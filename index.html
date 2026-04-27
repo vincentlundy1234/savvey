@@ -1,0 +1,2832 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="UTF-8"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="dns-prefetch" href="https://google.serper.dev"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no"/>
+  <title>Savvey — spend smart.</title>
+  <meta name="description" content="Know if you're getting a fair price before you buy. Savvey checks 40+ UK retailers instantly and gives you a Savvey Score — right price, check around, or overpaying."/>
+  <meta name="theme-color" content="#2a6b22"/>
+  <meta property="og:title" content="Savvey — Know what anything should cost"/>
+  <meta property="og:description" content="Check any product price in seconds. Savvey scans 40+ UK retailers and tells you if you're getting a fair deal — and where to get it cheaper."/>
+  <meta property="og:url" content="https://savvey.vercel.app"/>
+  <meta property="og:type" content="website"/>
+  <meta name="twitter:card" content="summary"/>
+  <meta name="twitter:title" content="Savvey — Stop overpaying."/>
+  <meta name="twitter:description" content="Check any product price in 10 seconds. 40+ UK retailers. Free forever."/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-title" content="Savvey"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="default"/>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap&font-display=swap" rel="stylesheet"/>
+
+  <!-- PWA / App Store readiness -->
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="application-name" content="Savvey"/>
+  <meta name="apple-mobile-web-app-title" content="Savvey"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="format-detection" content="telephone=no"/>
+  <meta name="msapplication-tap-highlight" content="no"/>
+
+  <!-- Accessibility -->
+  <meta name="color-scheme" content="light"/>
+
+  <!-- Structured data for SEO -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebApplication",
+    "name": "Savvey",
+    "description": "Check any product price in seconds. Savvey scans 40+ UK retailers and tells you if you are getting a fair deal.",
+    "url": "https://savvey.vercel.app",
+    "applicationCategory": "ShoppingApplication",
+    "operatingSystem": "Web, iOS, Android",
+    "offers": {"@type": "Offer", "price": "0", "priceCurrency": "GBP"},
+    "aggregateRating": {"@type": "AggregateRating", "ratingValue": "4.9", "ratingCount": "1200"}
+  }
+  </script>
+  <style>
+    :root {
+      --g:     #2a6b22;
+      --g2:    #3d9435;
+      --g3:    #56b84d;
+      --gl:    #edfae9;
+      --gb:    #c2e8bb;
+      --a:     #d4820a;
+      --a2:    #f0a020;
+      --al:    #fff8ec;
+      --ab:    #fce0a8;
+      --r:     #e03535;
+      --rl:    #fff1f1;
+      --rb:    #fac8c8;
+      --ink:   #111318;
+      --ink2:  #3d4148;
+      --ink3:  #767c88;
+      --ink4:  #b0b5be;
+      --sur:   #f4f5f7;
+      --sur2:  #eaebee;
+      --bdr:   #e2e4e9;
+      --white: #ffffff;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+      --shadow-md: 0 4px 16px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.06);
+      --shadow-lg: 0 12px 40px rgba(0,0,0,0.14), 0 4px 12px rgba(0,0,0,0.08);
+    }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    body{
+      font-family:'Inter',system-ui,sans-serif;
+      background:radial-gradient(ellipse at top,#1f4a18 0%,#0f2410 60%) fixed,linear-gradient(180deg,#0f2410,#0c1e0a);
+      min-height:100vh;display:flex;flex-direction:column;align-items:center;
+      padding:32px 16px 16px;
+      padding-top:max(32px,env(safe-area-inset-top));
+      padding-bottom:max(16px,env(safe-area-inset-bottom));
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+      text-rendering:optimizeLegibility;
+    }
+    .hero-tagline{
+      font-size:13px;font-weight:600;color:rgba(255,255,255,0.55);
+      letter-spacing:0.08em;text-transform:uppercase;margin-bottom:14px;
+      font-family:'Nunito',sans-serif;
+    }
+    .proto-label{
+      font-size:10px;font-weight:600;color:rgba(255,255,255,0.4);
+      letter-spacing:0.14em;text-transform:uppercase;margin-bottom:16px;
+    }
+    .screen-dots{display:flex;gap:5px;margin-bottom:12px;align-items:center;}
+    .dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.25);transition:all 0.3s ease;}
+    .dot.active{background:var(--g3);width:20px;border-radius:3px;}
+
+    /* Phone */
+    .phone{
+      width:100%;max-width:390px;min-height:844px;
+      background:var(--white);border-radius:46px;
+      border:6px solid #1a1a1a;overflow:hidden;
+      display:flex;flex-direction:column;
+      box-shadow:0 0 0 1px #2a2a2a,0 32px 100px rgba(0,0,0,0.6),inset 0 1px 0 rgba(255,255,255,0.08);
+      position:relative;
+    }
+
+    /* Status bar */
+    .sb-wrap{position:relative;height:50px;flex-shrink:0;background:var(--white);}
+    .sb-notch{width:120px;height:34px;background:#111;border-radius:0 0 22px 22px;position:absolute;left:50%;transform:translateX(-50%);top:0;z-index:2;}
+    .sb{height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 20px;position:relative;z-index:1;}
+    .sb-time{font-size:15px;font-weight:700;color:#111;letter-spacing:-0.3px;font-family:'Nunito',sans-serif;}
+    .sb-icons{display:flex;gap:5px;align-items:center;}
+    .sig{width:3px;background:#111;border-radius:1px;}
+
+    .screen{display:none;flex:1;flex-direction:column;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+    .screen.active{animation:screenIn 0.25s ease;}
+    @keyframes screenIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    .screen.active{display:flex;}
+    .screen::-webkit-scrollbar{display:none;}
+
+    /* Nav */
+    .nav{display:flex;justify-content:space-between;align-items:center;padding:14px 2px;max-width:390px;width:100%;margin-top:10px;}
+    .nav-btn{
+      background:rgba(255,255,255,0.12);border:1px solid rgba(255,255,255,0.18);
+      border-radius:12px;padding:10px 22px;font-size:13px;font-weight:600;color:rgba(255,255,255,0.8);
+      cursor:pointer;transition:all 0.15s;backdrop-filter:blur(8px);
+    }
+    .nav-btn:hover{background:rgba(255,255,255,0.2);}
+    .nav-btn:disabled{opacity:0.2;cursor:default;}
+    .nav-btn.primary{background:var(--g);color:#fff;border-color:var(--g);}
+    .nav-btn.primary:hover{background:var(--g2);}
+    .screen-name{font-size:11px;color:rgba(255,255,255,0.45);font-weight:600;letter-spacing:0.06em;text-transform:uppercase;}
+
+    /* ── WORDMARK ── */
+    .wm{font-family:'Nunito',sans-serif;font-weight:900;letter-spacing:-1.5px;line-height:1;display:inline-block;}
+    .wm .s{color:var(--g);}
+    .wm .y{color:var(--a2);}
+    .tag{font-size:12px;color:var(--ink3);font-weight:500;letter-spacing:0.01em;}
+    .tag .rd{color:var(--r);font-weight:700;}
+
+    /* ══════════════════════════════
+       SCREEN A — Welcome
+    ══════════════════════════════ */
+    #screen-a{background:var(--white);}
+    .welcome-hero{
+      background:linear-gradient(170deg,#e8f8e4 0%,#f2fdf0 45%,#fafffe 100%);
+      padding:44px 28px 32px;text-align:center;
+      display:flex;flex-direction:column;align-items:center;gap:18px;
+      border-bottom:1px solid var(--bdr);
+      animation:fadeIn 0.6s ease;
+    }
+    .welcome-logo-row{display:flex;align-items:center;gap:14px;justify-content:center;}
+    .welcome-headline{font-size:30px;font-weight:900;color:var(--ink);letter-spacing:-1px;line-height:1.1;font-family:'Nunito',sans-serif;}
+    .social-proof-row{display:flex;gap:8px;flex-wrap:wrap;justify-content:center;}
+    .sp-pill{
+      font-size:11px;font-weight:700;color:var(--g);
+      background:rgba(42,107,34,0.08);border:1px solid var(--gb);
+      border-radius:100px;padding:5px 12px;font-family:'Nunito',sans-serif;
+    }
+    /* ── Savvey S logo — all sizes ── */
+    .savvey-s{
+      display:flex;align-items:center;justify-content:center;flex-shrink:0;
+      background:linear-gradient(145deg,#3d9435 0%,#2a6b22 100%);
+      box-shadow:0 4px 14px rgba(42,107,34,0.35),inset 0 1px 0 rgba(255,255,255,0.15);
+      position:relative;overflow:hidden;
+    }
+    .savvey-s::after{
+      content:'';position:absolute;inset:0;
+      background:linear-gradient(160deg,rgba(255,255,255,0.18) 0%,transparent 55%);
+      pointer-events:none;
+    }
+    .savvey-s .s-letter{
+      font-family:'Nunito',sans-serif;font-weight:900;color:#fff;
+      line-height:1;position:relative;z-index:1;letter-spacing:-1px;
+    }
+    /* Sizes */
+    .savvey-s.lg{width:80px;height:80px;border-radius:22px;}
+    .savvey-s.lg .s-letter{font-size:40px;}
+    .savvey-s.md{width:40px;height:40px;border-radius:12px;}
+    .savvey-s.md .s-letter{font-size:20px;}
+    .savvey-s.sm{width:30px;height:30px;border-radius:9px;}
+    .savvey-s.sm .s-letter{font-size:15px;}
+    .savvey-s.spin{width:56px;height:56px;border-radius:16px;}
+    .savvey-s.spin .s-letter{font-size:26px;}
+
+    .logo-badge{display:none;} /* replaced by savvey-s */
+    .logo-badge-s{display:none;}
+    .wm-hero{font-size:44px;}
+    .tag-hero{font-size:14px;letter-spacing:0.06em;color:var(--ink3);}
+    .tag-hero .rd{color:var(--r);font-weight:700;}
+    .welcome-sub{font-size:17px;color:var(--ink2);line-height:1.55;font-weight:500;max-width:280px;}
+
+    .welcome-body{padding:20px 24px 0;display:flex;flex-direction:column;gap:10px;}
+    .feat{
+      display:flex;align-items:center;gap:14px;
+      background:var(--white);border:1px solid var(--bdr);
+      border-radius:18px;padding:14px 16px;
+      box-shadow:var(--shadow-sm);
+    }
+    .feat-icon{
+      width:44px;height:44px;border-radius:14px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-size:22px;
+    }
+    .feat-icon.green{background:var(--gl);border:1px solid var(--gb);}
+    .feat-icon.amber{background:var(--al);border:1px solid var(--ab);}
+    .feat-icon.red{background:var(--rl);border:1px solid var(--rb);}
+    .feat-body{flex:1;}
+    .feat-num{
+      width:28px;height:28px;border-radius:8px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;
+      font-size:13px;font-weight:900;font-family:'Nunito',sans-serif;
+    }
+    .feat-title{font-size:14px;font-weight:700;color:var(--ink);line-height:1.2;}
+    .feat-sub{font-size:12px;color:var(--ink3);margin-top:2px;line-height:1.4;}
+
+    .social-proof-strip{
+      display:flex;align-items:center;justify-content:center;gap:0;
+      padding:0 24px 4px;
+    }
+    .sps-item{
+      flex:1;text-align:center;font-size:12px;color:var(--ink3);padding:12px 8px;
+    }
+    .sps-item strong{display:block;font-size:20px;font-weight:900;color:var(--ink);font-family:'Nunito',sans-serif;letter-spacing:-0.5px;}
+    .sps-div{width:1px;height:32px;background:var(--bdr);}
+    .welcome-footer{padding:16px 24px 36px;}
+    .cta-primary{
+      width:100%;height:56px;background:var(--g);color:#fff;border:none;
+      border-radius:18px;font-size:16px;font-weight:700;cursor:pointer;
+      font-family:'Nunito',sans-serif;letter-spacing:-0.2px;
+      box-shadow:0 6px 20px rgba(42,107,34,0.35);
+      transition:all 0.2s;position:relative;overflow:hidden;
+    }
+    .cta-primary::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 100%);border-radius:18px;pointer-events:none;}
+    .cta-primary:hover{background:var(--g2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(42,107,34,0.4);}
+    .welcome-terms{font-size:11px;color:var(--ink4);margin-top:10px;text-align:center;line-height:1.6;}
+
+    /* ══════════════════════════════
+       SCREEN B — Location (with map)
+    ══════════════════════════════ */
+    #screen-b{background:var(--white);}
+    .map-container{
+      height:220px;background:#e8f0e8;position:relative;overflow:hidden;flex-shrink:0;
+    }
+    #map-iframe{width:100%;height:100%;border:none;display:block;}
+    .map-overlay{
+      position:absolute;inset:0;pointer-events:none;
+      background:linear-gradient(to bottom,transparent 60%,var(--white) 100%);
+    }
+    .map-pin{
+      position:absolute;top:50%;left:50%;transform:translate(-50%,-60%);
+      width:36px;height:36px;z-index:2;pointer-events:none;
+    }
+    .map-pin-inner{
+      width:36px;height:36px;background:var(--g);border-radius:50% 50% 50% 0;
+      transform:rotate(-45deg);display:flex;align-items:center;justify-content:center;
+      box-shadow:0 4px 12px rgba(42,107,34,0.4);
+    }
+    .map-pin-dot{width:12px;height:12px;background:#fff;border-radius:50%;transform:rotate(45deg);}
+    .map-pulse{
+      position:absolute;top:50%;left:50%;width:60px;height:60px;
+      transform:translate(-50%,-50%);border-radius:50%;
+      background:rgba(42,107,34,0.15);
+      animation:mapPulse 2s ease-out infinite;pointer-events:none;z-index:1;
+    }
+    @keyframes mapPulse{0%{transform:translate(-50%,-50%) scale(0.8);opacity:1}100%{transform:translate(-50%,-50%) scale(2);opacity:0}}
+
+    .ob-body{padding:24px 24px 0;display:flex;flex-direction:column;gap:14px;flex:1;}
+    .ob-title{font-size:22px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;line-height:1.2;font-family:'Nunito',sans-serif;}
+    .ob-sub{font-size:14px;color:var(--ink3);line-height:1.6;}
+    .ob-cards{display:flex;flex-direction:column;gap:10px;}
+    .ob-card{
+      display:flex;align-items:flex-start;gap:12px;
+      background:var(--sur);border:1px solid var(--bdr);
+      border-radius:16px;padding:14px;
+    }
+    .ob-card-icon{
+      width:36px;height:36px;border-radius:10px;flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;font-size:18px;
+      background:var(--gl);border:1px solid var(--gb);
+    }
+    .ob-card-text{font-size:13px;color:var(--ink2);line-height:1.5;}
+    .ob-card-text strong{color:var(--ink);display:block;margin-bottom:2px;font-weight:700;}
+    .ob-btns{padding:20px 24px 36px;display:flex;flex-direction:column;gap:10px;}
+    .btn-allow{
+      width:100%;height:54px;background:var(--g);color:#fff;border:none;
+      border-radius:16px;font-size:15px;font-weight:700;cursor:pointer;
+      font-family:'Nunito',sans-serif;
+      box-shadow:0 4px 16px rgba(42,107,34,0.3);transition:all 0.2s;
+    }
+    .btn-allow:hover{background:var(--g2);transform:translateY(-1px);}
+    .btn-skip{
+      width:100%;height:44px;background:transparent;border:none;
+      font-size:13px;color:var(--ink4);cursor:pointer;font-weight:500;transition:color 0.15s;
+    }
+    .btn-skip:hover{color:var(--ink3);}
+
+    /* ══════════════════════════════
+       SCREEN C — Email
+    ══════════════════════════════ */
+    #screen-c{background:var(--white);}
+    .email-hero{
+      background:linear-gradient(160deg,#fff8ec 0%,#fffbf5 60%,#fff 100%);
+      padding:52px 28px 32px;text-align:center;
+      display:flex;flex-direction:column;align-items:center;gap:14px;
+      border-bottom:1px solid var(--bdr);
+    }
+    .email-icon-wrap{
+      width:80px;height:80px;background:var(--al);border:1px solid var(--ab);
+      border-radius:24px;display:flex;align-items:center;justify-content:center;font-size:36px;
+      box-shadow:0 4px 16px rgba(212,130,10,0.15);
+    }
+    .email-hero-title{font-size:24px;font-weight:800;color:var(--ink);letter-spacing:-0.5px;font-family:'Nunito',sans-serif;}
+    .email-hero-sub{font-size:14px;color:var(--ink3);line-height:1.6;max-width:280px;}
+    .email-form{padding:24px 24px 0;display:flex;flex-direction:column;gap:12px;}
+    .email-field-wrap{position:relative;}
+    .email-field{
+      width:100%;height:54px;border:1.5px solid var(--bdr);border-radius:16px;
+      padding:0 18px 0 48px;font-size:15px;color:var(--ink);
+      background:var(--sur);outline:none;transition:all 0.2s;font-family:'Inter',sans-serif;
+    }
+    .email-field:focus{border-color:var(--a2);background:var(--white);box-shadow:0 0 0 3px rgba(240,160,32,0.12);}
+    .email-field::placeholder{color:var(--ink4);}
+    .email-field-icon{position:absolute;left:16px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;}
+    .email-benefit{display:flex;align-items:flex-start;gap:12px;padding:4px 0;}
+    .email-check{
+      width:22px;height:22px;flex-shrink:0;margin-top:1px;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .email-check svg{width:22px;height:22px;}
+    .email-benefit-text{font-size:14px;color:var(--ink2);font-weight:500;line-height:1.5;}
+
+    /* ══════════════════════════════
+       SCREEN 1 — Search
+    ══════════════════════════════ */
+    #screen-1{background:var(--white);}
+    .s1-top{
+      background:var(--white);padding:16px 20px 12px;
+      border-bottom:1px solid var(--bdr);
+    }
+    .s1-header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;}
+    .s1-wm{font-size:26px;}
+    .s1-avatar{
+      width:36px;height:36px;border-radius:10px;
+      background:linear-gradient(145deg,#3d9435 0%,#2a6b22 100%);
+      display:flex;align-items:center;justify-content:center;
+      font-size:16px;color:#fff;font-weight:900;cursor:pointer;
+      font-family:'Nunito',sans-serif;letter-spacing:-0.5px;
+      box-shadow:0 2px 8px rgba(42,107,34,0.3),inset 0 1px 0 rgba(255,255,255,0.15);
+    }
+    .s1-tagline{font-size:18px;color:var(--ink);font-weight:700;margin-top:4px;letter-spacing:-0.3px;}
+
+    .cat-row{
+      padding:12px 16px;display:flex;gap:8px;overflow-x:auto;
+      -webkit-overflow-scrolling:touch;scrollbar-width:none;
+      border-bottom:1px solid var(--bdr);
+    }
+    .cat-row::-webkit-scrollbar{display:none;}
+    .cat{
+      display:flex;align-items:center;gap:5px;padding:6px 14px;border-radius:100px;
+      border:1.5px solid var(--bdr);background:var(--white);
+      font-size:12px;font-weight:600;color:var(--ink2);
+      white-space:nowrap;cursor:pointer;transition:all 0.15s;flex-shrink:0;
+    }
+    .cat.active{background:var(--g);color:#fff;border-color:var(--g);box-shadow:0 2px 8px rgba(42,107,34,0.25);}
+    .cat:hover:not(.active){background:var(--sur);border-color:var(--sur2);}
+
+    /* Mode tabs — big impactful cards */
+    .mode-cards{display:flex;gap:8px;padding:14px 16px 0;}
+    .mode-card{
+      flex:1;border-radius:20px;padding:18px 10px 16px;cursor:pointer;
+      display:flex;flex-direction:column;align-items:center;gap:10px;
+      border:2px solid var(--sur2);background:var(--sur);
+      transition:all 0.22s cubic-bezier(0.34,1.2,0.64,1);position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;
+    }
+    .mode-card::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,0.6) 0%,transparent 60%);pointer-events:none;}
+    .mode-card.active{border-color:var(--g);background:var(--gl);box-shadow:0 4px 20px rgba(42,107,34,0.18),inset 0 1px 0 rgba(255,255,255,0.8);}
+    .mode-card:hover:not(.active){background:var(--sur2);border-color:var(--bdr);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+    .mode-card-icon{
+      width:56px;height:56px;border-radius:16px;
+      display:flex;align-items:center;justify-content:center;
+      transition:all 0.2s;
+    }
+    .mode-card.active .mode-card-icon{background:var(--g);box-shadow:0 4px 14px rgba(42,107,34,0.4);}
+    .mode-card:not(.active) .mode-card-icon{background:rgba(0,0,0,0.07);}
+
+    /* SVG icons for mode cards */
+    .mc-svg{width:28px;height:28px;}
+
+    .mode-card-label{font-size:13px;font-weight:800;color:var(--ink2);letter-spacing:0.01em;font-family:'Nunito',sans-serif;line-height:1.2;text-align:center;}
+    .mode-card.active .mode-card-label{color:var(--g);}
+    .mode-card-desc{font-size:10px;color:var(--ink3);text-align:center;line-height:1.4;padding:0 2px;}
+    .mode-card.active .mode-card-desc{color:var(--g2);}
+
+    /* Input panels */
+    .panel{display:none;padding:12px 16px 0;}
+    .panel.active{display:block;}
+
+    /* Scan panel */
+    .scan-zone{
+      width:100%;height:130px;border-radius:20px;
+      border:2px dashed var(--gb);background:var(--gl);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+      cursor:pointer;transition:all 0.2s;position:relative;overflow:hidden;
+    }
+    .scan-zone:hover{background:#e0f5db;border-color:var(--g2);}
+    .scan-corners{position:absolute;inset:12px;pointer-events:none;}
+    .scan-corner{position:absolute;width:16px;height:16px;border-color:var(--g);border-style:solid;}
+    .scan-corner.tl{top:0;left:0;border-width:2px 0 0 2px;border-radius:2px 0 0 0;}
+    .scan-corner.tr{top:0;right:0;border-width:2px 2px 0 0;border-radius:0 2px 0 0;}
+    .scan-corner.bl{bottom:0;left:0;border-width:0 0 2px 2px;border-radius:0 0 0 2px;}
+    .scan-corner.br{bottom:0;right:0;border-width:0 2px 2px 0;border-radius:0 0 2px 0;}
+    .scan-line{
+      position:absolute;left:16px;right:16px;height:1.5px;
+      background:linear-gradient(90deg,transparent,var(--g),transparent);
+      animation:scanLine 2s ease-in-out infinite;top:30%;
+    }
+    @keyframes scanLine{0%,100%{top:20%}50%{top:75%}}
+    .scan-label{font-size:15px;font-weight:800;color:var(--g);font-family:'Nunito',sans-serif;}
+    .scan-sub{font-size:12px;color:var(--g2);}
+
+    /* Search panel */
+    .search-row{display:flex;gap:8px;}
+    .search-wrap{flex:1;position:relative;}
+    .search-input{
+      width:100%;height:54px;border:1.5px solid var(--bdr);border-radius:16px;
+      padding:0 40px 0 46px;font-size:15px;color:var(--ink);background:var(--sur);
+      outline:none;transition:all 0.2s;font-family:'Inter',sans-serif;
+    }
+    .search-input::placeholder{color:var(--ink4);}
+    .search-input:focus{border-color:var(--g2);background:var(--white);box-shadow:0 0 0 3px rgba(61,148,53,0.1);}
+    .search-ico{position:absolute;left:15px;top:50%;transform:translateY(-50%);pointer-events:none;}
+    .search-clear{
+      position:absolute;right:12px;top:50%;transform:translateY(-50%);
+      width:20px;height:20px;border-radius:50%;background:var(--ink4);
+      color:#fff;font-size:10px;font-weight:700;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      transition:background 0.15s;
+    }
+    .search-clear:hover{background:var(--ink3);}
+    .btn-check{
+      height:52px;padding:0 20px;background:var(--g);color:#fff;border:none;
+      border-radius:16px;font-size:14px;font-weight:700;cursor:pointer;
+      font-family:'Nunito',sans-serif;white-space:nowrap;
+      box-shadow:0 3px 10px rgba(42,107,34,0.3);transition:all 0.2s;
+    }
+    .btn-check:hover{background:var(--g2);transform:translateY(-1px);}
+
+    /* URL panel */
+    .url-panel-inner{display:flex;flex-direction:column;gap:10px;}
+    .url-detected{
+      display:flex;align-items:center;gap:12px;
+      background:var(--gl);border:1.5px solid var(--gb);
+      border-radius:14px;padding:12px 14px;
+      animation:fadeIn 0.2s ease;
+    }
+    .url-det-icon{font-size:22px;flex-shrink:0;}
+    .url-det-info{flex:1;}
+    .url-det-retailer{font-size:14px;font-weight:700;color:var(--g);}
+    .url-det-sub{font-size:11px;color:var(--g2);margin-top:2px;}
+    .url-det-tick{
+      width:24px;height:24px;background:var(--g);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:12px;color:#fff;flex-shrink:0;font-weight:700;
+    }
+    .url-divider{
+      text-align:center;font-size:11px;color:var(--ink4);font-weight:500;
+      position:relative;
+    }
+    .url-divider::before,.url-divider::after{
+      content:'';position:absolute;top:50%;width:38%;height:1px;background:var(--bdr);
+    }
+    .url-divider::before{left:0;}
+    .url-divider::after{right:0;}
+    .url-input{
+      width:100%;height:52px;border:1.5px solid var(--bdr);border-radius:16px;
+      padding:0 16px 0 46px;font-size:14px;color:var(--ink);background:var(--sur);
+      outline:none;transition:all 0.2s;font-family:'Inter',sans-serif;
+    }
+    .url-input:focus{border-color:var(--a2);background:var(--white);box-shadow:0 0 0 3px rgba(240,160,32,0.1);}
+    .url-input::placeholder{color:var(--ink4);font-size:13px;}
+    .btn-paste{
+      width:100%;height:52px;background:var(--a);color:#fff;border:none;
+      border-radius:16px;font-size:14px;font-weight:700;cursor:pointer;
+      font-family:'Nunito',sans-serif;box-shadow:0 3px 10px rgba(212,130,10,0.3);transition:all 0.2s;
+    }
+    .btn-paste:hover{background:var(--a2);transform:translateY(-1px);}
+    .url-retailers{display:flex;flex-wrap:wrap;gap:6px;}
+    .url-pill{
+      font-size:11px;font-weight:600;color:var(--ink3);
+      background:var(--sur);border:1px solid var(--bdr);
+      border-radius:100px;padding:4px 10px;cursor:pointer;transition:all 0.15s;
+    }
+    .url-pill:hover{background:var(--gl);border-color:var(--gb);color:var(--g);}
+
+    /* Location banner */
+    .loc-banner{
+      margin:12px 16px 0;
+      background:linear-gradient(135deg,var(--gl) 0%,#f0fdf0 100%);
+      border:1px solid var(--gb);border-radius:16px;
+      padding:12px 14px;display:flex;align-items:center;gap:10px;
+      box-shadow:var(--shadow-sm);
+    }
+    .loc-dot{width:9px;height:9px;border-radius:50%;background:var(--g);flex-shrink:0;animation:pulse 2s ease infinite;position:relative;}
+    .loc-dot::after{content:'';position:absolute;inset:-4px;border-radius:50%;background:rgba(42,107,34,0.2);animation:pulse 2s ease infinite;}
+    @keyframes pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:0.7;transform:scale(1.15)}}
+    .loc-text{font-size:12px;color:var(--g);font-weight:700;}
+    .loc-text span{color:var(--g2);font-weight:400;}
+
+    .divider{height:1px;background:var(--bdr);margin:14px 16px 0;}
+
+    .popular{padding:14px 16px 24px;}
+    .sec-label{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;}
+    .chips{display:flex;flex-wrap:wrap;gap:7px;}
+    .chip{
+      background:var(--white);border:1.5px solid var(--bdr);
+      border-radius:100px;padding:7px 14px;
+      font-size:13px;color:var(--ink2);font-weight:500;cursor:pointer;transition:all 0.15s;
+      box-shadow:var(--shadow-sm);
+    }
+    .chip:hover{background:var(--gl);border-color:var(--gb);color:var(--g);}
+
+    /* Category tab panels */
+    .cat-panel{display:none;padding:14px 16px 24px;animation:fadeIn 0.2s ease;}
+    .cat-panel.active{display:block;}
+    @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Featured/ad slot inside category panel */
+    .cat-featured{
+      background:linear-gradient(135deg,var(--al) 0%,#fffbf0 100%);
+      border:1.5px solid var(--ab);border-radius:18px;
+      padding:13px 16px;margin-bottom:12px;
+      display:flex;align-items:center;gap:12px;
+      box-shadow:var(--shadow-sm);position:relative;
+    }
+    .cat-featured-badge{
+      position:absolute;top:8px;right:10px;
+      font-size:9px;font-weight:700;color:var(--ink4);
+      letter-spacing:0.08em;text-transform:uppercase;
+    }
+    .cat-featured-icon{
+      width:44px;height:44px;border-radius:12px;flex-shrink:0;
+      background:var(--white);border:1px solid var(--ab);
+      display:flex;align-items:center;justify-content:center;font-size:22px;
+    }
+    .cat-featured-title{font-size:13px;font-weight:700;color:var(--ink);}
+    .cat-featured-sub{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.4;}
+    .cat-featured-arrow{font-size:16px;color:var(--ab);margin-left:auto;flex-shrink:0;}
+
+    /* Trending row inside panel */
+    .trending-row{
+      display:flex;align-items:center;gap:12px;
+      background:var(--white);border:1px solid var(--bdr);
+      border-radius:14px;padding:11px 14px;margin-bottom:8px;
+      cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm);-webkit-tap-highlight-color:transparent;
+    }
+    .trending-row:hover{background:var(--gl);border-color:var(--gb);}
+    .trending-rank{
+      width:22px;height:22px;border-radius:7px;
+      background:var(--sur);display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:800;color:var(--ink3);flex-shrink:0;
+      font-family:'Nunito',sans-serif;
+    }
+    .trending-rank.top{background:var(--g);color:#fff;}
+    .trending-name{font-size:13px;font-weight:700;color:var(--ink);flex:1;}
+    .trending-searches{font-size:11px;color:var(--ink4);}
+    .trending-fire{font-size:14px;flex-shrink:0;}
+
+    /* ══════════════════════════════
+       SCREEN 1p — What are you paying?
+    ══════════════════════════════ */
+    #screen-1p{background:var(--white);align-items:stretch;}
+    .price-q-header{
+      padding:24px 22px 20px;border-bottom:1px solid var(--bdr);
+      display:flex;align-items:center;gap:12px;
+    }
+    .price-q-back{
+      width:34px;height:34px;background:var(--sur);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;color:var(--ink2);cursor:pointer;flex-shrink:0;transition:background 0.15s;
+    }
+    .price-q-back:hover{background:var(--sur2);}
+    .price-q-product{flex:1;font-size:15px;font-weight:700;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .price-q-cat{font-size:11px;font-weight:700;color:var(--a);background:var(--al);border:1px solid var(--ab);border-radius:100px;padding:3px 10px;flex-shrink:0;font-family:'Nunito',sans-serif;}
+    .price-q-body{padding:28px 22px 20px;display:flex;flex-direction:column;gap:6px;flex:1;}
+    .price-q-title{font-size:24px;font-weight:900;color:var(--ink);letter-spacing:-0.5px;line-height:1.2;font-family:'Nunito',sans-serif;}
+    .price-q-sub{font-size:14px;color:var(--ink3);line-height:1.6;margin-top:6px;}
+    .price-input-wrap{margin-top:24px;position:relative;}
+    .price-currency{position:absolute;left:18px;top:50%;transform:translateY(-50%);font-size:26px;font-weight:800;color:var(--ink2);font-family:'Nunito',sans-serif;pointer-events:none;z-index:1;}
+    .price-input{
+      width:100%;height:72px;border:2px solid var(--bdr);border-radius:20px;
+      padding:0 20px 0 46px;font-size:32px;font-weight:800;color:var(--ink);
+      font-family:'Nunito',sans-serif;letter-spacing:-1px;background:var(--sur);outline:none;transition:all 0.2s;
+    }
+    .price-input:focus{border-color:var(--g2);background:var(--white);box-shadow:0 0 0 4px rgba(61,148,53,0.1);}
+    .price-input::placeholder{color:var(--ink4);}
+    .price-context{
+      margin-top:12px;background:var(--gl);border:1px solid var(--gb);
+      border-radius:14px;padding:11px 14px;display:flex;align-items:center;gap:8px;
+    }
+    .price-ctx-dot{width:7px;height:7px;border-radius:50%;background:var(--g);flex-shrink:0;animation:pulse 2s ease infinite;}
+    .price-ctx-text{font-size:12px;color:var(--g);font-weight:600;}
+    .price-ctx-text span{font-weight:400;color:var(--g2);}
+    .price-q-actions{padding:0 22px 40px;display:flex;flex-direction:column;gap:10px;}
+    .btn-get-score{
+      width:100%;height:56px;background:var(--g);color:#fff;border:none;
+      border-radius:18px;font-size:16px;font-weight:800;cursor:pointer;
+      font-family:'Nunito',sans-serif;box-shadow:0 6px 20px rgba(42,107,34,0.3);
+      transition:all 0.2s;position:relative;overflow:hidden;
+    }
+    .btn-get-score::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 100%);pointer-events:none;}
+    .btn-get-score:not(:disabled){animation:btnPulse 2.5s ease-in-out infinite;}
+    @keyframes btnPulse{0%,100%{box-shadow:0 6px 20px rgba(42,107,34,0.3)}50%{box-shadow:0 6px 28px rgba(42,107,34,0.5)}}
+    .btn-get-score:hover{background:var(--g2);transform:translateY(-1px);}
+    .btn-best-only{
+      width:100%;height:50px;background:var(--white);border:1.5px solid var(--bdr);
+      border-radius:16px;font-size:14px;font-weight:700;color:var(--ink2);
+      cursor:pointer;transition:all 0.15s;font-family:'Nunito',sans-serif;box-shadow:var(--shadow-sm);
+    }
+    .btn-best-only:hover{background:var(--sur);}
+    .price-q-hint{font-size:12px;color:var(--ink4);text-align:center;line-height:1.6;padding:0 8px;}
+
+    /* ══════════════════════════════
+       SCREEN 1.5 — Camera/Scanner
+    ══════════════════════════════ */
+    #screen-15{background:#000;position:relative;}
+    .cam-view{
+      flex:1;background:#0a0a0a;position:relative;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      overflow:hidden;
+    }
+    /* Simulated camera grain */
+    .cam-view::before{
+      content:'';position:absolute;inset:0;
+      background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(255,255,255,0.015) 2px,rgba(255,255,255,0.015) 4px);
+      pointer-events:none;
+    }
+    .cam-top-bar{
+      position:absolute;top:0;left:0;right:0;
+      padding:16px 20px;display:flex;align-items:center;justify-content:space-between;
+      background:linear-gradient(to bottom,rgba(0,0,0,0.7),transparent);
+      z-index:10;
+    }
+    .cam-close{
+      width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;color:#fff;cursor:pointer;backdrop-filter:blur(4px);
+    }
+    .cam-title-text{font-size:14px;font-weight:700;color:#fff;letter-spacing:-0.2px;font-family:'Nunito',sans-serif;}
+    .cam-torch{
+      width:36px;height:36px;background:rgba(255,255,255,0.15);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:18px;
+      cursor:pointer;backdrop-filter:blur(4px);
+    }
+
+    /* Viewfinder box */
+    .viewfinder{
+      width:260px;height:180px;position:relative;
+    }
+    /* Corner brackets */
+    .vf-corner{position:absolute;width:22px;height:22px;border-color:#fff;border-style:solid;}
+    .vf-corner.tl{top:0;left:0;border-width:3px 0 0 3px;border-radius:3px 0 0 0;}
+    .vf-corner.tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 3px 0 0;}
+    .vf-corner.bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 3px;}
+    .vf-corner.br{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 3px 0;}
+    /* Scan beam */
+    .vf-beam{
+      position:absolute;left:4px;right:4px;height:2px;
+      background:linear-gradient(90deg,transparent,var(--g3),var(--g),var(--g3),transparent);
+      box-shadow:0 0 8px var(--g3),0 0 16px rgba(86,184,77,0.5);
+      animation:beam 2s ease-in-out infinite;top:10%;
+    }
+    @keyframes beam{0%,100%{top:10%}50%{top:85%}}
+    /* Fake barcode in viewfinder */
+    .vf-barcode{
+      position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+      display:flex;gap:2px;align-items:center;opacity:0.25;
+    }
+    .vf-bar{background:rgba(255,255,255,0.9);border-radius:1px;}
+
+    /* Lock-on state */
+    .vf-lockon{
+      position:absolute;inset:0;border-radius:4px;
+      border:2px solid var(--g3);
+      box-shadow:0 0 0 2px rgba(86,184,77,0.3),inset 0 0 20px rgba(86,184,77,0.1);
+      opacity:0;transition:opacity 0.3s ease;
+    }
+    .vf-lockon.show{opacity:1;}
+
+    .cam-hint{
+      position:absolute;bottom:0;left:0;right:0;
+      padding:28px 28px 40px;
+      background:linear-gradient(to top,rgba(0,0,0,0.8),transparent);
+      text-align:center;display:flex;flex-direction:column;gap:8px;align-items:center;
+    }
+    .cam-hint-text{font-size:13px;color:rgba(255,255,255,0.8);font-weight:500;line-height:1.5;}
+    .cam-hint-sub{font-size:11px;color:rgba(255,255,255,0.45);}
+    .cam-manual-btn{
+      margin-top:4px;font-size:13px;font-weight:700;
+      color:var(--g3);background:none;border:none;cursor:pointer;
+      text-decoration:underline;text-underline-offset:3px;
+    }
+
+    /* Detected product popup */
+    .cam-detected{
+      position:absolute;bottom:140px;left:20px;right:20px;
+      background:rgba(20,20,20,0.9);backdrop-filter:blur(12px);
+      border:1px solid rgba(255,255,255,0.12);border-radius:16px;
+      padding:14px 16px;display:flex;align-items:center;gap:12px;
+      transform:translateY(20px);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.1,0.64,1);
+      z-index:10;
+    }
+    .cam-detected.show{transform:translateY(0);opacity:1;}
+    .cam-det-icon{width:36px;height:36px;background:var(--g);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+    .cam-det-name{font-size:13px;font-weight:700;color:#fff;}
+    .cam-det-sub{font-size:11px;color:rgba(255,255,255,0.5);margin-top:2px;}
+    .cam-det-btn{
+      margin-left:auto;background:var(--g);color:#fff;border:none;border-radius:10px;
+      padding:8px 14px;font-size:12px;font-weight:800;cursor:pointer;
+      font-family:'Nunito',sans-serif;white-space:nowrap;flex-shrink:0;
+    }
+    #screen-2{
+      align-items:center;justify-content:center;gap:18px;
+      text-align:center;padding:40px 28px;background:var(--white);
+    }
+    .scan-anim{
+      width:80px;height:80px;position:relative;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .scan-ring{
+      position:absolute;inset:0;border-radius:50%;
+      border:3px solid var(--bdr);
+    }
+    .scan-ring-active{
+      position:absolute;inset:0;border-radius:50%;
+      border:3px solid transparent;border-top-color:var(--g);border-right-color:var(--g2);
+      animation:spin 0.85s linear infinite;
+    }
+    .scan-ring-active2{
+      position:absolute;inset:6px;border-radius:50%;
+      border:2px solid transparent;border-bottom-color:var(--gb);
+      animation:spin 1.4s linear infinite reverse;opacity:0.6;
+    }
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .scan-logo-inner{
+      width:56px;height:56px;
+      background:linear-gradient(145deg,#3d9435 0%,#2a6b22 100%);
+      border-radius:16px;
+      display:flex;align-items:center;justify-content:center;
+      font-family:'Nunito',sans-serif;font-weight:900;font-size:26px;color:#fff;
+      box-shadow:0 4px 16px rgba(42,107,34,0.4),inset 0 1px 0 rgba(255,255,255,0.15);
+      position:relative;overflow:hidden;letter-spacing:-1px;
+    }
+    .scan-logo-inner::after{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,0.18) 0%,transparent 55%);pointer-events:none;}
+    .scan-title{font-size:22px;font-weight:900;color:var(--ink);letter-spacing:-0.6px;font-family:'Nunito',sans-serif;}
+    .scan-prod{
+      font-size:14px;color:var(--ink);font-weight:600;
+      background:var(--sur);border:1px solid var(--bdr);
+      border-radius:100px;padding:7px 18px;box-shadow:var(--shadow-sm);
+    }
+    .scan-cat{
+      font-size:12px;color:var(--a);font-weight:700;
+      background:var(--al);border:1px solid var(--ab);
+      border-radius:100px;padding:5px 14px;
+    }
+    .scan-sub{font-size:13px;color:var(--ink3);line-height:1.6;}
+    .prog-track{width:220px;height:4px;background:var(--sur2);border-radius:4px;overflow:hidden;}
+    .prog-fill{height:100%;background:linear-gradient(90deg,var(--g),var(--g3));border-radius:4px;animation:prog 2.8s ease-in-out forwards;}
+    @keyframes prog{0%{width:0%}70%{width:82%}100%{width:94%}}
+    .r-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:310px;}
+    .r-chip{
+      font-size:11px;font-weight:600;color:var(--ink4);
+      background:var(--sur);border:1px solid var(--bdr);
+      border-radius:100px;padding:5px 12px;transition:all 0.3s ease;
+    }
+    .r-chip.lit{color:var(--g);border-color:var(--gb);background:var(--gl);}
+
+    /* ══════════════════════════════
+       SCREEN 3 — Savvey Score
+    ══════════════════════════════ */
+    #screen-3{padding:12px 16px 24px;gap:8px;background:var(--white);}
+
+
+    .scen-bar{display:flex;align-items:center;gap:8px;}
+    .scen-lbl{font-size:10px;color:var(--ink4);font-weight:700;white-space:nowrap;letter-spacing:0.06em;text-transform:uppercase;}
+    .scen-tabs{display:flex;gap:5px;}
+    .s-tab{
+      font-size:11px;font-weight:700;padding:5px 12px;border-radius:100px;
+      border:1.5px solid var(--bdr);background:var(--sur);
+      color:var(--ink4);cursor:pointer;transition:all 0.15s;font-family:'Nunito',sans-serif;
+    }
+    .s-tab.active{background:var(--g);color:#fff;border-color:var(--g);}
+
+    .score-card{
+      border-radius:24px;padding:22px 20px 20px;
+      display:flex;flex-direction:column;align-items:center;gap:14px;
+      transition:all 0.35s ease;box-shadow:0 4px 20px rgba(0,0,0,0.08),0 1px 4px rgba(0,0,0,0.04);
+    }
+    .score-card.state-red{background:linear-gradient(160deg,var(--rl),#fff9f9);border:1.5px solid var(--rb);}
+    .score-card.state-amber{background:linear-gradient(160deg,var(--al),#fffdf8);border:1.5px solid var(--ab);}
+    .score-card.state-green{background:linear-gradient(160deg,#edfae9,#f8fef7);border:1.5px solid rgba(194,232,187,0.8);animation:greenGlow 3s ease-in-out infinite;}
+    @keyframes greenGlow{0%,100%{box-shadow:0 4px 20px rgba(42,107,34,0.08)}50%{box-shadow:0 4px 28px rgba(42,107,34,0.18)}}
+
+    .score-eyebrow{font-size:10px;font-weight:800;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink3);font-family:'Nunito',sans-serif;}
+    .score-ring-wrap{position:relative;width:160px;height:160px;display:flex;align-items:center;justify-content:center;}
+    .score-svg{position:absolute;top:0;left:0;transform:rotate(-90deg);}
+    .score-track{fill:none;stroke:rgba(0,0,0,0.07);stroke-width:10;}
+    .score-arc{fill:none;stroke:var(--r);stroke-width:10;stroke-linecap:round;stroke-dasharray:377;stroke-dashoffset:377;}
+    .score-inner{display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:1;gap:2px;}
+    .score-num{
+      font-size:64px;font-weight:900;line-height:1;letter-spacing:-4px;
+      font-variant-numeric:tabular-nums;min-width:90px;text-align:center;
+      font-family:'Nunito',sans-serif;font-feature-settings:'tnum';
+    }
+    .score-num.red{color:#c02828;}
+    .score-num.amber{color:var(--a);}
+    .score-num.green{color:var(--g);}
+    .score-of{font-size:11px;font-weight:700;letter-spacing:0.05em;font-family:'Nunito',sans-serif;}
+    .score-of.red{color:#e07070;}
+    .score-of.amber{color:var(--a2);}
+    .score-of.green{color:var(--g2);}
+
+    .spec-wrap{width:100%;display:flex;flex-direction:column;gap:8px;}
+    .spec-track{
+      width:100%;height:8px;border-radius:6px;position:relative;
+      background:linear-gradient(90deg,var(--r) 0%,var(--a2) 40%,#6ac85f 70%,var(--g) 100%);
+    }
+    .spec-thumb{
+      position:absolute;top:50%;transform:translate(-50%,-50%);
+      width:22px;height:22px;background:#fff;border:3px solid var(--ink);
+      border-radius:50%;box-shadow:0 2px 10px rgba(0,0,0,0.25);
+    }
+    .spec-lbls{display:flex;justify-content:space-between;}
+    .spec-lbl{font-size:10px;color:var(--ink4);font-weight:600;font-family:'Nunito',sans-serif;}
+    .spec-lbl.active{color:var(--ink);font-weight:800;}
+
+    .verdict{
+      width:100%;border-radius:14px;padding:13px 14px;
+      display:flex;gap:10px;align-items:flex-start;
+      transition:opacity 0.45s ease,transform 0.45s ease;
+    }
+    .verdict.red{background:#fef0f0;border:1px solid var(--rb);}
+    .verdict.amber{background:var(--al);border:1px solid var(--ab);}
+    .verdict.green{background:var(--gl);border:1px solid var(--gb);}
+    .verdict-dot{width:8px;height:8px;border-radius:50%;margin-top:4px;flex-shrink:0;}
+    .verdict-dot.red{background:var(--r);}
+    .verdict-dot.amber{background:var(--a2);}
+    .verdict-dot.green{background:var(--g2);}
+    .verdict-title{font-size:17px;font-weight:900;line-height:1.3;font-family:'Nunito',sans-serif;}
+    .verdict-title.red{color:#b01818;}
+    .verdict-title.amber{color:var(--a);}
+    .verdict-title.green{color:var(--g);}
+    .verdict-sub{font-size:14px;margin-top:4px;line-height:1.55;font-weight:500;}
+    .verdict-sub.red{color:#8a1a1a;}
+    .verdict-sub.amber{color:#7a4800;}
+    .verdict-sub.green{color:#1e5c18;}
+    .verdict-saving{
+      font-size:20px;font-weight:900;font-family:'Nunito',sans-serif;
+      color:var(--r);background:var(--rl);border:1.5px solid var(--rb);
+      border-radius:12px;padding:6px 10px;text-align:center;flex-shrink:0;
+      line-height:1.1;min-width:52px;
+    }
+    .verdict-saving .vs-label{font-size:9px;font-weight:700;color:#c03030;display:block;letter-spacing:0.06em;text-transform:uppercase;}
+
+    .prod-card{
+      background:var(--white);border:1px solid var(--bdr);
+      border-radius:18px;padding:14px 16px;
+      display:flex;align-items:center;gap:12px;
+      box-shadow:var(--shadow-sm);
+    }
+    .prod-cat{
+      font-size:10px;font-weight:700;color:var(--a);
+      background:var(--al);border:1px solid var(--ab);
+      border-radius:100px;padding:4px 10px;white-space:nowrap;
+      font-family:'Nunito',sans-serif;
+    }
+    .prod-name{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;}
+    .prod-meta{font-size:12px;color:var(--ink3);margin-top:3px;font-weight:500;}
+
+    .ret-list{display:flex;flex-direction:column;gap:7px;}
+    .ret-row{
+      background:var(--white);border:1.5px solid var(--bdr);
+      border-radius:16px;padding:14px 15px;
+      display:flex;align-items:center;justify-content:space-between;
+      cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm);
+    }
+    .ret-row:hover{background:var(--sur);}
+    .ret-row.best{border-color:var(--g2);background:var(--gl);box-shadow:0 2px 12px rgba(42,107,34,0.12);}
+    .ret-row.best:hover{background:#e0f5db;}
+    .ret-name{font-size:14px;font-weight:700;color:var(--ink);}
+    .ret-sub{font-size:11px;color:var(--ink3);margin-top:2px;line-height:1.4;}
+    .ret-price{font-size:19px;font-weight:900;font-family:'Nunito',sans-serif;}
+    .p-best{color:var(--g);}
+    .p-mid{color:var(--a);}
+    .p-high{color:var(--r);}
+    .best-badge{
+      display:inline-flex;align-items:center;gap:3px;
+      font-size:10px;font-weight:700;color:var(--g);
+      background:rgba(42,107,34,0.12);border:1px solid var(--gb);padding:3px 9px;
+      border-radius:100px;margin-top:5px;font-family:'Nunito',sans-serif;
+    }
+    .ret-diff{font-size:11px;color:var(--ink3);margin-top:2px;text-align:right;font-weight:600;}
+    .ret-diff.bad{color:var(--r);}
+
+    .saving-hero{
+      background:linear-gradient(135deg,#fff1f1 0%,#fff8f8 100%);
+      border:1.5px solid var(--rb);border-radius:18px;padding:14px 16px;
+      text-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;
+    }
+    .saving-hero-amount{font-size:36px;font-weight:900;color:var(--r);font-family:'Nunito',sans-serif;letter-spacing:-1.5px;line-height:1;}
+    .saving-hero-text{font-size:12px;color:#c03030;font-weight:600;}
+    .track-cta{
+      background:var(--al);
+      border:1.5px solid var(--ab);border-radius:18px;padding:15px 16px;
+      display:flex;align-items:center;gap:12px;cursor:pointer;transition:all 0.2s;
+      box-shadow:0 2px 8px rgba(212,130,10,0.1);
+    }
+    .track-cta:hover{border-color:var(--a2);box-shadow:0 4px 16px rgba(212,130,10,0.15);}
+    .track-icon{font-size:24px;flex-shrink:0;}
+    .track-title{font-size:13px;font-weight:700;color:var(--a);}
+    .track-sub{font-size:11px;color:var(--a2);margin-top:2px;}
+    .track-arr{font-size:18px;color:var(--ab);font-weight:700;}
+
+    .share-score-btn{
+      width:100%;height:48px;background:var(--white);
+      border:1.5px solid var(--bdr);border-radius:14px;
+      font-size:13px;font-weight:700;color:var(--ink2);
+      cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm);
+      font-family:'Nunito',sans-serif;letter-spacing:0.01em;
+    }
+    .share-score-btn:hover{background:var(--sur);border-color:var(--bdr);}
+    .ts{font-size:11px;color:var(--ink3);text-align:center;padding:2px 0;font-weight:500;}
+    .live-badge{
+      display:flex;align-items:center;gap:6px;justify-content:center;
+      font-size:11px;font-weight:700;color:var(--g);
+      background:var(--gl);border:1px solid var(--gb);
+      border-radius:100px;padding:5px 14px;align-self:center;margin:-2px 0;
+    }
+    .live-dot{width:6px;height:6px;border-radius:50%;background:var(--g);animation:pulse 1.5s ease infinite;}
+
+    /* ══════════════════════════════
+       SCREEN 4 — Buy
+    ══════════════════════════════ */
+    #screen-4{padding:18px 16px 32px;gap:12px;background:var(--white);}
+    .back-row{display:flex;align-items:center;gap:8px;cursor:pointer;width:fit-content;}
+    .back-btn{
+      width:32px;height:32px;background:var(--sur);border-radius:50%;
+      display:flex;align-items:center;justify-content:center;font-size:17px;color:var(--ink2);
+      transition:background 0.15s;
+    }
+    .back-row:hover .back-btn{background:var(--sur2);}
+    .back-lbl{font-size:13px;color:var(--ink3);font-weight:600;}
+
+    .buy-hero{
+      background:linear-gradient(135deg,var(--gl) 0%,#f0fdf0 100%);
+      border:1.5px solid var(--gb);border-radius:22px;padding:20px;
+      display:flex;align-items:center;gap:16px;
+      box-shadow:0 4px 20px rgba(42,107,34,0.12);
+    }
+    .buy-logo{
+      width:56px;height:56px;background:var(--white);
+      border:1px solid var(--bdr);border-radius:16px;
+      display:flex;align-items:center;justify-content:center;
+      font-size:11px;font-weight:800;color:#e47911;flex-shrink:0;
+      box-shadow:var(--shadow-sm);font-family:'Nunito',sans-serif;
+    }
+    .buy-retailer{font-size:15px;font-weight:800;color:var(--g);font-family:'Nunito',sans-serif;}
+    .buy-price{font-size:36px;font-weight:900;color:var(--g);line-height:1.05;letter-spacing:-2px;font-family:'Nunito',sans-serif;}
+    .buy-sub{font-size:12px;color:var(--g2);margin-top:3px;font-weight:600;}
+
+    .buy-loc{
+      display:flex;align-items:center;gap:8px;
+      background:var(--sur);border:1px solid var(--bdr);
+      border-radius:14px;padding:11px 14px;
+    }
+    .buy-loc-dot{width:8px;height:8px;border-radius:50%;background:var(--g2);flex-shrink:0;}
+    .buy-loc-text{font-size:12px;color:var(--ink2);font-weight:600;}
+    .buy-loc-text span{color:var(--ink3);font-weight:400;}
+
+    .btn-buy{
+      width:100%;height:60px;background:var(--g);color:#fff;border:none;
+      border-radius:18px;font-size:17px;font-weight:900;cursor:pointer;
+      font-family:'Nunito',sans-serif;letter-spacing:-0.3px;
+      box-shadow:0 8px 24px rgba(42,107,34,0.4);transition:all 0.2s;
+      position:relative;overflow:hidden;
+    }
+    .btn-buy::after{content:'';position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,0.12) 0%,transparent 100%);border-radius:18px;pointer-events:none;}
+    .btn-buy:hover{background:var(--g2);transform:translateY(-1px);box-shadow:0 8px 24px rgba(42,107,34,0.4);}
+
+    .trust-row{display:flex;gap:8px;}
+    .trust-pill{
+      flex:1;background:var(--sur);border:1px solid var(--bdr);
+      border-radius:14px;padding:12px 8px;font-size:11px;
+      color:var(--ink3);text-align:center;line-height:1.4;
+      box-shadow:var(--shadow-sm);
+    }
+    .trust-pill strong{display:block;font-size:12px;font-weight:800;color:var(--ink);margin-bottom:2px;font-family:'Nunito',sans-serif;}
+    .trust-pill .rd{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--r);margin-right:3px;vertical-align:middle;}
+
+    .other-lbl{font-size:10px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:0.1em;font-family:'Nunito',sans-serif;}
+    .other-row{
+      background:var(--white);border:1px solid var(--bdr);
+      border-radius:14px;padding:13px 15px;
+      display:flex;align-items:center;justify-content:space-between;
+      box-shadow:var(--shadow-sm);
+    }
+    .other-name{font-size:14px;font-weight:700;color:var(--ink2);}
+    .other-sub{font-size:11px;color:var(--ink3);margin-top:2px;}
+    .other-price{font-size:15px;font-weight:800;color:var(--ink3);font-family:'Nunito',sans-serif;}
+    .other-diff{font-size:11px;color:var(--r);font-weight:600;text-align:right;margin-top:2px;}
+
+    .btn-share{
+      width:100%;height:48px;background:var(--white);
+      border:1.5px solid var(--bdr);border-radius:14px;
+      font-size:14px;font-weight:700;color:var(--ink2);
+      cursor:pointer;transition:all 0.15s;box-shadow:var(--shadow-sm);
+      font-family:'Nunito',sans-serif;
+    }
+    .btn-share:hover{background:var(--sur);}
+
+    /* ── Share sheet ── */
+    .sh-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:100;backdrop-filter:blur(3px);}
+    .sh-overlay.open{display:block;}
+    .sh-sheet{
+      display:none;position:fixed;bottom:0;left:50%;transform:translateX(-50%);
+      width:100%;max-width:390px;z-index:101;
+    }
+    .sh-sheet.open{display:block;animation:slideUp 0.35s cubic-bezier(0.34,1.1,0.64,1);}
+    @keyframes slideUp{from{transform:translateX(-50%) translateY(100%)}to{transform:translateX(-50%) translateY(0)}}
+    .sh-inner{background:var(--white);border-radius:28px 28px 0 0;padding:20px 20px 36px;display:flex;flex-direction:column;gap:16px;}
+    .sh-handle{width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:0 auto;}
+    .sh-preview{background:var(--sur);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px;}
+    .sh-pill{font-size:13px;font-weight:800;padding:5px 14px;border-radius:100px;align-self:flex-start;font-family:'Nunito',sans-serif;}
+    .sh-pill.red{background:var(--rl);color:#b01818;border:1px solid var(--rb);}
+    .sh-pill.amber{background:var(--al);color:var(--a);border:1px solid var(--ab);}
+    .sh-pill.green{background:var(--gl);color:var(--g);border:1px solid var(--gb);}
+    .sh-msg{font-size:12px;color:var(--ink2);line-height:1.5;}
+    .sh-tag{font-size:11px;color:var(--ink4);}
+    .sh-opts{display:flex;gap:16px;justify-content:center;}
+    .sh-opt{display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;}
+    .sh-opt-icon{width:54px;height:54px;border-radius:16px;background:var(--sur);border:1px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:22px;transition:transform 0.1s;}
+    .sh-opt:hover .sh-opt-icon{transform:scale(0.95);}
+    .sh-opt-lbl{font-size:11px;color:var(--ink3);font-weight:600;text-align:center;}
+    .sh-copied{display:none;text-align:center;font-size:13px;font-weight:700;color:var(--g);background:var(--gl);border-radius:10px;padding:8px;}
+    .sh-copied.show{display:block;}
+    .sh-cancel{width:100%;height:48px;background:var(--sur);border:none;border-radius:14px;font-size:15px;font-weight:700;color:var(--ink2);cursor:pointer;font-family:'Nunito',sans-serif;}
+
+    /* ── Email modal ── */
+    .em-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;backdrop-filter:blur(3px);}
+    .em-overlay.open{display:flex;align-items:flex-end;}
+    .em-modal{
+      background:var(--white);border-radius:28px 28px 0 0;
+      padding:24px 24px 40px;width:100%;max-width:390px;margin:0 auto;
+      display:flex;flex-direction:column;gap:14px;
+      animation:slideUp 0.35s cubic-bezier(0.34,1.1,0.64,1);
+    }
+    .em-handle{width:36px;height:4px;background:var(--bdr);border-radius:2px;margin:0 auto;}
+    .em-header{text-align:center;display:flex;flex-direction:column;align-items:center;gap:8px;}
+    .em-icon{width:56px;height:56px;background:var(--al);border:1px solid var(--ab);border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:26px;}
+    .em-title{font-size:20px;font-weight:900;color:var(--ink);letter-spacing:-0.3px;font-family:'Nunito',sans-serif;}
+    .em-sub{font-size:13px;color:var(--ink3);text-align:center;line-height:1.6;max-width:300px;}
+    .em-input{
+      width:100%;height:52px;border:1.5px solid var(--bdr);border-radius:16px;
+      padding:0 18px;font-size:15px;color:var(--ink);background:var(--sur);
+      outline:none;text-align:center;font-family:'Inter',sans-serif;transition:all 0.2s;
+    }
+    .em-input::placeholder{color:var(--ink4);}
+    .em-input:focus{border-color:var(--a2);background:var(--white);box-shadow:0 0 0 3px rgba(240,160,32,0.1);}
+    .em-btn{
+      width:100%;height:54px;background:var(--a);color:#fff;border:none;
+      border-radius:16px;font-size:15px;font-weight:800;cursor:pointer;
+      font-family:'Nunito',sans-serif;box-shadow:0 4px 16px rgba(212,130,10,0.3);transition:all 0.2s;
+    }
+    .em-btn:hover{background:var(--a2);transform:translateY(-1px);}
+    .em-skip{background:none;border:none;font-size:13px;color:var(--ink4);cursor:pointer;text-align:center;padding:4px;transition:color 0.15s;}
+    .em-skip:hover{color:var(--ink3);}
+    /* iOS input fixes */
+    input[type=number]{-webkit-appearance:none;-moz-appearance:textfield;appearance:textfield;}
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0;}
+    /* Prevent iOS text size adjustment */
+    html{-webkit-text-size-adjust:100%;text-size-adjust:100%;}
+    /* Better button reset */
+    button{-webkit-appearance:none;appearance:none;border:none;background:none;cursor:pointer;}
+    /* Smooth scrolling */
+    html{scroll-behavior:smooth;}
+    /* Selection colour */
+    ::selection{background:var(--gl);color:var(--g);}
+  </style>
+</head>
+<body>
+
+<!-- proto label removed for production -->
+
+<div class="hero-tagline">The app that pays for itself.</div>
+<div class="screen-dots">
+  <div class="dot active" id="dot-0"></div>
+  <div class="dot" id="dot-1"></div>
+  <div class="dot" id="dot-2"></div>
+  <div class="dot" id="dot-3"></div>
+  <div class="dot" id="dot-4"></div>
+  <div class="dot" id="dot-5"></div>
+  <div class="dot" id="dot-6"></div>
+  <div class="dot" id="dot-7"></div>
+  <div class="dot" id="dot-8"></div>
+</div>
+
+<div class="phone" role="main" aria-label="Savvey price checker">
+
+  <!-- Status bar -->
+  <div class="sb-wrap">
+    <div class="sb-notch"></div>
+    <div class="sb">
+      <div class="sb-time" id="sb-time">9:41</div>
+      <div class="sb-icons">
+        <div style="display:flex;gap:2px;align-items:flex-end">
+          <div class="sig" style="height:4px"></div>
+          <div class="sig" style="height:7px"></div>
+          <div class="sig" style="height:10px"></div>
+          <div class="sig" style="height:12px"></div>
+        </div>
+        <svg width="16" height="12" viewBox="0 0 16 12" fill="none">
+          <path d="M8 2.4C9.8 2.4 11.4 3.1 12.6 4.3L14 2.9C12.4 1.3 10.3 0.4 8 0.4C5.7 0.4 3.6 1.3 2 2.9L3.4 4.3C4.6 3.1 6.2 2.4 8 2.4Z" fill="#111"/>
+          <path d="M8 5.2C9.1 5.2 10.1 5.6 10.8 6.4L12.2 5C11.1 3.9 9.6 3.2 8 3.2C6.4 3.2 4.9 3.9 3.8 5L5.2 6.4C5.9 5.6 6.9 5.2 8 5.2Z" fill="#111"/>
+          <circle cx="8" cy="10" r="1.5" fill="#111"/>
+        </svg>
+        <svg width="25" height="12" viewBox="0 0 25 12" fill="none">
+          <rect x="0.5" y="0.5" width="21" height="11" rx="3.5" stroke="#111" stroke-opacity="0.35"/>
+          <rect x="2" y="2" width="16" height="8" rx="2" fill="#111"/>
+          <path d="M23 4.5V7.5C23.8 7.2 24.5 6.5 24.5 6C24.5 5.5 23.8 4.8 23 4.5Z" fill="#111" fill-opacity="0.4"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── A: Welcome ── -->
+  <div class="screen active" id="screen-a">
+    <div class="welcome-hero">
+      <div class="welcome-logo-row">
+        <div class="savvey-s lg"><span class="s-letter">S</span></div>
+        <div>
+          <div class="wm" style="font-size:40px"><span class="s">SAVVE</span><span class="y">Y</span></div>
+          <div class="tag-hero">spend smart<span class="rd">.</span></div>
+        </div>
+      </div>
+      <div class="welcome-headline">Know what anything<br>should cost.</div>
+      <div class="welcome-sub">Scan or search any product. Savvey checks 40+ UK retailers in seconds and tells you if there's a better deal out there.</div>
+      <div class="social-proof-row">
+        <div class="sp-pill">⭐ 4.9 rating</div>
+        <div class="sp-pill">🇬🇧 UK only</div>
+        <div class="sp-pill">⚡ Takes 10 seconds</div>
+      </div>
+    </div>
+    <div class="welcome-body">
+      <div class="feat">
+        <div class="feat-icon green" style="font-size:20px">📷</div>
+        <div class="feat-body">
+          <div class="feat-title">Scan or search any product</div>
+          <div class="feat-sub">Barcode, photo, or just type the name — works anywhere</div>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon amber">⚡</div>
+        <div class="feat-body">
+          <div class="feat-title">Get your Savvey Score</div>
+          <div class="feat-sub">Instantly know if you're getting a good deal or overpaying</div>
+        </div>
+      </div>
+      <div class="feat">
+        <div class="feat-icon red">💰</div>
+        <div class="feat-body">
+          <div class="feat-title">Buy it for less</div>
+          <div class="feat-sub">We show the cheapest UK retailer right now — Amazon, Currys, John Lewis, Argos and more</div>
+        </div>
+      </div>
+    </div>
+    <div class="social-proof-strip">
+      <div class="sps-item"><strong>40+</strong> retailers</div>
+      <div class="sps-div"></div>
+      <div class="sps-item"><strong>10s</strong> to check</div>
+      <div class="sps-div"></div>
+      <div class="sps-item"><strong>Free</strong> always</div>
+    </div>
+    <div class="welcome-footer">
+      <button class="cta-primary" onclick="goTo('b')" aria-label="Get started with Savvey">Check a price now →</button>
+      <div class="welcome-terms">Free · No sign-up · UK retailers only</div>
+    </div>
+  </div>
+
+  <!-- ── B: Location ── -->
+  <div class="screen" id="screen-b">
+    <div class="map-container">
+      <iframe id="map-iframe"
+        src="https://www.openstreetmap.org/export/embed.html?bbox=-0.1410,51.5130,-0.1290,51.5185&layer=mapnik&marker=51.5155,-0.1350"
+        allowfullscreen loading="lazy">
+      </iframe>
+      <div class="map-overlay"></div>
+      <div class="map-pulse"></div>
+      <div class="map-pin">
+        <div class="map-pin-inner"><div class="map-pin-dot"></div></div>
+      </div>
+    </div>
+    <div class="ob-body">
+      <div class="ob-title">Savvey works better<br>with your location</div>
+      <div class="ob-sub">We use it to detect which shop you're in and compare prices nearby — not just online.</div>
+      <div class="ob-cards">
+        <div class="ob-card">
+          <div class="ob-card-icon">🏪</div>
+          <div class="ob-card-text">
+            <strong>Auto-detects your store</strong>
+            No need to tell us where you are — we already know
+          </div>
+        </div>
+        <div class="ob-card">
+          <div class="ob-card-icon">🔒</div>
+          <div class="ob-card-text">
+            <strong>Private by design</strong>
+            Never stored, never sold, never shared with anyone
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="ob-btns">
+      <button class="btn-allow" onclick="goTo('c')">Allow location access</button>
+      <button class="btn-skip" onclick="goTo('c')">Not now — I'll enter manually</button>
+    </div>
+  </div>
+
+  <!-- ── C: Email ── -->
+  <div class="screen" id="screen-c">
+    <div class="email-hero">
+      <div class="email-icon-wrap">🔔</div>
+      <div class="email-hero-title">Get alerted when prices drop</div>
+      <div class="email-hero-sub">Add your email and Savvey watches your list. We ping you the moment something gets cheaper.</div>
+    </div>
+    <div class="email-form">
+      <div class="email-field-wrap">
+        <div class="email-field-icon">✉️</div>
+        <input class="email-field" type="email" placeholder="your@email.com"/>
+      </div>
+      <div class="email-benefit">
+        <div class="email-check"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="11" fill="#edfae9"/><path d="M6.5 11.5l3 3 6-6" stroke="#2a6b22" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="email-benefit-text">Price drop alerts — we track it, you just wait for the ping</div>
+      </div>
+      <div class="email-benefit">
+        <div class="email-check"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="11" fill="#edfae9"/><path d="M6.5 11.5l3 3 6-6" stroke="#2a6b22" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="email-benefit-text">Search history — come back to anything you've checked before</div>
+      </div>
+      <div class="email-benefit">
+        <div class="email-check"><svg viewBox="0 0 22 22" fill="none"><circle cx="11" cy="11" r="11" fill="#edfae9"/><path d="M6.5 11.5l3 3 6-6" stroke="#2a6b22" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="email-benefit-text">No spam — we only ever email when a price actually drops</div>
+      </div>
+    </div>
+    <div class="ob-btns" style="padding-top:20px;">
+      <button class="btn-allow" onclick="goTo(1)">Continue</button>
+      <button class="btn-skip" onclick="goTo(1)">Skip for now — just let me search</button>
+    </div>
+  </div>
+
+  <!-- ── 1: Search ── -->
+  <div class="screen" id="screen-1">
+    <div class="s1-top">
+      <div class="s1-header-row">
+        <div class="s1-wm wm"><span class="s">SAVVE</span><span class="y">Y</span></div>
+        <div class="s1-avatar">S</div>
+      </div>
+      <div class="s1-tagline">What should this cost?</div>
+    </div>
+
+    <div class="cat-row">
+      <div class="cat active" id="cat-tab-Electronics" onclick="selCat(this,'Electronics')">💻 Electronics</div>
+      <div class="cat" id="cat-tab-Home" onclick="selCat(this,'Home & Tools')">🏠 Home & Tools</div>
+      <div class="cat" id="cat-tab-Garden" onclick="selCat(this,'Garden')">🌱 Garden</div>
+      <div class="cat" id="cat-tab-Automotive" onclick="selCat(this,'Automotive')">🚗 Automotive</div>
+      <div class="cat" id="cat-tab-Sports" onclick="selCat(this,'Sports')">⚽ Sports</div>
+      <div class="cat" id="cat-tab-Health" onclick="selCat(this,'Health')">💊 Health</div>
+      <div class="cat" id="cat-tab-Baby" onclick="selCat(this,'Baby & Kids')">🧸 Baby & Kids</div>
+      <div class="cat" id="cat-tab-Pet" onclick="selCat(this,'Pet')">🐾 Pet</div>
+    </div>
+
+    <!-- Mode cards -->
+    <div class="mode-cards">
+      <div class="mode-card active" id="mode-scan" onclick="setMode('scan')">
+        <div class="mode-card-icon">
+          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+            <rect x="2" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+            <rect x="18" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+            <rect x="2" y="18" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+            <line x1="13" y1="4" x2="13" y2="22" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            <line x1="18" y1="13" x2="24" y2="13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            <rect x="20" y="18" width="4" height="6" rx="1" fill="white" opacity="0.6"/>
+          </svg>
+        </div>
+        <div class="mode-card-label">Scan or Snap</div>
+        <div class="mode-card-desc">Barcode or photo in any shop</div>
+      </div>
+      <div class="mode-card" id="mode-type" onclick="setMode('type')">
+        <div class="mode-card-icon">
+          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+            <circle cx="11" cy="11" r="7" stroke="#767c88" stroke-width="1.8"/>
+            <line x1="16.5" y1="16.5" x2="23" y2="23" stroke="#767c88" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="mode-card-label">Search</div>
+        <div class="mode-card-desc">Name + price you're seeing</div>
+      </div>
+      <div class="mode-card" id="mode-url" onclick="setMode('url')">
+        <div class="mode-card-icon">
+          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+            <path d="M10 13H7a5 5 0 0 0 0 10h2M16 13h3a5 5 0 0 1 0 10h-2" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-5) scale(1,0.9)"/>
+            <path d="M9 13h8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-1)"/>
+            <path d="M8 6l3-3 3 3M11 3v8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </div>
+        <div class="mode-card-label">Paste Link</div>
+        <div class="mode-card-desc">Drop any online product URL</div>
+      </div>
+    </div>
+
+    <!-- Scan panel -->
+    <div class="panel active" id="panel-scan">
+      <div class="scan-zone" onclick="goTo(15)">
+        <div class="scan-corners">
+          <div class="scan-corner tl"></div>
+          <div class="scan-corner tr"></div>
+          <div class="scan-corner bl"></div>
+          <div class="scan-corner br"></div>
+        </div>
+        <div class="scan-line"></div>
+        <div class="scan-label">📷 Scan barcode or take a photo</div>
+        <div class="scan-sub">Point at any product in any shop — works everywhere</div>
+      </div>
+    </div>
+
+    <!-- Search panel -->
+    <div class="panel" id="panel-type">
+      <div class="search-row">
+        <div class="search-wrap">
+          <div class="search-ico">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="6.5" cy="6.5" r="4.5" stroke="#b0b5be" stroke-width="1.5"/>
+              <line x1="10.5" y1="10.5" x2="14" y2="14" stroke="#b0b5be" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <input class="search-input" id="s1-input" type="text" placeholder="e.g. AirPods Pro, Dyson V15…" autocomplete="off" onkeydown="if(event.key==='Enter')doLiveSearch()" oninput="toggleClear(this)"/>
+          <div class="search-clear" id="search-clear" onclick="clearSearch()" style="display:none">✕</div>
+        </div>
+        <button class="btn-check" id="btn-check" onclick="doLiveSearch()" aria-label="Check this product price">Check</button>
+      </div>
+    </div>
+
+    <!-- URL panel -->
+    <div class="panel" id="panel-url">
+      <div class="url-panel-inner">
+        <div style="position:relative">
+          <div style="position:absolute;left:15px;top:50%;transform:translateY(-50%);font-size:16px;pointer-events:none;">🔗</div>
+          <input class="url-input" id="url-input-field" type="url" placeholder="Paste any retailer product link…"
+            oninput="detectRetailer(this.value)" onpaste="setTimeout(()=>detectRetailer(this.value),50)"/>
+        </div>
+        <!-- Retailer detected card — hidden until URL entered -->
+        <div class="url-detected" id="url-detected" style="display:none">
+          <div class="url-det-icon" id="url-det-icon">🛒</div>
+          <div class="url-det-info">
+            <div class="url-det-retailer" id="url-det-retailer">Retailer detected</div>
+            <div class="url-det-sub" id="url-det-sub">We'll fetch the price and find you a better deal</div>
+          </div>
+          <div class="url-det-tick">✓</div>
+        </div>
+        <button class="btn-paste" id="btn-paste-main" onclick="handlePaste()">Check this price</button>
+        <div class="url-divider">or paste from one of these retailers</div>
+        <div class="url-retailers">
+          <div class="url-pill" onclick="simulatePaste('https://www.amazon.co.uk/dp/B09XS7JWHH','amazon')">amazon.co.uk</div>
+          <div class="url-pill" onclick="simulatePaste('https://www.currys.co.uk/products/sony-wh1000xm5','currys')">currys.co.uk</div>
+          <div class="url-pill" onclick="simulatePaste('https://www.johnlewis.com/sony-wh-1000xm5','johnlewis')">johnlewis.com</div>
+          <div class="url-pill" onclick="simulatePaste('https://www.argos.co.uk/product/sony-wh1000xm5','argos')">argos.co.uk</div>
+          <div class="url-pill" onclick="simulatePaste('https://www.halfords.com/product/dash-cam','halfords')">halfords.com</div>
+        </div>
+        <div style="font-size:11px;color:var(--ink4);line-height:1.5;padding:2px 2px 0;">Copy any product link from the retailer's site and paste it above — Savvey detects the price automatically. These links will use affiliate tracking where available.</div>
+      </div>
+    </div>
+
+    <div class="loc-banner">
+      <div class="loc-dot"></div>
+      <div class="loc-text">You're in <strong>Currys, Oxford Street</strong> <span>· London W1</span></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- Electronics panel -->
+    <div class="cat-panel active" id="panel-cat-Electronics">
+      <div class="sec-label">Trending in Electronics</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🎧</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Sony WH-1000XM5</div>
+          <div class="cat-featured-sub">Best noise-cancelling headphones · from £249</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="searchTrend('Sony WH-1000XM5')"><div class="trending-rank top">1</div><div class="trending-name">Sony WH-1000XM5</div><div class="trending-searches">2.4k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">AirPods Pro 2</div><div class="trending-searches">1.8k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Dyson V15 Detect</div><div class="trending-searches">1.2k checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Samsung 65" QLED TV</div><div class="trending-searches">980 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Nintendo Switch OLED</div><div class="trending-searches">870 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Automotive panel -->
+    <div class="cat-panel" id="panel-cat-Automotive">
+      <div class="sec-label">Trending in Automotive</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🚗</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Halfords — 10% off this week</div>
+          <div class="cat-featured-sub">Tools, tyres and car accessories</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Tyre inflator</div><div class="trending-searches">1.6k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">Dash cam</div><div class="trending-searches">1.1k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Jump starter pack</div><div class="trending-searches">740 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Car phone mount</div><div class="trending-searches">620 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Screen wash concentrate</div><div class="trending-searches">510 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Home & Tools panel -->
+    <div class="cat-panel" id="panel-cat-Home">
+      <div class="sec-label">Trending in Home & Tools</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🏠</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">B&Q — Spring savings</div>
+          <div class="cat-featured-sub">Tools, paint and home improvement</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Kärcher pressure washer</div><div class="trending-searches">1.3k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">DeWalt drill set</div><div class="trending-searches">980 checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Ninja air fryer</div><div class="trending-searches">820 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Instant Pot</div><div class="trending-searches">790 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Dulux paint 5L</div><div class="trending-searches">540 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Sports panel -->
+    <div class="cat-panel" id="panel-cat-Sports">
+      <div class="sec-label">Trending in Sports</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">💪</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Protein World — 25% off today</div>
+          <div class="cat-featured-sub">Supplements, shakers and sports nutrition</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Protein powder 2kg</div><div class="trending-searches">1.9k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">Running trainers</div><div class="trending-searches">1.4k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Yoga mat</div><div class="trending-searches">880 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Garmin watch</div><div class="trending-searches">760 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Resistance bands set</div><div class="trending-searches">590 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Health panel -->
+    <div class="cat-panel" id="panel-cat-Health">
+      <div class="sec-label">Trending in Health & Beauty</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">💊</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Holland & Barrett — 3 for 2</div>
+          <div class="cat-featured-sub">Vitamins, supplements and wellness</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Vitamin D3 supplement</div><div class="trending-searches">2.1k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">Oral-B electric toothbrush</div><div class="trending-searches">1.5k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Omega 3 fish oil</div><div class="trending-searches">920 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Collagen powder</div><div class="trending-searches">780 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Philips Sonicare</div><div class="trending-searches">640 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Baby & Kids panel -->
+    <div class="cat-panel" id="panel-cat-Baby">
+      <div class="sec-label">Trending in Baby & Kids</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🧸</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Mothercare — new arrivals</div>
+          <div class="cat-featured-sub">Car seats, buggies and essentials</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Baby monitor</div><div class="trending-searches">1.1k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">LEGO sets</div><div class="trending-searches">980 checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Maclaren buggy</div><div class="trending-searches">720 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Kids scooter</div><div class="trending-searches">560 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Pampers nappies bulk</div><div class="trending-searches">490 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Pet panel -->
+    <div class="cat-panel" id="panel-cat-Pet">
+      <div class="sec-label">Trending in Pet</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🐾</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Pets at Home — member prices</div>
+          <div class="cat-featured-sub">Food, accessories and health</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Royal Canin dog food</div><div class="trending-searches">1.4k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">Whiskas cat food 40 pack</div><div class="trending-searches">1.1k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Cat tree / scratching post</div><div class="trending-searches">680 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Dog harness</div><div class="trending-searches">540 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Frontline flea treatment</div><div class="trending-searches">460 checks</div><div class="trending-fire"></div></div>
+    </div>
+
+    <!-- Garden panel -->
+    <div class="cat-panel" id="panel-cat-Garden">
+      <div class="sec-label">Trending in Garden</div>
+      <div class="cat-featured" onclick="goTo('1p')">
+        <div class="cat-featured-badge">Featured</div>
+        <div class="cat-featured-icon">🌱</div>
+        <div style="flex:1">
+          <div class="cat-featured-title">Screwfix — garden season deals</div>
+          <div class="cat-featured-sub">Mowers, tools and outdoor living</div>
+        </div>
+        <div class="cat-featured-arrow">›</div>
+      </div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">1</div><div class="trending-name">Lawn mower</div><div class="trending-searches">1.7k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank top">2</div><div class="trending-name">Garden hose 30m</div><div class="trending-searches">1.2k checks</div><div class="trending-fire">🔥</div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">3</div><div class="trending-name">Patio heater</div><div class="trending-searches">880 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">4</div><div class="trending-name">Raised bed planter</div><div class="trending-searches">640 checks</div><div class="trending-fire"></div></div>
+      <div class="trending-row" onclick="goTo('1p')"><div class="trending-rank">5</div><div class="trending-name">Cordless hedge trimmer</div><div class="trending-searches">520 checks</div><div class="trending-fire"></div></div>
+    </div>
+  </div>
+
+  <!-- ── 1p: What are you paying? ── -->
+  <div class="screen" id="screen-1p">
+    <div class="price-q-header">
+      <div class="price-q-back" onclick="goTo(1)">‹</div>
+      <div class="price-q-product" id="pq-product-name">Product</div>
+      <div class="price-q-cat">Electronics</div>
+    </div>
+    <div class="price-q-body">
+      <div class="price-q-title">What price are<br>you seeing?</div>
+      <div class="price-q-sub">Enter the price you're seeing — we'll tell you instantly if there's a better deal and where to get it.</div>
+      <div class="price-input-wrap">
+        <div class="price-currency">£</div>
+        <input class="price-input" id="price-input" type="number" placeholder="0.00" min="0" max="99999" step="0.01" inputmode="decimal"
+          oninput="document.getElementById('btn-get-score-el').disabled=!this.value" onkeydown="if(event.key==='Enter'&&this.value)startSearchWithPrice()"/>
+      </div>
+      <div class="price-context">
+        <div class="price-ctx-dot"></div>
+        <div class="price-ctx-text">You're in <strong>Currys, Oxford Street</strong> <span>· London W1</span></div>
+      </div>
+    </div>
+    <div class="price-q-actions">
+      <button class="btn-get-score" id="btn-get-score-el" onclick="startSearchWithPrice()" aria-label="Get my Savvey Score" disabled>
+        Get my Savvey Score →
+      </button>
+      <button class="btn-best-only" onclick="skipToResults()" aria-label="Skip price entry and find best price">
+        Skip — just show me the best price
+      </button>
+      <div class="price-q-hint">
+        No shelf price to hand? No problem — we'll still find the cheapest UK retailer.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 15: Camera Scanner ── -->
+  <div class="screen" id="screen-15">
+    <div class="cam-view">
+      <div class="cam-top-bar">
+        <div class="cam-close" onclick="goTo(1)">✕</div>
+        <div class="cam-title-text">Scan product</div>
+        <div class="cam-torch">🔦</div>
+      </div>
+
+      <div class="viewfinder" id="viewfinder">
+        <div class="vf-corner tl"></div>
+        <div class="vf-corner tr"></div>
+        <div class="vf-corner bl"></div>
+        <div class="vf-corner br"></div>
+        <div class="vf-beam" id="vf-beam"></div>
+        <!-- Fake barcode bars -->
+        <div class="vf-barcode" id="vf-barcode">
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:3px;height:50px"></div>
+          <div class="vf-bar" style="width:1px;height:50px"></div>
+          <div class="vf-bar" style="width:3px;height:50px"></div>
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:1px;height:50px"></div>
+          <div class="vf-bar" style="width:4px;height:50px"></div>
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:1px;height:50px"></div>
+          <div class="vf-bar" style="width:3px;height:50px"></div>
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:1px;height:50px"></div>
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:3px;height:50px"></div>
+          <div class="vf-bar" style="width:1px;height:50px"></div>
+          <div class="vf-bar" style="width:4px;height:50px"></div>
+          <div class="vf-bar" style="width:2px;height:50px"></div>
+          <div class="vf-bar" style="width:3px;height:50px"></div>
+        </div>
+        <div class="vf-lockon" id="vf-lockon"></div>
+      </div>
+
+      <!-- Detected product popup — appears after lock-on -->
+      <div class="cam-detected" id="cam-detected">
+        <div class="cam-det-icon">📦</div>
+        <div>
+          <div class="cam-det-name">Sony WH-1000XM5</div>
+          <div class="cam-det-sub">Noise cancelling headphones</div>
+        </div>
+        <button class="cam-det-btn" onclick="goTo('1p')">Check price →</button>
+      </div>
+
+      <div class="cam-hint">
+        <div class="cam-hint-text">Point at any barcode or product</div>
+        <div class="cam-hint-sub">Works with most products sold in UK shops</div>
+        <button class="cam-manual-btn" onclick="goTo(1);setTimeout(()=>setMode('type'),100)">Type product name instead</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── 2: Scanning ── -->
+  <div class="screen" id="screen-2">
+    <div class="scan-anim">
+      <div class="scan-ring"></div>
+      <div class="scan-ring-active"></div>
+      <div class="scan-ring-active2"></div>
+      <div class="scan-logo-inner">S</div>
+    </div>
+    <div class="scan-title">Finding best prices</div>
+    <div class="scan-counter" id="scan-counter" style="font-size:12px;color:var(--ink4);margin-top:-8px;"></div>
+    <div class="scan-prod">Sony WH-1000XM5</div>
+    <div class="scan-cat">Electronics</div>
+    <div class="scan-sub" id="scan-sub-text">Checking prices across UK retailers…</div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="r-chips" id="r-chips">
+      <div class="r-chip" id="rc-0">Amazon UK</div>
+      <div class="r-chip" id="rc-1">Currys</div>
+      <div class="r-chip" id="rc-2">John Lewis</div>
+      <div class="r-chip" id="rc-3">Argos</div>
+      <div class="r-chip" id="rc-4">AO</div>
+      <div class="r-chip" id="rc-5">Very</div>
+      <div class="r-chip" id="rc-6">Richer Sounds</div>
+      <div class="r-chip" id="rc-7">Box</div>
+    </div>
+  </div>
+
+  <!-- ── 3: Score ── -->
+  <div class="screen" id="screen-3">
+    <div class="scen-bar" id="scen-bar" style="display:none">
+      <div class="scen-lbl">Demo scenario:</div>
+      <div class="scen-tabs">
+        <div class="s-tab active" id="tab-0" onclick="setScen(0)">🔴 Red</div>
+        <div class="s-tab" id="tab-1" onclick="setScen(1)">🟡 Amber</div>
+        <div class="s-tab" id="tab-2" onclick="setScen(2)">🟢 Best</div>
+        <div class="s-tab" id="tab-3" onclick="setScen(3)">🟢 Close</div>
+      </div>
+    </div>
+
+    <div class="score-card state-red" id="score-card">
+      <div class="score-eyebrow" id="score-eyebrow-text">Your Savvey Score</div>
+      <div class="score-ring-wrap">
+        <svg class="score-svg" width="160" height="160" viewBox="0 0 152 152">
+          <circle class="score-track" cx="76" cy="76" r="60"/>
+          <circle class="score-arc" id="score-arc" cx="76" cy="76" r="60"/>
+        </svg>
+        <div class="score-inner">
+          <div class="score-num red" id="score-num">--</div>
+          <div class="score-of red" id="score-of">/ 100</div>
+        </div>
+      </div>
+      <div class="spec-wrap">
+        <div class="spec-track">
+          <div class="spec-thumb" id="spec-thumb" style="left:0%"></div>
+        </div>
+        <div class="spec-lbls">
+          <div class="spec-lbl" id="lbl-over">Overpaying</div>
+          <div class="spec-lbl" id="lbl-check">Check around</div>
+          <div class="spec-lbl" id="lbl-fair">Right price</div>
+        </div>
+      </div>
+      <div class="verdict red" id="verdict" style="opacity:0;transform:translateY(8px)">
+        <div class="verdict-dot red" id="vdot"></div>
+        <div style="flex:1">
+          <div class="verdict-title red" id="vtitle"></div>
+          <div class="verdict-sub red" id="vsub"></div>
+        </div>
+        <div class="verdict-saving" id="verdict-saving" style="display:none"></div>
+      </div>
+    </div>
+
+    <div class="prod-card">
+      <div style="flex:1">
+        <div class="prod-name" id="prod-name">Sony WH-1000XM5</div>
+        <div class="prod-meta" id="prod-meta">Best price: £249 at Amazon UK</div>
+      </div>
+      <div class="prod-cat" id="prod-cat">Electronics</div>
+    </div>
+    <div class="live-badge" id="live-badge" style="display:none">
+      <div class="live-dot"></div>
+      <span>Live prices</span>
+    </div>
+
+    <div id="saving-hero" style="display:none" class="saving-hero">
+      <div class="saving-hero-amount" id="saving-hero-amount">£0</div>
+      <div class="saving-hero-text">less elsewhere right now</div>
+    </div>
+    <div class="sec-label" style="padding:0 2px" id="prices-found-label">Prices found</div>
+    <div class="ret-list" id="ret-list"></div>
+
+    <div class="track-cta" onclick="showEM()">
+      <div class="track-icon">🔔</div>
+      <div style="flex:1">
+        <div class="track-title">Track this price</div>
+        <div class="track-sub">We'll email you the moment the price drops anywhere in the UK</div>
+      </div>
+      <div class="track-arr">›</div>
+    </div>
+
+    <button class="share-score-btn" id="share-score-btn" onclick="doShare()">
+      <span style="font-size:16px">📤</span> Share my Savvey Score
+    </button>
+    <div class="ts" id="check-timestamp">Checking prices…</div>
+  </div>
+
+  <!-- ── 4: Buy ── -->
+  <div class="screen" id="screen-4">
+    <div class="back-row" onclick="goTo(3)">
+      <div class="back-btn">‹</div>
+      <div class="back-lbl">Back to results</div>
+    </div>
+
+    <div class="buy-hero">
+      <div class="buy-logo">amzn</div>
+      <div>
+        <div class="buy-retailer">Amazon UK</div>
+        <div class="buy-price">£249</div>
+        <div class="buy-sub">Best price found · 90-day low</div>
+      </div>
+    </div>
+
+    <div class="buy-loc">
+      <div class="buy-loc-dot"></div>
+      <div class="buy-loc-text">You're in <strong>Currys, Oxford St</strong><span> — they charge £329 here</span></div>
+    </div>
+
+    <button class="btn-buy" id="btn-buy-main" onclick="window.open('https://www.amazon.co.uk/dp/B09XS7JWHH?tag=savvey-21','_blank')">Go to Amazon UK →</button>
+
+    <div class="trust-row">
+      <div class="trust-pill"><strong>Free</strong>delivery</div>
+      <div class="trust-pill"><strong>In stock</strong>ships today</div>
+      <div class="trust-pill"><strong style="color:var(--r)">⬤</strong> <strong>90-day low</strong></div>
+    </div>
+
+    <div class="other-lbl">Other options</div>
+    <div id="buy-others-list">
+    <div class="other-row">
+      <div><div class="other-name">Currys</div><div class="other-sub">In store · Oxford St</div></div>
+      <div style="text-align:right"><div class="other-price">£329</div><div class="other-diff">+£80 more</div></div>
+    </div>
+    <div class="other-row">
+      <div><div class="other-name">John Lewis</div><div class="other-sub">2yr warranty included</div></div>
+      <div style="text-align:right"><div class="other-price">£319</div><div class="other-diff">+£70 more</div></div>
+    </div>
+    <div class="other-row">
+      <div><div class="other-name">Argos</div><div class="other-sub">Click & collect · 0.2 mi</div></div>
+      <div style="text-align:right"><div class="other-price">£299</div><div class="other-diff">+£50 more</div></div>
+    
+    </div></div>
+
+    <button class="btn-share" onclick="doShare()">Share my Savvey Score</button>
+
+    <!-- Share sheet -->
+    <div class="sh-sheet" id="sh-sheet">
+      <div class="sh-inner">
+        <div class="sh-handle"></div>
+        <div class="sh-preview">
+          <div class="sh-pill" id="sh-pill">Savvey Score: 24/100 🔴</div>
+          <div class="sh-msg" id="sh-msg"></div>
+          <div class="sh-tag">Found with Savvey · savvey.app</div>
+        </div>
+        <div class="sh-opts">
+          <div class="sh-opt" onclick="cpShare()">
+            <div class="sh-opt-icon">⎘</div>
+            <div class="sh-opt-lbl">Copy</div>
+          </div>
+          <div class="sh-opt" onclick="shareVia('whatsapp')">
+            <div class="sh-opt-icon" style="background:#25D366;color:#fff;font-size:20px;font-weight:800;">W</div>
+            <div class="sh-opt-lbl">WhatsApp</div>
+          </div>
+          <div class="sh-opt" onclick="shareVia('twitter')">
+            <div class="sh-opt-icon" style="background:#000;color:#fff;font-size:17px;font-weight:800;">X</div>
+            <div class="sh-opt-lbl">X</div>
+          </div>
+          <div class="sh-opt" onclick="shareVia('messages')">
+            <div class="sh-opt-icon" style="background:#34C759;color:#fff;font-size:20px;">✉</div>
+            <div class="sh-opt-lbl">Messages</div>
+          </div>
+        </div>
+        <div class="sh-copied" id="sh-copied">Copied ✓</div>
+        <button class="sh-cancel" onclick="closeShare()">Cancel</button>
+      </div>
+    </div>
+    <div class="sh-overlay" id="sh-overlay" onclick="closeShare()"></div>
+  </div>
+
+</div><!-- /phone -->
+
+<!-- Email modal -->
+<div class="em-overlay" id="em-modal">
+  <div class="em-modal">
+    <div class="em-handle"></div>
+    <div class="em-header">
+      <div class="em-icon">🔔</div>
+      <div class="em-title">Track this price</div>
+    </div>
+    <div class="em-sub">Enter your email and Savvey will alert you the moment this gets cheaper anywhere in the UK.</div>
+    <input class="em-input" type="email" placeholder="your@email.com" oninput="this.style.borderColor=''"/>
+    <button class="em-btn" onclick="closeEM(true)">Start tracking</button>
+    <button class="em-skip" onclick="closeEM(false)">Skip for now</button>
+  </div>
+</div>
+
+<!-- Nav -->
+<div class="nav" style="display:none">
+  <button class="nav-btn" id="btn-prev" onclick="prev()" disabled>← Back</button>
+  <span class="screen-name" id="scr-name">Welcome</span>
+  <button class="nav-btn primary" id="btn-next" onclick="next()">Next →</button>
+</div>
+
+<script>
+const SB_URL='https://hbejaydvpkiowdfqhmoi.supabase.co';
+const SB_KEY='sb_publishable_BzLm-UOTZypHVJQUZj7KRA_tqgBsadg';
+const SERPER_KEY='c6f452d84cf819a5297da85154fdeb9086210a07';
+
+// ── UK retailer price extraction from Serper results ──
+const UK_RETAILERS_MAP={
+  'amazon.co.uk':    {name:'Amazon UK',      icon:'📦', aff:'?tag=savvey-21'},
+  'amazon.com':      {name:'Amazon UK',      icon:'📦', aff:'?tag=savvey-21'},
+  'currys.co.uk':    {name:'Currys',          icon:'⚡', aff:''},
+  'johnlewis.com':   {name:'John Lewis',      icon:'🛍️', aff:''},
+  'argos.co.uk':     {name:'Argos',           icon:'🔵', aff:''},
+  'ao.com':          {name:'AO.com',          icon:'🏠', aff:''},
+  'very.co.uk':      {name:'Very',            icon:'🛒', aff:''},
+  'richersounds.com':{name:'Richer Sounds',   icon:'🎵', aff:''},
+  'box.co.uk':       {name:'Box.co.uk',       icon:'📬', aff:''},
+  'ebay.co.uk':      {name:'eBay UK',         icon:'🏷️', aff:''},
+  'costco.co.uk':    {name:'Costco UK',       icon:'🏪', aff:''},
+  'halfords.com':    {name:'Halfords',         icon:'🚗', aff:''},
+  'screwfix.com':    {name:'Screwfix',         icon:'🔧', aff:''},
+  'boots.com':       {name:'Boots',            icon:'💊', aff:''},
+  'apple.com':       {name:'Apple Store',      icon:'🍎', aff:''},
+  'samsung.com':     {name:'Samsung',          icon:'📱', aff:''},
+  'therange.co.uk':  {name:'The Range',        icon:'🏪', aff:''},
+  'smythstoys.com':  {name:'Smyths Toys',      icon:'🧸', aff:''},
+  'wayfair.co.uk':   {name:'Wayfair',          icon:'🛋️', aff:''},
+  'next.co.uk':      {name:'Next',             icon:'👕', aff:''},
+  'dunelm.com':      {name:'Dunelm',           icon:'🏠', aff:''},
+  'bquk.com':        {name:'B&Q',              icon:'🔨', aff:''},
+  'diy.com':         {name:'B&Q',              icon:'🔨', aff:''},
+  'toolstation.com': {name:'Toolstation',      icon:'🔧', aff:''},
+  'mediamarkt':      {name:'MediaMarkt',       icon:'📺', aff:''},
+};
+
+let liveResults=null; // stores parsed live Serper results
+let liveQuery='';     // the product query used
+
+// Extract £ price from a string like "£249.00" or "Buy for £249"
+function extractPrice(str){
+  if(!str)return null;
+  if(typeof str==='number')return str>0&&str<99999?str:null;
+  // Try £ symbol
+  let m=str.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
+  if(m)return parseFloat(m[1].replace(',',''));
+  // Try plain numeric string (Serper price field is often just "219.00")
+  m=str.match(/^([\d,]+(?:\.\d{1,2})?)$/);
+  if(m){const v=parseFloat(m[1].replace(',',''));if(v>=5&&v<99999)return v;}
+  return null;
+}
+
+// Match a result URL to a known UK retailer
+function matchRetailer(url){
+  if(!url)return null;
+  for(const domain of Object.keys(UK_RETAILERS_MAP)){
+    if(url.includes(domain))return {domain,...UK_RETAILERS_MAP[domain]};
+  }
+  return null;
+}
+
+// Compute Savvey Score given user's price vs best available price
+function calcScore(userPrice, bestPrice){
+  if(!userPrice||!bestPrice||bestPrice<=0)return 91; // default to green if no user price
+  const gap=(userPrice-bestPrice)/bestPrice;
+  if(gap<=0.02)return Math.round(91+Math.min(9,(-gap)*200)); // best price or cheaper
+  if(gap<=0.08)return Math.round(91-gap*200);   // 0–8% more = high green
+  if(gap<=0.20)return Math.round(78-gap*150);   // 8–20% more = amber
+  if(gap<=0.40)return Math.round(58-gap*120);   // 20–40% more = red territory
+  return Math.max(5,Math.round(40-gap*80));      // >40% overpay = deep red
+}
+
+// Build a live SCEN object from Serper results
+function buildLiveScen(serperData, userPrice, query){
+  const shoppingResults=serperData.shopping||[];
+  const organicResults=serperData.organic||[];
+
+  // Combine sources and try to find UK retailer prices
+  const parsed=[];
+
+  // From shopping results
+  for(const item of shoppingResults){
+    // Try link first, then source (Serper often puts domain in source)
+    const searchStr=[item.link||'',item.source||'',item.merchant||''].join(' ');
+    const ret=matchRetailer(searchStr);
+    // Price: try the price field (often clean "£219.00"), then title/snippet
+    const rawPrice=item.price||item.extracted_price||'';
+    const price=extractPrice(String(rawPrice))||extractPrice(item.title||'')||extractPrice(item.snippet||'');
+    if(ret&&price&&price>5&&price<50000){
+      const link=item.link||item.product_link||'';
+      const affLink=link+(link.includes('amazon')?ret.aff:'');
+      // Sub: use delivery/condition info if available
+      const sub=item.delivery?`${item.delivery}`:item.condition?`${item.condition}`:'';
+      parsed.push({
+        retailer:ret.name, icon:ret.icon,
+        price, link:affLink,
+        sub, best:false, bad:false
+      });
+    }
+  }
+
+  // From organic results (as fallback)
+  for(const item of organicResults){
+    const ret=matchRetailer(item.link||'');
+    if(!ret)continue;
+    // Try snippet first (often has price), then title
+    const price=extractPrice(item.snippet||'')||extractPrice(item.title||'');
+    if(price&&price>5&&price<50000&&!parsed.find(p=>p.retailer===ret.name)){
+      // Clean snippet — remove everything after price for sub text
+      let sub='';
+      if(item.snippet){
+        const m=item.snippet.match(/£[\d,]+/);
+        sub=m?item.snippet.substring(0,item.snippet.indexOf(m[0])+m[0].length).trim():'';
+      }
+      parsed.push({
+        retailer:ret.name, icon:ret.icon,
+        price, link:(item.link||'')+(ret.aff||''),
+        sub:sub.slice(0,60), best:false, bad:false
+      });
+    }
+  }
+
+  // Dedupe and sort by price ascending
+  const seen=new Set();
+  const deduped=parsed.filter(p=>{
+    if(seen.has(p.retailer))return false;
+    seen.add(p.retailer);return true;
+  }).sort((a,b)=>a.price-b.price);
+
+  if(deduped.length===0)return null; // no results — fall back to demo
+
+  // Sanity filter: cluster prices around the median, drop wild outliers
+  // Catches accessories (£5 case) mixed with main product (£219 headphones)
+  if(deduped.length>=2){
+    const prices=deduped.map(p=>p.price);
+    const med=prices[Math.floor(prices.length/2)];
+    // Keep prices within 60% below or 80% above median
+    const filtered=deduped.filter(p=>p.price>=med*0.40 && p.price<=med*1.80);
+    if(filtered.length>=1){
+      deduped.length=0;filtered.forEach(p=>deduped.push(p));
+    }
+  }
+  if(deduped.length===0)return null;
+
+  // Mark best
+  deduped[0].best=true;
+  const bestPrice=deduped[0].price;
+
+  // Mark bad (more than 5% over best)
+  deduped.forEach(p=>{p.bad=p.price>bestPrice*1.05;});
+
+  // Score
+  const score=calcScore(userPrice,bestPrice);
+  const clampedScore=Math.max(5,Math.min(100,score));
+
+  // Verdict messaging
+  let vt,vs,spc;
+  const saving=userPrice?Math.round(userPrice-bestPrice):0;
+  const hasSaving = userPrice && saving > 0;
+  if(clampedScore>=75){
+    vt='Great price';
+    vs=hasSaving
+      ? `Only £${saving} cheaper online — barely worth waiting for delivery.`
+      : `${deduped[0].retailer} has the best price in the UK right now at £${bestPrice}.`;
+    spc='green';
+  } else if(clampedScore>=40){
+    vt='Worth shopping around';
+    vs=hasSaving
+      ? `You could save £${saving}. ${deduped[0].retailer} has it for £${bestPrice}.`
+      : `${deduped[0].retailer} has it for £${bestPrice}. Worth checking before you buy.`;
+    spc='amber';
+  } else {
+    vt='Better deal available';
+    vs=hasSaving
+      ? `You could save £${saving} right now. ${deduped[0].retailer} has it for £${bestPrice}.`
+      : `Best price found: £${bestPrice} at ${deduped[0].retailer}. Check before you pay more.`;
+    spc='red';
+  }
+
+  // Build rets array for renderRets
+  const rets=deduped.slice(0,6).map(p=>({
+    n:p.retailer,
+    s:p.sub.slice(0,50),
+    p:'£'+p.price.toFixed(0),
+    c:p.best?'p-best':p.price<bestPrice*1.15?'p-mid':'p-high',
+    d:p.best?'':`£${(p.price-bestPrice).toFixed(0)} more`,
+    bad:p.bad, best:p.best,
+    link:p.link
+  }));
+
+  // Share message
+  const bestRet=deduped[0];
+  const savingMsg=userPrice&&Math.round(userPrice-bestPrice)>0?` I could save £${Math.round(userPrice-bestPrice)}!`:'';
+  const sm=`🛍️ Just used Savvey to check the price of ${query}.${savingMsg} Savvey Score: ${clampedScore}/100 — ${spc==='green'?'Great deal ✅':'Check around ⚠️'} Best price: £${bestPrice} at ${bestRet.retailer} · savvey.vercel.app`;
+
+  return {
+    id:spc, score:clampedScore,
+    bounce:Math.min(100,clampedScore+Math.round(Math.random()*20+10)),
+    sp:clampedScore, vt, vs, sm,
+    _userPrice:userPrice, _bestPrice:bestPrice,
+    sp2:`Savvey Score: ${clampedScore}/100 ${spc==='green'?'🟢':spc==='amber'?'🟡':'🔴'}`,
+    spc, rets,
+    bestLink:bestRet.link,
+    bestRetailer:bestRet.retailer,
+    bestPrice
+  };
+}
+
+// Show a loading/error toast inside the phone
+function showSearchStatus(msg, isError=false){
+  let el=document.getElementById('search-status-toast');
+  if(!el){
+    el=document.createElement('div');
+    el.id='search-status-toast';
+    el.style.cssText=`position:fixed;bottom:80px;left:50%;transform:translateX(-50%);
+      background:${isError?'#e03535':'#2a6b22'};color:#fff;padding:10px 20px;
+      border-radius:100px;font-size:13px;font-weight:600;z-index:999;
+      box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:opacity 0.3s;`;
+    document.body.appendChild(el);
+  }
+  el.style.background=isError?'#e03535':'#2a6b22';
+  el.textContent=msg;
+  el.style.opacity='1';
+}
+function hideSearchStatus(){
+  const el=document.getElementById('search-status-toast');
+  if(el){el.style.opacity='0';setTimeout(()=>el.remove(),300);}
+}
+
+function doLiveSearch(){
+  const inp=document.getElementById('s1-input');
+  const query=(inp?inp.value.trim():'');
+  if(!query){inp&&inp.focus();return;}
+
+  // Sanitise input
+  const safeQuery=query.replace(/[<>"'&]/g,'').slice(0,150);
+  liveQuery=safeQuery;
+  inputMethod='search';
+
+  const cap=safeQuery.charAt(0).toUpperCase()+safeQuery.slice(1);
+  const scanProd=document.querySelector('.scan-prod');
+  if(scanProd)scanProd.textContent=cap;
+  const prodName=document.getElementById('prod-name');
+  if(prodName)prodName.textContent=cap;
+
+  // Update price screen product name
+  const pqName = document.getElementById('pq-product-name');
+  if(pqName) pqName.textContent = safeQuery;
+
+  // Brief visual feedback on button
+  const checkBtn=document.getElementById('btn-check');
+  if(checkBtn){checkBtn.style.transform='scale(0.96)';setTimeout(()=>checkBtn.style.transform='',150);}
+  // Go to price screen first
+  goTo('1p');
+}
+
+function startSearchWithPrice(){
+  const priceInp=document.getElementById('price-input');
+  const userPrice=priceInp?parseFloat(priceInp.value)||null:null;
+  serperPromise=new Promise(r=>{serperResolve=r;});
+  goTo(2);
+  runSerperSearch(userPrice);
+}
+
+let lastSerperQuery='';
+let lastSerperResult=null;
+
+async function runSerperSearch(userPrice){
+  const query=liveQuery;
+  if(!query)return;
+  // Use cached result if same query (re-check from price screen)
+  if(query===lastSerperQuery&&lastSerperResult){
+    const scen=buildLiveScen(lastSerperResult,userPrice,query);
+    if(scen){
+      if(SCENS[0]&&SCENS[0]._live)SCENS.shift();
+      scen._live=true;SCENS.unshift(scen);activeScen=0;liveResults=scen;
+      const lb=document.getElementById('live-badge');if(lb)lb.style.display='flex';
+      const sb=document.getElementById('scen-bar');if(sb)sb.style.display='none';
+      if(SCREENS[cur]===3)setTimeout(animScore,100);
+    }
+    if(serperResolve){serperResolve();serperResolve=null;}
+    return;
+  }
+
+  showSearchStatus('Searching UK retailers…');
+
+  try{
+    // Shopping search — primary source
+    const res=await fetch('/api/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q:`${query} buy UK`,type:'shopping'})
+    });
+
+    if(!res.ok)throw new Error('Search error '+res.status);
+    const data=await res.json();
+    let shopping=data.shopping||[];
+
+    // If shopping returned no UK retailer results, try a broader query
+    if(shopping.length===0){
+      const retry=await fetch('/api/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({q:query,type:'shopping'})
+      });
+      if(retry.ok){const rd=await retry.json();shopping=rd.shopping||[];}
+    }
+
+    // Organic search — secondary source for price signals
+    const res2=await fetch('/api/search',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q:`${query} price UK`,type:'search'})
+    });
+    const data2=res2.ok?await res2.json():{};
+
+    const combined={shopping,organic:data2.organic||[]};
+    lastSerperQuery=query;
+    lastSerperResult=combined;
+    const scen=buildLiveScen(combined,userPrice,query);
+
+    if(scen){
+      if(SCENS[0]&&SCENS[0]._live)SCENS.shift();
+      scen._live=true;
+      SCENS.unshift(scen);
+      activeScen=0;
+      liveResults=scen;
+      // Hide demo bar for live results
+      const sb=document.getElementById('scen-bar');
+      if(sb)sb.style.display='none';
+      const lb=document.getElementById('live-badge');
+      if(lb)lb.style.display='flex';
+      // If already on score screen, re-animate with live data
+      if(SCREENS[cur]===3){
+        const pn=document.getElementById('prod-name');
+        if(pn&&liveQuery)pn.textContent=liveQuery.charAt(0).toUpperCase()+liveQuery.slice(1);
+        setTimeout(animScore,100);
+      }
+
+      // Update buy screen with live data
+      const buyBtn=document.getElementById('btn-buy-main');
+      if(buyBtn&&scen.bestLink){
+        buyBtn.textContent=`Go to ${scen.bestRetailer} →`;
+        buyBtn.onclick=()=>window.open(scen.bestLink,'_blank');
+      }
+      // Update buy screen hero
+      const buyRetailer=document.querySelector('.buy-retailer');
+      const buyPrice=document.querySelector('.buy-price');
+      const buyLogo=document.querySelector('.buy-logo');
+      if(buyRetailer)buyRetailer.textContent=scen.bestRetailer;
+      if(buyPrice)buyPrice.textContent=`£${scen.bestPrice}`;
+      if(buyLogo)buyLogo.textContent=scen.bestRetailer.slice(0,4).toLowerCase();
+      // Update other options on buy screen from live rets
+      const othersList=document.getElementById('buy-others-list');
+      if(othersList&&scen.rets.length>1){
+        const others=scen.rets.slice(1,4);
+        othersList.innerHTML=others.map(r=>`
+          <div class="other-row" onclick="${r.link?`window.open('${r.link}','_blank')`:''}">
+            <div><div class="other-name">${r.n}</div><div class="other-sub">${r.s||'In stock'}</div></div>
+            <div style="text-align:right">
+              <div class="other-price">${r.p}</div>
+              ${r.d?`<div class="other-diff">+${r.d}</div>`:''}
+            </div>
+          </div>`).join('');
+      }
+
+      const prodMeta=document.getElementById('prod-meta');
+      if(prodMeta)prodMeta.textContent=`Best price: £${scen.bestPrice} at ${scen.bestRetailer}`;
+
+      // Update product name and price count on score screen
+      const pnEl=document.getElementById('prod-name');
+      if(pnEl&&liveQuery)pnEl.textContent=liveQuery.charAt(0).toUpperCase()+liveQuery.slice(1);
+      const pfLabel=document.getElementById('prices-found-label');
+      if(pfLabel)pfLabel.textContent=`${scen.rets.length} price${scen.rets.length!==1?'s':''} found`;
+
+      hideSearchStatus();
+    } else {
+      showSearchStatus('No UK prices found — showing example data',true);
+      const sb=document.getElementById('scen-bar');if(sb)sb.style.display='flex';
+      activeScen=0;
+      setTimeout(hideSearchStatus,3000);
+    }
+
+  }catch(err){
+    console.error('Serper error:',err);
+    // Still advance to score with demo data
+    if(SCREENS[cur]===2){
+      showSearchStatus('Using example prices — connect to see live data',true);
+    }
+    setTimeout(hideSearchStatus,4000);
+  } finally {
+    if(serperResolve){serperResolve();serperResolve=null;}
+  }
+}
+
+const SCREENS=['a','b','c',1,'1p',15,2,3,4];
+const NAMES=['Welcome','Location','Email','Search','What are you paying?','Scanner','Scanning','Savvey Score','Buy'];
+const CIRC=2*Math.PI*60;
+
+let cur=0,scanT=null,chipTs=[],af=null,activeScen=0,activeCat='Electronics';
+let inputMethod='search'; // 'scan' | 'search' | 'paste'
+
+const SCENS=[
+  {id:'red',score:24,bounce:72,sp:24,
+   vt:'Overpaying — significant gap found',
+   vs:'You could save £80 vs where you\'re standing. Amazon has it for £249.',
+   vsScanned:'You scanned this for £329. Amazon has it for £249 — save £80.',
+   vsSearched:'You searched for this at £329. Amazon has it for £249 — save £80.',
+   vsPasted:'This product costs £329 on Currys. Amazon has it for £249 — save £80.',
+   sm:'Sony WH-1000XM5 — Currys wanted £329, found it on Amazon UK for £249. Saving £80. Savvey Score: 24/100 · savvey.app',
+   sp2:'Savvey Score: 24/100 🔴',spc:'red',
+   rets:[
+     {n:'Amazon UK',s:'In stock · free delivery',p:'£249',c:'p-best',d:'',best:true},
+     {n:'Currys',s:'In stock · next day',p:'£279',c:'p-mid',d:'£30 more',bad:true},
+     {n:'Argos',s:'Click & collect',p:'£319',c:'p-high',d:'£70 more',bad:true},
+     {n:'John Lewis',s:'2yr warranty',p:'£329',c:'p-high',d:'£80 more',bad:true},
+   ]},
+  {id:'amber',score:58,bounce:80,sp:58,
+   vt:'Check around — a saving is available',
+   vs:'Only £20 cheaper online. If you need it today, buying here is reasonable.',
+   vsScanned:'You scanned this for £269. Amazon has it for £249 — only £20 more if you need it today.',
+   vsSearched:'You searched at £269. Amazon has it for £249 — a small saving if you\'re happy to wait.',
+   vsPasted:'This product is £269 online. Amazon has it for £249 — worth checking before buying.',
+   sm:'Savvey checked Sony WH-1000XM5 — £269 in store, £249 online. Worth checking around. Savvey Score: 58/100 · savvey.app',
+   sp2:'Savvey Score: 58/100 🟡',spc:'amber',
+   rets:[
+     {n:'Amazon UK',s:'In stock · free delivery',p:'£249',c:'p-best',d:'',best:true},
+     {n:'Currys',s:'In stock · next day',p:'£259',c:'p-mid',d:'£10 more',bad:true},
+     {n:'John Lewis',s:'2yr warranty',p:'£269',c:'p-mid',d:'£20 more',bad:true},
+     {n:'Argos',s:'Click & collect',p:'£275',c:'p-mid',d:'£26 more',bad:true},
+   ]},
+  {id:'green',score:91,bounce:97,sp:91,
+   vt:'Right price — this is the best deal',
+   vs:'You\'re already at the best available price in the UK. Buy with confidence.',
+   vsScanned:'You scanned this for £249. That\'s the best price in the UK right now. Buy with confidence.',
+   vsSearched:'You searched at £249. That\'s the best available UK price. You\'re good to go.',
+   vsPasted:'This listing at £249 is the best price in the UK right now. Buy with confidence.',
+   sm:'Savvey confirmed Sony WH-1000XM5 at £249 — right price, best in the UK right now. Savvey Score: 91/100 · savvey.app',
+   sp2:'Savvey Score: 91/100 🟢',spc:'green',
+   rets:[
+     {n:'This store',s:'You\'re already here — take it home',p:'£249',c:'p-best',d:'',best:true},
+     {n:'Amazon UK',s:'In stock · free delivery',p:'£249',c:'p-best',d:'Same price',bad:false},
+     {n:'Currys',s:'In stock · next day',p:'£259',c:'p-mid',d:'£10 more',bad:true},
+     {n:'John Lewis',s:'2yr warranty',p:'£275',c:'p-mid',d:'£26 more',bad:true},
+   ]},
+  {id:'green',score:78,bounce:93,sp:78,
+   vt:'Right price — almost the best deal',
+   vs:'Only £10 cheaper online. Barely worth the wait for delivery.',
+   vsScanned:'You scanned this for £259. Only £10 cheaper online — barely worth the wait.',
+   vsSearched:'You searched at £259. Amazon has it for £249 — only £10. Up to you.',
+   vsPasted:'This product is £259 here. Amazon has it for £249 — a small saving if you\'re happy to order.',
+   sm:'Savvey checked Sony WH-1000XM5 — £259 in store vs £249 online. Right price territory. Savvey Score: 78/100 · savvey.app',
+   sp2:'Savvey Score: 78/100 🟢',spc:'green',
+   rets:[
+     {n:'Amazon UK',s:'1–2 days delivery',p:'£249',c:'p-best',d:'',best:true},
+     {n:'This store',s:'Take it home today',p:'£259',c:'p-mid',d:'£10 more',bad:false},
+     {n:'Currys',s:'In stock · next day',p:'£259',c:'p-mid',d:'£10 more',bad:false},
+     {n:'John Lewis',s:'2yr warranty',p:'£275',c:'p-mid',d:'£26 more',bad:true},
+   ]},
+];
+
+let bestPriceOnly = false; // tracks whether user skipped price entry
+let serperResolve = null; // resolves when Serper search is done
+let serperPromise = null; // the current search promise
+
+function sid(i){return'screen-'+SCREENS[i];}
+
+function goTo(t){
+  if(scanT)clearTimeout(scanT);
+  chipTs.forEach(x=>clearTimeout(x));chipTs=[];
+  if(af)cancelAnimationFrame(af);
+  document.getElementById(sid(cur)).classList.remove('active');
+  document.getElementById('dot-'+cur).classList.remove('active');
+  cur=SCREENS.indexOf(t);if(cur<0)cur=0;
+  document.getElementById(sid(cur)).classList.add('active');
+  document.getElementById('dot-'+cur).classList.add('active');
+  document.getElementById('scr-name').textContent=NAMES[cur];
+  document.getElementById('btn-prev').disabled=cur===0;
+  document.getElementById('btn-next').disabled=cur===SCREENS.length-1;
+
+  // Screen-specific logic
+  if(SCREENS[cur]==='1p'){
+    // Reset price input every time this screen loads
+    const inp=document.getElementById('price-input');
+    const btn=document.getElementById('btn-get-score-el');
+    if(inp){inp.value='';inp.focus();}
+    if(btn){btn.disabled=true;}
+    bestPriceOnly=false;
+  }
+  if(SCREENS[cur]===15){inputMethod='scan';startScanner();}
+  if(SCREENS[cur]===2){
+    resetScan();
+    // If came from URL paste, update scan screen product/context
+    if(pastedRetailerData){
+      const sp2=document.querySelector('.scan-prod');
+      const ss=document.getElementById('scan-sub-text');
+      if(sp2)sp2.textContent=pastedRetailerData.product;
+      if(ss)ss.textContent=`Found on ${pastedRetailerData.retailer} at £${pastedRetailerData.price} — finding best deal…`;
+    }
+    startScan();
+    // Wait for Serper (up to 8s), then advance to score screen
+    let hasAdvanced=false;
+    const advanceToScore=()=>{if(hasAdvanced)return;hasAdvanced=true;pastedRetailerData=null;goTo(3);};
+    if(serperPromise){
+      const timeout=new Promise(r=>setTimeout(r,8000));
+      Promise.race([serperPromise,timeout]).then(advanceToScore);
+      scanT=setTimeout(advanceToScore,8500); // hard fallback
+    } else {
+      scanT=setTimeout(advanceToScore,3200);
+    }
+  }
+  if(SCREENS[cur]===3){setTimeout(animScore,250);}
+}
+
+// ── URL / Paste link logic ──
+const RETAILERS={
+  'amazon':    {name:'Amazon UK',     icon:'📦', price:'£249', product:'Sony WH-1000XM5'},
+  'currys':    {name:'Currys',        icon:'⚡', price:'£279', product:'Sony WH-1000XM5'},
+  'johnlewis': {name:'John Lewis',    icon:'🛍️', price:'£299', product:'Sony WH-1000XM5'},
+  'argos':     {name:'Argos',         icon:'🔵', price:'£319', product:'Sony WH-1000XM5'},
+  'halfords':  {name:'Halfords',      icon:'🚗', price:'£89',  product:'Nextbase 522GW Dash Cam'},
+  'ao':        {name:'AO.com',        icon:'🏠', price:'£269', product:'Sony WH-1000XM5'},
+  'very':      {name:'Very',          icon:'🛒', price:'£289', product:'Sony WH-1000XM5'},
+  'boots':     {name:'Boots',         icon:'💊', price:'£24',  product:'Oral-B Smart 6 Toothbrush'},
+  'tesco':     {name:'Tesco',         icon:'🛒', price:'£199', product:'Dyson V8 Hoover'},
+};
+
+let detectedRetailer=null;
+
+function detectRetailer(url){
+  const det=document.getElementById('url-detected');
+  const retEl=document.getElementById('url-det-retailer');
+  const subEl=document.getElementById('url-det-sub');
+  const iconEl=document.getElementById('url-det-icon');
+
+  if(!url||url.length<8){det.style.display='none';detectedRetailer=null;return;}
+
+  const lower=url.toLowerCase();
+  let matched=null;
+  for(const key of Object.keys(RETAILERS)){
+    if(lower.includes(key)){matched=key;break;}
+  }
+
+  if(matched){
+    const r=RETAILERS[matched];
+    detectedRetailer=matched;
+    iconEl.textContent=r.icon;
+    retEl.textContent=r.name+' detected';
+    subEl.textContent=`"${r.product}" · ${r.price} — we'll find better deals`;
+    det.style.display='flex';
+  } else {
+    det.style.display='none';
+    detectedRetailer=null;
+  }
+}
+
+function simulatePaste(url,retailerKey){
+  const input=document.getElementById('url-input-field');
+  if(input){input.value=url;}
+  detectedRetailer=retailerKey;
+  detectRetailer(url);
+  setTimeout(()=>handlePaste(),400);
+}
+
+function handlePaste(){
+  if(detectedRetailer&&RETAILERS[detectedRetailer]){
+    const r=RETAILERS[detectedRetailer];
+    pastedRetailerData={
+      retailer:r.name,
+      price:r.price.replace('£',''),
+      product:r.product
+    };
+  }
+  inputMethod='paste';
+  bestPriceOnly=true;
+  goTo(2);
+}
+
+let pastedRetailerData=null;
+
+// "Just find me the best price" from interstitial
+function skipToResults(){
+  bestPriceOnly=true;
+  serperPromise=new Promise(r=>{serperResolve=r;});
+  // Update product name placeholders
+  if(liveQuery){
+    const cap=liveQuery.charAt(0).toUpperCase()+liveQuery.slice(1);
+    const sp=document.querySelector('.scan-prod');if(sp)sp.textContent=cap;
+    const pn=document.getElementById('prod-name');if(pn)pn.textContent=cap;
+  }
+  goTo(2);
+  runSerperSearch(null);
+}
+
+function next(){if(cur<SCREENS.length-1)goTo(SCREENS[cur+1]);}
+function prev(){if(cur>0)goTo(SCREENS[cur-1]);}
+
+function startScanner(){
+  // Reset state
+  const lockon=document.getElementById('vf-lockon');
+  const detected=document.getElementById('cam-detected');
+  const barcode=document.getElementById('vf-barcode');
+  if(lockon)lockon.classList.remove('show');
+  if(detected)detected.classList.remove('show');
+  if(barcode)barcode.style.opacity='0.25';
+
+  // After 2s — lock on to barcode
+  const t1=setTimeout(()=>{
+    if(lockon)lockon.classList.add('show');
+    if(barcode)barcode.style.opacity='0.9';
+    // After 0.6s — show detected product card
+    const t2=setTimeout(()=>{
+      if(detected)detected.classList.add('show');
+    },600);
+    chipTs.push(t2);
+  },2000);
+  chipTs.push(t1);
+}
+
+function resetScan(){
+  for(let i=0;i<8;i++){const e=document.getElementById('rc-'+i);if(e)e.classList.remove('lit');}
+  const pf=document.getElementById('prog-fill');
+  if(pf){pf.style.animation='none';pf.offsetHeight;pf.style.animation='';}
+  const counter=document.getElementById('scan-counter');
+  if(counter)counter.textContent='';
+  const subTxt=document.getElementById('scan-sub-text');
+  if(subTxt)subTxt.textContent='Checking prices across UK retailers…';
+}
+function startScan(){
+  const counter=document.getElementById('scan-counter');
+  const retailers=['Amazon UK','Currys','John Lewis','Argos','AO','Very','Richer Sounds','Box'];
+  [0,1,2,3,4,5,6,7].forEach(i=>{
+    const t=setTimeout(()=>{
+      const e=document.getElementById('rc-'+i);
+      if(e)e.classList.add('lit');
+      if(counter)counter.textContent=`Checked ${i+1} of ${retailers.length} retailers`;
+    },200+i*300);
+    chipTs.push(t);
+  });
+}
+
+function setScen(i){
+  // When live results loaded, don't switch away from them
+  if(liveResults&&SCENS[0]&&SCENS[0]._live&&i!==0)return;
+  activeScen=i;
+  document.querySelectorAll('.s-tab').forEach((t,j)=>t.classList.toggle('active',i===j));
+  animScore();
+}
+
+function searchTrend(name){
+  const inp=document.getElementById('s1-input');
+  if(inp){inp.value=name;toggleClear(inp);}
+  liveQuery=name;
+  inputMethod='search';
+  const cap=name.charAt(0).toUpperCase()+name.slice(1);
+  const sp=document.querySelector('.scan-prod');if(sp)sp.textContent=cap;
+  const pn=document.getElementById('prod-name');if(pn)pn.textContent=cap;
+  const pqName=document.getElementById('pq-product-name');if(pqName)pqName.textContent=name;
+  goTo('1p');
+}
+function toggleClear(inp){
+  const cl=document.getElementById('search-clear');
+  if(cl)cl.style.display=inp.value?'flex':'none';
+}
+function clearSearch(){
+  const inp=document.getElementById('s1-input');
+  if(inp){inp.value='';inp.focus();}
+  const cl=document.getElementById('search-clear');
+  if(cl)cl.style.display='none';
+}
+function startClock(){
+  function tick(){
+    const el=document.getElementById('sb-time');
+    if(!el)return;
+    const now=new Date();
+    const h=now.getHours()%12||12,m=now.getMinutes().toString().padStart(2,'0');
+    el.textContent=`${h}:${m}`;
+  }
+  tick();setInterval(tick,10000);
+}
+startClock();
+
+function updateTimestamp(){
+  const el=document.getElementById('check-timestamp');
+  if(!el)return;
+  const now=new Date();
+  const h=now.getHours(),m=now.getMinutes().toString().padStart(2,'0');
+  const ampm=h>=12?'pm':'am';
+  const isLive=liveResults&&SCENS[0]&&SCENS[0]._live&&activeScen===0;
+  el.textContent=isLive
+    ?`Live prices · checked at ${h%12||12}:${m}${ampm}`
+    :`Demo prices · updated ${h%12||12}:${m}${ampm}`;
+}
+
+function animScore(){
+  const sc=SCENS[activeScen];
+  const arc=document.getElementById('score-arc');
+  const num=document.getElementById('score-num');
+  const of=document.getElementById('score-of');
+  const thumb=document.getElementById('spec-thumb');
+  const verdict=document.getElementById('verdict');
+  const vdot=document.getElementById('vdot');
+  const vt=document.getElementById('vtitle');
+  const vs=document.getElementById('vsub');
+  const card=document.getElementById('score-card');
+  const eyebrow=document.querySelector('.score-eyebrow');
+  const prodMeta=document.getElementById('prod-meta');
+  const shareBtn=document.getElementById('share-score-btn');
+
+  // Update product meta line dynamically
+  if(prodMeta){
+    const bestRet=sc.rets.find(r=>r.best);
+    prodMeta.textContent=`Best price: ${bestRet?bestRet.p:'£249'} at ${bestRet?bestRet.n:'Amazon UK'}`;
+  }
+
+  // Update timestamp and category
+  updateTimestamp();
+  const pcEl=document.getElementById('prod-cat');
+  if(pcEl)pcEl.textContent=activeCat;
+  // Reset prices label for demo, count for live
+  const pfLbl=document.getElementById('prices-found-label');
+  if(pfLbl){
+    const isLiveSc=sc&&sc._live;
+    pfLbl.textContent=isLiveSc?`${sc.rets.length} price${sc.rets.length!==1?'s':''} found`:'Prices found';
+  }
+  // Show saving hero when overpaying with live data
+  const savHero=document.getElementById('saving-hero');
+  const savAmt=document.getElementById('saving-hero-amount');
+  if(savHero&&savAmt){
+    if(sc.spc==='red'&&sc._userPrice&&sc._bestPrice){
+      const save=Math.round(sc._userPrice-sc._bestPrice);
+      if(save>0){savAmt.textContent=`£${save}`;savHero.style.display='';}
+      else savHero.style.display='none';
+    } else {savHero.style.display='none';}
+  }
+
+  // Best-price-only mode — hide score ring, show simplified results
+  if(bestPriceOnly){
+    card.style.display='none';
+    const sw=document.querySelector('.spec-wrap');
+    if(sw)sw.style.display='none';
+    if(eyebrow)eyebrow.textContent='Best price found';
+    if(shareBtn){shareBtn.innerHTML='<span style="font-size:16px">📤</span> Share these results';}
+    // Still update timestamp and render rets
+    updateTimestamp();
+    renderRets(sc.rets);
+    return;
+  }
+
+  // Normal scored mode — restore everything
+  card.style.display='';
+  const sw=document.querySelector('.spec-wrap');
+  if(sw)sw.style.display='';
+  if(eyebrow)eyebrow.textContent='Your Savvey Score';
+  if(shareBtn)shareBtn.textContent='Share my Savvey Score';
+
+  card.className='score-card state-'+sc.id;
+  num.className='score-num '+sc.id;
+  of.className='score-of '+sc.id;
+  verdict.className='verdict '+sc.id;
+  vdot.className='verdict-dot '+sc.id;
+  vt.className='verdict-title '+sc.id;
+  vs.className='verdict-sub '+sc.id;
+  vt.textContent=sc.vt;
+  // Pick the right sub-message based on how the user arrived
+  const vsText = inputMethod==='scan' ? (sc.vsScanned||sc.vs)
+               : inputMethod==='paste' ? (sc.vsPasted||sc.vs)
+               : (sc.vsSearched||sc.vs);
+  vs.textContent=vsText;
+  // Show saving badge for overpaying
+  const savingBadge=document.getElementById('verdict-saving');
+  if(savingBadge){
+    const bestRet2=sc.rets?sc.rets.find(r=>r.best):null;
+    const bestP2=sc._bestPrice||sc.bestPrice;
+    if(sc.spc==='red'&&bestP2&&sc._userPrice){
+      const save=Math.round(sc._userPrice-bestP2);
+      if(save>0){
+        savingBadge.innerHTML=`<span class="vs-label">save</span>£${save}`;
+        savingBadge.style.display='';
+      } else {savingBadge.style.display='none';}
+    } else {savingBadge.style.display='none';}
+  }
+
+  ['lbl-over','lbl-check','lbl-fair'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  if(sc.score<40)document.getElementById('lbl-over').classList.add('active');
+  else if(sc.score<75)document.getElementById('lbl-check').classList.add('active');
+  else document.getElementById('lbl-fair').classList.add('active');
+
+  renderRets(sc.rets);
+
+  arc.style.transition='none';arc.style.strokeDashoffset=CIRC;
+  num.textContent='--';thumb.style.transition='none';thumb.style.left='0%';
+  verdict.style.opacity='0';verdict.style.transform='translateY(8px)';
+  void arc.getBoundingClientRect();
+
+  const col=sc.id==='red'?'#e03535':sc.id==='amber'?'#f0a020':'#3d9435';
+  arc.style.stroke=col;
+
+  const P1=1100,P2=750;
+  setTimeout(()=>{
+    arc.style.transition=`stroke-dashoffset ${P1}ms cubic-bezier(0.15,0,0.35,1)`;
+    arc.style.strokeDashoffset=CIRC-(sc.bounce/100)*CIRC;
+    thumb.style.transition=`left ${P1}ms cubic-bezier(0.15,0,0.35,1)`;
+    thumb.style.left=sc.bounce+'%';
+    const t0=performance.now();
+    function up(ts){const p=Math.min((ts-t0)/P1,1);num.textContent=Math.round((1-Math.pow(1-p,2.5))*sc.bounce);if(p<1)af=requestAnimationFrame(up);}
+    af=requestAnimationFrame(up);
+  },80);
+  setTimeout(()=>{
+    arc.style.transition=`stroke-dashoffset ${P2}ms cubic-bezier(0.34,1.56,0.64,1)`;
+    arc.style.strokeDashoffset=CIRC-(sc.score/100)*CIRC;
+    thumb.style.transition=`left ${P2}ms cubic-bezier(0.34,1.56,0.64,1)`;
+    thumb.style.left=sc.sp+'%';
+    const t1=performance.now();
+    function dn(ts){
+      const p=Math.min((ts-t1)/P2,1),e=1-Math.pow(1-p,3);
+      num.textContent=Math.round(sc.bounce-e*(sc.bounce-sc.score));
+      if(p<1){af=requestAnimationFrame(dn);}
+      else{num.textContent=sc.score;verdict.style.transition='opacity 0.45s ease,transform 0.45s ease';verdict.style.opacity='1';verdict.style.transform='translateY(0)';}
+    }
+    af=requestAnimationFrame(dn);
+  },P1+100);
+}
+
+function renderRets(rets){
+  const list=document.getElementById('ret-list');
+  list.innerHTML=rets.map(r=>{
+    // Clean sub text — don't show retailer name twice
+    const sub=r.s&&r.s.toLowerCase()!==r.n.toLowerCase()&&r.s!==r.n?r.s:'';
+    return `
+    <div class="ret-row${r.best?' best':''}" onclick="${r.link?`window.open('${r.link}','_blank')`:'goTo(4)'}">
+      <div style="flex:1;min-width:0">
+        <div class="ret-name">${r.n}</div>
+        ${sub?`<div class="ret-sub">${sub}</div>`:''}
+        ${r.best?'<div class="best-badge">✓ Best price</div>':''} 
+      </div>
+      <div style="text-align:right;flex-shrink:0;padding-left:12px">
+        <div class="ret-price ${r.c}">${r.p}</div>
+        ${r.d?`<div class="ret-diff${r.bad?' bad':''}">${r.d}</div>`:''} 
+      </div>
+    </div>`
+  }).join('');
+}
+
+const CAT_MAP={'Electronics':'Electronics','Automotive':'Automotive','Home & Tools':'Home','Sports':'Sports','Health':'Health','Baby & Kids':'Baby','Pet':'Pet','Garden':'Garden'};
+
+const CAT_PLACEHOLDERS={
+  'Electronics':'e.g. AirPods Pro, Sony WH-1000XM5…',
+  'Home & Tools':'e.g. Ninja Air Fryer, DeWalt drill…',
+  'Garden':'e.g. Karcher pressure washer, lawn mower…',
+  'Automotive':'e.g. dash cam, jump starter…',
+  'Sports':'e.g. Garmin watch, protein powder…',
+  'Health':'e.g. Oral-B toothbrush, Vitamin D3…',
+  'Baby & Kids':'e.g. baby monitor, LEGO set…',
+  'Pet':'e.g. Royal Canin dog food, cat tree…',
+};
+function selCat(el,cat){
+  activeCat=cat;
+  document.querySelectorAll('.cat').forEach(c=>c.classList.remove('active'));
+  el.classList.add('active');
+  document.getElementById('prod-cat').textContent=cat;
+  // Update placeholder
+  const inp=document.getElementById('s1-input');
+  if(inp&&CAT_PLACEHOLDERS[cat])inp.placeholder=CAT_PLACEHOLDERS[cat];
+  // Switch panel
+  document.querySelectorAll('.cat-panel').forEach(p=>p.classList.remove('active'));
+  const key=CAT_MAP[cat]||cat;
+  const panel=document.getElementById('panel-cat-'+key);
+  if(panel)panel.classList.add('active');
+}
+
+function setMode(m){
+  ['scan','type','url'].forEach(x=>{
+    document.getElementById('mode-'+x).classList.toggle('active',x===m);
+    document.getElementById('panel-'+x).classList.toggle('active',x===m);
+    if(x==='type'||x==='url'){
+      const icon=document.querySelector('#mode-'+x+' .mc-svg');
+      const iconWrap=document.querySelector('#mode-'+x+' .mode-card-icon');
+      if(iconWrap){iconWrap.style.background=x===m?'var(--g)':'var(--sur2)';}
+      if(icon){
+        const paths=icon.querySelectorAll('path,circle,line,rect');
+        paths.forEach(p=>p.style.stroke=x===m?'white':null);
+      }
+    }
+  });
+  const scanIcon=document.querySelector('#mode-scan .mode-card-icon');
+  if(scanIcon)scanIcon.style.background=m==='scan'?'var(--g)':'var(--sur2)';
+}
+
+function doShare(){
+  const sc=SCENS[activeScen];
+  document.getElementById('sh-msg').textContent=sc.sm;
+  const pill=document.getElementById('sh-pill');
+  pill.textContent=sc.sp2;
+  pill.className='sh-pill '+sc.spc; // always correct colour from active scenario
+  if(navigator.share){
+    navigator.share({title:sc.sp2,text:sc.sm,url:'https://savvey.app'}).catch(()=>openSheet());
+  }else openSheet();
+}
+function openSheet(){
+  document.getElementById('sh-sheet').classList.add('open');
+  document.getElementById('sh-overlay').classList.add('open');
+  document.getElementById('sh-copied').classList.remove('show');
+}
+function closeShare(){
+  document.getElementById('sh-sheet').classList.remove('open');
+  document.getElementById('sh-overlay').classList.remove('open');
+}
+function cpShare(){
+  const text=SCENS[activeScen].sm;
+  navigator.clipboard.writeText(text).then(()=>{
+    document.getElementById('sh-copied').classList.add('show');
+    setTimeout(()=>{document.getElementById('sh-copied').classList.remove('show');closeShare();},1800);
+  }).catch(()=>{
+    const ta=document.createElement('textarea');ta.value=text;document.body.appendChild(ta);ta.select();document.execCommand('copy');document.body.removeChild(ta);
+    document.getElementById('sh-copied').classList.add('show');
+    setTimeout(closeShare,1800);
+  });
+}
+function shareVia(p){
+  const enc=encodeURIComponent(SCENS[activeScen].sm);
+  const urls={whatsapp:`https://wa.me/?text=${enc}`,twitter:`https://twitter.com/intent/tweet?text=${enc}`,messages:`sms:?body=${enc}`};
+  if(urls[p])window.open(urls[p],'_blank');
+  closeShare();
+}
+
+function showEM(){document.getElementById('em-modal').classList.add('open');}
+async function closeEM(confirmed){
+  if(confirmed){
+    const inp=document.querySelector('.em-input');
+    const email=inp?inp.value.trim():'';
+    const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+    if(valid){
+      await saveAlert(email);
+    } else if(email.length>0){
+      if(inp){inp.style.borderColor='var(--r)';inp.placeholder='Please enter a valid email';}
+      return; // don't close — let them fix it
+    }
+  }
+  document.getElementById('em-modal').classList.remove('open');
+}
+async function saveAlert(email){
+  const sc=SCENS[activeScen];
+  const productQuery=liveQuery||'Sony WH-1000XM5';
+  const productName=liveQuery||(document.getElementById('prod-name')?document.getElementById('prod-name').textContent:'Sony WH-1000XM5');
+  const bestRet=sc.rets.find(r=>r.best);
+  try{
+    const res=await fetch(`${SB_URL}/rest/v1/price_alerts`,{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'},
+      body:JSON.stringify({email,product_name:productName,product_query:productQuery,
+        best_price_at_alert:bestRet?.p?.replace('£','')||249,
+        best_retailer:bestRet?.n||'Amazon UK',category:activeCat})
+    });
+    if(res.ok)showConf();
+  }catch(e){showConf();}
+}
+function showConf(){
+  const btn=document.querySelector('.track-cta');
+  if(btn){
+    btn.innerHTML=`<div class="track-icon">✅</div><div style="flex:1"><div class="track-title" style="color:var(--g)">We're watching it</div><div class="track-sub" style="color:var(--g2)">We'll email you the moment it drops</div></div>`;
+    btn.style.background='var(--gl)';btn.style.borderColor='var(--gb)';btn.style.cursor='default';btn.onclick=null;
+  }
+}
+
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')next();if(e.key==='ArrowLeft')prev();},{passive:true});
+
+// Global error handler — silent recovery
+window.addEventListener('error',e=>{
+  console.warn('[Savvey] Caught error:',e.message);
+});
+window.addEventListener('unhandledrejection',e=>{
+  console.warn('[Savvey] Unhandled promise rejection:',e.reason);
+  e.preventDefault();
+});
+
+// Prevent double-tap zoom on iOS
+document.addEventListener('touchend',e=>{
+  if(e.target.tagName==='BUTTON'||e.target.closest('button')){e.preventDefault();}
+},{passive:false});
+
+// Register service worker for PWA offline support (when available)
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js').catch(()=>{/* not available yet */});
+  });
+}
+</script>
+</body>
+</html>
