@@ -1,8 +1,8 @@
 {
   "functions": {
     "api/search.js": {
-      "memory": 128,
-      "maxDuration": 10
+      "memory": 256,
+      "maxDuration": 15
     }
   }
 }
