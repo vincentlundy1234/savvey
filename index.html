@@ -369,19 +369,34 @@
     .cat.active{background:var(--g);color:#fff;border-color:var(--g);box-shadow:0 2px 8px rgba(42,107,34,0.25);}
     .cat:hover:not(.active){background:var(--sur);border-color:var(--sur2);}
 
-    /* Mode tabs — big impactful cards */
+    /* Mode tabs — two group layout */
+    .mode-groups{display:flex;align-items:stretch;gap:0;padding:14px 16px 0;}
+    .mode-group{display:flex;flex-direction:column;gap:6px;flex:1;min-width:0;height:100%;}
+    .mode-group-label{
+      display:flex;align-items:center;gap:5px;
+      font-size:10px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+      color:var(--ink4);font-family:'Nunito',sans-serif;padding:0 2px;
+    }
+    .mode-group-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0;}
+    .mode-group-dot.green{background:var(--g);}
+    .mode-group-dot.blue{background:#378ADD;}
+    .mode-group-cards{display:flex;gap:7px;align-items:stretch;}
+    .mode-group-divider{
+      width:1px;background:var(--bdr);margin:20px 10px 0;flex-shrink:0;align-self:stretch;
+    }
     .mode-cards{display:flex;gap:8px;padding:14px 16px 0;}
     .mode-card{
-      flex:1;border-radius:20px;padding:18px 10px 16px;cursor:pointer;
-      display:flex;flex-direction:column;align-items:center;gap:10px;
+      flex:1;border-radius:18px;padding:14px 8px 13px;cursor:pointer;
+      display:flex;flex-direction:column;align-items:center;gap:8px;
       border:2px solid var(--sur2);background:var(--sur);
       transition:all 0.22s cubic-bezier(0.34,1.2,0.64,1);position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;
+      justify-content:center;
     }
     .mode-card::before{content:'';position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,0.6) 0%,transparent 60%);pointer-events:none;}
     .mode-card.active{border-color:var(--g);background:var(--gl);box-shadow:0 4px 20px rgba(42,107,34,0.18),inset 0 1px 0 rgba(255,255,255,0.8);}
     .mode-card:hover:not(.active){background:var(--sur2);border-color:var(--bdr);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,0.08);}
     .mode-card-icon{
-      width:56px;height:56px;border-radius:16px;
+      width:48px;height:48px;border-radius:14px;
       display:flex;align-items:center;justify-content:center;
       transition:all 0.2s;
     }
@@ -1282,43 +1297,64 @@
       <div class="cat" id="cat-tab-Pet" onclick="selCat(this,'Pet')">🐾 Pet</div>
     </div>
 
-    <!-- Mode cards -->
-    <div class="mode-cards">
-      <div class="mode-card active" id="mode-scan" onclick="setMode('scan')">
-        <div class="mode-card-icon">
-          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
-            <rect x="2" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
-            <rect x="18" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
-            <rect x="2" y="18" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
-            <line x1="13" y1="4" x2="13" y2="22" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-            <line x1="18" y1="13" x2="24" y2="13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
-            <rect x="20" y="18" width="4" height="6" rx="1" fill="white" opacity="0.6"/>
-          </svg>
+    <!-- Mode cards — two groups: in store / online -->
+    <div class="mode-groups">
+
+      <div class="mode-group">
+        <div class="mode-group-label">
+          <div class="mode-group-dot green"></div>
+          In store
         </div>
-        <div class="mode-card-label">Scan or Snap</div>
-        <div class="mode-card-desc">Barcode or photo in any shop</div>
-      </div>
-      <div class="mode-card" id="mode-type" onclick="setMode('type')">
-        <div class="mode-card-icon">
-          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
-            <circle cx="11" cy="11" r="7" stroke="#767c88" stroke-width="1.8"/>
-            <line x1="16.5" y1="16.5" x2="23" y2="23" stroke="#767c88" stroke-width="1.8" stroke-linecap="round"/>
-          </svg>
+        <div class="mode-group-cards">
+          <div class="mode-card active" id="mode-scan" onclick="setMode('scan')">
+            <div class="mode-card-icon">
+              <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+                <rect x="2" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+                <rect x="18" y="2" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+                <rect x="2" y="18" width="6" height="6" rx="1" stroke="white" stroke-width="1.8"/>
+                <line x1="13" y1="4" x2="13" y2="22" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+                <line x1="18" y1="13" x2="24" y2="13" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+                <rect x="20" y="18" width="4" height="6" rx="1" fill="white" opacity="0.6"/>
+              </svg>
+            </div>
+            <div class="mode-card-label">Scan or Snap</div>
+            <div class="mode-card-desc">Barcode or photo</div>
+          </div>
+          <div class="mode-card" id="mode-type" onclick="setMode('type')">
+            <div class="mode-card-icon">
+              <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+                <circle cx="11" cy="11" r="7" stroke="#767c88" stroke-width="1.8"/>
+                <line x1="16.5" y1="16.5" x2="23" y2="23" stroke="#767c88" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="mode-card-label">Search</div>
+            <div class="mode-card-desc">Type &amp; enter price</div>
+          </div>
         </div>
-        <div class="mode-card-label">Search</div>
-        <div class="mode-card-desc">Name + price you're seeing</div>
       </div>
-      <div class="mode-card" id="mode-url" onclick="setMode('url')">
-        <div class="mode-card-icon">
-          <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
-            <path d="M10 13H7a5 5 0 0 0 0 10h2M16 13h3a5 5 0 0 1 0 10h-2" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-5) scale(1,0.9)"/>
-            <path d="M9 13h8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-1)"/>
-            <path d="M8 6l3-3 3 3M11 3v8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+
+      <div class="mode-group-divider"></div>
+
+      <div class="mode-group" style="flex:0.6">
+        <div class="mode-group-label">
+          <div class="mode-group-dot blue"></div>
+          Online
         </div>
-        <div class="mode-card-label">Paste Link</div>
-        <div class="mode-card-desc">Drop any online product URL</div>
+        <div class="mode-group-cards">
+          <div class="mode-card" id="mode-url" onclick="setMode('url')">
+            <div class="mode-card-icon">
+              <svg class="mc-svg" viewBox="0 0 26 26" fill="none">
+                <path d="M10 13H7a5 5 0 0 0 0 10h2M16 13h3a5 5 0 0 1 0 10h-2" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-5) scale(1,0.9)"/>
+                <path d="M9 13h8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" transform="translate(0,-1)"/>
+                <path d="M8 6l3-3 3 3M11 3v8" stroke="#767c88" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div class="mode-card-label">Paste Link</div>
+            <div class="mode-card-desc">Drop a product URL</div>
+          </div>
+        </div>
       </div>
+
     </div>
 
     <!-- Scan panel -->
@@ -2521,6 +2557,7 @@ function startClock(){
   tick();setInterval(tick,10000);
 }
 startClock();
+setMode('scan'); // initialise correct icon colours
 
 function updateTimestamp(){
   const el=document.getElementById('check-timestamp');
@@ -2712,21 +2749,22 @@ function selCat(el,cat){
 }
 
 function setMode(m){
+  // Color per group: in-store = green, online = blue
+  const colors={scan:'var(--g)',type:'var(--g)',url:'#378ADD'};
   ['scan','type','url'].forEach(x=>{
-    document.getElementById('mode-'+x).classList.toggle('active',x===m);
-    document.getElementById('panel-'+x).classList.toggle('active',x===m);
-    if(x==='type'||x==='url'){
-      const icon=document.querySelector('#mode-'+x+' .mc-svg');
-      const iconWrap=document.querySelector('#mode-'+x+' .mode-card-icon');
-      if(iconWrap){iconWrap.style.background=x===m?'var(--g)':'var(--sur2)';}
-      if(icon){
-        const paths=icon.querySelectorAll('path,circle,line,rect');
-        paths.forEach(p=>p.style.stroke=x===m?'white':null);
-      }
+    const card=document.getElementById('mode-'+x);
+    const panel=document.getElementById('panel-'+x);
+    const iconWrap=card?card.querySelector('.mode-card-icon'):null;
+    const icon=card?card.querySelector('.mc-svg'):null;
+    const isActive=x===m;
+    if(card)card.classList.toggle('active',isActive);
+    if(panel)panel.classList.toggle('active',isActive);
+    if(iconWrap)iconWrap.style.background=isActive?colors[x]:'var(--sur2)';
+    if(icon){
+      const paths=icon.querySelectorAll('path,circle,line,rect');
+      paths.forEach(p=>p.style.stroke=isActive?'white':null);
     }
   });
-  const scanIcon=document.querySelector('#mode-scan .mode-card-icon');
-  if(scanIcon)scanIcon.style.background=m==='scan'?'var(--g)':'var(--sur2)';
 }
 
 function doShare(){
