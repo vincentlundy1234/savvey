@@ -1,4 +1,4 @@
-const CACHE = 'savvey-v1';
+const CACHE = 'savvey-v3';
 const STATIC = [
   '/',
   '/index.html',
@@ -23,14 +23,14 @@ self.addEventListener('fetch', e => {
   if (e.request.url.includes('/api/')) {
     return;
   }
-  // Navigation — network first, fall back to cache
-  if (e.request.mode === 'navigate') {
+  // Navigation and HTML — always network first, fall back to cache only if offline
+  if (e.request.mode === 'navigate' || e.request.url.endsWith('.html')) {
     e.respondWith(
       fetch(e.request).catch(() => caches.match('/index.html'))
     );
     return;
   }
-  // Assets — cache first
+  // Other assets — cache first
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request))
   );

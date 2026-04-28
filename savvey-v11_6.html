@@ -1437,6 +1437,8 @@ async function doLiveSearch(forced){
   userPrice=null;bestPriceOnly=false;
   goTo('price');
 
+  // Reset liveScen so showResults waits for fresh data
+  liveScen=null;
   // Kick off search in background
   fetchPrices(query);
 }
@@ -1456,6 +1458,7 @@ async function fetchPrices(query){
     const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({q:query})});
     const d=r.ok?await r.json():{};
+    console.log('[Savvey] API response:',JSON.stringify(d).slice(0,500));
     // v3 API returns pre-matched retailer data — build scen directly from shopping array
     const shopping=(d.shopping||[]).map(item=>({
       link: item.link||'',
@@ -1466,6 +1469,7 @@ async function fetchPrices(query){
     }));
     liveScen=buildScenV3(shopping,userPrice,query);
   }catch(e){
+    console.error('[Savvey] fetchPrices error:',e.message);
     liveScen=null;
   }
   chipTimers.forEach(clearTimeout);
@@ -1487,16 +1491,11 @@ function skipPrice(){
 async function showResults(){
   // Wait for fetch if still running (max 6s)
   const t0=Date.now();
-  while(!liveScen&&Date.now()-t0<6000)await new Promise(r=>setTimeout(r,200));
-  // Rebuild scen with user price if we now have it
-  if(liveScen&&userPrice){
-    liveScen=buildScen(
-      {shopping:liveScen.rets.map(r=>({link:'',price:'£'+r.p.replace('£',''),source:r.n})),organic:[]},
-      userPrice,liveQuery
-    )||liveScen;
-  }
+  while(!liveScen&&Date.now()-t0<10000)await new Promise(r=>setTimeout(r,200));
+  console.log('[Savvey] showResults: liveScen=',liveScen?'GOT LIVE DATA':'null - using demo after timeout','userPrice=',userPrice);
   // If no live results, use fallback demo
   const sc=liveScen||DEMO_SCEN;
+  console.log('[Savvey] rendering:',sc===DEMO_SCEN?'DEMO DATA':'LIVE DATA');
   renderResults(sc);
   goTo('results');
 
@@ -1662,7 +1661,7 @@ function trendSearch(product){
   document.getElementById('price-header-product').textContent=product;
   document.getElementById('price-num').value='';
   document.getElementById('btn-score').disabled=true;
-  userPrice=null;bestPriceOnly=false;
+  userPrice=null;bestPriceOnly=false;liveScen=null;
   goTo('price');
   fetchPrices(product);
 }
@@ -1763,7 +1762,7 @@ function useScannedProduct(){
   document.getElementById('price-header-product').textContent=scannedProductName;
   document.getElementById('price-num').value='';
   document.getElementById('btn-score').disabled=true;
-  userPrice=null;bestPriceOnly=false;
+  userPrice=null;bestPriceOnly=false;liveScen=null;
   goTo('price');
   fetchPrices(scannedProductName);
 }
@@ -1801,14 +1800,14 @@ function simulatePaste(url,key){
   detectedRetailerKey=key;detectRetailer(url);
   setTimeout(handlePaste,400);
 }
-function handlePaste(){
+async function handlePaste(){
   const r=detectedRetailerKey&&PASTE_RETAILERS[detectedRetailerKey];
   if(r){
     liveQuery=r.product;
     // Use the retailer's known price as the user price for scoring
     userPrice=parseFloat(r.price.replace('£',''))||null;
   }
-  inputMethod='paste';bestPriceOnly=false;
+  inputMethod='paste';bestPriceOnly=false;liveScen=null;
   // Skip price entry — we already know the retailer's price from the URL
   goTo('searching');
   fetchPrices(liveQuery);
