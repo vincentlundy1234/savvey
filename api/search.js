@@ -1,7 +1,8 @@
+// Savvey search proxy v3 - FORCED REDEPLOY
 const UK_RETAILERS = {
   'amazon.co.uk':     { name: 'Amazon UK',    aff: '?tag=savvey-21' },
   'currys.co.uk':     { name: 'Currys',        aff: '' },
-  'johnlewis.com':    { name: 'John Lewis',   aff: '' },
+  'johnlewis.com':    { name: 'John Lewis',    aff: '' },
   'argos.co.uk':      { name: 'Argos',         aff: '' },
   'ao.com':           { name: 'AO.com',        aff: '' },
   'very.co.uk':       { name: 'Very',          aff: '' },
@@ -31,9 +32,11 @@ function matchRetailer(url) {
 
 function extractPrice(str) {
   if (!str) return null;
-  const m = String(str).match(/[£]?\s?([\d,]+(?:\.\d{1,2})?)/);
-  if (m) { const v = parseFloat(m[1].replace(',', '')); if (v > 0) return v; }
-  return null;
+  // Must have £ sign to be a price - prevents model numbers being parsed
+  const m = String(str).match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
+  if (!m) return null;
+  const v = parseFloat(m[1].replace(',', ''));
+  return (v > 0.5 && v < 5000) ? v : null;
 }
 
 function isPlausiblePrice(price, allPrices) {
@@ -41,8 +44,10 @@ function isPlausiblePrice(price, allPrices) {
   if (allPrices.length < 2) return true;
   const sorted = [...allPrices].sort((a, b) => a - b);
   const lowest = sorted[0];
-  // Drop anything more than 3.5x the lowest price - catches scraping outliers
-  return price <= lowest * 3.5;
+  // Drop anything more than 3x the lowest - catches outliers like £1000 vs £230
+  const passes = price <= lowest * 3.0;
+  console.log(`  isPlausiblePrice: £${price} vs lowest £${lowest} (${lowest*3.0}) -> ${passes}`);
+  return passes;
 }
 
 async function fetchSerper(q) {
@@ -66,7 +71,8 @@ async function fetchSerper(q) {
     for (const item of (d.shopping || [])) {
       const price = extractPrice(item.price) || extractPrice(String(item.extracted_price || ''));
       const retailer = matchRetailer(item.link || item.source || '');
-      if (price && price > 1 && retailer) {
+      if (price && retailer) {
+        console.log(`  Serper shopping: ${retailer.name} £${price}`);
         items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: item.delivery || '' });
       }
     }
@@ -77,7 +83,8 @@ async function fetchSerper(q) {
       const retailer = matchRetailer(item.link || '');
       if (!retailer) continue;
       const price = extractPrice(item.snippet || '') || extractPrice(item.title || '');
-      if (price && price > 1) {
+      if (price) {
+        console.log(`  Serper organic: ${retailer.name} £${price}`);
         items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: '' });
       }
     }
@@ -105,7 +112,8 @@ async function fetchGoogleCSE(q) {
       item.title,
     ].filter(Boolean).join(' ');
     const price = extractPrice(priceStr);
-    if (price && price > 1) {
+    if (price) {
+      console.log(`  Google CSE: ${retailer.name} £${price}`);
       items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: '' });
     }
   }
@@ -136,7 +144,8 @@ async function fetchEbay(q) {
   for (const item of (d.itemSummaries || [])) {
     if (!item.price || item.price.currency !== 'GBP') continue;
     const price = parseFloat(item.price.value);
-    if (price > 1) {
+    if (price > 0.5 && price < 5000) {
+      console.log(`  eBay: £${price}`);
       items.push({ retailer: 'eBay UK', domain: 'ebay.co.uk', aff: '', price, link: item.itemWebUrl || '', sub: item.condition || 'New' });
     }
   }
@@ -153,6 +162,8 @@ export default async function handler(req, res) {
   const { q } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
+  console.log(`\n=== Savvey search: "${q}" ===`);
+
   const [serperResult, googleResult, ebayResult] = await Promise.allSettled([
     fetchSerper(q),
     fetchGoogleCSE(q),
@@ -163,7 +174,10 @@ export default async function handler(req, res) {
     ...(serperResult.status === 'fulfilled' ? serperResult.value : []),
     ...(googleResult.status === 'fulfilled' ? googleResult.value : []),
     ...(ebayResult.status  === 'fulfilled' ? ebayResult.value  : []),
-  ].filter(i => i.retailer && i.price > 1);
+  ].filter(i => i.retailer && i.price > 0.5);
+
+  console.log(`Raw items before dedup: ${rawItems.length}`);
+  rawItems.forEach(i => console.log(`  ${i.retailer}: £${i.price} (${i.source||''})`));
 
   const byRetailer = {};
   for (const item of rawItems) {
@@ -173,9 +187,16 @@ export default async function handler(req, res) {
   }
 
   let deduped = Object.values(byRetailer);
+  console.log(`After dedup: ${deduped.length} retailers`);
+  deduped.forEach(i => console.log(`  ${i.retailer}: £${i.price}`));
+
   const allPrices = deduped.map(i => i.price);
+  console.log(`Running sanity filter on prices: ${JSON.stringify(allPrices)}`);
   deduped = deduped.filter(i => isPlausiblePrice(i.price, allPrices));
   deduped.sort((a, b) => a.price - b.price);
+
+  console.log(`Final after filter: ${deduped.length} retailers`);
+  deduped.forEach(i => console.log(`  ${i.retailer}: £${i.price}`));
 
   const shopping = deduped.map(item => ({
     title:    item.retailer,
@@ -185,14 +206,9 @@ export default async function handler(req, res) {
     delivery: item.sub || '',
   }));
 
-  console.log('Savvey v3:', {
-    q,
-    serper: serperResult.status === 'fulfilled' ? serperResult.value.length + ' items' : String(serperResult.reason),
-    google: googleResult.status === 'fulfilled' ? googleResult.value.length + ' items' : String(googleResult.reason),
-    ebay:   ebayResult.status  === 'fulfilled' ? ebayResult.value.length  + ' items' : String(ebayResult.reason),
-    raw: rawItems.length, final: deduped.length,
-    top: deduped[0] ? deduped[0].retailer + ' £' + deduped[0].price : 'none',
+  return res.status(200).json({
+    shopping,
+    organic: [],
+    debug: { raw: rawItems.length, final: deduped.length }
   });
-
-  return res.status(200).json({ shopping, organic: [], debug: { raw: rawItems.length, final: deduped.length } });
 }
