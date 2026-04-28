@@ -37,11 +37,12 @@ function extractPrice(str) {
 }
 
 function isPlausiblePrice(price, allPrices) {
-  if (!price || price < 1) return false;
+  if (!price || price < 0.5 || price > 5000) return false;
   if (allPrices.length < 2) return true;
   const sorted = [...allPrices].sort((a, b) => a - b);
-  const median = sorted[Math.floor(sorted.length / 2)];
-  return price >= median * 0.2 && price <= median * 5;
+  const lowest = sorted[0];
+  // Drop anything more than 3.5x the lowest price - catches scraping outliers
+  return price <= lowest * 3.5;
 }
 
 async function fetchSerper(q) {

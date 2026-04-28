@@ -1281,8 +1281,15 @@ function buildScenV3(shopping,uPrice,query){
   if(parsed.length===0)return null;
   const allPrices=parsed.map(p=>p.price);
   const sorted=[...allPrices].sort((a,b)=>a-b);
+  const lowest=sorted[0];
   const median=sorted[Math.floor(sorted.length/2)];
-  const deduped=parsed.filter(p=>p.price>=median*0.2&&p.price<=median*5).sort((a,b)=>a.price-b.price);
+  // Anchor to lowest: drop anything more than 3x the lowest price (catches £1000 outliers)
+  // Also drop anything below 50p (clearly an error) or above £5000 (scraping garbage)
+  const deduped=parsed.filter(p=>
+    p.price>=0.5 &&
+    p.price<=5000 &&
+    p.price<=lowest*3.5
+  ).sort((a,b)=>a.price-b.price);
   if(deduped.length===0)return null;
   deduped[0].best=true;
   const bestP=deduped[0].price;
