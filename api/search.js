@@ -1,4 +1,4 @@
-// Savvey search proxy v3 - FORCED REDEPLOY
+// Savvey search proxy v3.1
 const UK_RETAILERS = {
   'amazon.co.uk':     { name: 'Amazon UK',    aff: '?tag=savvey-21' },
   'currys.co.uk':     { name: 'Currys',        aff: '' },
@@ -22,6 +22,19 @@ const UK_RETAILERS = {
   'ebay.co.uk':       { name: 'eBay UK',       aff: '' },
 };
 
+// URLs that are search/category pages, not product pages - prices are meaningless
+const JUNK_URL_PATTERNS = [
+  '/shop/', '/s?', '/search', 'nkw=', 'k=', '/b?', 'field-keywords',
+  '/stores/', '/browse/', '/category/'
+];
+
+function isProductUrl(url) {
+  if (!url) return false;
+  const lower = url.toLowerCase();
+  // Must be a product page not a search/category page
+  return !JUNK_URL_PATTERNS.some(p => lower.includes(p));
+}
+
 function matchRetailer(url) {
   if (!url) return null;
   for (const [domain, data] of Object.entries(UK_RETAILERS)) {
@@ -32,7 +45,6 @@ function matchRetailer(url) {
 
 function extractPrice(str) {
   if (!str) return null;
-  // Must have £ sign to be a price - prevents model numbers being parsed
   const m = String(str).match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
   if (!m) return null;
   const v = parseFloat(m[1].replace(',', ''));
@@ -41,13 +53,13 @@ function extractPrice(str) {
 
 function isPlausiblePrice(price, allPrices) {
   if (!price || price < 0.5 || price > 5000) return false;
+  // Round thousands are almost always placeholder prices (£1000, £2000 etc)
+  if (price % 1000 === 0) return false;
   if (allPrices.length < 2) return true;
-  const sorted = [...allPrices].sort((a, b) => a - b);
+  const sorted = [...allPrices].filter(p => p % 1000 !== 0).sort((a, b) => a - b);
+  if (sorted.length === 0) return true;
   const lowest = sorted[0];
-  // Drop anything more than 3x the lowest - catches outliers like £1000 vs £230
-  const passes = price <= lowest * 3.0;
-  console.log(`  isPlausiblePrice: £${price} vs lowest £${lowest} (${lowest*3.0}) -> ${passes}`);
-  return passes;
+  return price <= lowest * 3.0;
 }
 
 async function fetchSerper(q) {
@@ -72,7 +84,6 @@ async function fetchSerper(q) {
       const price = extractPrice(item.price) || extractPrice(String(item.extracted_price || ''));
       const retailer = matchRetailer(item.link || item.source || '');
       if (price && retailer) {
-        console.log(`  Serper shopping: ${retailer.name} £${price}`);
         items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: item.delivery || '' });
       }
     }
@@ -84,7 +95,6 @@ async function fetchSerper(q) {
       if (!retailer) continue;
       const price = extractPrice(item.snippet || '') || extractPrice(item.title || '');
       if (price) {
-        console.log(`  Serper organic: ${retailer.name} £${price}`);
         items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: '' });
       }
     }
@@ -104,6 +114,8 @@ async function fetchGoogleCSE(q) {
   for (const item of (d.items || [])) {
     const retailer = matchRetailer(item.link || '');
     if (!retailer) continue;
+    // Skip search/category pages - prices from these are meaningless
+    if (!isProductUrl(item.link)) continue;
     const priceStr = [
       item.pagemap && item.pagemap.offer && item.pagemap.offer[0] && item.pagemap.offer[0].price,
       item.pagemap && item.pagemap.product && item.pagemap.product[0] && item.pagemap.product[0].price,
@@ -113,7 +125,6 @@ async function fetchGoogleCSE(q) {
     ].filter(Boolean).join(' ');
     const price = extractPrice(priceStr);
     if (price) {
-      console.log(`  Google CSE: ${retailer.name} £${price}`);
       items.push({ retailer: retailer.name, domain: retailer.domain, aff: retailer.aff, price, link: item.link || '', sub: '' });
     }
   }
@@ -143,9 +154,9 @@ async function fetchEbay(q) {
   const items = [];
   for (const item of (d.itemSummaries || [])) {
     if (!item.price || item.price.currency !== 'GBP') continue;
+    if (!item.itemWebUrl || !isProductUrl(item.itemWebUrl)) continue;
     const price = parseFloat(item.price.value);
     if (price > 0.5 && price < 5000) {
-      console.log(`  eBay: £${price}`);
       items.push({ retailer: 'eBay UK', domain: 'ebay.co.uk', aff: '', price, link: item.itemWebUrl || '', sub: item.condition || 'New' });
     }
   }
@@ -162,8 +173,6 @@ export default async function handler(req, res) {
   const { q } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
-  console.log(`\n=== Savvey search: "${q}" ===`);
-
   const [serperResult, googleResult, ebayResult] = await Promise.allSettled([
     fetchSerper(q),
     fetchGoogleCSE(q),
@@ -176,9 +185,6 @@ export default async function handler(req, res) {
     ...(ebayResult.status  === 'fulfilled' ? ebayResult.value  : []),
   ].filter(i => i.retailer && i.price > 0.5);
 
-  console.log(`Raw items before dedup: ${rawItems.length}`);
-  rawItems.forEach(i => console.log(`  ${i.retailer}: £${i.price} (${i.source||''})`));
-
   const byRetailer = {};
   for (const item of rawItems) {
     if (!byRetailer[item.retailer] || item.price < byRetailer[item.retailer].price) {
@@ -187,16 +193,9 @@ export default async function handler(req, res) {
   }
 
   let deduped = Object.values(byRetailer);
-  console.log(`After dedup: ${deduped.length} retailers`);
-  deduped.forEach(i => console.log(`  ${i.retailer}: £${i.price}`));
-
   const allPrices = deduped.map(i => i.price);
-  console.log(`Running sanity filter on prices: ${JSON.stringify(allPrices)}`);
   deduped = deduped.filter(i => isPlausiblePrice(i.price, allPrices));
   deduped.sort((a, b) => a.price - b.price);
-
-  console.log(`Final after filter: ${deduped.length} retailers`);
-  deduped.forEach(i => console.log(`  ${i.retailer}: £${i.price}`));
 
   const shopping = deduped.map(item => ({
     title:    item.retailer,
@@ -205,6 +204,15 @@ export default async function handler(req, res) {
     price:    '£' + item.price.toFixed(2),
     delivery: item.sub || '',
   }));
+
+  console.log('Savvey v3.1:', {
+    q,
+    serper: serperResult.status === 'fulfilled' ? serperResult.value.length + ' items' : String(serperResult.reason),
+    google: googleResult.status === 'fulfilled' ? googleResult.value.length + ' items' : String(googleResult.reason),
+    ebay:   ebayResult.status  === 'fulfilled' ? ebayResult.value.length  + ' items' : String(ebayResult.reason),
+    raw: rawItems.length, final: deduped.length,
+    top: deduped[0] ? deduped[0].retailer + ' £' + deduped[0].price : 'none',
+  });
 
   return res.status(200).json({
     shopping,
