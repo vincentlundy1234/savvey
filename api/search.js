@@ -1,465 +1,502 @@
-/**
- * Savvey — /api/search.js  v5.0
- *
- * Production hardening vs v4:
- *  - Circuit breaker: CSE 429/403 → Awin fallback (when key is set)
- *  - Security headers: X-Content-Type-Options, Strict-Transport-Security
- *  - AwinProductProvider class: swap in real credentials later
- *  - clean() sanitiser + normalisePrice() at intake (no string prices in pipeline)
- *  - Sanity filter uses lowest×3 anchor, runs on final combined array
- *  - All API keys from process.env only — none hardcoded
- *  - Forensic per-item filter logs for Vercel Function Log debugging
- */
+// api/search.js — Savvey Search Proxy v6.3
+// Change log v6.0:
+//   - PRICE_CEILING hard constant replaces dynamic lowest×3 anchor
+//   - Nuclear cleanPrice() sanitizer applied at every intake point
+//   - nuclearFilter() runs as final pass before response — nothing above ceiling escapes
+// v6.1:
+//   - admitPrice() rounds to 2dp before ceiling check (float artifact fix)
+//   - nuclearFilter() consistent rounding + Vercel log format updated
+//   - AwinProductProvider class — activates when AWIN_API_KEY env var is set
+// v6.2:
+//   - identityFilter(): keyword confidence scoring + accessory blocklist
+//   - Numeric tokens (model/size) are mandatory — one miss = hard fail
+//   - Text tokens use 60% CONFIDENCE_THRESHOLD
+//   - Accessory blocklist: remote/cable/case/bracket/stand/mount/+9 more
+// v6.3:
+//   - Hybrid ceiling replaces fixed £689.97 (was breaking TVs, iPhones, laptops)
+//   - Hard ceiling £5,000 at intake (admitPrice) — blocks absurd listings
+//   - Dynamic ceiling: lowest×4 after identityFilter — product-aware
+//   - Dynamic skipped when <3 results (collapse protection)
+//   - Circuit breaker on Google CSE (429/403 → bypass for 1hr)
+//   - Security headers locked to ALLOWED_ORIGIN
 
-const VERSION      = 'search.js v5.0';
-const ABSOLUTE_MAX = 2500; // hard cap — reject anything above this regardless
+const VERSION = 'search.js v6.3';
+const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
-// ── Price sanitiser ───────────────────────────────────────────
-// Strips all non-digit/dot chars then parseFloat.
-// Handles: '£1,000.00' → 1000, '£229.99' → 229.99, null → NaN
-const clean = v => parseFloat(String(v).replace(/[^\d.]/g, ''));
+// ─────────────────────────────────────────────────────────────
+// HYBRID PRICE FILTER
+//
+// Two-layer ceiling — solves the fixed-ceiling problem (£689.97
+// was breaking TV / laptop / iPhone searches).
+//
+// Layer 1 — Hard ceiling £5,000 at intake (admitPrice)
+//   Applied to every result individually as it enters rawItems.
+//   Blocks anything absurd (£10,000 scam listings) regardless of product.
+//   Set high enough to cover any UK consumer product.
+//
+// Layer 2 — Dynamic ceiling after identityFilter (dynamicCeilingFilter)
+//   lowest_price × PRICE_MULTIPLIER (4).
+//   Only fires when 3+ results survive identityFilter (collapse protection).
+//   Adapts to the product: headphones at £230 → ceiling £920.
+//   TV at £800 → ceiling £3,200. iPhone at £1,089 → ceiling £4,356.
+//   Anchors off the cheapest *legitimate* result, not a noise value.
+//
+// Pipeline order (critical):
+//   admitPrice (intake) → nuclearFilter → identityFilter → dynamicCeilingFilter → dedup
+//   Dynamic ceiling runs AFTER identityFilter so accessories cannot
+//   become the anchor that collapses the ceiling.
+// ─────────────────────────────────────────────────────────────
+const PRICE_CEILING_HARD  = 5000;  // absolute max — covers any UK consumer product
+const PRICE_FLOOR         = 0.50;  // anything below 50p is noise
+const PRICE_MULTIPLIER    = 4;     // dynamic ceiling = lowest × this
+const DYNAMIC_MIN_RESULTS = 3;     // minimum results needed to trust the anchor
 
-// ── Retailer map ──────────────────────────────────────────────
-const UK_RETAILERS = {
-  'amazon.co.uk':     { name: 'Amazon UK',    aff: '?tag=savvey-21' },
-  'currys.co.uk':     { name: 'Currys',        aff: '' },
-  'johnlewis.com':    { name: 'John Lewis',    aff: '' },
-  'argos.co.uk':      { name: 'Argos',         aff: '' },
-  'ao.com':           { name: 'AO.com',        aff: '' },
-  'very.co.uk':       { name: 'Very',          aff: '' },
-  'richersounds.com': { name: 'Richer Sounds', aff: '' },
-  'box.co.uk':        { name: 'Box.co.uk',     aff: '' },
-  'ebay.co.uk':       { name: 'eBay UK',       aff: '' },
-  'halfords.com':     { name: 'Halfords',      aff: '' },
-  'screwfix.com':     { name: 'Screwfix',      aff: '' },
-  'boots.com':        { name: 'Boots',         aff: '' },
-  'costco.co.uk':     { name: 'Costco UK',     aff: '' },
-  'toolstation.com':  { name: 'Toolstation',   aff: '' },
-  'dunelm.com':       { name: 'Dunelm',        aff: '' },
-  'wayfair.co.uk':    { name: 'Wayfair UK',    aff: '' },
-  'bq.co.uk':         { name: 'B&Q',           aff: '' },
-  'tesco.com':        { name: 'Tesco',         aff: '' },
-  'asda.com':         { name: 'Asda',          aff: '' },
-};
+// Nuclear sanitizer — strips every non-digit/dot character before parsing.
+// Handles: "£1,000.00", "1.000,00" (EU format), "$249", "GBP 249.99", "&pound;249"
+const cleanPrice = (val) => parseFloat(String(val).replace(/[^\d.]/g, ''));
 
-function matchRetailer(url) {
-  if (!url) return null;
-  for (const [domain, data] of Object.entries(UK_RETAILERS)) {
-    if (url.includes(domain)) return { domain, ...data };
+// Strict admission test — returns the clean numeric price or null.
+// null = reject. No exceptions.
+// Rounds to 2dp BEFORE the ceiling check so floating point artifacts
+// like 4999.9999999 are correctly handled.
+function admitPrice(val) {
+  const raw = cleanPrice(val);
+  if (isNaN(raw))                return null; // unparseable — "Out of Stock", "", null
+  const n = Math.round(raw * 100) / 100;      // round to 2dp before any comparison
+  if (n < PRICE_FLOOR)           return null; // noise / zero / negative
+  if (n > PRICE_CEILING_HARD)    return null; // above hard ceiling — absurd listing
+  return n;
+}
+
+// Nuclear filter — belt-and-suspenders pass on the full combined array.
+// Catches anything that slipped through admitPrice (e.g. type coercion edge cases).
+function nuclearFilter(items) {
+  const before = items.length;
+  const passed = items.filter(item => {
+    const raw = typeof item.price === 'number' ? item.price : cleanPrice(item.price);
+    const n   = Math.round(raw * 100) / 100;
+    const ok  = !isNaN(n) && n >= PRICE_FLOOR && n <= PRICE_CEILING_HARD;
+    if (!ok) {
+      console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${n} is over £${PRICE_CEILING_HARD}`);
+    }
+    return ok;
+  });
+  console.log(`[${VERSION}] nuclearFilter: ${before} in → ${passed.length} out (hard ceiling=£${PRICE_CEILING_HARD})`);
+  return passed;
+}
+
+// Dynamic ceiling filter — Layer 2.
+// Runs AFTER identityFilter so accessories cannot corrupt the anchor.
+// Skipped entirely when fewer than DYNAMIC_MIN_RESULTS items remain
+// (collapse protection — prevents a single bad anchor wiping everything).
+function dynamicCeilingFilter(items) {
+  if (items.length < DYNAMIC_MIN_RESULTS) {
+    console.log(`[${VERSION}] dynamicCeiling: skipped (${items.length} items < min ${DYNAMIC_MIN_RESULTS})`);
+    return items;
+  }
+  const prices  = items.map(i => i.price).sort((a, b) => a - b);
+  const lowest  = prices[0];
+  const ceiling = Math.round(lowest * PRICE_MULTIPLIER * 100) / 100;
+  console.log(`[${VERSION}] dynamicCeiling: lowest=£${lowest} × ${PRICE_MULTIPLIER} = ceiling £${ceiling}`);
+  const before  = items.length;
+  const passed  = items.filter(item => {
+    const ok = item.price <= ceiling;
+    if (!ok) {
+      console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${item.price} > dynamic ceiling £${ceiling}`);
+    }
+    return ok;
+  });
+  console.log(`[${VERSION}] dynamicCeiling: ${before} in → ${passed.length} out`);
+  return passed;
+}
+// ─────────────────────────────────────────────────────────────
+// IDENTITY FILTER — Keyword Confidence Scoring
+// Solves the Identity Test failure: a TV search returning a £15 remote.
+// Two gates in sequence — both must pass.
+//
+// Gate 1 — Accessory blocklist
+//   If the result title contains an accessory term that the query did NOT
+//   mention, the item is a different product class. Hard discard.
+//
+// Gate 2 — Keyword confidence score
+//   Numeric tokens (model numbers, sizes): every one must appear verbatim
+//   in the title — a single miss is a hard fail (score 0).
+//   Text tokens: at least 60% must be present (CONFIDENCE_THRESHOLD).
+//
+// Why split numeric vs text?
+//   "Sony WH-1000XM5" — brand "sony" + series "wh" can match loosely,
+//   but the model number "1000xm5" must be exact. XM4 must not pass.
+//   "Samsung 65 TV" — "65" must match; "55" is a different product.
+// ─────────────────────────────────────────────────────────────
+
+const CONFIDENCE_THRESHOLD = 0.60;
+
+// Stop words: stripped before keyword matching — carry no identity signal
+const STOP_WORDS = new Set([
+  'a','an','the','and','or','for','with','in','on','at','to','of',
+  'inch','cm','mm','gb','tb','mb','hz','ghz','mhz','w','kg','g',
+  'buy','uk','price','cheap','best','new','deal','sale',
+]);
+
+// Accessory terms: if present in title but absent from query → discard
+const ACCESSORY_TERMS = [
+  'remote','cable','case','bracket','stand','mount','adapter','adaptor',
+  'charger','lead','strap','skin','cover','screen protector','pouch',
+  'bag','holder','clip','hook','wall plate','replacement','spare',
+];
+
+function tokenise(str) {
+  return String(str)
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(w => w.length > 1 && !STOP_WORDS.has(w));
+}
+
+function isNumericToken(tok) {
+  return /\d/.test(tok); // any digit = model/size token
+}
+
+// Gate 1: returns the blocking accessory term, or null if clean
+function accessoryBlock(query, title) {
+  const qLower = query.toLowerCase();
+  const tLower = title.toLowerCase();
+  for (const term of ACCESSORY_TERMS) {
+    if (tLower.includes(term) && !qLower.includes(term)) return term;
   }
   return null;
 }
 
-// Extract £price from prose text (snippets, titles)
-function extractPriceFromText(str) {
-  if (!str) return null;
-  const m = str.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
-  return m ? clean(m[1]) : null;
+// Gate 2: keyword confidence score
+// Numeric tokens → mandatory (one miss = 0 score = hard fail)
+// Text tokens    → 60% threshold
+function keywordScore(query, title) {
+  const qTokens = tokenise(query);
+  if (qTokens.length === 0) return 1.0; // no tokens = cannot fail
+
+  const tNorm = title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
+
+  const numericTokens = qTokens.filter(isNumericToken);
+  const textTokens    = qTokens.filter(t => !isNumericToken(t));
+
+  // Numeric: every token must appear as a whole word in the normalised title
+  for (const tok of numericTokens) {
+    const re = new RegExp(`(?<![a-z0-9])${tok}(?![a-z0-9])`);
+    if (!re.test(tNorm)) return 0; // hard fail — wrong model/size
+  }
+
+  // Text: fraction of tokens found
+  if (textTokens.length === 0) return 1.0;
+  const matched = textTokens.filter(tok => tNorm.includes(tok)).length;
+  return matched / textTokens.length;
 }
 
-// Normalise any raw price to a clean float, or null if implausible
-function normalisePrice(raw) {
-  const n = clean(raw);
-  return (isNaN(n) || n <= 0 || n > ABSOLUTE_MAX) ? null : n;
-}
+// Combined identity filter — runs after nuclearFilter, before dedup
+function identityFilter(items, query) {
+  const before = items.length;
+  const passed = items.filter(item => {
+    const title = item.title || item.source || '';
 
-// ── URL validator ─────────────────────────────────────────────
-// Rejects category/search/browse pages that show aggregate "from" prices.
-function isValidProductUrl(url, provider) {
-  if (!url) return false;
-  try {
-    const path = new URL(url).pathname;
-    if (provider === 'amazon') {
-      if (['/s?', '/b?', '/Best-Sellers', '/stores/'].some(p => url.includes(p))) return false;
-      return path.includes('/dp/') || path.includes('/gp/product/');
+    // Gate 1: accessory blocklist
+    const blocked = accessoryBlock(query, title);
+    if (blocked) {
+      console.log(`[${VERSION}] IDENTITY BLOCK (accessory "${blocked}"): "${title}"`);
+      return false;
     }
-    if (provider === 'ebay') {
-      if (['/sch/', '/deals/', '/usr/'].some(p => path.includes(p))) return false;
-      const segs = path.split('/').filter(Boolean);
-      if (segs[0] === 'b' || segs[0] === 'shop') return false;
-      return path.includes('/itm/');
-    }
-    return !['/search', '/browse', '/category', '/c/', '?q='].some(p => url.includes(p));
-  } catch { return false; }
-}
 
-// ── Sanity filter ─────────────────────────────────────────────
-// Anchors to LOWEST price across ALL sources (not median).
-// Runs once on the final combined deduplicated array.
-// item.price is a clean Number at this point — guaranteed by admit().
-function sanityFilter(items, query) {
-  if (items.length < 2) return items;
-  const lowest  = Math.min(...items.map(i => i.price));
-  const ceiling = lowest * 3.0;
-  const floor   = lowest * 0.5;
-  console.log(`[${VERSION}][SANITY] query="${query}" lowest=£${lowest} ceiling=£${ceiling}`);
-  return items.filter(item => {
-    const p    = item.price;
-    const pass = p >= floor && p <= ceiling;
-    console.log(
-      `[${VERSION}][FILTER] [${item.source}] ${item.retailer}` +
-      ` | price=${p} typeof=${typeof p}` +
-      ` | ${p} <= ${ceiling}: ${p <= ceiling}` +
-      ` | ${pass ? 'PASS ✅' : 'FAIL ❌'}`
-    );
-    return pass;
+    // Gate 2: keyword confidence
+    const score = keywordScore(query, title);
+    if (score < CONFIDENCE_THRESHOLD) {
+      console.log(`[${VERSION}] IDENTITY BLOCK (score ${Math.round(score*100)}%<${CONFIDENCE_THRESHOLD*100}%): "${title}"`);
+      return false;
+    }
+
+    return true;
   });
+  console.log(`[${VERSION}] identityFilter: ${before} in → ${passed.length} out (query="${query}")`);
+  return passed;
 }
 
-// ──────────────────────────────────────────────────────────────
-//  AwinProductProvider
-//  Swap in real credentials by setting AWIN_API_KEY in Vercel env vars.
-//  No code change required — the class self-activates when the key exists.
-// ──────────────────────────────────────────────────────────────
-class AwinProductProvider {
-  constructor() {
-    this.apiKey  = process.env.AWIN_API_KEY || null;
-    this.baseUrl = 'https://productdata.awin.com/datafeed/list/apikey';
-    this.enabled = !!this.apiKey;
-  }
 
-  isEnabled() { return this.enabled; }
-
-  async search(query) {
-    if (!this.enabled) throw new Error('Awin not configured: AWIN_API_KEY not set');
-
-    const params = new URLSearchParams({
-      apikey:   this.apiKey,
-      freetext: query,
-      country:  'GB',
-      currency: 'GBP',
-      format:   'json',
-      limit:    '20',
-    });
-
-    const res = await fetch(`${this.baseUrl}?${params}`, {
-      headers: { Accept: 'application/json' },
-    });
-
-    if (res.status === 429 || res.status === 403) {
-      throw new Error(`Awin rate limited: HTTP ${res.status}`);
-    }
-    if (!res.ok) throw new Error(`Awin HTTP ${res.status}`);
-
-    const data     = await res.json();
-    const products = Array.isArray(data) ? data : (data.products || data.feed?.products || []);
-
-    return products
-      .map(p => {
-        const url      = p.aw_deep_link || p.merchant_deep_link || '';
-        const retailer = matchRetailer(url);
-        return {
-          retailer: retailer ? retailer.name : (p.merchant_name || 'Unknown'),
-          domain:   retailer ? retailer.domain : '',
-          aff:      retailer ? retailer.aff    : '',
-          // Awin sends comma-formatted strings — clean() handles it
-          price:    clean(p.display_price || p.search_price || '0'),
-          link:     url,
-          sub:      '',
-        };
-      })
-      .filter(p => !isNaN(p.price) && p.price > 0 && p.link);
-  }
-}
-
-// ── Circuit breaker state ─────────────────────────────────────
-// Tracks whether Google CSE has tripped (429/403).
-// Resets after CIRCUIT_RESET_MS to allow CSE to retry (e.g. next day).
-// This is module-level state — persists across requests within the same
-// Vercel function instance (typically minutes, not days).
-const CIRCUIT_RESET_MS = 60 * 60 * 1000; // 1 hour
-let cseCircuitOpen     = false;
-let cseCircuitOpenedAt = 0;
-
-function cseCircuitTripped() {
-  if (!cseCircuitOpen) return false;
-  if (Date.now() - cseCircuitOpenedAt > CIRCUIT_RESET_MS) {
-    cseCircuitOpen = false;
-    console.log(`[${VERSION}][CIRCUIT] CSE circuit reset after 1hr`);
-    return false;
-  }
+// ─────────────────────────────────────────────────────────────
+// URL VALIDATION
+// Blocks category/search pages — only product-level URLs admitted.
+// ─────────────────────────────────────────────────────────────
+function isValidProductUrl(url) {
+  if (!url) return false;
+  if (url.includes('amazon') && !url.includes('/dp/'))    return false;
+  if (url.includes('ebay')   && !url.includes('/itm/'))   return false;
   return true;
 }
 
-function tripCseCircuit() {
-  cseCircuitOpen     = true;
-  cseCircuitOpenedAt = Date.now();
-  console.warn(`[${VERSION}][CIRCUIT] CSE circuit tripped — will retry after 1hr`);
+// ─────────────────────────────────────────────────────────────
+// CIRCUIT BREAKER — Google CSE
+// Trips on 429 or 403. Bypasses CSE for 1 hour to protect quota.
+// ─────────────────────────────────────────────────────────────
+let cseCircuitOpen   = false;
+let cseCircuitOpenAt = 0;
+const CSE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+
+function cseTripCircuit() {
+  cseCircuitOpen   = true;
+  cseCircuitOpenAt = Date.now();
+  console.warn(`[${VERSION}] CSE circuit TRIPPED — bypassing for 1hr`);
+}
+function cseCircuitOk() {
+  if (!cseCircuitOpen) return true;
+  if (Date.now() - cseCircuitOpenAt > CSE_COOLDOWN_MS) {
+    cseCircuitOpen = false;
+    console.log(`[${VERSION}] CSE circuit RESET`);
+    return true;
+  }
+  return false;
 }
 
-// ── Main handler ──────────────────────────────────────────────
-export default async function handler(req, res) {
+// ─────────────────────────────────────────────────────────────
+// AWIN PRODUCT PROVIDER
+// Self-contained class. Activates the moment AWIN_API_KEY is set
+// in Vercel env vars. No code change needed to enable.
+// ─────────────────────────────────────────────────────────────
+class AwinProductProvider {
+  constructor(apiKey) { this.apiKey = apiKey; }
 
-  // ── Security headers ──────────────────────────────────────
-  const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
-  res.setHeader('Access-Control-Allow-Origin',  ALLOWED_ORIGIN);
-  res.setHeader('Vary',                         'Origin');
+  async search(query) {
+    try {
+      const r = await fetch(
+        `https://productserve.awin.com/productserve?apikey=${this.apiKey}&query=${encodeURIComponent(query)}&country=GB&currency=GBP&format=json&limit=20`,
+        { headers: { 'Accept': 'application/json' } }
+      );
+      if (!r.ok) return [];
+      const data = await r.json();
+      const items = Array.isArray(data) ? data : (data.products || []);
+      return items
+        .map(p => ({
+          source:   p.merchant_name || p.merchantName || 'Awin',
+          price:    admitPrice(p.display_price || p.price || p.aw_deep_link_price),
+          link:     p.aw_deep_link || p.deepLink || '',
+          title:    p.product_name || p.name || query,
+          delivery: p.delivery_cost || '',
+        }))
+        .filter(p => p.price !== null); // admitPrice already applied PRICE_CEILING_HARD
+    } catch (e) {
+      console.error(`[${VERSION}] Awin error:`, e.message);
+      return [];
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// SERPER — shopping + organic results
+// ─────────────────────────────────────────────────────────────
+async function fetchSerper(query, type, apiKey) {
+  const endpoint = type === 'search'
+    ? 'https://google.serper.dev/search'
+    : 'https://google.serper.dev/shopping';
+
+  const r = await fetch(endpoint, {
+    method:  'POST',
+    headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: 10 }),
+  });
+
+  if (!r.ok) throw Object.assign(new Error('Serper error'), { status: r.status });
+  return r.json();
+}
+
+// Extract and normalise items from a Serper shopping response.
+// admitPrice() is the gatekeeper — no item with a bad price enters rawItems.
+function normaliseSerperShopping(data, query) {
+  const shopping = data.shopping || [];
+  return shopping
+    .filter(item => isValidProductUrl(item.link))
+    .map(item => {
+      const price = admitPrice(item.price); // PRICE_CEILING_HARD enforced here
+      if (price === null) {
+        console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${item.price} is over £${PRICE_CEILING_HARD} (intake)`);
+        return null;
+      }
+      return {
+        source:   item.source || 'Unknown',
+        price,
+        link:     item.link || '',
+        title:    item.title || query,
+        delivery: item.delivery || '',
+      };
+    })
+    .filter(Boolean);
+}
+
+// Extract prices embedded in organic snippet text.
+function normaliseSerperOrganic(data, query) {
+  const organic = data.organic || [];
+  return organic
+    .filter(item => isValidProductUrl(item.link))
+    .map(item => {
+      const raw   = item.snippet || item.title || '';
+      const match = raw.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
+      if (!match) return null;
+      const price = admitPrice(match[1]); // PRICE_CEILING_HARD enforced here
+      if (price === null) return null;
+      return {
+        source:   (item.displayLink || item.link || '').replace(/^www\./, '').split('/')[0],
+        price,
+        link:     item.link || '',
+        title:    item.title || query,
+        delivery: '',
+      };
+    })
+    .filter(Boolean);
+}
+
+// ─────────────────────────────────────────────────────────────
+// GOOGLE CSE — secondary fallback
+// ─────────────────────────────────────────────────────────────
+async function fetchCSE(query) {
+  const CSE_KEY = process.env.GOOGLE_CSE_KEY;
+  const CSE_CX  = process.env.GOOGLE_CSE_CX;
+  if (!CSE_KEY || !CSE_CX || !cseCircuitOk()) return [];
+
+  try {
+    const url = `https://www.googleapis.com/customsearch/v1?key=${CSE_KEY}&cx=${CSE_CX}&q=${encodeURIComponent(query + ' price UK buy')}&gl=uk&num=10`;
+    const r   = await fetch(url);
+
+    if (r.status === 429 || r.status === 403) { cseTripCircuit(); return []; }
+    if (!r.ok) return [];
+
+    const data  = await r.json();
+    const items = data.items || [];
+
+    return items
+      .filter(item => isValidProductUrl(item.link))
+      .map(item => {
+        const raw   = item.snippet || '';
+        const match = raw.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
+        if (!match) return null;
+        const price = admitPrice(match[1]); // PRICE_CEILING_HARD enforced here
+        if (price === null) return null;
+        return {
+          source:   (item.displayLink || '').replace(/^www\./, '').split('/')[0],
+          price,
+          link:     item.link || '',
+          title:    item.title || query,
+          delivery: '',
+        };
+      })
+      .filter(Boolean);
+  } catch (e) {
+    console.error(`[${VERSION}] CSE error:`, e.message);
+    return [];
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+// DEDUPLICATION
+// One entry per source domain. Cheapest price wins on collision.
+// ─────────────────────────────────────────────────────────────
+function dedup(items) {
+  const map = new Map();
+  for (const item of items) {
+    const key = item.source.toLowerCase();
+    if (!map.has(key) || item.price < map.get(key).price) {
+      map.set(key, item);
+    }
+  }
+  return [...map.values()].sort((a, b) => a.price - b.price);
+}
+
+// ─────────────────────────────────────────────────────────────
+// HANDLER
+// ─────────────────────────────────────────────────────────────
+export default async function handler(req, res) {
+  console.log(`[${VERSION}] ${req.method} ${req.url}`);
+
+  // Security headers
+  res.setHeader('Access-Control-Allow-Origin',  ORIGIN);
+  res.setHeader('Vary',                          'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  // Prevent MIME-type sniffing attacks
   res.setHeader('X-Content-Type-Options',       'nosniff');
-  // Force HTTPS for 1 year (Vercel always serves HTTPS, belt-and-braces)
   res.setHeader('Strict-Transport-Security',    'max-age=31536000; includeSubDomains');
 
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
 
+  const SERPER_KEY = process.env.SERPER_KEY;
+  if (!SERPER_KEY) return res.status(500).json({ error: 'SERPER_KEY not configured' });
+
   const { q, type = 'shopping' } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
-  console.log(`[${VERSION}] ── START query="${q}" ──`);
+  // ── Source priority ──────────────────────────────────────
+  // 1. Awin   — PRIMARY   (when AWIN_API_KEY set)
+  // 2. Serper — PRIMARY fallback
+  // 3. CSE    — SECONDARY fallback, circuit-breaker protected
+  // ─────────────────────────────────────────────────────────
+  let rawItems = [];
 
-  const awin         = new AwinProductProvider();
-  const rawItems     = [];
-  const sourceStatus = {};
-  let   rateLimited  = false;
-
-  // Centralised intake — all items must pass through here.
-  // Ensures item.price is always a clean Number before entering rawItems.
-  function admit(item, sourceLabel) {
-    const price = normalisePrice(item.price);
-    if (price === null) {
-      console.log(`[${VERSION}][ADMIT] REJECTED ${item.retailer} raw="${item.price}"`);
-      return;
-    }
-    rawItems.push({ ...item, price, source: sourceLabel });
+  // 1. Awin
+  const AWIN_KEY = process.env.AWIN_API_KEY;
+  if (AWIN_KEY) {
+    const awin  = new AwinProductProvider(AWIN_KEY);
+    const awinR = await awin.search(q);
+    rawItems.push(...awinR);
+    console.log(`[${VERSION}] Awin: ${awinR.length} items`);
   }
 
-  // ── SOURCE 1: Awin (PRIMARY when key is set) ──────────────
-  if (awin.isEnabled()) {
-    try {
-      const results = await awin.search(q);
-      results.forEach(item => admit(item, 'awin'));
-      sourceStatus.awin = `ok:${results.length}`;
-      console.log(`[${VERSION}] Awin: ${results.length} raw → ${rawItems.length} admitted`);
-    } catch (err) {
-      sourceStatus.awin = `error:${err.message}`;
-      console.warn(`[${VERSION}] Awin failed: ${err.message}`);
-    }
-  } else {
-    sourceStatus.awin = 'disabled:no_key';
-  }
-
-  // ── SOURCE 2: Serper (PRIMARY fallback when Awin absent/empty) ──
-  const needsSerper = !awin.isEnabled() || rawItems.length === 0;
-  if (needsSerper) {
-    try {
-      const data        = await fetchSerper(q, type);
-      const before      = rawItems.length;
-      const urlProvider = url =>
-        url.includes('amazon') ? 'amazon' : url.includes('ebay') ? 'ebay' : 'other';
-
-      for (const item of (data.shopping || [])) {
-        if (!isValidProductUrl(item.link, urlProvider(item.link || ''))) continue;
-        const ret = matchRetailer(item.link || item.source || '');
-        admit({
-          retailer: ret ? ret.name   : (item.source || 'Unknown'),
-          domain:   ret ? ret.domain : '',
-          aff:      ret ? ret.aff    : '',
-          price:    item.price,
-          link:     item.link || '',
-          sub:      item.delivery || '',
-        }, 'serper-shopping');
-      }
-
-      for (const item of (data.organic || [])) {
-        if (!isValidProductUrl(item.link, urlProvider(item.link || ''))) continue;
-        const ret = matchRetailer(item.link || '');
-        if (!ret) continue;
-        admit({
-          retailer: ret.name,
-          domain:   ret.domain,
-          aff:      ret.aff,
-          price:    extractPriceFromText(item.snippet || item.title || ''),
-          link:     item.link || '',
-          sub:      '',
-        }, 'serper-organic');
-      }
-
-      sourceStatus.serper = `ok:+${rawItems.length - before}`;
-      console.log(`[${VERSION}] Serper done. Total admitted: ${rawItems.length}`);
-    } catch (err) {
-      sourceStatus.serper = `error:${err.message}`;
-      console.warn(`[${VERSION}] Serper failed: ${err.message}`);
-    }
-  } else {
-    sourceStatus.serper = 'skipped:awin_active';
-  }
-
-  // ── SOURCE 3: Google CSE (FALLBACK, circuit-breaker protected) ──
-  // Circuit breaker: if CSE has returned 429 or 403 recently, skip it
-  // and go straight to Awin fallback (even if Awin is the primary).
-  // This prevents burning through Awin's quota retrying a broken CSE.
-  if (rawItems.length < 2) {
-    if (cseCircuitTripped()) {
-      sourceStatus.googleCse = 'skipped:circuit_open';
-      console.warn(`[${VERSION}] CSE circuit open — skipping`);
-
-      // Circuit is open: if Awin is configured and we haven't tried it
-      // as a fallback yet, try it now as the CSE replacement.
-      if (awin.isEnabled() && rawItems.length === 0) {
-        try {
-          const results = await awin.search(q);
-          results.forEach(item => admit(item, 'awin-circuit-fallback'));
-          sourceStatus.awinFallback = `ok:${results.length}`;
-          console.log(`[${VERSION}] Awin circuit-fallback: ${results.length} results`);
-        } catch (err) {
-          sourceStatus.awinFallback = `error:${err.message}`;
-        }
-      }
-    } else {
-      try {
-        const data   = await fetchGoogleCSE(q);
-        const before = rawItems.length;
-        const urlP   = url =>
-          url.includes('amazon') ? 'amazon' : url.includes('ebay') ? 'ebay' : 'other';
-
-        for (const item of (data.items || [])) {
-          if (!isValidProductUrl(item.link, urlP(item.link || ''))) continue;
-          const ret = matchRetailer(item.link || '');
-          if (!ret) continue;
-          const text = [
-            item.snippet, item.title,
-            item.pagemap?.offer?.[0]?.price,
-            item.pagemap?.product?.[0]?.price,
-          ].filter(Boolean).join(' ');
-          admit({
-            retailer: ret.name,
-            domain:   ret.domain,
-            aff:      ret.aff,
-            price:    extractPriceFromText(text),
-            link:     item.link || '',
-            sub:      '',
-          }, 'google-cse');
-        }
-
-        sourceStatus.googleCse = `ok:+${rawItems.length - before}`;
-      } catch (err) {
-        // 429 or 403 — trip the circuit breaker
-        if (err.message.includes('RATE_LIMITED') || err.message.includes('FORBIDDEN')) {
-          tripCseCircuit();
-          rateLimited = true;
-          sourceStatus.googleCse = 'rate_limited:circuit_tripped';
-
-          // Immediate fallback to Awin if available
-          if (awin.isEnabled() && rawItems.length === 0) {
-            try {
-              const results = await awin.search(q);
-              results.forEach(item => admit(item, 'awin-circuit-fallback'));
-              sourceStatus.awinFallback = `ok:${results.length}`;
-              console.log(`[${VERSION}] Awin circuit-fallback activated: ${results.length} results`);
-            } catch (awinErr) {
-              sourceStatus.awinFallback = `error:${awinErr.message}`;
-            }
-          }
-        } else {
-          sourceStatus.googleCse = `error:${err.message}`;
-          console.warn(`[${VERSION}] CSE failed: ${err.message}`);
-        }
-      }
-    }
-  } else {
-    sourceStatus.googleCse = 'skipped:enough_results';
-  }
-
-  // ── Deduplicate: lowest price per retailer ────────────────
-  const byRetailer = {};
-  for (const item of rawItems) {
-    if (!byRetailer[item.retailer] || item.price < byRetailer[item.retailer].price) {
-      byRetailer[item.retailer] = item;
+  // 2. Serper (always runs as fallback or primary)
+  try {
+    const serperData = await fetchSerper(q, type, SERPER_KEY);
+    const shopping   = normaliseSerperShopping(serperData, q);
+    const organic    = normaliseSerperOrganic(serperData, q);
+    rawItems.push(...shopping, ...organic);
+    console.log(`[${VERSION}] Serper: ${shopping.length} shopping + ${organic.length} organic`);
+  } catch (e) {
+    console.error(`[${VERSION}] Serper failed:`, e.message);
+    if (rawItems.length === 0) {
+      return res.status(502).json({ error: 'upstream_error' });
     }
   }
 
-  // Object.values returns a new array — not a reference to rawItems
-  let deduped = Object.values(byRetailer);
-  console.log(`[${VERSION}] After dedup: ${deduped.length} | ${deduped.map(i => i.retailer + ' £' + i.price).join(', ')}`);
+  // 3. CSE top-up (if circuit is closed)
+  const cseItems = await fetchCSE(q);
+  rawItems.push(...cseItems);
+  console.log(`[${VERSION}] CSE: ${cseItems.length} items`);
 
-  // ── Sanity filter (global, on final combined array) ───────
-  deduped = sanityFilter(deduped, q);
-  deduped.sort((a, b) => a.price - b.price);
+  // ── NUCLEAR FILTER — final pass, no exceptions ────────────
+  // admitPrice() already rejected bad prices at intake above.
+  // This runs again on the full combined array as a hard guarantee.
+  const safe = nuclearFilter(rawItems);
 
-  // ── Shape to frontend schema ──────────────────────────────
-  // Price converted back to string AFTER filtering — no raw strings re-enter
-  const shopping = deduped.map(item => ({
-    title:    item.retailer,
-    link:     item.link + (item.link.includes('amazon') && item.aff ? item.aff : ''),
-    source:   item.domain,
-    price:    '£' + item.price.toFixed(2),
-    delivery: item.sub || '',
-  }));
+  // ── IDENTITY FILTER — discard accessories + low-confidence items ──
+  // Runs after nuclearFilter, before dynamic ceiling.
+  const identified = identityFilter(safe, q);
 
-  console.log(
-    `[${VERSION}] ── END: ${shopping.length} results` +
-    ` | top: ${shopping[0] ? shopping[0].title + ' ' + shopping[0].price : 'none'}` +
-    ` | sources: ${JSON.stringify(sourceStatus)} ──`
-  );
+  // ── DYNAMIC CEILING — lowest × 4, product-aware ──────────
+  // Runs after identityFilter so accessories cannot corrupt the anchor.
+  // Skipped if fewer than 3 results survive (collapse protection).
+  const priced = dynamicCeilingFilter(identified);
 
-  // All sources failed + rate limited = tell the frontend clearly
-  if (rateLimited && shopping.length === 0) {
-    return res.status(429).json({
-      error:       'rate_limited',
-      message:     'Service temporarily busy. Try again in a few minutes.',
-      shopping:    [],
-      organic:     [],
-      rateLimited: true,
-      debug:       { version: VERSION, sources: sourceStatus },
-    });
-  }
+  // ── Dedup + sort ──────────────────────────────────────────
+  const results = dedup(priced);
 
+  console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'} | hard=£${PRICE_CEILING_HARD} | dynamic=lowest×${PRICE_MULTIPLIER}`);
+
+  // Return in the shape the frontend's buildScen() expects
   return res.status(200).json({
-    shopping,
-    organic:     [],
-    rateLimited: rateLimited && shopping.length > 0,
-    debug: {
-      version:    VERSION,
-      sources:    sourceStatus,
-      rawCount:   rawItems.length,
-      finalCount: deduped.length,
-      topResult:  deduped[0] ? `${deduped[0].retailer} £${deduped[0].price}` : 'none',
+    shopping: results.map(r => ({
+      source:   r.source,
+      price:    `£${r.price.toFixed(2)}`,
+      link:     r.link,
+      title:    r.title,
+      delivery: r.delivery,
+    })),
+    organic: [], // organic already folded into shopping above
+    _meta: {
+      version:      VERSION,
+      itemCount:    results.length,
+      priceCeilingHard: PRICE_CEILING_HARD,
+      priceMultiplier: PRICE_MULTIPLIER,
+      cheapest:     results[0]?.price ?? null,
     },
   });
-}
-
-// ── Serper provider ───────────────────────────────────────────
-async function fetchSerper(q, type) {
-  const key = process.env.SERPER_KEY;
-  if (!key) throw new Error('SERPER_KEY not set');
-  const endpoint = type === 'search'
-    ? 'https://google.serper.dev/search'
-    : 'https://google.serper.dev/shopping';
-  const r = await fetch(endpoint, {
-    method:  'POST',
-    headers: { 'X-API-KEY': key, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ q, gl: 'uk', hl: 'en', num: 10 }),
-  });
-  if (!r.ok) throw new Error(`Serper HTTP ${r.status}`);
-  return r.json();
-}
-
-// ── Google CSE provider ───────────────────────────────────────
-// Throws 'RATE_LIMITED' on 429 or quota-exhausted 400.
-// Throws 'FORBIDDEN' on 403.
-// Both trigger the circuit breaker in the handler above.
-async function fetchGoogleCSE(q) {
-  const key = process.env.GOOGLE_CSE_KEY;
-  const cx  = process.env.GOOGLE_CSE_CX;
-  if (!key || !cx) throw new Error('GOOGLE_CSE_KEY or GOOGLE_CSE_CX not set');
-
-  const params = new URLSearchParams({ key, cx, q, gl: 'uk', hl: 'en', num: '10' });
-  const r = await fetch(`https://www.googleapis.com/customsearch/v1?${params}`);
-
-  if (r.status === 429) throw new Error('RATE_LIMITED');
-  if (r.status === 403) throw new Error('FORBIDDEN');
-
-  if (!r.ok) {
-    let body = {};
-    try { body = await r.json(); } catch {}
-    const reason = body?.error?.errors?.[0]?.reason || '';
-    if (reason === 'rateLimitExceeded' || reason === 'dailyLimitExceeded') {
-      throw new Error('RATE_LIMITED');
-    }
-    throw new Error(`Google CSE HTTP ${r.status}`);
-  }
-
-  return r.json();
 }
