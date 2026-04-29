@@ -1459,7 +1459,7 @@ function fetchPrices(query){
     const d1=r1.ok?await r1.json():{};
     const d2=r2.ok?await r2.json():{};
     if(searchGeneration!==gen)return null; // check again after await
-    const sc=buildScenV3(d1.items||[],userPrice,query);
+    const sc=buildScenV3(d1.shopping||[],userPrice,query);
     liveScen=sc;
     chipTimers.forEach(clearTimeout);
     return sc;
