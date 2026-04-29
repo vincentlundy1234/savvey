@@ -1357,65 +1357,46 @@ function calcScore(userP,bestP){
 function scoreToSpc(s){return s>=4?'green':s===3?'amber':'red';}
 
 // ── Build result from Serper data ──
-function buildScen(data,uPrice,query){
-  const shopping=data.shopping||[];
-  const organic=data.organic||[];
-  const parsed=[];
-  const allPrices=[];
-
-  for(const item of shopping){
-    const ret=matchRetailer(item.link||item.source||'');
-    const price=extractPrice(item.price);
-    if(price)allPrices.push(price);
-    if(ret&&price&&price>1){
-      const link=(item.link||'')+(item.link&&item.link.includes('amazon')?ret.aff:'');
-      parsed.push({retailer:ret.name,price,link,sub:item.delivery||'',best:false,bad:false});
-    }
-  }
-  // Price sanity
-  if(allPrices.length>2){
-    const sorted=[...allPrices].sort((a,b)=>a-b);
-    const median=sorted[Math.floor(sorted.length/2)];
-    const filtered=parsed.filter(p=>p.price>=median*0.2&&p.price<=median*5);
-    if(filtered.length>0)parsed.splice(0,parsed.length,...filtered);
-  }
-  for(const item of organic){
-    const ret=matchRetailer(item.link||'');
-    const price=extractPrice(item.snippet||item.title||'');
-    if(ret&&price&&price>1&&!parsed.find(p=>p.retailer===ret.name)){
-      parsed.push({retailer:ret.name,price,link:item.link||'',sub:'',best:false,bad:false});
-    }
-  }
-
+function buildScenV3(items, uPrice, query){
+  if(!items||items.length===0)return null;
   const seen=new Set();
-  const deduped=parsed.filter(p=>{
+  const deduped=items.filter(p=>{
     if(seen.has(p.retailer))return false;
     seen.add(p.retailer);return true;
   }).sort((a,b)=>a.price-b.price);
-
   if(deduped.length===0)return null;
   deduped[0].best=true;
   const bestP=deduped[0].price;
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
-
   const score=calcScore(uPrice,bestP);
   const spc=scoreToSpc(score);
   const saving=uPrice?Math.round(uPrice-bestP):0;
-
   const vTitle=['','Walk away.','Better deal available.','Worth a look.','Pretty good.','Best price.'][score];
-  const vSub=spc==='green'?(saving<=2?'Best price in the UK right now.':`Only £${saving} cheaper online.`):spc==='amber'?`${deduped[0].retailer} has it for £${bestP}.`:`${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`;
-
+  const vSub=spc==='green'
+    ?(saving<=2?'Best price in the UK right now.':`Only £${saving} cheaper online.`)
+    :spc==='amber'
+    ?`${deduped[0].retailer} has it for £${bestP}.`
+    :`${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`;
   return{
     score,spc,vTitle,vSub,query,
-    bestPrice:bestP,bestRetailer:deduped[0].retailer,bestLink:deduped[0].link,
+    bestPrice:bestP,
+    bestRetailer:deduped[0].retailer,
+    bestLink:deduped[0].link||'',
     saving,uPrice,
     rets:deduped.slice(0,4).map(p=>({
-      n:p.retailer,p:'£'+p.price.toFixed(0),
-      link:p.link,best:p.best,bad:p.bad,
-      sub:(p.sub||'').replace(/£[\d,.]+/g,'').trim().slice(0,50)||'Check retailer',
+      n:p.retailer,
+      p:'£'+p.price.toFixed(0),
+      link:p.link||'',
+      best:p.best,
+      bad:p.bad,
+      sub:p.sub||'Check retailer',
       diff:p.best?'':'+£'+(p.price-bestP).toFixed(0)+' more'
     })),
-    shareMsg:spc==='red'?`Scanned ${query}. ${deduped[1]?.retailer||'The shop'} wanted £${uPrice||'more'}. ${deduped[0].retailer} has it for £${bestP}. Savvey ${score}/5 — savvey.app`:spc==='amber'?`${query} — worth checking before buying. Savvey ${score}/5. savvey.app`:`${query} — best UK price confirmed. Savvey ${score}/5 — savvey.app`
+    shareMsg:spc==='red'
+      ?`Scanned ${query}. ${deduped[1]?.retailer||'The shop'} wanted £${uPrice||'more'}. ${deduped[0].retailer} has it for £${bestP}. Savvey — savvey.app`
+      :spc==='amber'
+      ?`${query} — worth checking before buying. savvey.app`
+      :`${query} — best UK price confirmed. savvey.app`
   };
 }
 
@@ -1478,7 +1459,7 @@ function fetchPrices(query){
     const d1=r1.ok?await r1.json():{};
     const d2=r2.ok?await r2.json():{};
     if(searchGeneration!==gen)return null; // check again after await
-    const sc=buildScen({shopping:d1.shopping||[],organic:d2.organic||[]},userPrice,query);
+    const sc=buildScenV3(d1.items||[],userPrice,query);
     liveScen=sc;
     chipTimers.forEach(clearTimeout);
     return sc;
@@ -1557,10 +1538,13 @@ async function showResults(fetchPromise){
 
   // Rebuild scen with user price now that we have it
   if(sc&&userPrice){
-    const rebuilt=buildScen(
-      {shopping:sc.rets.map(r=>({link:r.link,price:'£'+r.p.replace('£',''),source:r.n})),organic:[]},
-      userPrice,liveQuery
-    );
+    const rebuiltItems=sc.rets.map(r=>({
+      retailer:r.n,
+      price:parseFloat(r.p.replace(/[^0-9.]/g,'')),
+      link:r.link||'',
+      sub:r.sub||''
+    }));
+    const rebuilt=buildScenV3(rebuiltItems,userPrice,liveQuery);
     if(rebuilt)sc=rebuilt;
   }
 
