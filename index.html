@@ -309,6 +309,69 @@
     .h-foot{flex:1;min-height:8px;padding-bottom:env(safe-area-inset-bottom);}
     #trending-list,#cat-chips{display:none;}
 
+    /* Secondary "Snap a product" button — sits just under the big Scan one */
+    .h-snap{
+      margin-top:10px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px 16px;
+      display:flex;align-items:center;gap:12px;
+      cursor:pointer;width:100%;
+      transition:transform 0.12s;
+    }
+    .h-snap:active{transform:scale(0.985);}
+    .h-snap-icon{
+      width:34px;height:34px;border-radius:10px;
+      background:var(--green-lt);
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;flex-shrink:0;
+    }
+    .h-snap-body{flex:1;text-align:left;min-width:0;}
+    .h-snap-title{font-weight:700;font-size:14px;color:var(--text);letter-spacing:-0.1px;}
+    .h-snap-sub{font-size:12px;color:var(--muted);margin-top:1px;}
+
+    /* Snap-mode camera overlay — capture button + identification state */
+    #screen-snap{background:#000;overflow:hidden;}
+    #snap-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
+    .snap-capture-btn{
+      position:absolute;left:50%;bottom:calc(40px + env(safe-area-inset-bottom));
+      transform:translateX(-50%);
+      width:78px;height:78px;border-radius:50%;
+      background:#fff;border:6px solid rgba(255,255,255,0.4);
+      cursor:pointer;
+      box-shadow:0 4px 24px rgba(0,0,0,0.5);
+      transition:transform 0.1s;
+    }
+    .snap-capture-btn:active{transform:translateX(-50%) scale(0.92);}
+    .snap-capture-btn:disabled{opacity:0.4;cursor:not-allowed;}
+    .snap-hint{
+      position:absolute;left:50%;bottom:calc(140px + env(safe-area-inset-bottom));
+      transform:translateX(-50%);
+      background:rgba(0,0,0,0.5);
+      color:#fff;font-size:13px;font-weight:500;
+      padding:8px 16px;border-radius:20px;
+      pointer-events:none;white-space:nowrap;
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+    }
+    .snap-busy{
+      position:absolute;inset:0;
+      background:rgba(0,0,0,0.7);
+      display:none;align-items:center;justify-content:center;
+      flex-direction:column;gap:18px;
+      z-index:5;
+    }
+    .snap-busy.show{display:flex;}
+    .snap-spinner{
+      width:46px;height:46px;border-radius:50%;
+      border:4px solid rgba(255,255,255,0.2);
+      border-top-color:#fff;
+      animation:snap-spin 0.7s linear infinite;
+    }
+    @keyframes snap-spin{to{transform:rotate(360deg)}}
+    .snap-busy-msg{color:#fff;font-size:15px;font-weight:600;}
+    .snap-busy-sub{color:rgba(255,255,255,0.65);font-size:13px;margin-top:-10px;}
+
     /* ─────────────────────────────────────────
        SCANNER
     ───────────────────────────────────────── */
@@ -902,6 +965,18 @@
         </div>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
+
+      <!-- Snap — secondary AI vision identification (Haiku 4.5). Useful when
+           there's no readable barcode (clothing, fresh food, restaurant items)
+           or the barcode scanner can't lock on. -->
+      <button class="h-snap" onclick="goTo('snap');startSnapper()">
+        <div class="h-snap-icon">📸</div>
+        <div class="h-snap-body">
+          <div class="h-snap-title">Snap a product</div>
+          <div class="h-snap-sub">No barcode? Photo identifies it for you</div>
+        </div>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>
     </div>
   </div>
 
@@ -910,9 +985,10 @@
     <div class="cam-shell">
       <video id="cam-video" autoplay playsinline muted></video>
       <div class="cam-noperm" id="cam-no-perm">
-        <div style="font-size:48px;margin-bottom:8px">📷</div>
-        <h2>Camera access needed</h2>
-        <p>Allow camera access in your browser settings, then tap Try again.</p>
+        <div style="font-size:48px;margin-bottom:8px" id="cam-no-perm-icon">📷</div>
+        <h2 id="cam-no-perm-title">Camera access needed</h2>
+        <p id="cam-no-perm-msg">Allow camera access in your browser settings, then tap Try again.</p>
+        <p id="cam-no-perm-detail" style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.55);font-family:monospace;display:none;"></p>
         <button class="cam-alt" style="margin-top:16px;font-size:14px;" onclick="startScanner()">Try again</button>
         <button class="cam-alt" style="margin-top:8px;" onclick="stopScanner();goHome()">Search instead</button>
       </div>
@@ -944,6 +1020,40 @@
       <div class="cam-foot">
         <div class="cam-hint-txt">Point at any barcode</div>
         <button class="cam-alt" onclick="stopScanner();goHome()">Search by name instead</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ SNAP (AI VISION) ══════ -->
+  <!-- Photo-identification mode powered by /api/ai-vision (Claude Haiku 4.5
+       vision). User points at any product, taps capture, Haiku returns the
+       product name, then we route into the existing search pipeline. Reuses
+       the cam-no-perm overlay pattern but with its own video element so each
+       camera-using screen owns its own MediaStream lifecycle cleanly. -->
+  <div class="screen" id="screen-snap">
+    <div class="cam-shell">
+      <video id="snap-video" autoplay playsinline muted></video>
+      <div class="cam-noperm" id="snap-no-perm">
+        <div style="font-size:48px;margin-bottom:8px" id="snap-no-perm-icon">📸</div>
+        <h2 id="snap-no-perm-title">Camera access needed</h2>
+        <p id="snap-no-perm-msg">Allow camera access to snap a photo for identification.</p>
+        <p id="snap-no-perm-detail" style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.55);font-family:monospace;display:none;"></p>
+        <button class="cam-alt" style="margin-top:16px;font-size:14px;" onclick="startSnapper()">Try again</button>
+        <button class="cam-alt" style="margin-top:8px;" onclick="stopSnapper();goHome()">Search instead</button>
+      </div>
+      <div class="cam-bar">
+        <button class="cam-btn" onclick="stopSnapper();goHome()">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="cam-label">Snap a product</div>
+        <div style="width:36px"></div>
+      </div>
+      <div class="snap-hint">Frame the product, then tap the shutter</div>
+      <button class="snap-capture-btn" id="snap-capture-btn" onclick="captureSnap()" aria-label="Capture photo"></button>
+      <div class="snap-busy" id="snap-busy">
+        <div class="snap-spinner"></div>
+        <div class="snap-busy-msg" id="snap-busy-msg">Identifying product…</div>
+        <div class="snap-busy-sub" id="snap-busy-sub">Asking the AI</div>
       </div>
     </div>
   </div>
@@ -1326,6 +1436,7 @@ function goTo(screen){
   if(currentScreen===screen)return;
   // Stop scanner when leaving scan screen
   if(currentScreen==='scan'&&screen!=='scan')stopScanner();
+  if(currentScreen==='snap'&&screen!=='snap')stopSnapper();
   document.getElementById('screen-'+currentScreen).classList.remove('active');
   const entering=document.getElementById('screen-'+screen);
   entering.classList.add('active');
@@ -2380,7 +2491,7 @@ function renderResults(sc){
   }
 
   // ── Nav meta ──
-  const modeLabel=inputMethod==='scan'?'📷 In-store':inputMethod==='paste'?'🔗 Online':'🔍 Search';
+  const modeLabel=inputMethod==='scan'?'📷 In-store':inputMethod==='snap'?'📸 Snap':inputMethod==='paste'?'🔗 Online':'🔍 Search';
   // Set both the hidden product label (kept for share-card compat) and the
   // visible refine-search input value.
   const productText=(sc.query||liveQuery||'');
@@ -2443,40 +2554,162 @@ function trendSearch(product){
 }
 
 // ── Scanner ──
-function startScanner(){
-  const lockon=document.getElementById('vf-lockon');
-  const detected=document.getElementById('cam-detected');
-  const noPerm=document.getElementById('cam-no-perm');
-  if(lockon)lockon.classList.remove('show');
-  if(detected)detected.classList.remove('show');
-  if(noPerm)noPerm.classList.remove('show');
-  scannedBarcode=null;scannedProductName=null;
-  // Reset CTA in case it was changed to "Type name"
-  const cta=document.getElementById('cam-det-cta');
-  if(cta){cta.textContent='Check →';cta.onclick=useScannedProduct;}
-  if(!window.Quagga)return;
-  if(quaggaRunning){try{Quagga.stop();}catch(e){}quaggaRunning=false;}
-  const video=document.getElementById('cam-video');
+//
+// Robust startScanner with explicit failure surfacing. Previous version
+// returned silently when Quagga wasn't loaded and showed a generic "no
+// permission" overlay regardless of what actually broke. That made phone
+// debugging impossible. This version:
+//   1. Detects every distinct failure mode (Quagga unloaded, getUserMedia
+//      unavailable, permission denied, no camera, init timeout, etc.)
+//   2. Shows the user a tailored message AND a small debug detail line
+//      (visible on the no-perm overlay) with the raw error name. Tap the
+//      debug line — it stays visible so testers can read the error.
+//   3. Pre-grabs the camera stream itself via mediaDevices.getUserMedia so
+//      Quagga never gets blamed for permission failures, AND so we can
+//      surface a perm-denied UI instantly without waiting for Quagga.
+//   4. Logs every step to console — opens DevTools or Eruda gives a full
+//      trace.
+function showScanError(title, msg, detail){
+  const noPerm   = document.getElementById('cam-no-perm');
+  const titleEl  = document.getElementById('cam-no-perm-title');
+  const msgEl    = document.getElementById('cam-no-perm-msg');
+  const detailEl = document.getElementById('cam-no-perm-detail');
+  if(titleEl) titleEl.textContent = title;
+  if(msgEl)   msgEl.textContent   = msg;
+  if(detailEl){
+    if(detail){ detailEl.textContent = '['+detail+']'; detailEl.style.display='block'; }
+    else { detailEl.textContent = ''; detailEl.style.display='none'; }
+  }
+  if(noPerm) noPerm.classList.add('show');
+}
+
+async function startScanner(){
+  console.log('[Scanner] startScanner() called');
+  const lockon   = document.getElementById('vf-lockon');
+  const detected = document.getElementById('cam-detected');
+  const noPerm   = document.getElementById('cam-no-perm');
+  if(lockon)   lockon.classList.remove('show');
+  if(detected) detected.classList.remove('show');
+  if(noPerm)   noPerm.classList.remove('show');
+  scannedBarcode = null; scannedProductName = null;
+  const cta = document.getElementById('cam-det-cta');
+  if(cta){ cta.textContent='Check →'; cta.onclick=useScannedProduct; }
+
+  // 1. Quagga library check — CDN load failure = silent black screen otherwise.
+  if(!window.Quagga){
+    console.error('[Scanner] window.Quagga is not defined');
+    showScanError('Scanner failed to load',
+      'The barcode library didn\'t load — likely a content blocker or flaky connection.',
+      'Quagga undefined');
+    return;
+  }
+
+  // 2. mediaDevices feature check — older iOS / private mode lacks this.
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    console.error('[Scanner] navigator.mediaDevices.getUserMedia not available');
+    showScanError('Camera not supported',
+      'Your browser doesn\'t expose a camera API. Try Safari or Chrome on a recent OS.',
+      'mediaDevices missing');
+    return;
+  }
+
+  // 3. Stop any prior session cleanly.
+  if(quaggaRunning){ try{ Quagga.stop(); }catch(e){} quaggaRunning=false; }
+  const video = document.getElementById('cam-video');
+  if(video && video.srcObject){
+    try{ video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){}
+    video.srcObject = null;
+  }
+
+  // 4. Pre-grab the camera stream OURSELVES. This separates "permission
+  //    denied" (a clean UX path) from "Quagga init blew up" (an actual bug).
+  //    iOS Safari sometimes silently fails Quagga's internal getUserMedia
+  //    because the user gesture chain breaks; doing it here in the click
+  //    handler context keeps the gesture alive.
+  let stream;
+  try{
+    console.log('[Scanner] requesting camera stream…');
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: false,
+    });
+    console.log('[Scanner] camera stream acquired');
+  }catch(err){
+    console.error('[Scanner] getUserMedia failed:', err.name, err.message);
+    if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+      showScanError('Camera permission denied',
+        'Tap the camera icon in your address bar (or in Settings → Safari → Camera) to allow access, then Try again.',
+        err.name);
+    } else if(err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'){
+      showScanError('No camera found',
+        'This device doesn\'t expose a usable rear camera. Search by name instead.',
+        err.name);
+    } else if(err.name === 'NotReadableError' || err.name === 'TrackStartError'){
+      showScanError('Camera in use',
+        'Another app is using the camera. Close it and tap Try again.',
+        err.name);
+    } else {
+      showScanError('Camera error',
+        'We couldn\'t start the camera. Tap Try again, or search by name.',
+        err.name || err.message || 'unknown');
+    }
+    return;
+  }
+
+  // 5. Attach stream to the video tag so the user sees something IMMEDIATELY,
+  //    even before Quagga finishes initialising. This kills the "I tapped
+  //    allow but nothing happened" black-screen experience.
+  video.srcObject = stream;
+  try{ await video.play(); }catch(e){ console.warn('[Scanner] video.play() rejected:', e.name); }
+  await new Promise(r => requestAnimationFrame(r)); // let video size settle
+
+  // 6. Track the live torch-capable track for the torch button.
+  const tracks = stream.getVideoTracks();
+  if(tracks.length) torchTrack = tracks[0];
+
+  // 7. Init Quagga against the same video element. Wrapped in a 6s timeout
+  //    so a hung init becomes a visible failure rather than a frozen UI.
+  let initDone = false;
+  const initTimeout = setTimeout(()=>{
+    if(initDone) return;
+    console.error('[Scanner] Quagga init timed out after 6s');
+    try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    showScanError('Scanner timed out',
+      'The barcode engine didn\'t start in time. Tap Try again.',
+      'Quagga init timeout');
+  }, 6000);
+
+  console.log('[Scanner] initialising Quagga…');
   Quagga.init({
-    inputStream:{name:'Live',type:'LiveStream',target:video,
-      constraints:{width:{ideal:1280},height:{ideal:720},facingMode:'environment'},
-      area:{top:'20%',right:'5%',bottom:'20%',left:'5%'}},
-    locator:{patchSize:'medium',halfSample:true},
-    numOfWorkers:0,frequency:10,
-    decoder:{readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader']},
-    locate:true
-  },err=>{
-    if(err){if(noPerm)noPerm.classList.add('show');return;}
-    Quagga.start();quaggaRunning=true;
-    const stream=video.srcObject;
-    if(stream){const t=stream.getVideoTracks();if(t.length)torchTrack=t[0];}
+    inputStream: { name:'Live', type:'LiveStream', target: video,
+      constraints: { width:{ideal:1280}, height:{ideal:720}, facingMode:'environment' },
+      area: { top:'20%', right:'5%', bottom:'20%', left:'5%' } },
+    locator: { patchSize:'medium', halfSample:true },
+    numOfWorkers: 0, frequency: 10,
+    decoder: { readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'] },
+    locate: true,
+  }, err => {
+    initDone = true;
+    clearTimeout(initTimeout);
+    if(err){
+      console.error('[Scanner] Quagga.init error:', err.name, err.message);
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
+      showScanError('Scanner failed to start',
+        'The barcode engine couldn\'t initialise on this device.',
+        err.name || err.message || 'init error');
+      return;
+    }
+    Quagga.start();
+    quaggaRunning = true;
+    console.log('[Scanner] Quagga running');
   });
-  Quagga.onDetected(result=>{
-    if(!quaggaRunning)return;
-    const code=result.codeResult&&result.codeResult.code;
-    if(!code||code===scannedBarcode)return;
-    if(scanDebounce)clearTimeout(scanDebounce);
-    scanDebounce=setTimeout(()=>{scannedBarcode=code;onBarcodeDetected(code);},300);
+
+  Quagga.onDetected(result => {
+    if(!quaggaRunning) return;
+    const code = result.codeResult && result.codeResult.code;
+    if(!code || code === scannedBarcode) return;
+    if(scanDebounce) clearTimeout(scanDebounce);
+    scanDebounce = setTimeout(()=>{ scannedBarcode = code; onBarcodeDetected(code); }, 300);
   });
 }
 function stopScanner(){
@@ -2485,6 +2718,209 @@ function stopScanner(){
   if(v&&v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null;}
   torchTrack=null;torchOn=false;
   const tb=document.getElementById('torch-btn');if(tb)tb.classList.remove('on');
+}
+
+// ── Snap (AI vision) ──
+//
+// Photo-based product identification. Powered by /api/ai-vision (Claude
+// Haiku 4.5 with vision). UX:
+//   1. startSnapper() requests camera, attaches stream to #snap-video.
+//      Same explicit-failure-mode plumbing as startScanner (v1.5).
+//   2. User frames product, taps capture button.
+//   3. captureSnap() extracts a JPEG frame via canvas, downscaled to a
+//      reasonable size, POSTs to /api/ai-vision.
+//   4. On success: returned product name is fed into the existing search
+//      pipeline (same path as a typed search). Snap mode is just a
+//      different way to GENERATE the query string.
+//   5. On low confidence: still routes the search but flags it so the
+//      user can refine the query if results look wrong.
+let snapStream = null;
+let snapBusy   = false;
+
+function showSnapError(title, msg, detail){
+  const noPerm   = document.getElementById('snap-no-perm');
+  const titleEl  = document.getElementById('snap-no-perm-title');
+  const msgEl    = document.getElementById('snap-no-perm-msg');
+  const detailEl = document.getElementById('snap-no-perm-detail');
+  if(titleEl) titleEl.textContent = title;
+  if(msgEl)   msgEl.textContent   = msg;
+  if(detailEl){
+    if(detail){ detailEl.textContent = '['+detail+']'; detailEl.style.display='block'; }
+    else { detailEl.textContent = ''; detailEl.style.display='none'; }
+  }
+  if(noPerm) noPerm.classList.add('show');
+}
+
+async function startSnapper(){
+  console.log('[Snapper] startSnapper() called');
+  // Hide error overlays from prior attempts
+  const noPerm = document.getElementById('snap-no-perm');
+  if(noPerm) noPerm.classList.remove('show');
+  const busy = document.getElementById('snap-busy');
+  if(busy) busy.classList.remove('show');
+  snapBusy = false;
+  const captureBtn = document.getElementById('snap-capture-btn');
+  if(captureBtn) captureBtn.disabled = false;
+
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    console.error('[Snapper] mediaDevices.getUserMedia not available');
+    showSnapError('Camera not supported',
+      'Your browser doesn\'t expose a camera API. Try Safari or Chrome on a recent OS.',
+      'mediaDevices missing');
+    return;
+  }
+
+  // Stop prior session
+  stopSnapper();
+
+  const video = document.getElementById('snap-video');
+  if(!video){
+    console.error('[Snapper] #snap-video element missing');
+    showSnapError('Internal error', 'The camera view is missing — reload the app.', 'video element missing');
+    return;
+  }
+
+  try{
+    console.log('[Snapper] requesting camera stream…');
+    snapStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+      audio: false,
+    });
+    console.log('[Snapper] camera stream acquired');
+  }catch(err){
+    console.error('[Snapper] getUserMedia failed:', err.name, err.message);
+    if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
+      showSnapError('Camera permission denied',
+        'Tap the camera icon in your address bar (or Settings → Safari → Camera) to allow access, then Try again.',
+        err.name);
+    } else if(err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'){
+      showSnapError('No camera found',
+        'This device doesn\'t expose a usable rear camera. Search by name instead.',
+        err.name);
+    } else if(err.name === 'NotReadableError' || err.name === 'TrackStartError'){
+      showSnapError('Camera in use',
+        'Another app is using the camera. Close it and tap Try again.',
+        err.name);
+    } else {
+      showSnapError('Camera error',
+        'We couldn\'t start the camera. Tap Try again, or search by name.',
+        err.name || err.message || 'unknown');
+    }
+    return;
+  }
+
+  video.srcObject = snapStream;
+  try{ await video.play(); }catch(e){ console.warn('[Snapper] video.play() rejected:', e.name); }
+}
+
+function stopSnapper(){
+  if(snapStream){
+    try{ snapStream.getTracks().forEach(t=>t.stop()); }catch(e){}
+    snapStream = null;
+  }
+  const video = document.getElementById('snap-video');
+  if(video && video.srcObject){
+    try{ video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){}
+    video.srcObject = null;
+  }
+  const busy = document.getElementById('snap-busy');
+  if(busy) busy.classList.remove('show');
+  snapBusy = false;
+}
+
+// Extract a JPEG frame from the live video, downscale to ~1024px on the
+// long edge, send to /api/ai-vision. On success: route into the search
+// pipeline with the returned product name.
+async function captureSnap(){
+  if(snapBusy) return; // don't double-fire
+  if(!snapStream){
+    showSnapError('Camera not ready', 'Wait for the camera preview, then tap the shutter.', 'no stream');
+    return;
+  }
+  const video = document.getElementById('snap-video');
+  if(!video || !video.videoWidth || !video.videoHeight){
+    showSnapError('Camera not ready', 'The camera hasn\'t produced a frame yet — wait a moment, then retap the shutter.', 'no video frame');
+    return;
+  }
+
+  snapBusy = true;
+  const captureBtn = document.getElementById('snap-capture-btn');
+  if(captureBtn) captureBtn.disabled = true;
+  const busy   = document.getElementById('snap-busy');
+  const busyMsg= document.getElementById('snap-busy-msg');
+  const busySub= document.getElementById('snap-busy-sub');
+  if(busyMsg) busyMsg.textContent = 'Identifying product…';
+  if(busySub) busySub.textContent = 'Asking the AI';
+  if(busy) busy.classList.add('show');
+
+  // Downscale the frame so we're not posting 4MB images. ~1024px on the
+  // long edge gives plenty of detail for Haiku and keeps the body small.
+  const MAX_DIM = 1024;
+  const srcW = video.videoWidth, srcH = video.videoHeight;
+  const scale = Math.min(1, MAX_DIM / Math.max(srcW, srcH));
+  const dstW = Math.round(srcW * scale);
+  const dstH = Math.round(srcH * scale);
+
+  let dataUrl;
+  try{
+    const canvas = document.createElement('canvas');
+    canvas.width = dstW; canvas.height = dstH;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(video, 0, 0, dstW, dstH);
+    dataUrl = canvas.toDataURL('image/jpeg', 0.82);
+  }catch(e){
+    console.error('[Snapper] frame capture failed:', e);
+    snapBusy = false;
+    if(busy) busy.classList.remove('show');
+    if(captureBtn) captureBtn.disabled = false;
+    showSnapError('Capture failed', 'Couldn\'t grab a frame from the camera. Try again.', e.message || 'canvas error');
+    return;
+  }
+
+  try{
+    console.log('[Snapper] POST /api/ai-vision (' + Math.round(dataUrl.length/1024) + 'KB)');
+    const r = await fetch('/api/ai-vision', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl }),
+    });
+    const d = await r.json();
+    if(!r.ok || !d.product){
+      console.warn('[Snapper] vision call returned no product:', d);
+      snapBusy = false;
+      if(busy) busy.classList.remove('show');
+      if(captureBtn) captureBtn.disabled = false;
+      const reason = d?.notes || d?.error || 'no_product_recognised';
+      showSnapError('Couldn\'t identify the product',
+        'The image wasn\'t clear enough — make sure the product fills the frame and try again.',
+        reason);
+      return;
+    }
+    const productName = d.product;
+    const conf        = d.confidence || 'unknown';
+    console.log('[Snapper] identified: "' + productName + '" (' + conf + ')');
+
+    // Update the busy state so user sees what we found, then route into search.
+    if(busyMsg) busyMsg.textContent = 'Found: ' + productName;
+    if(busySub) busySub.textContent = 'Searching UK retailers…';
+
+    // Tear down the stream cleanly before navigating off the screen.
+    stopSnapper();
+
+    // Drive the same path a typed search takes: set liveQuery, mark inputMethod
+    // as 'snap' so renderResults shows a "📸 Snap" mode pill, and call into
+    // the existing search flow.
+    liveQuery    = productName;
+    inputMethod  = 'snap';
+    goTo('searching');
+    showResults(fetchPrices(productName));
+  }catch(e){
+    console.error('[Snapper] /api/ai-vision request failed:', e);
+    snapBusy = false;
+    if(busy) busy.classList.remove('show');
+    if(captureBtn) captureBtn.disabled = false;
+    showSnapError('Connection error', 'Couldn\'t reach the AI service. Check your connection and try again.', e.message || 'network');
+  }
 }
 function toggleTorch(){
   if(!torchTrack)return;torchOn=!torchOn;
