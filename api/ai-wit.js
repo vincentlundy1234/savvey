@@ -1,32 +1,28 @@
-// api/ai-wit.js — Savvey AI Wit Generator v1.0
+// api/ai-wit.js — Savvey AI Wit Generator v1.1
 //
-// Generates a one-line wit / verdict copy for a Savvey result via
-// Anthropic Claude Haiku 4.5. Activates when ANTHROPIC_API_KEY is set
-// in Vercel env vars; falls through with 503 otherwise (frontend uses
-// hardcoded witLine() as fallback).
+// v1.1 (2 May 2026 evening):
+//   - Imports applySecurityHeaders from _shared.js
+//   - Rate limit: 60 calls/IP/hour (higher than ai-search since wit fires
+//     async after every render; budget reflects realistic usage pattern)
+//   - Circuit breaker on Anthropic shared with ai-search — if Anthropic
+//     trips for any endpoint, wit also bypasses. Returns null wit so the
+//     frontend hardcoded fallback takes over. App never breaks.
 //
 // Cost: ~£0.0005 per call. At 1000 daily user searches = £15/month.
-//
-// Voice: locked tightly to Savvey's brand via system prompt — UK
-// dry-humour, second-person ("you're the savvey one"), per-retailer
-// character (Currys = bumbling, John Lewis = aspirational, etc.),
-// UK-cultural reference units (Tesco meal deal, Greggs, pints, train
-// fares, tank of petrol). Never accusatory of the user.
-//
-// Designed to be called async from the frontend AFTER results render.
-// User sees the hardcoded fallback immediately; the AI line replaces it
-// when this endpoint returns (~500ms-1.5s). No blocking.
 
-const VERSION = 'ai-wit.js v1.0';
-const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
+import { applySecurityHeaders }            from './_shared.js';
+import { rejectIfRateLimited }             from './_rateLimit.js';
+import { withCircuit }                     from './_circuitBreaker.js';
+
+const VERSION   = 'ai-wit.js v1.1';
+const ORIGIN    = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
 const MODEL              = 'claude-haiku-4-5-20251001';
 const TIMEOUT_MS         = 4000;
 const MAX_TOKENS         = 80;
+const RATE_LIMIT_PER_HOUR = 60;
 
-// System prompt — the Savvey voice locked in. Examples set the register;
-// the model is encouraged to riff fresh within them.
 const SYSTEM_PROMPT = `You are Savvey, a UK price-comparison app with a dry mate-down-the-pub voice. Write ONE punchy verdict line about a price comparison the user just made.
 
 Brand rules:
@@ -60,17 +56,8 @@ async function callAnthropic(userPrompt, apiKey) {
   try {
     const r = await fetch(ANTHROPIC_ENDPOINT, {
       method: 'POST',
-      headers: {
-        'x-api-key':         apiKey,
-        'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
-      },
-      body: JSON.stringify({
-        model:      MODEL,
-        max_tokens: MAX_TOKENS,
-        system:     SYSTEM_PROMPT,
-        messages:   [{ role: 'user', content: userPrompt }],
-      }),
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: MODEL, max_tokens: MAX_TOKENS, system: SYSTEM_PROMPT, messages: [{ role: 'user', content: userPrompt }] }),
       signal: ac.signal,
     });
     if (!r.ok) {
@@ -78,38 +65,26 @@ async function callAnthropic(userPrompt, apiKey) {
       throw Object.assign(new Error('Anthropic error'), { status: r.status, body: txt.slice(0, 200) });
     }
     const data = await r.json();
-    // Messages API response shape: { content: [{type:'text', text:'...'}, ...], ... }
     const blocks = (data && data.content) || [];
-    const text   = blocks.filter(b => b && b.type === 'text').map(b => b.text || '').join(' ').trim();
-    return text;
-  } finally {
-    clearTimeout(timer);
-  }
+    return blocks.filter(b => b && b.type === 'text').map(b => b.text || '').join(' ').trim();
+  } finally { clearTimeout(timer); }
 }
 
-// Strip surrounding quotes, leading/trailing whitespace, and trim
-// hallucinated preamble like "Sure, here's a line:".
 function clean(text) {
   if (!text) return '';
   let t = String(text).trim();
-  // Drop common preambles
   t = t.replace(/^(sure[,!]?|here'?s|certainly[,!]?|verdict[:!]?|line[:!]?)\s+/i, '').trim();
-  // Strip wrapping quotes
   t = t.replace(/^["'`""]+|["'`""]+$/g, '').trim();
-  // Cap at 200 chars as a safety bound
   if (t.length > 200) t = t.slice(0, 200);
   return t;
 }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin',  ORIGIN);
-  res.setHeader('Vary',                          'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-Type-Options',       'nosniff');
-
+  applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
+
+  if (rejectIfRateLimited(req, res, 'ai-wit', RATE_LIMIT_PER_HOUR)) return;
 
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return res.status(503).json({ error: 'anthropic_not_configured' });
@@ -117,7 +92,6 @@ export default async function handler(req, res) {
   const { product, retailer, bestRetailer, bestPrice, saving, score, spc } = req.body || {};
   if (!product || !spc) return res.status(400).json({ error: 'missing_fields' });
 
-  // Build the per-call user prompt with the actual scenario data
   const userPrompt = [
     `Product: ${product}`,
     `Verdict colour: ${spc} (red=overpaying, amber=close, green=best price)`,
@@ -131,8 +105,11 @@ export default async function handler(req, res) {
   ].filter(Boolean).join('\n');
 
   try {
-    const raw  = await callAnthropic(userPrompt, ANTHROPIC_KEY);
-    const wit  = clean(raw);
+    const raw = await withCircuit('anthropic',
+      () => callAnthropic(userPrompt, ANTHROPIC_KEY),
+      { onOpen: () => '' }   // circuit open → return empty, frontend uses hardcoded
+    );
+    const wit = clean(raw);
     if (!wit) return res.status(200).json({ wit: null, error: 'empty_response' });
     console.log(`[${VERSION}] "${product}" → "${wit}"`);
     return res.status(200).json({ wit, model: MODEL });

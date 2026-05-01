@@ -1,55 +1,35 @@
-// api/ai-search.js — Savvey AI Search v1.1
-// Perplexity Sonar /search + Claude Haiku price extraction.
-// v1.1 (2 May 2026): replaced regex price extraction with Haiku batched
-//   structured extraction (kills monthly/bundle price misreads).
+// api/ai-search.js — Savvey AI Search v1.2
+//
+// v1.2 (2 May 2026 evening):
+//   - Imports shared retailer + price config from _shared.js (eliminates
+//     "three retailer lists drift" bug class — issue C3 from audit)
+//   - Rate limit: 30 requests/IP/hour via _rateLimit.js (kills C1)
+//   - Circuit breaker on Perplexity + Anthropic via _circuitBreaker.js
+//     (kills C2 — runaway cost when provider has an incident)
+//   - URL HEAD verification: every result URL is HEAD-checked in parallel
+//     before render. Dead links never reach the user. Adds ~1s latency.
+//     (kills H4 — the "Buy on Currys → 404" trust killer)
 
-const VERSION = 'ai-search.js v1.1';
+import {
+  UK_RETAILERS,
+  admitPrice,
+  matchRetailerByHost,
+  applySecurityHeaders,
+} from './_shared.js';
+import { rejectIfRateLimited } from './_rateLimit.js';
+import { withCircuit }         from './_circuitBreaker.js';
+
+const VERSION = 'ai-search.js v1.2';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
 const PERPLEXITY_ENDPOINT   = 'https://api.perplexity.ai/search';
+const ANTHROPIC_ENDPOINT    = 'https://api.anthropic.com/v1/messages';
+const HAIKU_MODEL           = 'claude-haiku-4-5-20251001';
+const HAIKU_TIMEOUT_MS      = 5000;
+const HEAD_VERIFY_TIMEOUT_MS = 1500;
 
-const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
-const HAIKU_MODEL        = 'claude-haiku-4-5-20251001';
-const HAIKU_TIMEOUT_MS   = 5000;
-
-const UK_RETAILERS = [
-  { host: 'amazon.co.uk',     name: 'Amazon UK' },
-  { host: 'currys.co.uk',     name: 'Currys' },
-  { host: 'argos.co.uk',      name: 'Argos' },
-  { host: 'johnlewis.com',    name: 'John Lewis' },
-  { host: 'ao.com',           name: 'AO.com' },
-  { host: 'very.co.uk',       name: 'Very' },
-  { host: 'richersounds.com', name: 'Richer Sounds' },
-  { host: 'box.co.uk',        name: 'Box.co.uk' },
-  { host: 'ebay.co.uk',       name: 'eBay UK' },
-  { host: 'ebay.com',         name: 'eBay' },
-  { host: 'halfords.com',     name: 'Halfords' },
-  { host: 'screwfix.com',     name: 'Screwfix' },
-  { host: 'boots.com',        name: 'Boots' },
-  { host: 'costco.co.uk',     name: 'Costco UK' },
-  { host: 'selfridges.com',   name: 'Selfridges' },
-  { host: 'mcgrocer.com',     name: 'McGrocer' },
-  { host: 'harveynichols.com',name: 'Harvey Nichols' },
-];
-
-const PRICE_CEILING_HARD = 5000;
-const PRICE_FLOOR        = 0.50;
-
-function admitPrice(val) {
-  const n = Math.round(parseFloat(String(val).replace(/[^\d.]/g, '')) * 100) / 100;
-  if (isNaN(n) || n < PRICE_FLOOR || n > PRICE_CEILING_HARD) return null;
-  return n;
-}
-
-function matchRetailer(url) {
-  if (!url) return null;
-  const u = String(url).toLowerCase();
-  for (const r of UK_RETAILERS) {
-    if (u.includes(r.host)) return r;
-  }
-  return null;
-}
+const RATE_LIMIT_PER_HOUR = 30;
 
 function rawResultsOf(data) {
   return (data && data.results) ||
@@ -86,7 +66,7 @@ function gatherRetailerHits(data, query) {
     const url     = r.url || r.link || '';
     const title   = r.title || r.name || query;
     const snippet = r.snippet || r.content || r.description || r.text || '';
-    const retailer = matchRetailer(url);
+    const retailer = matchRetailerByHost(url);
     if (!retailer) continue;
     hits.push({ url, title, snippet, retailer });
   }
@@ -118,6 +98,7 @@ Results:
 ${JSON.stringify(numbered, null, 2)}
 
 Output ONLY the JSON array.`;
+
   const ac    = new AbortController();
   const timer = setTimeout(() => ac.abort(), HAIKU_TIMEOUT_MS);
   try {
@@ -129,8 +110,8 @@ Output ONLY the JSON array.`;
     });
     if (!r.ok) {
       const txt = await r.text().catch(() => '');
-      console.error(`[${VERSION}] Haiku ${r.status}:`, txt.slice(0, 200));
-      return hits.map((_, i) => ({ index: i, price: null, plausible: false }));
+      const err = Object.assign(new Error('Haiku error'), { status: r.status, body: txt.slice(0, 200) });
+      throw err;
     }
     const data = await r.json();
     const text = ((data.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
@@ -142,9 +123,6 @@ Output ONLY the JSON array.`;
     const parsed = JSON.parse(jsonMatch[0]);
     if (!Array.isArray(parsed)) return hits.map((_, i) => ({ index: i, price: null, plausible: false }));
     return parsed;
-  } catch (e) {
-    console.error(`[${VERSION}] Haiku price extraction error:`, e.message);
-    return hits.map((_, i) => ({ index: i, price: null, plausible: false }));
   } finally { clearTimeout(timer); }
 }
 
@@ -159,6 +137,33 @@ function combineHitsWithPrices(hits, priceData) {
     items.push({ source: h.retailer.name, price: p, link: h.url, title: h.title.slice(0, 200), delivery: '' });
   }
   return items;
+}
+
+// HEAD-check every URL in parallel. Drop any that 4xx/5xx or time out.
+// Eliminates dead-link Buy buttons (audit issue H4).
+async function verifyUrls(items) {
+  if (!items || items.length === 0) return items;
+  const checks = items.map(async (item) => {
+    if (!item.link) return null;
+    try {
+      const ac = new AbortController();
+      const t  = setTimeout(() => ac.abort(), HEAD_VERIFY_TIMEOUT_MS);
+      const r  = await fetch(item.link, {
+        method: 'HEAD',
+        signal: ac.signal,
+        redirect: 'follow',
+        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; Savvey/1.0; +https://savvey.app)' },
+      });
+      clearTimeout(t);
+      // Some retailers (Cloudflare-protected) return 403 to HEAD but page is fine for users.
+      // We accept 200-399 and 403 (Forbidden often signals "human only" gate).
+      return (r.ok || r.status === 403) ? item : null;
+    } catch (_) {
+      return null; // timeout / network error — drop
+    }
+  });
+  const verified = (await Promise.all(checks)).filter(Boolean);
+  return verified;
 }
 
 function dedup(items) {
@@ -176,51 +181,106 @@ function computeCoverage(items) {
   return { onlyEbay, coverage };
 }
 
+// ─────────────────────────────────────────────────────────────
+// HANDLER
+// ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   console.log(`[${VERSION}] ${req.method} ${req.url}`);
-  res.setHeader('Access-Control-Allow-Origin',  ORIGIN);
-  res.setHeader('Vary',                          'Origin');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-  res.setHeader('X-Content-Type-Options',       'nosniff');
+  applySecurityHeaders(res, ORIGIN);
+
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
+
+  // Rate limit BEFORE doing any expensive work.
+  if (rejectIfRateLimited(req, res, 'ai-search', RATE_LIMIT_PER_HOUR)) return;
 
   const PERPLEXITY_KEY = process.env.PERPLEXITY_API_KEY;
   const ANTHROPIC_KEY  = process.env.ANTHROPIC_API_KEY;
   if (!PERPLEXITY_KEY) return res.status(503).json({ error: 'perplexity_not_configured' });
-  if (!ANTHROPIC_KEY)  return res.status(503).json({ error: 'anthropic_not_configured', message: 'AI price extraction requires Anthropic key' });
+  if (!ANTHROPIC_KEY)  return res.status(503).json({ error: 'anthropic_not_configured' });
 
-  const { q, region = 'uk', debug = false } = req.body || {};
+  const { q, region = 'uk', debug = false, verify = true } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
   if (region !== 'uk') return res.status(400).json({ error: 'unsupported_region', message: `region "${region}" not yet supported` });
 
+  // Perplexity search via circuit breaker
   let raw;
   try {
-    raw = await fetchPerplexitySearch(q, PERPLEXITY_KEY);
+    raw = await withCircuit('perplexity', () => fetchPerplexitySearch(q, PERPLEXITY_KEY));
   } catch (e) {
     console.error(`[${VERSION}] Perplexity failed:`, e.message, e.body || '');
     return res.status(502).json({ error: 'perplexity_error', message: e.message, status: e.status });
   }
 
-  const hits      = gatherRetailerHits(raw, q);
-  const priceData = await extractPricesViaHaiku(hits, q, ANTHROPIC_KEY);
-  const items     = combineHitsWithPrices(hits, priceData);
-  const results   = dedup(items);
-  const cov       = computeCoverage(results);
+  const hits = gatherRetailerHits(raw, q);
+  if (hits.length === 0) {
+    return res.status(200).json({
+      shopping: [],
+      organic:  [],
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region },
+    });
+  }
 
-  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'}`);
+  // Haiku price extraction via circuit breaker — falls back to all-not-plausible
+  // if the circuit is open or the call fails. App degrades gracefully rather
+  // than 500ing.
+  let priceData;
+  try {
+    priceData = await withCircuit('anthropic',
+      () => extractPricesViaHaiku(hits, q, ANTHROPIC_KEY),
+      { onOpen: () => hits.map((_, i) => ({ index: i, price: null, plausible: false })) }
+    );
+  } catch (e) {
+    console.error(`[${VERSION}] Haiku extraction failed:`, e.message);
+    priceData = hits.map((_, i) => ({ index: i, price: null, plausible: false }));
+  }
+
+  let items = combineHitsWithPrices(hits, priceData);
+
+  // URL HEAD verification — drop any link that's dead BEFORE the user sees it.
+  // Optional via { verify: false } in request body for testing/debug paths.
+  const beforeVerify = items.length;
+  if (verify) items = await verifyUrls(items);
+  const verifiedDropped = beforeVerify - items.length;
+
+  const results = dedup(items);
+  const cov     = computeCoverage(results);
+
+  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'}`);
 
   const debugEnvelope = debug ? {
-    counts: { raw_results: rawResultsOf(raw).length, uk_hits: hits.length, ai_plausible: items.length, final: results.length },
+    counts: {
+      raw_results:    rawResultsOf(raw).length,
+      uk_hits:        hits.length,
+      ai_plausible:   combineHitsWithPrices(hits, priceData).length,
+      url_verified:   items.length,
+      verified_dropped: verifiedDropped,
+      final:          results.length,
+    },
     rawSample: rawResultsOf(raw).slice(0, 8).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })),
     priceDataSample: priceData.slice(0, 8),
   } : undefined;
 
   return res.status(200).json({
-    shopping: results.map(r => ({ source: r.source, price: `£${r.price.toFixed(2)}`, link: r.link, title: r.title, delivery: r.delivery })),
+    shopping: results.map(r => ({
+      source:   r.source,
+      price:    `£${r.price.toFixed(2)}`,
+      link:     r.link,
+      title:    r.title,
+      delivery: r.delivery,
+    })),
     organic: [],
-    _meta: { version: VERSION, itemCount: results.length, cheapest: results[0]?.price ?? null, coverage: cov.coverage, onlyEbay: cov.onlyEbay, source: 'perplexity', region },
+    _meta: {
+      version:           VERSION,
+      itemCount:         results.length,
+      cheapest:          results[0]?.price ?? null,
+      coverage:          cov.coverage,
+      onlyEbay:          cov.onlyEbay,
+      source:            'perplexity',
+      region,
+      verified:          verify,
+      verifiedDropped,
+    },
     _debug: debugEnvelope,
   });
 }
