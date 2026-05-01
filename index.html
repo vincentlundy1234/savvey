@@ -1565,16 +1565,85 @@ async function showResults(fetchPromise){
   // so the score/verdict already reflect it. No rebuild needed.
 
   liveScen=sc||null;
-  const display=liveScen||DEMO_SCEN;
-  renderResults(display);
+
+  // No real result? Show an honest empty state — never DEMO_SCEN as fallback.
+  // Demo data masquerading as a real verdict is the bug we just spent two
+  // deploys killing; it cannot creep back in via a null-coalesce.
+  if(!liveScen){
+    renderNoResults(liveQuery||'that product');
+    goTo('results');
+    return;
+  }
+
+  renderResults(liveScen);
   goTo('results');
 
   if(!hasSeenResult){
     hasSeenResult=true;
-    if(display.spc!=='green'){
+    if(liveScen.spc!=='green'){
       setTimeout(()=>{if(!hasBoughtItem)showEmailModal();},8000);
     }
   }
+}
+
+// ── No-results state ──
+// Mutates the existing results-screen hero card to a clean empty state.
+// Brand voice: helpful, dry, never accusatory.
+function renderNoResults(query){
+  const safeQ=String(query||'that product').replace(/[<>]/g,'');
+  const setText=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
+  const setHTML=(id,html)=>{const el=document.getElementById(id);if(el)el.innerHTML=html;};
+
+  // Verdict banner — neutral / amber, no pips lit
+  const bar=document.getElementById('hero-verdict-bar');
+  if(bar){bar.classList.remove('red','green');bar.classList.add('amber');}
+  for(let i=1;i<=5;i++){
+    const p=document.getElementById('vp-'+i);
+    if(p){p.classList.remove('lit','active');}
+  }
+  const lbl=document.getElementById('hero-verdict-label');
+  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Savvey Signal';}
+  const ttl=document.getElementById('hero-verdict-title');
+  if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='No UK prices found.';}
+
+  // Body — clear out price block, replace with empty-state copy
+  setText('hero-wit',`Couldn't pull reliable UK retailer prices for "${safeQ}".`);
+  setText('hero-saving-num','');
+  setText('hero-saving-label','');
+  setHTML('hero-where','Try a more specific product name, or check the spelling. Marketplace listings (eBay sellers, Mercari, etc.) were filtered out — Savvey only surfaces major UK retailers.');
+
+  // Action buttons — retry + new search, drop buy + share
+  const buy=document.getElementById('btn-buy-now');
+  if(buy){buy.style.display='none';}
+  const actions=document.querySelector('.hero-actions');
+  if(actions){
+    actions.innerHTML=`
+      <button class="hero-buy" onclick="retrySearch()" style="background:#2a6b22;">Try again →</button>
+      <button class="hero-new-search" onclick="goHome()">Search for something else →</button>
+    `;
+  }
+
+  // Empty the retailer list + section label
+  const list=document.getElementById('ret-list');
+  if(list)list.innerHTML='';
+  const lblSection=document.querySelector('.res-section-lbl');
+  if(lblSection)lblSection.style.display='none';
+
+  // Hide the email-track CTA on empty state
+  const track=document.getElementById('track-cta');
+  if(track)track.style.display='none';
+}
+
+function retrySearch(){
+  const q=liveQuery;
+  if(!q){goHome();return;}
+  // Restore the results screen DOM that renderNoResults mutated, then refire.
+  const lblSection=document.querySelector('.res-section-lbl');
+  if(lblSection)lblSection.style.display='';
+  const track=document.getElementById('track-cta');
+  if(track)track.style.display='';
+  goTo('searching');
+  showResults(fetchPrices(q));
 }
 
 // ── Wit copy engine ──
@@ -1612,7 +1681,8 @@ function witLine(spc,saving,retailer,bestRetailer){
 
 function buyNow(){
   hasBoughtItem=true;
-  const sc=liveScen||DEMO_SCEN;
+  if(!liveScen||!liveScen.bestLink)return; // no real scen → nothing to open
+  const sc=liveScen;
   if(sc.bestLink)window.open(sc.bestLink,'_blank');
   // Nudge share when they return
   document.addEventListener('visibilitychange',function onReturn(){
@@ -1919,7 +1989,8 @@ async function submitEmail(){
   const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   if(!valid&&email.length>0){inp.style.borderColor='var(--r)';return;}
   if(valid){
-    const sc=liveScen||DEMO_SCEN;
+    if(!liveScen){closeEmailModal&&closeEmailModal();return;}
+    const sc=liveScen;
     const bestRet=sc.rets&&sc.rets.find(r=>r.best);
     try{
       await fetch(`${SB_URL}/rest/v1/price_alerts`,{
@@ -1946,7 +2017,8 @@ async function submitEmail(){
 
 // ── Share card ──
 function openShareCard(){
-  const sc=liveScen||DEMO_SCEN;
+  if(!liveScen)return; // empty state — nothing to share
+  const sc=liveScen;
   drawCard(sc);
   document.getElementById('share-overlay').classList.add('open');
 }
@@ -2084,11 +2156,12 @@ function saveCard(){
   a.click();
 }
 async function shareCard(){
+  if(!liveScen)return; // empty state — no share message to send
   document.getElementById('share-canvas').toBlob(async blob=>{
     const file=new File([blob],'savvey-score.png',{type:'image/png'});
     if(navigator.canShare&&navigator.canShare({files:[file]})){
       await navigator.share({files:[file],title:'My Savvey Score',
-        text:(liveScen||DEMO_SCEN).shareMsg});
+        text:liveScen.shareMsg});
     }else saveCard();
   },'image/png');
 }
