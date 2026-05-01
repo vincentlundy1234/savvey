@@ -12,8 +12,10 @@
   <!-- Barcode scanning: native BarcodeDetector first (Chrome/Android since
        2019, iOS Safari 17+). When unavailable, lazy-imports @zxing/browser
        on first scan. QuaggaJS removed 1 May 2026 — unmaintained since 2017,
-       known iOS Safari issues. See loadScannerEngine() below. -->
-  <link rel="modulepreload" href="https://esm.sh/@zxing/browser@0.1.5">
+       known iOS Safari issues. See loadScannerEngine() below.
+       jsDelivr's +esm bundles all dependencies into a single file, so this
+       is one HTTP fetch instead of esm.sh's multi-module dependency walk. -->
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm">
   <style>
     /* ─────────────────────────────────────────
        DESIGN TOKENS
@@ -2623,11 +2625,27 @@ async function loadScannerEngine(){
       console.warn('[Scanner] BarcodeDetector init threw, falling back:', e.name);
     }
   }
-  // ZXing path — lazy import via esm.sh. The modulepreload <link> in <head>
-  // primes the network fetch so this resolves quickly. Cached by SW after
-  // first load.
+  // ZXing path — lazy import via jsDelivr's +esm bundle (single file, all
+  // dependencies inlined). modulepreload <link> in <head> primes the fetch.
+  // Cached by SW after first load. Wrapped in a 6s timeout so a hung fetch
+  // surfaces a real error rather than a frozen UI.
   console.log('[Scanner] loading @zxing/browser fallback…');
-  const mod = await import('https://esm.sh/@zxing/browser@0.1.5');
+  const ZXING_URL = 'https://cdn.jsdelivr.net/npm/@zxing/browser@0.1.5/+esm';
+  const importStart = Date.now();
+  let mod;
+  try{
+    mod = await Promise.race([
+      import(ZXING_URL),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('zxing_load_timeout')), 6000)),
+    ]);
+    console.log('[Scanner] @zxing/browser loaded in ' + (Date.now() - importStart) + 'ms');
+  }catch(e){
+    console.error('[Scanner] @zxing/browser load failed:', e.message);
+    throw new Error('zxing_load_failed: ' + e.message);
+  }
+  if(!mod || typeof mod.BrowserMultiFormatReader !== 'function'){
+    throw new Error('zxing_unexpected_shape');
+  }
   const reader = new mod.BrowserMultiFormatReader();
   return { type: 'zxing', reader };
 }
