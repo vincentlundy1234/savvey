@@ -1,4 +1,4 @@
-// api/search.js — Savvey Search Proxy v6.4
+// api/search.js — Savvey Search Proxy v6.7
 // Change log v6.0:
 //   - PRICE_CEILING hard constant replaces dynamic lowest×3 anchor
 //   - Nuclear cleanPrice() sanitizer applied at every intake point
@@ -39,8 +39,18 @@
 //     function limit on cold starts and causing CDP timeouts during testing).
 //   - Frontend now fires a single /api/search call (shopping only); the
 //     second call was unused by the mapping step.
+// v6.6.1:
+//   - Debug envelope (?debug=true): per-stage pipeline counts + raw/identity
+//     samples for diagnosing zero-result queries without crawling Vercel logs.
+// v6.7:
+//   - Trust filter rewritten as two-tier: TLD-based (.co.uk/.uk) + explicit
+//     allowlist for UK-trading .com brands (Selfridges, McGrocer, Harvey
+//     Nichols, M&S, Next, Fortnum & Mason) + eBay global. Diagnostic via
+//     debug envelope showed v6.5/v6.6 trust filter rejected legitimate UK
+//     retailers like Selfridges/McGrocer because they weren't enumerated;
+//     TLD-based rule covers the long tail correctly.
 
-const VERSION = 'search.js v6.6';
+const VERSION = 'search.js v6.7';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -62,9 +72,9 @@ const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 //   Anchors off the cheapest *legitimate* result, not a noise value.
 //
 // Pipeline order (critical):
-//   admitPrice (intake) → nuclearFilter → identityFilter → dynamicCeilingFilter → dedup
-//   Dynamic ceiling runs AFTER identityFilter so accessories cannot
-//   become the anchor that collapses the ceiling.
+//   admitPrice (intake) → nuclearFilter → identityFilter → trustedSourceFilter → dynamicCeilingFilter → dedup
+//   Dynamic ceiling runs AFTER identityFilter and trust filter so accessories
+//   and untrusted-source listings cannot become the anchor.
 // ─────────────────────────────────────────────────────────────
 const PRICE_CEILING_HARD  = 5000;  // absolute max — covers any UK consumer product
 const PRICE_FLOOR         = 0.50;  // anything below 50p is noise
@@ -142,29 +152,16 @@ function dynamicCeilingFilter(items) {
 //   Numeric tokens (model numbers, sizes): every one must appear verbatim
 //   in the title — a single miss is a hard fail (score 0).
 //   Text tokens: at least 60% must be present (CONFIDENCE_THRESHOLD).
-//
-// Why split numeric vs text?
-//   "Sony WH-1000XM5" — brand "sony" + series "wh" can match loosely,
-//   but the model number "1000xm5" must be exact. XM4 must not pass.
-//   "Samsung 65 TV" — "65" must match; "55" is a different product.
 // ─────────────────────────────────────────────────────────────
 
 const CONFIDENCE_THRESHOLD = 0.60;
 
-// Stop words: stripped before keyword matching — carry no identity signal
 const STOP_WORDS = new Set([
   'a','an','the','and','or','for','with','in','on','at','to','of',
   'inch','cm','mm','gb','tb','mb','hz','ghz','mhz','w','kg','g',
   'buy','uk','price','cheap','best','new','deal','sale',
 ]);
 
-// Accessory + condition terms: if present in title but absent from query → discard
-// Covers two distinct identity failures:
-//   (a) wrong product class — "remote", "cable", "case" etc.
-//   (b) wrong product condition — refurb / used / damaged listings on eBay
-//       and Amazon Marketplace that pollute "New" search results
-// If a user explicitly searches "refurbished iPhone" the term is in the query,
-// so the gate doesn't fire. Behaviour is symmetric with the accessory case.
 const ACCESSORY_TERMS = [
   // Accessories — different product class
   'remote','cable','case','bracket','stand','mount','adapter','adaptor',
@@ -174,8 +171,6 @@ const ACCESSORY_TERMS = [
   'refurbished','refurb','used','pre-owned','preowned','open box',
   'broken','faulty','damaged','spares or repair','for parts','not working',
   // Refurb euphemisms + physical defects
-  // ('grade a' is omitted — refurbishers use it but so do legitimate "Grade A
-  //  consumer" listings; rely on 'refurbished'/'refurb' keywords elsewhere.)
   'grade b','grade c','scratched','blemished','pristine condition',
   'cosmetic damage','dented','cracked','tested working',
 ];
@@ -189,10 +184,9 @@ function tokenise(str) {
 }
 
 function isNumericToken(tok) {
-  return /\d/.test(tok); // any digit = model/size token
+  return /\d/.test(tok);
 }
 
-// Gate 1: returns the blocking accessory term, or null if clean
 function accessoryBlock(query, title) {
   const qLower = query.toLowerCase();
   const tLower = title.toLowerCase();
@@ -202,44 +196,36 @@ function accessoryBlock(query, title) {
   return null;
 }
 
-// Gate 2: keyword confidence score
-// Numeric tokens → mandatory (one miss = 0 score = hard fail)
-// Text tokens    → 60% threshold
 function keywordScore(query, title) {
   const qTokens = tokenise(query);
-  if (qTokens.length === 0) return 1.0; // no tokens = cannot fail
+  if (qTokens.length === 0) return 1.0;
 
   const tNorm = title.toLowerCase().replace(/[^a-z0-9\s]/g, ' ');
 
   const numericTokens = qTokens.filter(isNumericToken);
   const textTokens    = qTokens.filter(t => !isNumericToken(t));
 
-  // Numeric: every token must appear as a whole word in the normalised title
   for (const tok of numericTokens) {
     const re = new RegExp(`(?<![a-z0-9])${tok}(?![a-z0-9])`);
-    if (!re.test(tNorm)) return 0; // hard fail — wrong model/size
+    if (!re.test(tNorm)) return 0;
   }
 
-  // Text: fraction of tokens found
   if (textTokens.length === 0) return 1.0;
   const matched = textTokens.filter(tok => tNorm.includes(tok)).length;
   return matched / textTokens.length;
 }
 
-// Combined identity filter — runs after nuclearFilter, before dedup
 function identityFilter(items, query) {
   const before = items.length;
   const passed = items.filter(item => {
     const title = item.title || item.source || '';
 
-    // Gate 1: accessory blocklist
     const blocked = accessoryBlock(query, title);
     if (blocked) {
       console.log(`[${VERSION}] IDENTITY BLOCK (accessory "${blocked}"): "${title}"`);
       return false;
     }
 
-    // Gate 2: keyword confidence
     const score = keywordScore(query, title);
     if (score < CONFIDENCE_THRESHOLD) {
       console.log(`[${VERSION}] IDENTITY BLOCK (score ${Math.round(score*100)}%<${CONFIDENCE_THRESHOLD*100}%): "${title}"`);
@@ -265,38 +251,58 @@ function isValidProductUrl(url) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TRUSTED RETAILER ALLOWLIST
+// TRUSTED SOURCE FILTER — two-tier
 //
-// Why an allowlist not a blocklist:
-//   Serper surfaces a long tail of US-centric and peer-to-peer marketplaces
-//   (Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb, Impulse, Walmart, etc.)
-//   that are not relevant to a UK consumer and that pollute the dynamic-ceiling
-//   anchor with suspiciously cheap used/refurb listings. Mirroring the
-//   frontend's UK_RETAILERS list keeps the result set comparable across the
-//   13 retailers the app actually supports.
+// Tier 1 — TLD allowlist
+//   Any URL whose hostname ends in .co.uk, .uk, or .com.gb is treated as
+//   UK-shoppable. This naturally excludes US-only marketplaces (Mercari,
+//   Poshmark, Whatnot, Crutchfield, Phonesrefurb, Unclaimed Baggage, Impulse,
+//   Reverb) without needing to enumerate every reject. The trade-off is that
+//   peer-to-peer .co.uk sellers could slip through; identityFilter's condition
+//   blocklist (refurb / grade b / scratched / pristine condition / etc.)
+//   handles the residual quality risk.
 //
-// eBay is allowed but its listings are tightened by:
-//   - isValidProductUrl   — must be /itm/ (no category pages)
-//   - hardenEbayUrl       — appends LH_ItemCondition=3
-//   - identityFilter      — condition blocklist on title (refurb/grade b/etc.)
+// Tier 2 — explicit .com brands
+//   UK-trading retailers and global brands worth surfacing despite the .com
+//   TLD: Selfridges (UK luxury department store), McGrocer (UK grocery),
+//   Harvey Nichols (UK luxury), Marks & Spencer global, John Lewis global,
+//   Next, Fortnum & Mason, and eBay global (eBay's product URLs are often
+//   ebay.com even on UK-targeted Serper results; the LH_ItemCondition=3
+//   hardening + condition blocklist do the quality work).
 // ─────────────────────────────────────────────────────────────
+
+// Tier 1: anything on these TLDs is UK-shoppable by definition
+const UK_TLDS = ['.co.uk', '.uk', '.com.gb'];
+
+// Tier 2: explicit .com domains for UK-trading brands + global retailers
 const TRUSTED_DOMAINS = [
-  'amazon.co.uk',
-  'currys.co.uk',
-  'johnlewis.com',
-  'argos.co.uk',
-  'ao.com',
-  'very.co.uk',
-  'richersounds.com',
-  'box.co.uk',
-  'ebay.co.uk',
-  'halfords.com',
-  'screwfix.com',
-  'boots.com',
-  'costco.co.uk',
+  // Frontend-affiliated UK retailers (full set, retained from prior version)
+  'amazon.co.uk', 'currys.co.uk', 'johnlewis.com', 'argos.co.uk',
+  'ao.com', 'very.co.uk', 'richersounds.com', 'box.co.uk',
+  'ebay.co.uk', 'halfords.com', 'screwfix.com', 'boots.com', 'costco.co.uk',
+  // Global brands that operate in UK and surface on Serper UK shopping
+  'ebay.com',                  // eBay global — listings often have .com URLs
+  'amazon.com',                // rare on UK searches but possible
+  // UK-trading .com retailers
+  'selfridges.com',            // UK luxury department store
+  'mcgrocer.com',              // UK grocery
+  'harveynichols.com',         // UK luxury
+  'marksandspencer.com',       // M&S global
+  'next.com',                  // Next global
+  'fortnumandmason.com',       // Fortnum & Mason
 ];
 
+function extractHostname(url) {
+  if (!url) return '';
+  const m = String(url).match(/^https?:\/\/(?:www\.)?([^\/]+)/i);
+  return m ? m[1].toLowerCase() : '';
+}
+
 function isTrustedSource(item) {
+  const host = extractHostname(item.link || '');
+  // Tier 1: UK TLD?
+  if (host && UK_TLDS.some(tld => host.endsWith(tld))) return true;
+  // Tier 2: explicit allowlist (matched against link + source for resilience)
   const haystack = `${item.link || ''} ${item.source || ''}`.toLowerCase();
   return TRUSTED_DOMAINS.some(d => haystack.includes(d));
 }
@@ -327,11 +333,10 @@ function hardenEbayUrl(url) {
 
 // ─────────────────────────────────────────────────────────────
 // CIRCUIT BREAKER — Google CSE
-// Trips on 429 or 403. Bypasses CSE for 1 hour to protect quota.
 // ─────────────────────────────────────────────────────────────
 let cseCircuitOpen   = false;
 let cseCircuitOpenAt = 0;
-const CSE_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
+const CSE_COOLDOWN_MS = 60 * 60 * 1000;
 
 function cseTripCircuit() {
   cseCircuitOpen   = true;
@@ -350,8 +355,6 @@ function cseCircuitOk() {
 
 // ─────────────────────────────────────────────────────────────
 // AWIN PRODUCT PROVIDER
-// Self-contained class. Activates the moment AWIN_API_KEY is set
-// in Vercel env vars. No code change needed to enable.
 // ─────────────────────────────────────────────────────────────
 class AwinProductProvider {
   constructor(apiKey) { this.apiKey = apiKey; }
@@ -373,7 +376,7 @@ class AwinProductProvider {
           title:    p.product_name || p.name || query,
           delivery: p.delivery_cost || '',
         }))
-        .filter(p => p.price !== null); // admitPrice already applied PRICE_CEILING_HARD
+        .filter(p => p.price !== null);
     } catch (e) {
       console.error(`[${VERSION}] Awin error:`, e.message);
       return [];
@@ -382,15 +385,7 @@ class AwinProductProvider {
 }
 
 // ─────────────────────────────────────────────────────────────
-// SERPER — shopping + organic results
-//
-// Resilience tuned for Vercel's 15s function limit:
-//   - 5s per-attempt timeout via AbortController (was 8s + retry — that path
-//     compounded to 16s per call, and the frontend fires two calls in
-//     parallel, so the function would routinely exceed Vercel's limit
-//     during cold starts).
-//   - No retry — caller falls through to organic/CSE on failure. A failed
-//     primary call is better than a slow one.
+// SERPER
 // ─────────────────────────────────────────────────────────────
 const SERPER_TIMEOUT_MS = 5000;
 
@@ -415,14 +410,12 @@ async function fetchSerper(query, type, apiKey) {
   }
 }
 
-// Extract and normalise items from a Serper shopping response.
-// admitPrice() is the gatekeeper — no item with a bad price enters rawItems.
 function normaliseSerperShopping(data, query) {
   const shopping = data.shopping || [];
   return shopping
     .filter(item => isValidProductUrl(item.link))
     .map(item => {
-      const price = admitPrice(item.price); // PRICE_CEILING_HARD enforced here
+      const price = admitPrice(item.price);
       if (price === null) {
         console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${item.price} is over £${PRICE_CEILING_HARD} (intake)`);
         return null;
@@ -438,7 +431,6 @@ function normaliseSerperShopping(data, query) {
     .filter(Boolean);
 }
 
-// Extract prices embedded in organic snippet text.
 function normaliseSerperOrganic(data, query) {
   const organic = data.organic || [];
   return organic
@@ -447,7 +439,7 @@ function normaliseSerperOrganic(data, query) {
       const raw   = item.snippet || item.title || '';
       const match = raw.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
       if (!match) return null;
-      const price = admitPrice(match[1]); // PRICE_CEILING_HARD enforced here
+      const price = admitPrice(match[1]);
       if (price === null) return null;
       return {
         source:   (item.displayLink || item.link || '').replace(/^www\./, '').split('/')[0],
@@ -461,7 +453,7 @@ function normaliseSerperOrganic(data, query) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// GOOGLE CSE — secondary fallback
+// GOOGLE CSE
 // ─────────────────────────────────────────────────────────────
 async function fetchCSE(query) {
   const CSE_KEY = process.env.GOOGLE_CSE_KEY;
@@ -484,7 +476,7 @@ async function fetchCSE(query) {
         const raw   = item.snippet || '';
         const match = raw.match(/£\s?([\d,]+(?:\.\d{1,2})?)/);
         if (!match) return null;
-        const price = admitPrice(match[1]); // PRICE_CEILING_HARD enforced here
+        const price = admitPrice(match[1]);
         if (price === null) return null;
         return {
           source:   (item.displayLink || '').replace(/^www\./, '').split('/')[0],
@@ -503,7 +495,6 @@ async function fetchCSE(query) {
 
 // ─────────────────────────────────────────────────────────────
 // DEDUPLICATION
-// One entry per source domain. Cheapest price wins on collision.
 // ─────────────────────────────────────────────────────────────
 function dedup(items) {
   const map = new Map();
@@ -540,10 +531,6 @@ export default async function handler(req, res) {
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
   // ── Source priority ──────────────────────────────────────
-  // 1. Awin   — PRIMARY   (when AWIN_API_KEY set)
-  // 2. Serper — PRIMARY fallback
-  // 3. CSE    — SECONDARY fallback, circuit-breaker protected
-  // ─────────────────────────────────────────────────────────
   let rawItems = [];
 
   // 1. Awin
@@ -569,38 +556,22 @@ export default async function handler(req, res) {
     }
   }
 
-  // 3. CSE top-up (if circuit is closed)
+  // 3. CSE top-up
   const cseItems = await fetchCSE(q);
   rawItems.push(...cseItems);
   console.log(`[${VERSION}] CSE: ${cseItems.length} items`);
 
-  // ── NUCLEAR FILTER — final pass, no exceptions ────────────
-  // admitPrice() already rejected bad prices at intake above.
-  // This runs again on the full combined array as a hard guarantee.
-  const safe = nuclearFilter(rawItems);
-
-  // ── IDENTITY FILTER — discard accessories + low-confidence items ──
-  // Runs after nuclearFilter, before trust filter.
+  // ── Pipeline ──────────────────────────────────────────────
+  const safe       = nuclearFilter(rawItems);
   const identified = identityFilter(safe, q);
-
-  // ── TRUSTED SOURCE FILTER — drop non-UK / peer-to-peer listings ──
-  // Runs before the dynamic ceiling so peer-to-peer used listings cannot
-  // anchor an artificially low ceiling. Mirrors frontend UK_RETAILERS.
-  const trusted = trustedSourceFilter(identified);
-
-  // ── DYNAMIC CEILING — lowest × 4, product-aware ──────────
-  // Runs on trusted sources only — anchor is a legitimate UK retailer price.
-  // Skipped if fewer than 3 results survive (collapse protection).
-  const priced = dynamicCeilingFilter(trusted);
-
-  // ── Dedup + sort ──────────────────────────────────────────
-  const results = dedup(priced);
+  const trusted    = trustedSourceFilter(identified);
+  const priced     = dynamicCeilingFilter(trusted);
+  const results    = dedup(priced);
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'} | hard=£${PRICE_CEILING_HARD} | dynamic=lowest×${PRICE_MULTIPLIER}`);
 
-  // Debug envelope — exposes per-stage pipeline counts and the raw item set
-  // so we can diagnose why a query produced no results without having to
-  // crawl Vercel function logs. Triggered by { debug: true } in request body.
+  // Debug envelope — exposes per-stage pipeline counts and the raw item set.
+  // Triggered by { debug: true } in request body.
   const debug = req.body && req.body.debug === true;
   const debugEnvelope = debug ? {
     counts: {
@@ -615,7 +586,6 @@ export default async function handler(req, res) {
     identitySample: identified.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
   } : undefined;
 
-  // Return in the shape the frontend's buildScen() expects
   return res.status(200).json({
     shopping: results.map(r => ({
       source:   r.source,
@@ -624,7 +594,7 @@ export default async function handler(req, res) {
       title:    r.title,
       delivery: r.delivery,
     })),
-    organic: [], // organic already folded into shopping above
+    organic: [],
     _meta: {
       version:      VERSION,
       itemCount:    results.length,
