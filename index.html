@@ -990,9 +990,155 @@
 
     /* ── Quality-audit pass: focus-visible everywhere, tap targets ── */
     button,a,[role="button"]{min-height:44px;}
-    button.cam-btn,button.h-pill,button.trend-chip,button.cam-found-cta{min-height:auto;}
+    button.cam-btn,button.h-pill,button.trend-chip,button.cam-found-cta,button.home2-pill,button.home2-go{min-height:auto;}
     *:focus-visible:not([data-logo-home]):not(.btn-primary):not(.btn-secondary):not(.btn-ghost){
       outline:2px solid var(--green);outline-offset:2px;border-radius:6px;
+    }
+
+    /* ═══════════════════════════════════════════════════════════
+       Wave 5 — Visible home redesign. Search-focused panel of the
+       swipe deck. Old .h-* classes still rendered elsewhere.
+       ═══════════════════════════════════════════════════════════ */
+    .home2-content{
+      display:flex;flex-direction:column;
+      flex:1;min-height:0;
+      padding:8px 20px calc(64px + env(safe-area-inset-bottom));
+      gap:24px;
+    }
+    .home2-hero{
+      display:flex;flex-direction:column;gap:10px;
+      padding-top:8px;
+    }
+    .home2-eyebrow{
+      font:600 13px/1 "Inter",sans-serif;
+      color:var(--ink3);
+      letter-spacing:0.2px;
+    }
+    .home2-search{
+      display:flex;align-items:center;gap:12px;
+      height:64px;padding:0 6px 0 20px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r-lg);
+      box-shadow:var(--depth-1);
+      transition:border-color var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
+    }
+    .home2-search:focus-within{
+      border-color:var(--green);
+      box-shadow:var(--depth-2),0 0 0 4px var(--green-lt);
+    }
+    .home2-search-ico{flex-shrink:0;color:var(--ink3);transition:color var(--motion-norm) var(--ease-quick);}
+    .home2-search:focus-within .home2-search-ico{color:var(--green);}
+    .home2-search input{
+      flex:1;border:none;outline:none;background:transparent;
+      font:700 22px/1 "Nunito",sans-serif;
+      color:var(--ink);min-width:0;
+      letter-spacing:-0.4px;
+    }
+    .home2-search input::placeholder{color:var(--ink4);font-weight:600;}
+    .home2-go{
+      flex-shrink:0;
+      width:52px;height:52px;border-radius:14px;
+      background:linear-gradient(132deg,#3d9435 0%,#2a6b22 100%);
+      color:#fff;border:none;cursor:pointer;
+      font:800 22px/1 "Nunito",sans-serif;
+      box-shadow:var(--depth-glow-green);
+      display:flex;align-items:center;justify-content:center;
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 opacity var(--motion-norm) var(--ease-quick);
+    }
+    .home2-go:active{transform:scale(0.92);}
+    .home2-go:disabled{opacity:0.35;cursor:not-allowed;box-shadow:var(--depth-1);}
+
+    .home2-trending{display:flex;flex-direction:column;gap:10px;}
+    .home2-trending-label{
+      font:700 11px/1 "Inter";letter-spacing:0.8px;
+      text-transform:uppercase;color:var(--ink3);
+      padding-left:2px;
+    }
+    .home2-pills{
+      display:flex;gap:8px;
+      overflow-x:auto;overflow-y:hidden;
+      padding:2px 20px 2px 0;margin:0 -20px 0 0;
+      scrollbar-width:none;
+      -webkit-overflow-scrolling:touch;
+      scroll-snap-type:x proximity;
+    }
+    .home2-pills::-webkit-scrollbar{display:none;}
+    .home2-pill{
+      flex-shrink:0;padding:11px 16px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r-pill,999px);
+      font:600 13px/1 "Inter",sans-serif;
+      color:var(--ink);cursor:pointer;
+      scroll-snap-align:start;white-space:nowrap;
+      box-shadow:var(--depth-1);
+      transition:transform var(--motion-fast) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick),
+                 border-color var(--motion-norm) var(--ease-quick);
+    }
+    .home2-pill:active{
+      background:var(--green-lt);
+      border-color:var(--green-bd);
+      transform:scale(0.94);
+    }
+
+    .home2-spacer{flex:1;min-height:8px;}
+
+    /* Always-visible swipe rail at the bottom — the user can SEE the
+       four modes laid out and that we're currently on Search. */
+    .home2-swipe-rail{
+      display:flex;flex-direction:column;align-items:center;gap:6px;
+      padding:14px 16px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      box-shadow:var(--depth-1);
+    }
+    .home2-swipe-row{
+      display:flex;align-items:center;gap:8px;
+      font:700 13px/1 "Nunito",sans-serif;
+      color:var(--green);
+    }
+    .home2-swipe-mode{padding:2px 0;}
+    .home2-swipe-mode.dim{color:var(--ink4);font-weight:600;}
+    .home2-swipe-arrow{color:var(--ink4);font-size:14px;line-height:1;}
+    .home2-swipe-arrow.dim{opacity:0.4;}
+    .home2-swipe-hint{
+      font:500 11px/1 "Inter",sans-serif;
+      color:var(--ink3);letter-spacing:0.2px;
+    }
+
+    /* First-visit hint pill — animated nudge that auto-dismisses. */
+    .swipe-coach{
+      position:absolute;left:50%;
+      bottom:calc(80px + env(safe-area-inset-bottom));
+      transform:translateX(-50%);
+      display:flex;align-items:center;gap:8px;
+      padding:10px 16px;
+      background:var(--ink);color:#fff;
+      border-radius:var(--r-pill,999px);
+      font:600 13px/1 "Inter",sans-serif;
+      box-shadow:var(--depth-3);
+      pointer-events:none;z-index:80;
+      opacity:0;animation:coach-in 340ms var(--ease-pop) 600ms both,
+                          coach-bob 1.2s ease-in-out 1500ms infinite;
+    }
+    .swipe-coach.dismiss{animation:coach-out 240ms var(--ease-quick) both;}
+    .swipe-coach .coach-arrow{font-size:15px;display:inline-block;}
+    @keyframes coach-in{
+      from{opacity:0;transform:translateX(-50%) translateY(8px);}
+      to  {opacity:1;transform:translateX(-50%) translateY(0);}
+    }
+    @keyframes coach-out{
+      from{opacity:1;transform:translateX(-50%) translateY(0);}
+      to  {opacity:0;transform:translateX(-50%) translateY(8px);}
+    }
+    @keyframes coach-bob{
+      0%,100%{transform:translateX(-50%) translateY(0);}
+      50%    {transform:translateX(-50%) translateY(-3px);}
     }
   </style>
 </head>
@@ -1068,88 +1214,58 @@
       <div class="s-badge s-badge-sm"><span class="s-letter">S</span></div>
     </div>
 
-    <div class="h-content">
-      <!-- Two secondary cards side by side -->
-      <div class="h-secondary-row">
-        <div class="h-sec-card" onclick="goTo('paste')">
-          <div class="h-sec-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round">
-              <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
-            </svg>
-          </div>
-          <div>
-            <div class="h-sec-title">Online checker</div>
-            <div class="h-sec-sub">Paste any product link</div>
-          </div>
-        </div>
-        <div class="h-sec-card" onclick="document.getElementById('search-input').focus()">
-          <div class="h-sec-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2.2" stroke-linecap="round">
-              <circle cx="11" cy="11" r="7"/>
-              <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-          </div>
-          <div>
-            <div class="h-sec-title">Search</div>
-            <div class="h-sec-sub">Type a product name</div>
-          </div>
+    <!-- Home is now the SEARCH panel of the swipe deck. Scan/Snap/Paste are
+         reached by swiping left. Removed 1 May 2026: the legacy paste/search
+         secondary-card row and the bottom scan/snap button stack — redundant
+         once swipe is the navigation primitive. -->
+    <div class="home2-content">
+      <div class="home2-hero">
+        <div class="home2-eyebrow">Find a fair price for</div>
+        <div class="home2-search">
+          <svg class="home2-search-ico" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input id="search-input" type="text" placeholder="any product"
+            autocomplete="off" enterkeyhint="search" inputmode="search"
+            oninput="document.getElementById('btn-search').disabled=!this.value.trim()"
+            onkeydown="if(event.key==='Enter'&&this.value.trim())doLiveSearch()"/>
+          <button id="btn-search" class="home2-go" disabled onclick="doLiveSearch()" aria-label="Check prices">→</button>
         </div>
       </div>
 
-      <!-- Search bar -->
-      <div class="h-search">
-        <input id="search-input" type="text" placeholder="Search any product…" autocomplete="off"
-          oninput="document.getElementById('btn-search').disabled=!this.value.trim()"
-          onkeydown="if(event.key==='Enter'&&this.value.trim())doLiveSearch()"/>
-        <button id="btn-search" class="h-search-go" disabled onclick="doLiveSearch()">Check</button>
+      <div class="home2-trending">
+        <div class="home2-trending-label">Trending now</div>
+        <div class="home2-pills" data-no-swipe>
+          <button class="home2-pill" onclick="trendSearch('Apple AirPods Pro 2')">AirPods Pro 2</button>
+          <button class="home2-pill" onclick="trendSearch('Dyson V15 Detect')">Dyson V15</button>
+          <button class="home2-pill" onclick="trendSearch('Sony WH-1000XM5')">Sony WH-1000XM5</button>
+          <button class="home2-pill" onclick="trendSearch('Nintendo Switch OLED')">Nintendo Switch</button>
+          <button class="home2-pill" onclick="trendSearch('Samsung 65 QLED TV')">Samsung QLED TV</button>
+        </div>
       </div>
 
-      <!-- Trending -->
-      <div class="h-trending">
-        <div class="h-trending-label">People are checking</div>
-        <div class="h-pills">
-          <div class="h-pill" onclick="trendSearch('Apple AirPods Pro 2')">AirPods Pro 2</div>
-          <div class="h-pill" onclick="trendSearch('Dyson V15 Detect')">Dyson V15</div>
-          <div class="h-pill" onclick="trendSearch('Sony WH-1000XM5')">Sony WH-1000XM5</div>
-          <div class="h-pill" onclick="trendSearch('Nintendo Switch OLED')">Nintendo Switch</div>
-          <div class="h-pill" onclick="trendSearch('Samsung 65 QLED TV')">Samsung QLED TV</div>
+      <div class="home2-spacer"></div>
+
+      <!-- Swipe affordance: tells users they can swipe to other modes.
+           The first-time hint pill is injected by JS on top of this. -->
+      <div class="home2-swipe-rail" aria-hidden="true">
+        <div class="home2-swipe-row">
+          <span class="home2-swipe-mode">Search</span>
+          <span class="home2-swipe-arrow">›</span>
+          <span class="home2-swipe-mode dim">Scan</span>
+          <span class="home2-swipe-arrow dim">›</span>
+          <span class="home2-swipe-mode dim">Snap</span>
+          <span class="home2-swipe-arrow dim">›</span>
+          <span class="home2-swipe-mode dim">Paste link</span>
         </div>
+        <div class="home2-swipe-hint">Swipe left to switch mode</div>
       </div>
     </div>
 
+    <!-- legacy IDs kept for any remaining JS hooks -->
     <div id="trending-list" style="display:none"></div>
     <div id="cat-chips" style="display:none"></div>
-
-    <!-- Scan — big bottom-anchored primary -->
-    <div class="h-scan-footer">
-      <button class="h-scan" onclick="goTo('scan');startScanner()">
-        <div class="h-scan-icon">
-          <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
-            <rect x="2" y="7" width="20" height="13" rx="2.5"/>
-            <circle cx="12" cy="13.5" r="3"/>
-            <path d="M9 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5V7"/>
-          </svg>
-        </div>
-        <div class="h-scan-body">
-          <div class="h-scan-title">Scan in-store</div>
-          <div class="h-scan-sub">Point at any barcode — instant price check</div>
-        </div>
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-
-      <!-- Snap — secondary AI vision identification (Haiku 4.5). Useful when
-           there's no readable barcode (clothing, fresh food, restaurant items)
-           or the barcode scanner can't lock on. -->
-      <button class="h-snap" onclick="goTo('snap');startSnapper()">
-        <div class="h-snap-icon">📸</div>
-        <div class="h-snap-body">
-          <div class="h-snap-title">Snap a product</div>
-          <div class="h-snap-sub">No barcode? Photo identifies it for you</div>
-        </div>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#999" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-      </button>
-    </div>
   </div>
 
   <!-- ══════ SCANNER ══════ -->
@@ -1668,7 +1784,42 @@ function goTo(screen, opts){
   if(screen==='home'){
     silentGeo();
     renderTrending(activeCat);
+    // First-visit swipe coach
+    setTimeout(showSwipeCoachIfFirstVisit, 350);
+  } else {
+    // Leaving home → kill any active coach pill
+    dismissSwipeCoach();
   }
+}
+
+// ── First-visit swipe coach pill (Wave 5) ──
+//
+// Shown once per device, on first home view. Auto-dismisses on first swipe
+// or after 6 seconds. Persistence via localStorage so subsequent visits
+// don't re-show. Discoverability without friction.
+function showSwipeCoachIfFirstVisit(){
+  try{
+    if(localStorage.getItem('savvey_swipe_coach_seen') === '1') return;
+  }catch(e){ /* localStorage blocked — show once anyway, dismiss on swipe */ }
+  if(document.getElementById('swipe-coach-pill')) return;
+  if(currentScreen !== 'home') return;
+  const homeScreen = document.getElementById('screen-home');
+  if(!homeScreen) return;
+  const pill = document.createElement('div');
+  pill.id = 'swipe-coach-pill';
+  pill.className = 'swipe-coach';
+  pill.setAttribute('aria-hidden', 'true');
+  pill.innerHTML = '<span class="coach-arrow">←</span><span>Swipe to scan, snap, paste-link</span>';
+  homeScreen.appendChild(pill);
+  // Auto-dismiss after 6s if user hasn't swiped
+  setTimeout(dismissSwipeCoach, 6000);
+}
+function dismissSwipeCoach(){
+  const pill = document.getElementById('swipe-coach-pill');
+  if(!pill) return;
+  pill.classList.add('dismiss');
+  setTimeout(() => pill.remove(), 280);
+  try{ localStorage.setItem('savvey_swipe_coach_seen', '1'); }catch(e){}
 }
 
 // ── Swipe navigation (Wave 3 design pass) ──
@@ -1730,6 +1881,7 @@ document.addEventListener('pointerup', (e) => {
 document.addEventListener('pointercancel', () => { _swipeStart = null; }, { passive: true });
 
 function navigateSwipe(targetScreen, dir){
+  dismissSwipeCoach();
   goTo(targetScreen, { slideDir: dir });
   if(targetScreen === 'scan')  startScanner();
   if(targetScreen === 'snap')  startSnapper();
