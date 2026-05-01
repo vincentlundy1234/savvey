@@ -1615,56 +1615,49 @@ function fetchPrices(query){
     chipTimers.push(t);
   }
 
-  const timeout=setTimeout(()=>{if(activeController)activeController.abort();},12000);
+  const timeout=setTimeout(()=>{if(activeController)activeController.abort();},14000);
 
-  // Single shopping call — the second call (organic /search) was always unused
-  // by the mapping step below, doubled Serper quota burn, and could push the
-  // serverless function past its 15s ceiling on cold starts.
-  const p=fetch('/api/search',{
+  // ─────────────────────────────────────────────────────────────
+  // Tier 1: AI search via Perplexity (primary, AI-native).
+  // Falls through to Tier 2 (legacy /api/search Serper pipeline) if AI
+  // returns nothing useful or fails. App never breaks.
+  //
+  // We try AI first because it gives real retailer URLs (no Google
+  // aggregator), no WAF problems, and structured price data. Serper
+  // remains as the safety net.
+  // ─────────────────────────────────────────────────────────────
+  const aiPromise=fetch('/api/ai-search',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     signal:sig,
-    body:JSON.stringify({q:`${query} buy UK price`,type:'shopping'})
-  }).then(async r1=>{
-    clearTimeout(timeout);
+    body:JSON.stringify({q:query,region:'uk'})
+  }).then(async r=>{
+    if(!r.ok)return null;
+    const d=await r.json();
+    if(searchGeneration!==gen)return null;
+    return d&&d.shopping&&d.shopping.length>=2?d:null; // require 2+ to consider AI useful
+  }).catch(()=>null);
+
+  const p=aiPromise.then(async aiResp=>{
     if(searchGeneration!==gen){console.log('[fetchPrices] stale gen discarded');return null;}
-    const d1=r1.ok?await r1.json():{};
-    if(searchGeneration!==gen)return null; // check again after await
-    // ── Map Serper response shape → buildScenV3 input shape ──
-    // Serper returns {source, price:'£89.99', link, title, delivery}
-    // buildScenV3 expects {retailer, price:89.99, link, sub}
-    // Defence in depth: backend now applies trustedSourceFilter, but we also
-    // require matchRetailer() to resolve to a known UK_RETAILERS entry here —
-    // any item whose URL doesn't match a UK retailer domain is dropped.
-    const raw=(d1.shopping||[]);
-    const mapped=raw.map(i=>{
-      // Match against source name ONLY — the link field for Serper shopping
-      // results is a Google aggregator URL that encodes our entire UK_SITE
-      // search query (site:ebay.co.uk OR site:currys.co.uk OR ...) which
-      // would falsely match against any retailer in the list. Source is the
-      // small retailer-name string Google Shopping populates ("Currys",
-      // "Selfridges", "eBay - sellerName") — that's the reliable signal.
-      const ret=matchRetailer(i.source||'');
-      if(!ret)return null; // not a recognised UK retailer — discard
-      const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
-      return{
-        retailer:ret.name,
-        price,
-        link:i.link||'',
-        sub:i.delivery||'Check retailer'
-      };
-    }).filter(i=>i&&i.price>1&&i.price<5000);
-    console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length);
-    const sc=buildScenV3(mapped,userPrice,query);
-    // Attach coverage flags from backend _meta so renderResults can warn the user
-    // when the result set is thin (1-3 trusted retailers) or eBay-only.
-    if(sc&&d1._meta){
-      sc.coverage=d1._meta.coverage||'good';
-      sc.onlyEbay=!!d1._meta.onlyEbay;
+    let d1;
+    if(aiResp&&aiResp.shopping&&aiResp.shopping.length>=2){
+      console.log('[fetchPrices] AI search delivered '+aiResp.shopping.length+' retailers');
+      d1=aiResp;
+    }else{
+      // Tier 2 — fall back to Serper-based pipeline
+      console.log('[fetchPrices] AI search empty/failed, falling back to Serper');
+      const r2=await fetch('/api/search',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        signal:sig,
+        body:JSON.stringify({q:`${query} buy UK price`,type:'shopping'})
+      });
+      if(searchGeneration!==gen)return null;
+      d1=r2.ok?await r2.json():{};
     }
-    liveScen=sc;
-    chipTimers.forEach(clearTimeout);
-    return sc;
+    if(searchGeneration!==gen)return null;
+    return processSearchResponse(d1,query);
   }).catch(e=>{
     clearTimeout(timeout);
     if(e.name==='AbortError'){console.log('[fetchPrices] aborted');return null;}
@@ -1674,6 +1667,38 @@ function fetchPrices(query){
   });
 
   return p;
+}
+
+// Process a search response (from /api/ai-search OR /api/search) into a
+// scen object via buildScenV3. Handles the Serper shape (source name)
+// AND the AI search shape (real retailer URLs) — both work because we
+// match against the source field which both endpoints populate.
+function processSearchResponse(d1, query){
+  if(!d1)return null;
+  const raw=(d1.shopping||[]);
+  const mapped=raw.map(i=>{
+    // matchRetailer accepts source name OR URL — both data sources covered
+    const haystack=(i.source||'')+' '+(i.link||'');
+    const ret=matchRetailer(haystack);
+    if(!ret)return null;
+    const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
+    return{
+      retailer:ret.name,
+      price,
+      link:i.link||'',
+      sub:i.delivery||'Check retailer'
+    };
+  }).filter(i=>i&&i.price>1&&i.price<5000);
+  console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length+' source='+(d1._meta&&d1._meta.source||'serper'));
+  const sc=buildScenV3(mapped,userPrice,query);
+  if(sc&&d1._meta){
+    sc.coverage=d1._meta.coverage||'good';
+    sc.onlyEbay=!!d1._meta.onlyEbay;
+    sc.dataSource=d1._meta.source||'serper';
+  }
+  liveScen=sc;
+  chipTimers.forEach(clearTimeout);
+  return sc;
 }
 
 // Extract a plausible product name from a retailer URL slug as a fallback
@@ -1899,71 +1924,71 @@ function witLine(spc,saving,retailer,bestRetailer){
   const r=String(retailer||'').toLowerCase();
   const b=bestRetailer||'somewhere else';
 
-  // ── GREEN: best price found, celebrate ──
+  // ── GREEN: best price found, celebrate the user ──
   if(spc==='green'){
     return _pick([
-      'Rare moment. You found the actual best UK price.',
-      'Don\'t overthink it. This is the one.',
-      'The first place you looked is the right one. For once.',
-      'Genuinely the cheapest. No notes.',
-      'Buy it. The internet has nothing better.',
-      'You\'ve out-Saveyed Savvey.',
-      'No better deal exists right now in the UK.',
-      'Take it. Tell your mates. Move on.',
+      'You found the actual best UK price. Nice work.',
+      'You\'re being savvey. The internet has nothing cheaper.',
+      'You\'ve done the homework — this is the one.',
+      'You\'ve out-Saveyed Savvey. Take the win.',
+      'You\'re ahead of the game. Buy with confidence.',
+      'You picked the right shop first time. That never happens.',
+      'You\'re on the cheapest UK price. Move on, buy it.',
+      'You\'ve found it. No deal exists better than this.',
     ]);
   }
 
-  // ── AMBER: small gap, worth checking ──
+  // ── AMBER: small gap, you can do a touch better ──
   if(spc==='amber'){
     return _pick([
-      'Close. But '+b+' nicks it.',
-      'A small saving is still a saving.',
-      'Nearly. '+b+' has the edge.',
-      'Within the margin. But why pay extra?',
-      'Not bad. But not best.',
-      'Worth a 60-second detour to '+b+'.',
+      'You\'re close. But '+b+' nicks it.',
+      'You can save a bit. '+b+' has the edge.',
+      'You\'re within reach — but why pay extra?',
+      'You\'re nearly there. 60-second detour to '+b+' and you\'re winning.',
+      'You\'ve almost got it. A few quid in '+b+'\'s favour.',
     ]);
   }
 
-  // ── RED: overpaying. Tier by saving amount, then retailer-specific ──
+  // ── RED: overpaying. Tier by saving — frame in YOU + concrete UK things ──
 
-  // £300+ — outrageous saving, big-ticket items
+  // £300+ — outrageous, big-ticket items
   if(saving>=300){
     return _pick([
-      'That\'s a flight to Italy. '+retailer+' is having a moment.',
-      retailer+' wanted £'+saving+' more. That\'s a weekend in Edinburgh.',
-      'A whole month of food shopping in the gap. Walk away.',
-      'That\'s a flight, a hotel, and pizza. Don\'t let '+retailer+' have it.',
+      'You\'d get a return flight to Italy with that. '+retailer+' is having a moment.',
+      'You\'d cover a long weekend in Edinburgh. Don\'t hand it to '+retailer+'.',
+      'You\'d do a month\'s food shop with the gap. Walk away.',
+      'You\'re being asked to fund a flight, a hotel, and pizza for '+retailer+'. Politely decline.',
+      'You could buy a second '+(b||'one')+' for the difference. Mad.',
     ]);
   }
 
   // £200-299
   if(saving>=200){
     return _pick([
-      retailer+' wanted £'+saving+' more than '+b+'. Bold.',
-      'A new pair of trainers in the difference. Save it.',
-      'That\'s eight months of Netflix. Eight.',
-      'Two hundred and change. Just because you didn\'t check.',
+      'You\'d save eight months of Netflix. Eight.',
+      'You\'d pay for a new pair of trainers with what '+retailer+' wants extra.',
+      retailer+' wants £'+saving+' more than '+b+'. Bold of them.',
+      'You\'d cover your phone bill for half a year. Save it.',
     ]);
   }
 
   // £150-199
   if(saving>=150){
     return _pick([
-      'That\'s a decent night out you\'re leaving on the table.',
-      retailer+' priced this with confidence. Misplaced confidence.',
-      'A train to London and back. From Manchester. Walk away.',
-      'Three months of gym membership. Save it for January guilt.',
+      'You\'d get a decent night out for the difference. Walk away.',
+      'You could train it to London and back from Manchester. Save the cash.',
+      'You\'d cover three months of gym membership (the January-guilt edition).',
+      'You\'re paying for '+retailer+'\'s confidence. Misplaced confidence.',
     ]);
   }
 
   // £100-149
   if(saving>=100){
     return _pick([
-      'Three figures more than necessary. Hard no.',
-      'A weekly food shop\'s worth. '+retailer+' fancy themselves.',
-      'Two months of phone bill. They\'re hoping you don\'t check.',
-      retailer+' rounded up. Aggressively.',
+      'You\'re funding a weekly food shop for '+retailer+'. Hard no.',
+      'You\'d cover two months of phone bill. They\'re hoping you didn\'t notice.',
+      'You\'re three figures over. Walk to '+b+'.',
+      retailer+' rounded up. Aggressively. Don\'t reward it.',
     ]);
   }
 
@@ -1971,108 +1996,108 @@ function witLine(spc,saving,retailer,bestRetailer){
 
   if(r.includes('currys')){
     return _pick([
-      'Currys, more worries 😢',
-      'Currys does that. Always.',
-      'Currys priced this on a Friday afternoon, clearly.',
-      'Currys: confident in numbers others find baffling.',
+      'Currys, more worries 😢 You can do better at '+b+'.',
+      'Classic Currys. You spotted it though.',
+      'Currys priced this on a Friday afternoon. You\'re smarter than that.',
+      'Currys: confident in numbers others find baffling. You\'re not paying it.',
     ]);
   }
   if(r.includes('john lewis')){
     return saving>=60
       ? _pick([
-          'John Lewis: aspirational pricing. As ever.',
-          'You\'re paying for the carpet at John Lewis. Walk on it elsewhere.',
-          'John Lewis, where prices have ambitions.',
+          'John Lewis: aspirational pricing. As ever. You\'re wise to skip it.',
+          'You\'re paying for the John Lewis carpet. Walk on it elsewhere.',
+          'John Lewis, where prices have ambitions and you have options.',
         ])
       : _pick([
-          'John Lewis. Lovely shop. Optimistic till.',
-          'John Lewis being John Lewis again.',
+          'John Lewis being John Lewis. You\'ve got the edge.',
+          'John Lewis. Lovely shop. Optimistic till. You\'ve dodged it.',
         ]);
   }
   if(r.includes('argos')){
     return saving>=40
       ? _pick([
-          'Argos has some explaining to do.',
-          'Argos hoped you\'d still be using the laminated catalogue.',
-          'The Argos pen wrote that price down wrong.',
+          'Argos has some explaining to do. You\'ve already moved on.',
+          'Argos hoped you\'d still be using the laminated catalogue. You\'re not.',
+          'The Argos pen wrote that price down wrong. You spotted it.',
         ])
-      : 'Argos slightly off the pace today.';
+      : 'Argos slightly off the pace today. You\'re ahead of them.';
   }
   if(r.includes('amazon')){
     return _pick([
-      'Amazon\'s algorithm is having a self-confident day.',
-      'Amazon thinks you\'re not paying attention. Prove it.',
-      'The Amazon price changed three times today. The third time wasn\'t kind.',
-      'Bezos does not need your £'+saving+'.',
+      'Amazon\'s algorithm having a confident day. You\'re smarter than the algorithm.',
+      'Amazon thought you weren\'t paying attention. You are.',
+      'The Amazon price changed three times today. You spotted the wrong one.',
+      'Bezos does not need your £'+saving+'. '+(b||'somewhere else')+' does.',
     ]);
   }
   if(r.includes('very')){
     return _pick([
-      'Very. The catalogue-pricing tradition lives on.',
-      'Very wants you on a 12-month payment plan. Cash beats it.',
+      'Very. The catalogue-pricing tradition lives on. You don\'t have to.',
+      'Very wants you on a 12-month plan. Cash at '+b+' beats it.',
     ]);
   }
   if(r.includes('ao')){
     return _pick([
-      'AO had a number. The number was wrong.',
-      'AO\'s confident pricing strikes again.',
+      'AO had a number. The number was wrong. You spotted it.',
+      'AO\'s confident pricing. You\'re ahead of it.',
     ]);
   }
   if(r.includes('selfridges')){
     return _pick([
-      'You\'re paying for the postcode at Selfridges.',
-      'Selfridges. Where the floor staff outnumber the bargains.',
+      'You\'re paying for the Selfridges postcode. Skip it.',
+      'Selfridges. Where the floor staff outnumber the bargains. You found one elsewhere.',
     ]);
   }
   if(r.includes('halfords')){
     return _pick([
-      'Halfords is having an opinion on pricing today.',
-      'Halfords. Where every aisle thinks it\'s special.',
+      'Halfords is having an opinion on pricing. You\'ve got a better one.',
+      'Halfords. Every aisle thinks it\'s special. You know better.',
     ]);
   }
   if(r.includes('boots')){
-    return 'Boots prices like the Advantage Card discount is mandatory. It isn\'t.';
+    return 'Boots prices like the Advantage Card discount is mandatory. It isn\'t — you\'ve found cheaper.';
   }
   if(r.includes('ebay')){
     return _pick([
-      'eBay seller having a moment. '+b+' is the grown-up choice.',
-      'That eBay listing is a vibe. '+b+' is the actual deal.',
+      'eBay seller having a moment. You\'ve found the grown-up shop at '+b+'.',
+      'That eBay listing is a vibe. '+b+' is your actual deal.',
     ]);
   }
 
   // ── Saving-amount fallbacks (£25-99, no retailer hook) ──
   if(saving>=80){
     return _pick([
-      'A tank of petrol\'s worth. '+retailer+' tried it on.',
-      'That\'s eight Tesco meal deals. Not worth it.',
-      retailer+' priced this with the heating on. Walk to '+b+'.',
+      'You\'d save a tank of petrol. '+retailer+' tried it on.',
+      'That\'s eight Tesco meal deals you\'d be funding. You\'re not.',
+      retailer+' priced this with the heating on. You walked.',
     ]);
   }
   if(saving>=60){
     return _pick([
-      'A round of drinks they quietly slipped in there.',
-      'Twenty Greggs sausage rolls in the gap. Walk away.',
-      'Two months of Netflix. Save it.',
+      'You\'d save a round of drinks. They quietly slipped that in.',
+      'You\'ve dodged twenty Greggs sausage rolls\' worth of overcharge. Excellent.',
+      'You\'d cover two months of Netflix. Pocket it.',
     ]);
   }
   if(saving>=40){
     return _pick([
-      retailer+' is optimistic about that price.',
-      'Ten Tesco meal deals you didn\'t know you were funding.',
-      'A train fare you didn\'t need to pay.',
+      'You\'re smarter than '+retailer+'\'s pricing model.',
+      'You\'d be funding ten Tesco meal deals. You\'ve spotted it.',
+      'You\'d be paying for a train fare you didn\'t need to.',
     ]);
   }
   if(saving>=25){
     return _pick([
-      'Not outrageous. But you can still do better.',
-      'A few quid. Adds up.',
-      'Pizza-money\'s worth. Why give it to '+retailer+'?',
+      'You can still do better. A few quid adds up.',
+      'You\'d be giving '+retailer+' your pizza money. Skip it.',
+      'You\'re close to a better deal. Take it.',
     ]);
   }
   return _pick([
-    'A small gap. Yours to keep.',
+    'You\'ve got a small gap. Yours to keep.',
     'Marginal — but every quid is yours.',
-    'Tiny gap. Take it anyway.',
+    'You\'ve found a small win. Take it.',
   ]);
 }
 
@@ -2306,6 +2331,32 @@ function renderResults(sc){
       : '<div style="margin-top:10px;padding:8px 10px;background:#fff8e6;border:1px solid #f0c674;border-radius:8px;font-size:13px;color:#7a5a00;">Limited UK retailer coverage right now — only one match found. Try a more specific name for better comparison.</div>';
     where.innerHTML=where.innerHTML+note;
   }
+
+  // ── AI wit refresh (async, non-blocking) ─────────────────────
+  // The hardcoded witLine() rendered above is the safety net. Fire a
+  // call to /api/ai-wit to get a fresh contextual line from Claude
+  // Haiku and swap it in when it arrives (~500ms-1.5s typical).
+  // If the AI call fails, the hardcoded line stays. App never breaks
+  // because of AI.
+  const witGen=searchGeneration; // capture so stale searches don't overwrite
+  fetch('/api/ai-wit',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      product:      sc.query||liveQuery||'this product',
+      retailer:     overpayingRetailer,
+      bestRetailer: sc.bestRetailer,
+      bestPrice:    sc.bestPrice,
+      saving:       sc.saving||0,
+      score:        sc.score,
+      spc,
+    })
+  }).then(r=>r.ok?r.json():null).then(d=>{
+    if(searchGeneration!==witGen)return; // stale render
+    if(!d||!d.wit)return;
+    sc.witLine=d.wit;          // store on scen for share consistency
+    if(witEl)witEl.textContent=d.wit;
+  }).catch(()=>{/* AI failed, hardcoded stays */});
 
   // ── Buy button — always green, always fires ──
   const buyBtn=document.getElementById('btn-buy-now');
