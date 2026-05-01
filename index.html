@@ -1396,7 +1396,14 @@ function buildScenV3(items, uPrice, query){
     bestRetailer:deduped[0].retailer,
     bestLink:deduped[0].link||'',
     saving,uPrice,
-    rets:deduped.slice(0,4).map(p=>({
+    // Average across all trusted retailers — shown on the results screen as
+    // a reference point so a user with no shelf-price comparison still gets
+    // meaningful context ("Cheapest £X · Average £Y").
+    avgPrice:Math.round(deduped.reduce((sum,p)=>sum+p.price,0)/deduped.length),
+    retailerCount:deduped.length,
+    // Top 3 retailers, cheapest as standout. Dropped from 4 to 3 so the
+    // result screen doesn't pad with marginal listings.
+    rets:deduped.slice(0,3).map(p=>({
       n:p.retailer,
       p:'£'+p.price.toFixed(0),
       link:p.link||'',
@@ -1771,67 +1778,102 @@ function buyNow(){
 }
 
 // ── Render results ──
+//
+// Two modes:
+//   A. VALIDATION mode  — user has a reference price (in-store scan or URL
+//      paste). Show full Savvey Score with pips + verdict because we have
+//      something to compare the cheapest UK price to.
+//   B. DISCOVERY mode   — user just typed a search. We have no reference,
+//      so the score has nothing to score against. Hide pips, replace
+//      verdict with "Best UK price" headline, show the cheapest + average
+//      + retailer list. Honest about what we can and can't tell them.
 function renderResults(sc){
-  const spc=sc.spc;
+  const hasUserPrice = !!sc.uPrice;
+  const spc=hasUserPrice ? sc.spc : 'green'; // discovery mode is always informational, not a verdict
   const overpayingRetailer=sc.rets&&sc.rets.filter(r=>!r.best)[0]?.n||'this retailer';
 
   // ── Verdict banner ──
   const vBar=document.getElementById('hero-verdict-bar');
   const vLabel=document.getElementById('hero-verdict-label');
   const vTitle=document.getElementById('hero-verdict-title');
+  const pipsWrap=document.querySelector('.hero-verdict-pips');
   if(!vBar)return;
   vBar.className='hero-verdict '+spc;
   vLabel.className='hero-verdict-label '+spc;
   vTitle.className='hero-verdict-title '+spc;
-  vTitle.textContent=sc.vTitle;
 
-  // ── Pip animation in banner — fill up, no overshoot ──
-  for(let i=1;i<=5;i++){
-    const p=document.getElementById('vp-'+i);
-    p.className='v-pip off';p.textContent=i;
-  }
-  function lightPip(n){
-    if(n>sc.score){
-      for(let i=1;i<=5;i++){
-        const p=document.getElementById('vp-'+i);
-        if(i===sc.score)    p.className='v-pip lit-'+spc;
-        else if(i<sc.score) p.className='v-pip dim-'+spc;
-        else                p.className='v-pip off';
-      }
-      return;
-    }
+  if(hasUserPrice){
+    // VALIDATION mode — show Savvey Score
+    if(pipsWrap)pipsWrap.style.display='';
+    vLabel.textContent='Savvey Signal';
+    vTitle.textContent=sc.vTitle;
+
+    // Pip animation — fill up, no overshoot
     for(let i=1;i<=5;i++){
       const p=document.getElementById('vp-'+i);
-      p.className=i<=n?'v-pip lit-'+spc:'v-pip off';
+      p.className='v-pip off';p.textContent=i;
     }
-    setTimeout(()=>lightPip(n+1),140);
+    (function animatePips(){
+      function lightPip(n){
+        if(n>sc.score){
+          for(let i=1;i<=5;i++){
+            const p=document.getElementById('vp-'+i);
+            if(i===sc.score)    p.className='v-pip lit-'+spc;
+            else if(i<sc.score) p.className='v-pip dim-'+spc;
+            else                p.className='v-pip off';
+          }
+          return;
+        }
+        for(let i=1;i<=5;i++){
+          const p=document.getElementById('vp-'+i);
+          p.className=i<=n?'v-pip lit-'+spc:'v-pip off';
+        }
+        setTimeout(()=>lightPip(n+1),140);
+      }
+      setTimeout(()=>lightPip(1),200);
+    })();
+  }else{
+    // DISCOVERY mode — hide pips, headline cheapest UK price
+    if(pipsWrap)pipsWrap.style.display='none';
+    vLabel.textContent='Best UK Price';
+    vTitle.textContent='£'+sc.bestPrice+' at '+sc.bestRetailer;
   }
-  setTimeout(()=>lightPip(1),200);
 
   // ── Hero body ──
-  document.getElementById('hero-wit').textContent=witLine(spc,sc.saving||0,overpayingRetailer,sc.bestRetailer||'Amazon UK');
   const savNumEl=document.getElementById('hero-saving-num');
   savNumEl.className='hero-num '+spc;
   const savLblEl=document.getElementById('hero-saving-label');
-  if(spc==='green'){
-    savNumEl.textContent='£'+sc.bestPrice;
-    savLblEl.textContent='best price in the UK right now';
-    document.getElementById('hero-where').innerHTML='You\'re at the best available price. <strong>Buy with confidence.</strong>';
+  const where=document.getElementById('hero-where');
+  const witEl=document.getElementById('hero-wit');
+
+  if(hasUserPrice){
+    witEl.textContent=witLine(spc,sc.saving||0,overpayingRetailer,sc.bestRetailer||'Amazon UK');
+    if(spc==='green'){
+      savNumEl.textContent='£'+sc.bestPrice;
+      savLblEl.textContent='best price in the UK right now';
+      where.innerHTML='You\'re at the best available price. <strong>Buy with confidence.</strong>';
+    }else{
+      savNumEl.textContent='£'+(sc.saving||0);
+      savLblEl.textContent='cheaper elsewhere';
+      where.innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
+    }
   }else{
-    savNumEl.textContent='£'+(sc.saving||0);
-    savLblEl.textContent='cheaper elsewhere';
-    document.getElementById('hero-where').innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
+    // DISCOVERY: cheapest + average context line, no "saving" number
+    witEl.textContent='Found the lowest UK price right now.';
+    savNumEl.textContent='£'+sc.bestPrice;
+    savNumEl.className='hero-num green';
+    savLblEl.textContent='cheapest UK price';
+    const avg=sc.avgPrice;
+    const n=sc.retailerCount||(sc.rets?sc.rets.length:0);
+    if(avg&&n>=2){
+      where.innerHTML='Average across '+n+' UK retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
+    }else{
+      where.innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
+    }
   }
 
   // ── Coverage warning — sets honest expectations when result set is thin ──
-  // sc.coverage is set in fetchPrices from the backend _meta envelope.
-  //   'good'    — 4+ retailers, full comparison available
-  //   'partial' — 2-3 retailers, fair comparison
-  //   'limited' — 1 retailer, no real comparison; show heads-up
-  //   'none'    — handled upstream by renderNoResults
-  // sc.onlyEbay — every result is an eBay listing (no major UK retailer)
   if(sc.coverage==='limited'||sc.onlyEbay){
-    const where=document.getElementById('hero-where');
     const note=sc.onlyEbay
       ? '<div style="margin-top:10px;padding:8px 10px;background:#fff8e6;border:1px solid #f0c674;border-radius:8px;font-size:13px;color:#7a5a00;">Heads-up: only marketplace listings (eBay sellers) found for this query — no major UK retailer surfaced. Verify condition and seller before buying.</div>'
       : '<div style="margin-top:10px;padding:8px 10px;background:#fff8e6;border:1px solid #f0c674;border-radius:8px;font-size:13px;color:#7a5a00;">Limited UK retailer coverage right now — only one match found. Try a more specific name for better comparison.</div>';

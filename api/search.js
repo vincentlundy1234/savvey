@@ -50,7 +50,7 @@
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.11.1';
+const VERSION = 'search.js v6.12';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -283,13 +283,21 @@ function extractHostname(url) {
 }
 
 function isTrustedSource(item) {
+  // Tier 1: source name matches a known UK retailer (most reliable signal —
+  // this is the retailer-name string Google Shopping populates).
   const src = String(item.source || '').toLowerCase();
   if (src && TRUSTED_SOURCE_TERMS.some(t => src.includes(t))) return true;
+
+  // Tier 2: link hostname matches an EXPLICIT trusted domain. We dropped
+  // the bare ".co.uk / .uk TLD" tier in v6.12 — it was too permissive,
+  // letting random reseller domains pass and end up as the user's "best
+  // price" with no comparison context (e.g. a £45 TV from an unknown
+  // .co.uk store was passing because the TLD alone was treated as trust).
+  // The explicit TRUSTED_DOMAINS list covers ~20 major UK retailers; any
+  // genuinely useful long-tail retailer should be added there explicitly.
   const host = extractHostname(item.link || '');
   if (host && host !== 'google.com' && host !== 'www.google.com') {
-    if (UK_TLDS.some(tld => host.endsWith(tld))) return true;
-    const haystack = `${item.link || ''} ${item.source || ''}`.toLowerCase();
-    if (TRUSTED_DOMAINS.some(d => haystack.includes(d))) return true;
+    if (TRUSTED_DOMAINS.some(d => host === d || host.endsWith('.' + d))) return true;
   }
   return false;
 }
@@ -618,14 +626,20 @@ export default async function handler(req, res) {
   console.log(`[${VERSION}] CSE: ${cseItems.length} items`);
 
   // ── Pipeline ──────────────────────────────────────────────
+  // Dynamic ceiling REMOVED in v6.12 — it was too aggressive in practice.
+  // When the cheapest trusted item was an eBay variant, the lowest×4 ceiling
+  // ate legitimate Currys/Argos/JL listings priced 5-7× higher. The remaining
+  // four layers (nuclearFilter £5k cap, identityFilter, trustedSourceFilter,
+  // priceAnomalyFloor) cover the same defensive ground without the false
+  // negatives.
   const safe       = nuclearFilter(rawItems);
   const identified = identityFilter(safe, q);
   const trusted    = trustedSourceFilter(identified);
-  const priced     = dynamicCeilingFilter(trusted);
-  const deduped    = dedup(priced);
+  const deduped    = dedup(trusted);
   // Price-anomaly floor runs LAST — operates on the per-retailer cheapest set
   // so it's comparing apples to apples (one Currys vs one Argos vs one eBay).
   const results    = priceAnomalyFloor(deduped);
+  const priced     = trusted; // backwards-compat alias for debug envelope
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
 
