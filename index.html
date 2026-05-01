@@ -554,8 +554,36 @@
     }
     .res-back{width:36px;height:36px;border-radius:50%;background:var(--surface);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--ink2);flex-shrink:0;}
     .res-meta{flex:1;min-width:0;}
-    .res-mode{font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
-    .res-product{font-size:15px;font-weight:700;color:var(--ink);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+    .res-mode{font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+    /* Inline refine-search bar — replaces the static product label so users
+       can edit/refine the query without navigating away from the results. */
+    .res-refine{
+      display:flex;align-items:center;gap:8px;
+      background:var(--surface);
+      border:1px solid var(--ink5,#d4d4d4);
+      border-radius:10px;
+      padding:0 10px 0 12px;
+      height:38px;
+      transition:border-color 180ms ease, box-shadow 180ms ease;
+    }
+    .res-refine:focus-within{border-color:#2a6b22;box-shadow:0 0 0 3px rgba(42,107,34,0.10);}
+    .res-refine input{
+      flex:1;min-width:0;
+      border:none;outline:none;background:transparent;
+      font:600 14px/1.3 'Inter',sans-serif;
+      color:var(--ink2,#1c1c1c);
+      padding:0;
+      width:100%;
+    }
+    .res-refine input::placeholder{color:var(--ink4,#767676);font-weight:500;}
+    .res-refine-go{
+      background:transparent;border:none;cursor:pointer;
+      color:var(--ink4,#767676);
+      width:24px;height:24px;
+      display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;
+    }
+    .res-refine-go:hover,.res-refine-go:focus{color:#2a6b22;}
 
     .res-scroll{overflow-y:auto;flex:1;padding:16px 16px 32px;display:flex;flex-direction:column;gap:8px;}
 
@@ -1009,7 +1037,27 @@
       </button>
       <div class="res-meta">
         <div class="res-mode" id="results-mode">🔍 Search</div>
-        <div class="res-product" id="results-product">Sony WH-1000XM5</div>
+        <!-- Refine search bar — pre-fills with the current product. Users
+             can edit and submit to fire a new search without leaving the
+             results screen. The hidden #results-product is kept in the DOM
+             for compatibility with code that reads it (share card etc.). -->
+        <form class="res-refine" onsubmit="event.preventDefault();refineSearch();">
+          <input
+            id="results-refine-input"
+            type="text"
+            inputmode="search"
+            autocomplete="off"
+            placeholder="Refine search…"
+            aria-label="Refine search"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();refineSearch();}"
+          />
+          <button type="submit" class="res-refine-go" aria-label="Search">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </button>
+        </form>
+        <span id="results-product" style="display:none"></span>
       </div>
     </div>
     <div class="res-scroll">
@@ -1838,6 +1886,25 @@ function bestBuyUrl(scen){
   return search||link||null;
 }
 
+// Refine the current search from the results screen — re-uses the same
+// doLiveSearch path so the new query goes through globalReset, fetchPrices,
+// renderResults like a fresh search would. Skips the price-entry screen
+// because the user is in Discovery mode (just looking for prices).
+function refineSearch(){
+  const inp=document.getElementById('results-refine-input');
+  const next=(inp&&inp.value||'').trim();
+  if(!next){return;}
+  // If they just pressed Enter on the existing query, no-op (avoid burning
+  // a Serper call for the same string).
+  if(next===liveQuery){if(inp)inp.blur();return;}
+  // Mirror the input value into the home screen search box so back-nav
+  // shows the latest query, then fire a normal search.
+  const homeInp=document.getElementById('search-input');
+  if(homeInp)homeInp.value=next;
+  if(inp)inp.blur();
+  doLiveSearch(next);
+}
+
 // Always-on Amazon UK affiliate search.
 // Lands the user on Amazon UK with the savvey-21 partner tag; any purchase
 // (this product or anything else they grab in that session) earns a
@@ -1990,7 +2057,12 @@ function renderResults(sc){
 
   // ── Nav meta ──
   const modeLabel=inputMethod==='scan'?'📷 In-store':inputMethod==='paste'?'🔗 Online':'🔍 Search';
-  document.getElementById('results-product').textContent=(sc.query||liveQuery);
+  // Set both the hidden product label (kept for share-card compat) and the
+  // visible refine-search input value.
+  const productText=(sc.query||liveQuery||'');
+  document.getElementById('results-product').textContent=productText;
+  const refineInput=document.getElementById('results-refine-input');
+  if(refineInput)refineInput.value=productText;
   document.getElementById('results-mode').textContent=modeLabel;
 
   // ── Retailer list ──
