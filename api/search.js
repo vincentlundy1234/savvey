@@ -56,8 +56,15 @@
 //     frontend UK_RETAILERS (13) + UK supermarkets and DIY chains.
 //   - URL/hostname check retained as fallback for the rare organic-snippet
 //     items where the link IS a real retailer URL.
+// v6.9:
+//   - UK site-restricted search (fetchSerperUKSites) — second Serper call in
+//     parallel with shopping, using site:currys.co.uk OR site:argos.co.uk
+//     OR ... to guarantee UK retailer coverage when the shopping endpoint
+//     biases toward US/global aggregators. Organic snippet prices extracted
+//     by the existing normaliseSerperOrganic. Strategy: stop relying on
+//     Awin acceptance for UK retailer data; make Serper deliver it directly.
 
-const VERSION = 'search.js v6.8';
+const VERSION = 'search.js v6.9';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -430,6 +437,38 @@ async function fetchSerper(query, type, apiKey) {
   }
 }
 
+// UK site-restricted search — forces Serper to only surface organic results
+// from our trusted UK retailer set. The plain shopping endpoint biases hard
+// toward US/global aggregators (Mercari, Crutchfield etc.); this restores
+// UK retailer coverage by querying Google Search with explicit site:
+// operators OR'd together. Prices come from the snippet text via
+// normaliseSerperOrganic — same regex extraction we already use elsewhere.
+const UK_SITE_QUERY = [
+  'site:amazon.co.uk', 'site:currys.co.uk', 'site:argos.co.uk',
+  'site:johnlewis.com', 'site:ao.com', 'site:very.co.uk',
+  'site:richersounds.com', 'site:box.co.uk', 'site:ebay.co.uk',
+  'site:halfords.com', 'site:screwfix.com', 'site:boots.com',
+  'site:costco.co.uk', 'site:selfridges.com', 'site:harveynichols.com',
+].join(' OR ');
+
+async function fetchSerperUKSites(query, apiKey) {
+  const q = `${query} (${UK_SITE_QUERY})`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), SERPER_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://google.serper.dev/search', {
+      method:  'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ q, gl: 'uk', hl: 'en', num: 15 }),
+      signal:  ac.signal,
+    });
+    if (!r.ok) throw Object.assign(new Error('Serper UK-sites error'), { status: r.status });
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function normaliseSerperShopping(data, query) {
   const shopping = data.shopping || [];
   return shopping
@@ -562,18 +601,37 @@ export default async function handler(req, res) {
     console.log(`[${VERSION}] Awin: ${awinR.length} items`);
   }
 
-  // 2. Serper (always runs as fallback or primary)
-  try {
-    const serperData = await fetchSerper(q, type, SERPER_KEY);
-    const shopping   = normaliseSerperShopping(serperData, q);
-    const organic    = normaliseSerperOrganic(serperData, q);
+  // 2. Serper — TWO parallel calls
+  //    a) shopping endpoint — broad coverage, biased to US/global aggregators
+  //    b) UK site-restricted search — guarantees results from our trusted
+  //       UK retailer set even when shopping doesn't surface them
+  //    Both fire in parallel so total wall-clock is bounded by the slower one
+  //    (~5s timeout each, well under Vercel's 15s function ceiling).
+  const [shoppingResult, ukSitesResult] = await Promise.allSettled([
+    fetchSerper(q, type, SERPER_KEY),
+    fetchSerperUKSites(q, SERPER_KEY),
+  ]);
+
+  if (shoppingResult.status === 'fulfilled') {
+    const shopping = normaliseSerperShopping(shoppingResult.value, q);
+    const organic  = normaliseSerperOrganic(shoppingResult.value, q);
     rawItems.push(...shopping, ...organic);
-    console.log(`[${VERSION}] Serper: ${shopping.length} shopping + ${organic.length} organic`);
-  } catch (e) {
-    console.error(`[${VERSION}] Serper failed:`, e.message);
-    if (rawItems.length === 0) {
-      return res.status(502).json({ error: 'upstream_error' });
-    }
+    console.log(`[${VERSION}] Serper shopping endpoint: ${shopping.length} shopping + ${organic.length} organic`);
+  } else {
+    console.error(`[${VERSION}] Serper shopping failed:`, shoppingResult.reason?.message);
+  }
+
+  if (ukSitesResult.status === 'fulfilled') {
+    const ukOrganic = normaliseSerperOrganic(ukSitesResult.value, q);
+    rawItems.push(...ukOrganic);
+    console.log(`[${VERSION}] Serper UK-sites: ${ukOrganic.length} organic`);
+  } else {
+    console.error(`[${VERSION}] Serper UK-sites failed:`, ukSitesResult.reason?.message);
+  }
+
+  if (rawItems.length === 0) {
+    // Both Serper calls returned nothing — let CSE try (next stage) or fail through.
+    console.warn(`[${VERSION}] Serper produced 0 items for "${q}"`);
   }
 
   // 3. CSE top-up
