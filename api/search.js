@@ -578,6 +578,67 @@ async function fetchSerperUKSites(query, apiKey) {
   }
 }
 
+// Per-retailer site-restricted Serper search.
+//
+// Why: the OR'd UK_SITE_QUERY in fetchSerperUKSites returns at most 15 mixed
+// results across 15 sites — Google often returns 5+ results from one big
+// retailer (eBay) and 0 from the others. Hitting each retailer with its
+// own targeted query guarantees Google's index has surfaced that retailer's
+// top hit for the query, then we extract the price from the snippet.
+//
+// Each retailer is fired in parallel so total wall-clock is ~5s (the per-call
+// timeout), not 5×N. Failure of one retailer doesn't block the others.
+const PER_RETAILER_SITES = [
+  { source: 'Currys',       site: 'currys.co.uk' },
+  { source: 'Argos',        site: 'argos.co.uk' },
+  { source: 'John Lewis',   site: 'johnlewis.com' },
+  { source: 'AO.com',       site: 'ao.com' },
+  { source: 'Very',         site: 'very.co.uk' },
+  { source: 'Halfords',     site: 'halfords.com' },
+  { source: 'Boots',        site: 'boots.com' },
+  { source: 'Selfridges',   site: 'selfridges.com' },
+  { source: 'Richer Sounds',site: 'richersounds.com' },
+];
+
+async function fetchSerperOneRetailer(query, retailer, apiKey) {
+  const q  = `${query} site:${retailer.site}`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), SERPER_TIMEOUT_MS);
+  try {
+    const r = await fetch('https://google.serper.dev/search', {
+      method:  'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ q, gl: 'uk', hl: 'en', num: 3 }),
+      signal:  ac.signal,
+    });
+    if (!r.ok) return [];
+    const data = await r.json();
+    // Extract first valid result with a price; force the source name to the
+    // canonical retailer name (Google's `displayLink` can be inconsistent
+    // — e.g. 'm.currys.co.uk' instead of 'currys.co.uk').
+    const items = normaliseSerperOrganic(data, query)
+      .map(it => ({ ...it, source: retailer.source }))
+      .slice(0, 1);
+    return items;
+  } catch (e) {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchSerperPerRetailer(query, apiKey) {
+  const results = await Promise.allSettled(
+    PER_RETAILER_SITES.map(r => fetchSerperOneRetailer(query, r, apiKey))
+  );
+  const items = [];
+  for (const r of results) {
+    if (r.status === 'fulfilled') items.push(...r.value);
+  }
+  console.log(`[${VERSION}] Per-retailer fan-out: ${items.length} hits across ${PER_RETAILER_SITES.length} retailers`);
+  return items;
+}
+
 function normaliseSerperShopping(data, query) {
   const shopping = data.shopping || [];
   return shopping
@@ -772,10 +833,15 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Serper — TWO parallel calls
-  const [shoppingResult, ukSitesResult] = await Promise.allSettled([
+  // 2. Serper — three sources in parallel:
+  //      a) shopping endpoint (Google Shopping aggregator)
+  //      b) UK-sites OR'd query (one search across all UK retailers)
+  //      c) per-retailer fan-out (one search per retailer — max coverage)
+  //    Total wall clock bounded by the per-call timeout (~5s).
+  const [shoppingResult, ukSitesResult, perRetailerItems] = await Promise.allSettled([
     fetchSerper(q, type, SERPER_KEY),
     fetchSerperUKSites(q, SERPER_KEY),
+    fetchSerperPerRetailer(q, SERPER_KEY),
   ]);
 
   if (shoppingResult.status === 'fulfilled') {
@@ -793,6 +859,12 @@ export default async function handler(req, res) {
     console.log(`[${VERSION}] Serper UK-sites: ${ukOrganic.length} organic`);
   } else {
     console.error(`[${VERSION}] Serper UK-sites failed:`, ukSitesResult.reason?.message);
+  }
+
+  if (perRetailerItems.status === 'fulfilled') {
+    rawItems.push(...perRetailerItems.value);
+  } else {
+    console.error(`[${VERSION}] Per-retailer fan-out failed:`, perRetailerItems.reason?.message);
   }
 
   // 3. CSE top-up

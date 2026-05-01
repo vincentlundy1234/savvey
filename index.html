@@ -1044,6 +1044,19 @@
       <div class="res-section-lbl">All prices found</div>
       <div id="ret-list"></div>
 
+      <!-- Always-on Amazon affiliate card. Shown regardless of whether Amazon
+           appeared in the result set — gives users a guaranteed alternative
+           to check on Amazon UK and pays Savvey a commission on any purchase
+           made via the tagged search URL. -->
+      <div class="amazon-cta" id="amazon-cta-card" onclick="searchAmazon()" style="display:flex;align-items:center;gap:14px;margin:18px 0 8px;padding:14px 16px;background:#fff;border:1px solid #e6e1d8;border-radius:14px;cursor:pointer;transition:transform 0.1s ease;">
+        <div style="width:42px;height:42px;border-radius:10px;background:#232f3e;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">🛒</div>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:15px;color:#1c1c1c;">Also search Amazon UK</div>
+          <div style="font-size:13px;color:#666;margin-top:2px;" id="amazon-cta-sub">Tap to check Amazon's price for this product</div>
+        </div>
+        <div style="font-size:18px;color:#999;">›</div>
+      </div>
+
       <div class="track" id="track-cta" onclick="showEmailModal()">
         <div class="track-ico">🔔</div>
         <div class="track-body">
@@ -1756,6 +1769,18 @@ function bestBuyUrl(scen){
   if(link&&!isGoogleAgg)return link;
   const search=retailerSearchUrl(scen.bestRetailer,scen.query||liveQuery||'');
   return search||link||null;
+}
+
+// Always-on Amazon UK affiliate search.
+// Lands the user on Amazon UK with the savvey-21 partner tag; any purchase
+// (this product or anything else they grab in that session) earns a
+// commission. Available on every result screen regardless of whether Amazon
+// surfaced in the result set.
+function searchAmazon(){
+  const q = liveQuery || (liveScen && liveScen.query) || '';
+  if(!q){return;}
+  const url = retailerSearchUrl('Amazon UK', q);
+  if(url) window.open(url, '_blank');
 }
 
 // Click handler for individual retailer rows in the results list — uses the
