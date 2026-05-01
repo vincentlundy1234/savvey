@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.15';
+const VERSION = 'search.js v6.16';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -767,13 +767,37 @@ function canonicaliseSource(source, link) {
   return src;
 }
 
+function isGoogleAggregator(link) {
+  return /^https?:\/\/(?:www\.)?google\./i.test(String(link || ''));
+}
+
 function dedup(items) {
   const map = new Map();
   for (const item of items) {
     const key = canonicaliseSource(item.source, item.link);
-    if (!map.has(key) || item.price < map.get(key).price) {
-      // Keep the original source string for display, but bucket by canonical
+    const existing = map.get(key);
+    if (!existing) {
       map.set(key, item);
+      continue;
+    }
+    // Both items in the same canonical-source bucket. Two factors decide
+    // the winner — and they're not equal:
+    //
+    //   1. Link type: a real retailer URL (currys.co.uk/products/...)
+    //      always beats a Google aggregator URL (google.com/search?...).
+    //      The user-experience cost of landing on Google's search page
+    //      vs the actual retailer product page is much larger than the
+    //      price discrepancy will ever be.
+    //
+    //   2. Within the same link-type, prefer the cheaper price.
+    const existingIsAgg = isGoogleAggregator(existing.link);
+    const incomingIsAgg = isGoogleAggregator(item.link);
+    if (existingIsAgg && !incomingIsAgg) {
+      map.set(key, item);   // upgrade — real URL beats Google URL
+    } else if (!existingIsAgg && incomingIsAgg) {
+      // keep existing — already on a real URL
+    } else if (item.price < existing.price) {
+      map.set(key, item);   // same link-type, cheaper wins
     }
   }
   return [...map.values()].sort((a, b) => a.price - b.price);

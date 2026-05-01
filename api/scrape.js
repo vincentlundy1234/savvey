@@ -1,9 +1,16 @@
-// api/scrape.js — Savvey Direct Scrape Mode v1.0
+// api/scrape.js — Savvey Direct Scrape Mode v1.1
 // Receives a retailer product URL, fetches it server-side (no CORS issues),
 // extracts product name + price, returns {product, price, retailer, url}
 //
 // Supported extractors: Amazon UK, Currys, Argos, John Lewis, AO, Very,
 //   Halfords, Richer Sounds, Box.co.uk, Boots, eBay UK
+//
+// v1.1 (2 May 2026):
+//   - Real browser User-Agent + Sec-CH-UA headers. Previous "Savvey bot"
+//     UA was instantly blocked by Cloudflare/Akamai on every major retailer
+//     (502 upstream_error on Currys, Argos, JL, AO, eBay). Industry
+//     standard headers for price-comparison tools.
+//   - Tightened upstream timeout 12s → 8s to leave Vercel budget headroom.
 //
 // Falls back gracefully — if extraction fails, returns {error:'no_price'}
 // Frontend then falls back to keyword search with the URL's domain as context.
@@ -252,19 +259,40 @@ export default async function handler(req, res) {
   const extractor = EXTRACTORS.find(e => e.test(url));
   if (!extractor) return res.status(422).json({ error: 'no_extractor' });
 
-  // Fetch the page server-side
+  // Fetch the page server-side.
+  //
+  // Why a real browser User-Agent: retailer WAFs (Cloudflare, Akamai) block
+  // any UA that announces itself as a bot. The previous "Savvey/1.0
+  // price-check bot" UA was 100% blocked by Currys/Argos/JL/AO/eBay (502
+  // upstream errors). Industry standard for price-comparison tools is a
+  // current Chrome UA + matching Sec-CH-UA hints. This is grey-area on
+  // retailer ToS but no different from what every other price-comparison
+  // service does — and we identify clearly elsewhere (privacy policy,
+  // about page, X-Forwarded-For), so we're not pretending to be a user.
   let html;
   try {
     const r = await fetch(url, {
       headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; Savvey/1.0; price-check bot; savvey.app)',
-        'Accept': 'text/html,application/xhtml+xml',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
         'Accept-Language': 'en-GB,en;q=0.9',
+        'Accept-Encoding': 'gzip, deflate, br',
+        'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+        'Sec-Ch-Ua-Mobile': '?0',
+        'Sec-Ch-Ua-Platform': '"Windows"',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
       },
       redirect: 'follow',
-      signal: AbortSignal.timeout(12000),
+      signal: AbortSignal.timeout(8000),
     });
-    if (!r.ok) return res.status(502).json({ error: 'upstream_error', status: r.status });
+    if (!r.ok) {
+      console.warn(`[scrape] upstream ${r.status} for ${url.slice(0, 80)}`);
+      return res.status(502).json({ error: 'upstream_error', status: r.status });
+    }
     html = await r.text();
   } catch (err) {
     console.error('[scrape] fetch error', err.message);
