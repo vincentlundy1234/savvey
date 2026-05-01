@@ -17,7 +17,7 @@
 //  Bump FONT_VER only if font families or weights change.
 // ─────────────────────────────────────────────────────────────
 
-const STATIC_VER    = 'savvey-static-v28';
+const STATIC_VER    = 'savvey-static-v29';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];

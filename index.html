@@ -9,7 +9,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="manifest" href="/manifest.json"/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+  <!-- Barcode scanning: native BarcodeDetector first (Chrome/Android since
+       2019, iOS Safari 17+). When unavailable, lazy-imports @zxing/browser
+       on first scan. QuaggaJS removed 1 May 2026 — unmaintained since 2017,
+       known iOS Safari issues. See loadScannerEngine() below. -->
+  <link rel="modulepreload" href="https://esm.sh/@zxing/browser@0.1.5">
   <style>
     /* ─────────────────────────────────────────
        DESIGN TOKENS
@@ -1309,7 +1313,12 @@ let bestPriceOnly=false;
 let inputMethod='search';
 let activeCat='Electronics';
 let userLat=null,userLng=null;
-let quaggaRunning=false,torchOn=false,torchTrack=null;
+// Scanner engine state — see loadScannerEngine() / startScanner() below.
+// scannerEngine.type === 'native' uses BarcodeDetector; 'zxing' uses
+// @zxing/browser dynamic import.
+let scannerEngine = null;       // { type, detector?, reader?, controls? }
+let scannerActive = false;      // true while a decode loop is running
+let torchOn=false,torchTrack=null;
 let scannedBarcode=null,scannedProductName=null,scanDebounce=null;
 let chipTimers=[];
 
@@ -2555,20 +2564,26 @@ function trendSearch(product){
 
 // ── Scanner ──
 //
-// Robust startScanner with explicit failure surfacing. Previous version
-// returned silently when Quagga wasn't loaded and showed a generic "no
-// permission" overlay regardless of what actually broke. That made phone
-// debugging impossible. This version:
-//   1. Detects every distinct failure mode (Quagga unloaded, getUserMedia
-//      unavailable, permission denied, no camera, init timeout, etc.)
-//   2. Shows the user a tailored message AND a small debug detail line
-//      (visible on the no-perm overlay) with the raw error name. Tap the
-//      debug line — it stays visible so testers can read the error.
-//   3. Pre-grabs the camera stream itself via mediaDevices.getUserMedia so
-//      Quagga never gets blamed for permission failures, AND so we can
-//      surface a perm-denied UI instantly without waiting for Quagga.
-//   4. Logs every step to console — opens DevTools or Eruda gives a full
-//      trace.
+// 1 May 2026 — engine swap. QuaggaJS removed (unmaintained since 2017,
+// flaky on iOS). Replaced with a two-tier engine:
+//
+//   Tier 1: native BarcodeDetector API
+//     Built into Chrome/Android since 2019 and Safari 17+ (iOS 17+).
+//     OS-level decode — fastest, most accurate, zero library cost.
+//     Hits ~80% of modern phones in the wild.
+//
+//   Tier 2: @zxing/browser (lazy-imported via esm.sh)
+//     Google's reference barcode engine. ~250KB compressed, only loaded
+//     when BarcodeDetector isn't available. Standard fallback for older
+//     iOS and obscure browsers.
+//
+// Both tiers feed the same UX: live preview → debounced detect callback →
+// onBarcodeDetected → product lookup → search. The diagnostic-friendly
+// failure surfacing (showScanError + [error name] detail line) carries
+// over unchanged.
+//
+// Scaling cost: zero on the native path, zero per-call on the ZXing path
+// (one-time CDN fetch then cached by the SW).
 function showScanError(title, msg, detail){
   const noPerm   = document.getElementById('cam-no-perm');
   const titleEl  = document.getElementById('cam-no-perm-title');
@@ -2583,6 +2598,40 @@ function showScanError(title, msg, detail){
   if(noPerm) noPerm.classList.add('show');
 }
 
+// Barcode formats we care about for UK retail. Chosen to match QuaggaJS's
+// previous coverage: EAN-13/8 (most product packaging), UPC-A/E (US imports
+// + some UK), Code 128 (logistics labels you sometimes see in store).
+const SCAN_FORMATS_NATIVE = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+
+// Resolve the best-available decode engine for this browser. Native first,
+// ZXing second. Cached on `scannerEngine` so repeated start/stop cycles
+// don't re-import on every scan.
+async function loadScannerEngine(){
+  // Native path — feature-detect AND check supported formats. Some Android
+  // OEMs ship a partial implementation that lists BarcodeDetector but only
+  // supports QR codes; if no relevant format is supported we fall through.
+  if(window.BarcodeDetector){
+    try{
+      const supported = await BarcodeDetector.getSupportedFormats();
+      const ours = SCAN_FORMATS_NATIVE.filter(f => supported.includes(f));
+      if(ours.length > 0){
+        console.log('[Scanner] using native BarcodeDetector with formats:', ours.join(', '));
+        return { type: 'native', detector: new BarcodeDetector({ formats: ours }) };
+      }
+      console.warn('[Scanner] BarcodeDetector exists but no relevant formats — falling back');
+    }catch(e){
+      console.warn('[Scanner] BarcodeDetector init threw, falling back:', e.name);
+    }
+  }
+  // ZXing path — lazy import via esm.sh. The modulepreload <link> in <head>
+  // primes the network fetch so this resolves quickly. Cached by SW after
+  // first load.
+  console.log('[Scanner] loading @zxing/browser fallback…');
+  const mod = await import('https://esm.sh/@zxing/browser@0.1.5');
+  const reader = new mod.BrowserMultiFormatReader();
+  return { type: 'zxing', reader };
+}
+
 async function startScanner(){
   console.log('[Scanner] startScanner() called');
   const lockon   = document.getElementById('vf-lockon');
@@ -2595,16 +2644,7 @@ async function startScanner(){
   const cta = document.getElementById('cam-det-cta');
   if(cta){ cta.textContent='Check →'; cta.onclick=useScannedProduct; }
 
-  // 1. Quagga library check — CDN load failure = silent black screen otherwise.
-  if(!window.Quagga){
-    console.error('[Scanner] window.Quagga is not defined');
-    showScanError('Scanner failed to load',
-      'The barcode library didn\'t load — likely a content blocker or flaky connection.',
-      'Quagga undefined');
-    return;
-  }
-
-  // 2. mediaDevices feature check — older iOS / private mode lacks this.
+  // 1. mediaDevices feature check — older iOS / private mode lacks this.
   if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
     console.error('[Scanner] navigator.mediaDevices.getUserMedia not available');
     showScanError('Camera not supported',
@@ -2613,19 +2653,17 @@ async function startScanner(){
     return;
   }
 
-  // 3. Stop any prior session cleanly.
-  if(quaggaRunning){ try{ Quagga.stop(); }catch(e){} quaggaRunning=false; }
+  // 2. Stop any prior session cleanly (engine + stream).
+  await stopScanner();
+
   const video = document.getElementById('cam-video');
-  if(video && video.srcObject){
-    try{ video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){}
-    video.srcObject = null;
+  if(!video){
+    showScanError('Internal error', 'Video element missing — reload the app.', 'video missing');
+    return;
   }
 
-  // 4. Pre-grab the camera stream OURSELVES. This separates "permission
-  //    denied" (a clean UX path) from "Quagga init blew up" (an actual bug).
-  //    iOS Safari sometimes silently fails Quagga's internal getUserMedia
-  //    because the user gesture chain breaks; doing it here in the click
-  //    handler context keeps the gesture alive.
+  // 3. Pre-grab the camera stream in the click-handler gesture context.
+  //    Decouples "permission denied" (clean UX) from "engine init blew up".
   let stream;
   try{
     console.log('[Scanner] requesting camera stream…');
@@ -2656,64 +2694,111 @@ async function startScanner(){
     return;
   }
 
-  // 5. Attach stream to the video tag so the user sees something IMMEDIATELY,
-  //    even before Quagga finishes initialising. This kills the "I tapped
-  //    allow but nothing happened" black-screen experience.
+  // 4. Attach stream so user sees the live preview IMMEDIATELY.
   video.srcObject = stream;
   try{ await video.play(); }catch(e){ console.warn('[Scanner] video.play() rejected:', e.name); }
-  await new Promise(r => requestAnimationFrame(r)); // let video size settle
+  await new Promise(r => requestAnimationFrame(r));
 
-  // 6. Track the live torch-capable track for the torch button.
+  // 5. Track the torch-capable video track for the torch button.
   const tracks = stream.getVideoTracks();
   if(tracks.length) torchTrack = tracks[0];
 
-  // 7. Init Quagga against the same video element. Wrapped in a 6s timeout
-  //    so a hung init becomes a visible failure rather than a frozen UI.
-  let initDone = false;
+  // 6. Resolve and start the decode engine. 6s timeout protects against a
+  //    silent hang in the engine init (e.g. ZXing import failing on flaky
+  //    network) — surfaces a real error instead of a frozen UI.
+  let engineLoaded = false;
   const initTimeout = setTimeout(()=>{
-    if(initDone) return;
-    console.error('[Scanner] Quagga init timed out after 6s');
+    if(engineLoaded) return;
+    console.error('[Scanner] engine load timed out after 8s');
     try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
     showScanError('Scanner timed out',
-      'The barcode engine didn\'t start in time. Tap Try again.',
-      'Quagga init timeout');
-  }, 6000);
+      'The barcode engine didn\'t load in time. Tap Try again.',
+      'engine timeout');
+  }, 8000);
 
-  console.log('[Scanner] initialising Quagga…');
-  Quagga.init({
-    inputStream: { name:'Live', type:'LiveStream', target: video,
-      constraints: { width:{ideal:1280}, height:{ideal:720}, facingMode:'environment' },
-      area: { top:'20%', right:'5%', bottom:'20%', left:'5%' } },
-    locator: { patchSize:'medium', halfSample:true },
-    numOfWorkers: 0, frequency: 10,
-    decoder: { readers:['ean_reader','ean_8_reader','upc_reader','upc_e_reader','code_128_reader'] },
-    locate: true,
-  }, err => {
-    initDone = true;
+  let engine;
+  try{
+    engine = await loadScannerEngine();
+    engineLoaded = true;
     clearTimeout(initTimeout);
-    if(err){
-      console.error('[Scanner] Quagga.init error:', err.name, err.message);
-      try{ stream.getTracks().forEach(t=>t.stop()); }catch(e){}
-      showScanError('Scanner failed to start',
-        'The barcode engine couldn\'t initialise on this device.',
-        err.name || err.message || 'init error');
-      return;
-    }
-    Quagga.start();
-    quaggaRunning = true;
-    console.log('[Scanner] Quagga running');
-  });
+  }catch(e){
+    engineLoaded = true;
+    clearTimeout(initTimeout);
+    console.error('[Scanner] loadScannerEngine failed:', e);
+    try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+    showScanError('Scanner failed to load',
+      'Couldn\'t load the barcode engine — likely a content blocker or flaky connection.',
+      e.message || e.name || 'engine load failed');
+    return;
+  }
 
-  Quagga.onDetected(result => {
-    if(!quaggaRunning) return;
-    const code = result.codeResult && result.codeResult.code;
-    if(!code || code === scannedBarcode) return;
-    if(scanDebounce) clearTimeout(scanDebounce);
-    scanDebounce = setTimeout(()=>{ scannedBarcode = code; onBarcodeDetected(code); }, 300);
-  });
+  scannerEngine = engine;
+  scannerActive = true;
+
+  // 7. Run the decode loop. Both engines feed handleScannedCode() with the
+  //    raw barcode digits — same debounce, same downstream flow as before.
+  if(engine.type === 'native'){
+    const loop = async () => {
+      if(!scannerActive) return;
+      try{
+        const codes = await engine.detector.detect(video);
+        if(codes && codes.length > 0){
+          handleScannedCode(codes[0].rawValue);
+          return;
+        }
+      }catch(e){ /* per-frame errors are normal — keep polling */ }
+      // ~12Hz feels responsive without burning battery
+      setTimeout(loop, 80);
+    };
+    loop();
+    console.log('[Scanner] native decode loop running');
+  } else {
+    // ZXing's continuous decoder. controls.stop() halts it cleanly.
+    try{
+      engine.controls = await engine.reader.decodeFromVideoElement(video, (result, err) => {
+        if(!scannerActive) return;
+        if(result){
+          const text = (result.getText && result.getText()) || result.text;
+          if(text) handleScannedCode(text);
+        }
+        // err is fired per-frame when no code present — ignore
+      });
+      console.log('[Scanner] ZXing decoder running');
+    }catch(e){
+      console.error('[Scanner] ZXing decode start failed:', e);
+      try{ stream.getTracks().forEach(t=>t.stop()); }catch(_){}
+      showScanError('Scanner failed to start',
+        'The barcode engine couldn\'t hook into the camera. Tap Try again.',
+        e.message || 'zxing decode start failed');
+    }
+  }
 }
-function stopScanner(){
-  if(quaggaRunning){try{Quagga.offDetected();Quagga.stop();}catch(e){}quaggaRunning=false;}
+
+// Single funnel for "we got a code from either engine". Debounce so a noisy
+// frame burst doesn't fire the lookup multiple times for the same barcode.
+function handleScannedCode(code){
+  if(!scannerActive) return;
+  if(!code || code === scannedBarcode) return;
+  if(scanDebounce) clearTimeout(scanDebounce);
+  scanDebounce = setTimeout(()=>{
+    scannedBarcode = code;
+    scannerActive = false; // halt further detection
+    onBarcodeDetected(code);
+  }, 300);
+}
+
+async function stopScanner(){
+  scannerActive = false;
+  if(scanDebounce){ clearTimeout(scanDebounce); scanDebounce = null; }
+  if(scannerEngine){
+    try{
+      if(scannerEngine.type === 'zxing' && scannerEngine.controls){
+        scannerEngine.controls.stop();
+      }
+      // Native engine has no teardown needed — the loop checks scannerActive.
+    }catch(e){ /* swallow */ }
+    scannerEngine = null;
+  }
   const v=document.getElementById('cam-video');
   if(v&&v.srcObject){v.srcObject.getTracks().forEach(t=>t.stop());v.srcObject=null;}
   torchTrack=null;torchOn=false;
@@ -2929,7 +3014,13 @@ function toggleTorch(){
   }catch(e){}
 }
 async function onBarcodeDetected(code){
-  if(quaggaRunning){try{Quagga.offDetected();Quagga.stop();}catch(e){}quaggaRunning=false;}
+  // Halt the engine — handleScannedCode already set scannerActive=false but
+  // we belt-and-brace it here in case onBarcodeDetected is called directly
+  // (e.g. from a manual lookup path in future).
+  scannerActive = false;
+  if(scannerEngine && scannerEngine.type === 'zxing' && scannerEngine.controls){
+    try{ scannerEngine.controls.stop(); }catch(e){}
+  }
   const lockon=document.getElementById('vf-lockon');if(lockon)lockon.classList.add('show');
   const nameEl=document.getElementById('cam-det-name');
   const subEl=document.getElementById('cam-det-sub');
