@@ -50,7 +50,7 @@
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.10';
+const VERSION = 'search.js v6.11';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -109,15 +109,22 @@ function dynamicCeilingFilter(items) {
 // Price-anomaly floor — drops "too good to be true" outliers.
 // Mis-listings (a TV remote sneaking into a TV search, an air-fryer basket
 // into an air-fryer search) often pass identity filter on title tokens but
-// cost a fraction of the real product. Heuristic: if there are 2+ results
-// and the cheapest is less than ANOMALY_FLOOR_RATIO of the second-cheapest,
-// drop it as a probable mis-listing. Repeat once more so a chain of two
-// anomalies (e.g. £20 cable, £45 stand, £800 TV) both get caught.
-const ANOMALY_FLOOR_RATIO = 0.30;
+// cost a fraction of the real product.
+//
+// Two heuristics:
+//   1. If there are 2+ results and the cheapest is less than
+//      ANOMALY_FLOOR_RATIO of the second-cheapest, drop the cheapest.
+//      Repeat up to 3 times to handle chains (e.g. £15 cable, £30 stand,
+//      £45 mount, £800 TV — first three drops, TV survives).
+//   2. If there is only ONE result and its source is a non-major retailer
+//      (eBay individual seller etc.), we can't anchor against anything;
+//      we keep it but flag in logs. Frontend can render with a "limited
+//      coverage" indicator.
+const ANOMALY_FLOOR_RATIO = 0.50;
 
 function priceAnomalyFloor(items) {
   let working = items.slice().sort((a, b) => a.price - b.price);
-  for (let pass = 0; pass < 2; pass++) {
+  for (let pass = 0; pass < 3; pass++) {
     if (working.length < 2) break;
     const cheapest = working[0];
     const second   = working[1];
@@ -491,12 +498,47 @@ async function fetchCSE(query) {
 
 // ─────────────────────────────────────────────────────────────
 // DEDUPLICATION
+//
+// Two-stage:
+//   1. canonicaliseSource() — collapses every flavour of an eBay listing
+//      ("eBay", "eBay - sellerX", "ebay.co.uk", "ebay.com") into a single
+//      "ebay" bucket. Same for Amazon, Currys etc. Otherwise the dedup
+//      treats every eBay reseller as a unique retailer and a popular
+//      product can return 6+ near-identical eBay rows with no comparison
+//      retailers visible.
+//   2. cheapest-per-bucket wins on collision.
 // ─────────────────────────────────────────────────────────────
+function canonicaliseSource(source, link) {
+  const haystack = `${link || ''} ${source || ''}`.toLowerCase();
+  // Order matters — most specific patterns first
+  if (haystack.includes('ebay')) return 'ebay';
+  if (haystack.includes('amazon')) return 'amazon';
+  if (haystack.includes('currys')) return 'currys';
+  if (haystack.includes('argos')) return 'argos';
+  if (haystack.includes('john lewis') || haystack.includes('johnlewis')) return 'john lewis';
+  if (haystack.includes('ao.com') || /\bao\b/.test(haystack)) return 'ao';
+  if (haystack.includes('very')) return 'very';
+  if (haystack.includes('richer sounds') || haystack.includes('richersounds')) return 'richer sounds';
+  if (haystack.includes('box.co.uk') || haystack.includes('box.com')) return 'box';
+  if (haystack.includes('halfords')) return 'halfords';
+  if (haystack.includes('screwfix')) return 'screwfix';
+  if (haystack.includes('boots')) return 'boots';
+  if (haystack.includes('costco')) return 'costco';
+  if (haystack.includes('selfridges')) return 'selfridges';
+  if (haystack.includes('mcgrocer')) return 'mcgrocer';
+  if (haystack.includes('harvey nichols')) return 'harvey nichols';
+  if (haystack.includes('marks & spencer') || haystack.includes('marksandspencer') || haystack.includes('m&s')) return 'm&s';
+  if (haystack.includes('fortnum')) return 'fortnum & mason';
+  // Fallback to lowercased raw source for anything we don't recognise
+  return String(source || '').toLowerCase();
+}
+
 function dedup(items) {
   const map = new Map();
   for (const item of items) {
-    const key = String(item.source || '').toLowerCase();
+    const key = canonicaliseSource(item.source, item.link);
     if (!map.has(key) || item.price < map.get(key).price) {
+      // Keep the original source string for display, but bucket by canonical
       map.set(key, item);
     }
   }
@@ -601,6 +643,15 @@ export default async function handler(req, res) {
       priceCeilingHard: PRICE_CEILING_HARD,
       priceMultiplier: PRICE_MULTIPLIER,
       cheapest: results[0]?.price ?? null,
+      // Coverage flags for the frontend — let the UI tell users when the
+      // result set is thin so they don't mistake "1 eBay listing" for
+      // "the genuine UK best price".
+      onlyEbay: results.length > 0 && results.every(r =>
+        canonicaliseSource(r.source, r.link) === 'ebay'),
+      coverage: results.length === 0 ? 'none'
+              : results.length === 1 ? 'limited'
+              : results.length <= 3  ? 'partial'
+              : 'good',
     },
     _debug: debugEnvelope,
   });
