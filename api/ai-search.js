@@ -1,4 +1,15 @@
-// api/ai-search.js — Savvey AI Search v1.3
+// api/ai-search.js — Savvey AI Search v1.4
+//
+// v1.4 (1 May 2026, post-v1.3 verification):
+//   - Dual Perplexity call: one broad (all UK retailers EXCLUDING Amazon),
+//     one Amazon-locked (site:amazon.co.uk only). Run in parallel, merge by
+//     URL. v1.3 verification showed Perplexity's OR-chain de-prioritises
+//     Amazon below sites with richer crawlable snippets (Argos/JL) — even
+//     for Amazon-exclusive products like Kindle. The locked call guarantees
+//     Amazon coverage when Amazon has the product.
+//   - Cost: 2× Perplexity per search (~£0.005 → ~£0.010 per query). Latency
+//     unchanged (calls run in Promise.all). Still single Haiku extraction
+//     across the combined hit set.
 //
 // v1.3 (1 May 2026):
 //   - TRUSTED_NO_HEAD bypass: Amazon, John Lewis, Argos URLs that match a
@@ -6,7 +17,7 @@
 //     the HEAD verification step. These retailers' product pages don't 404
 //     once live, but their bot defences return 503/429 to bare HEAD requests
 //     from Vercel IPs — so HEAD verification was silently dropping every
-//     Amazon hit. This unblocks Amazon results for the user.
+//     Amazon hit. (Standalone fix wasn't enough — see v1.4.)
 //   - Amazon affiliate tag injection: any amazon.co.uk product URL gets
 //     ?tag=$AMAZON_ASSOCIATE_TAG appended (defaults to "savvey-21"). Untagged
 //     tag IDs don't break links — they just don't track until Associates is
@@ -31,7 +42,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.3';
+const VERSION = 'ai-search.js v1.4';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -80,16 +91,16 @@ function rawResultsOf(data) {
          [];
 }
 
-async function fetchPerplexitySearch(query, apiKey) {
+// Single Perplexity /search call. Caller passes the fully-formed augmented
+// query (including any site: filter). Throws on non-2xx.
+async function callPerplexity(augmentedQuery, apiKey, maxResults = 10) {
   const ac    = new AbortController();
   const timer = setTimeout(() => ac.abort(), PERPLEXITY_TIMEOUT_MS);
-  const ukSites = UK_RETAILERS.map(r => `site:${r.host}`).join(' OR ');
-  const augmentedQuery = `${query} buy UK price (${ukSites})`;
   try {
     const r = await fetch(PERPLEXITY_ENDPOINT, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query: augmentedQuery, max_results: 10, max_tokens_per_page: 256 }),
+      body: JSON.stringify({ query: augmentedQuery, max_results: maxResults, max_tokens_per_page: 256 }),
       signal: ac.signal,
     });
     if (!r.ok) {
@@ -98,6 +109,61 @@ async function fetchPerplexitySearch(query, apiKey) {
     }
     return await r.json();
   } finally { clearTimeout(timer); }
+}
+
+// Two parallel Perplexity calls:
+//   - Broad: all UK retailers EXCEPT Amazon, OR'd together (10 results)
+//   - Amazon-locked: site:amazon.co.uk ONLY (10 results)
+//
+// Merge by URL (dedup) so a single result that appears in both buckets
+// only counts once. If either call fails, the other still wins — graceful
+// degrade rather than 502'ing the whole search.
+async function fetchPerplexitySearch(query, apiKey) {
+  const broadHosts = UK_RETAILERS
+    .filter(r => r.host !== 'amazon.co.uk')
+    .map(r => `site:${r.host}`)
+    .join(' OR ');
+  const broadQuery  = `${query} buy UK price (${broadHosts})`;
+  const amazonQuery = `${query} buy UK price site:amazon.co.uk`;
+
+  const [broadSettled, amazonSettled] = await Promise.allSettled([
+    callPerplexity(broadQuery,  apiKey, 10),
+    callPerplexity(amazonQuery, apiKey, 10),
+  ]);
+
+  // Surface fatal errors only when BOTH calls failed. Single-call failure
+  // just means we operate with the surviving call's results.
+  if (broadSettled.status === 'rejected' && amazonSettled.status === 'rejected') {
+    throw broadSettled.reason; // either failure is representative
+  }
+
+  const broadData  = broadSettled.status  === 'fulfilled' ? broadSettled.value  : null;
+  const amazonData = amazonSettled.status === 'fulfilled' ? amazonSettled.value : null;
+
+  // Diagnostic logging — track which call contributed what.
+  const broadCount  = rawResultsOf(broadData).length;
+  const amazonCount = rawResultsOf(amazonData).length;
+  if (broadSettled.status === 'rejected') {
+    console.warn(`[${VERSION}] broad Perplexity call failed:`, broadSettled.reason?.message || broadSettled.reason);
+  }
+  if (amazonSettled.status === 'rejected') {
+    console.warn(`[${VERSION}] amazon Perplexity call failed:`, amazonSettled.reason?.message || amazonSettled.reason);
+  }
+  console.log(`[${VERSION}] perplexity dual: broad=${broadCount} amazon=${amazonCount}`);
+
+  // Merge + dedup by URL. Order: broad first, then Amazon, so broad's
+  // canonical hit wins if there's overlap (rare since broad excludes Amazon).
+  const seen     = new Set();
+  const combined = [];
+  for (const r of [...rawResultsOf(broadData), ...rawResultsOf(amazonData)]) {
+    const url = r.url || r.link || '';
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    combined.push(r);
+  }
+
+  // Return in the same shape the rest of the pipeline expects.
+  return { results: combined, _amazonCallSucceeded: amazonSettled.status === 'fulfilled', _amazonHitCount: amazonCount };
 }
 
 function gatherRetailerHits(data, query) {
@@ -338,8 +404,12 @@ export default async function handler(req, res) {
       verified_dropped: verifiedDropped,
       final:          results.length,
     },
-    rawSample: rawResultsOf(raw).slice(0, 8).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })),
-    priceDataSample: priceData.slice(0, 8),
+    perplexity: {
+      amazonCallSucceeded: raw?._amazonCallSucceeded ?? null,
+      amazonHitCount:      raw?._amazonHitCount      ?? null,
+    },
+    rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })),
+    priceDataSample: priceData.slice(0, 12),
   } : undefined;
 
   return res.status(200).json({
