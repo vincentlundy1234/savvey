@@ -1,4 +1,16 @@
-// api/ai-search.js — Savvey AI Search v1.2
+// api/ai-search.js — Savvey AI Search v1.3
+//
+// v1.3 (1 May 2026):
+//   - TRUSTED_NO_HEAD bypass: Amazon, John Lewis, Argos URLs that match a
+//     structural product-page pattern (/dp/ASIN, /p/PID, /product/PID) skip
+//     the HEAD verification step. These retailers' product pages don't 404
+//     once live, but their bot defences return 503/429 to bare HEAD requests
+//     from Vercel IPs — so HEAD verification was silently dropping every
+//     Amazon hit. This unblocks Amazon results for the user.
+//   - Amazon affiliate tag injection: any amazon.co.uk product URL gets
+//     ?tag=$AMAZON_ASSOCIATE_TAG appended (defaults to "savvey-21"). Untagged
+//     tag IDs don't break links — they just don't track until Associates is
+//     active. Setting AMAZON_ASSOCIATE_TAG to empty string disables tagging.
 //
 // v1.2 (2 May 2026 evening):
 //   - Imports shared retailer + price config from _shared.js (eliminates
@@ -19,7 +31,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.2';
+const VERSION = 'ai-search.js v1.3';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -30,6 +42,35 @@ const HAIKU_TIMEOUT_MS      = 5000;
 const HEAD_VERIFY_TIMEOUT_MS = 1500;
 
 const RATE_LIMIT_PER_HOUR = 30;
+
+// Hosts whose product URLs we trust without HEAD verification. These retailers
+// have aggressive bot detection that 503s bare HEAD requests from cloud IPs,
+// so verifying their URLs throws away legitimate results. Their product-page
+// URLs (matched against TRUSTED_PRODUCT_PATTERNS below) are structurally
+// stable — once a product is live, the URL doesn't 404.
+const TRUSTED_NO_HEAD = new Set([
+  'amazon.co.uk',
+  'johnlewis.com',
+  'argos.co.uk',
+]);
+
+// URL must match one of these patterns to be trusted-skipped. A bare
+// homepage/search URL still goes through HEAD because there's no ASIN/PID
+// stability to lean on.
+const TRUSTED_PRODUCT_PATTERNS = [
+  /amazon\.co\.uk\/(?:[^\/]+\/)?(?:dp|gp\/product)\/[A-Z0-9]{10}/i,  // Amazon ASIN
+  /johnlewis\.com\/.+\/p\d+/i,                                        // JL /p123456
+  /argos\.co\.uk\/product\/\d+/i,                                     // Argos /product/123
+];
+
+// Amazon Associates tag. Set AMAZON_ASSOCIATE_TAG in Vercel env vars; falls
+// back to "savvey-21" (the registered tag) if not present. To fully disable,
+// set AMAZON_ASSOCIATE_TAG to an empty string explicitly. Untagged links from
+// non-approved partners still work for users — the tag just doesn't track
+// until Associates approves.
+const AMAZON_TAG = (process.env.AMAZON_ASSOCIATE_TAG !== undefined)
+  ? process.env.AMAZON_ASSOCIATE_TAG
+  : 'savvey-21';
 
 function rawResultsOf(data) {
   return (data && data.results) ||
@@ -139,12 +180,30 @@ function combineHitsWithPrices(hits, priceData) {
   return items;
 }
 
+// True when a URL belongs to a trusted-no-HEAD host AND matches a structural
+// product-page pattern. These get a free pass past HEAD verification.
+function isTrustedProductUrl(url) {
+  if (!url) return false;
+  const u = String(url).toLowerCase();
+  for (const host of TRUSTED_NO_HEAD) {
+    if (u.includes(host)) {
+      return TRUSTED_PRODUCT_PATTERNS.some(p => p.test(url));
+    }
+  }
+  return false;
+}
+
 // HEAD-check every URL in parallel. Drop any that 4xx/5xx or time out.
 // Eliminates dead-link Buy buttons (audit issue H4).
+//
+// Trusted retailers (Amazon/JL/Argos) with product-page URL patterns skip
+// the HEAD step entirely — their bot defences return 503/429 to HEAD from
+// Vercel IPs, which silently dropped every Amazon hit before v1.3.
 async function verifyUrls(items) {
   if (!items || items.length === 0) return items;
   const checks = items.map(async (item) => {
     if (!item.link) return null;
+    if (isTrustedProductUrl(item.link)) return item; // bypass — URL is structurally stable
     try {
       const ac = new AbortController();
       const t  = setTimeout(() => ac.abort(), HEAD_VERIFY_TIMEOUT_MS);
@@ -164,6 +223,28 @@ async function verifyUrls(items) {
   });
   const verified = (await Promise.all(checks)).filter(Boolean);
   return verified;
+}
+
+// Append the Amazon Associates tag to any amazon.co.uk URL. No-op for other
+// hosts and no-op if AMAZON_TAG is empty (operator disabled).
+//
+// Handles existing query strings, fragments, and any pre-existing tag (we
+// override with our own — Perplexity sometimes returns URLs with seller
+// affiliate tags from the page that linked to them).
+function tagAmazonUrl(url) {
+  if (!url || !AMAZON_TAG) return url;
+  if (!/amazon\.co\.uk/i.test(url)) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.set('tag', AMAZON_TAG);
+    return u.toString();
+  } catch (_) {
+    // Malformed URL — fall back to a naive append rather than dropping the link
+    const sep = url.includes('?') ? '&' : '?';
+    return /[?&]tag=/.test(url)
+      ? url.replace(/([?&])tag=[^&#]*/i, `$1tag=${AMAZON_TAG}`)
+      : `${url}${sep}tag=${AMAZON_TAG}`;
+  }
 }
 
 function dedup(items) {
@@ -265,7 +346,7 @@ export default async function handler(req, res) {
     shopping: results.map(r => ({
       source:   r.source,
       price:    `£${r.price.toFixed(2)}`,
-      link:     r.link,
+      link:     tagAmazonUrl(r.link),  // Amazon URLs get ?tag=savvey-21 appended
       title:    r.title,
       delivery: r.delivery,
     })),
@@ -280,6 +361,7 @@ export default async function handler(req, res) {
       region,
       verified:          verify,
       verifiedDropped,
+      amazonTagged:      Boolean(AMAZON_TAG),
     },
     _debug: debugEnvelope,
   });
