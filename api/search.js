@@ -1,4 +1,4 @@
-// api/search.js — Savvey Search Proxy v6.7
+// api/search.js — Savvey Search Proxy v6.10
 // Change log v6.0:
 //   - PRICE_CEILING hard constant replaces dynamic lowest×3 anchor
 //   - Nuclear cleanPrice() sanitizer applied at every intake point
@@ -24,96 +24,54 @@
 //     extended into ACCESSORY_TERMS so non-New listings get killed by identityFilter
 //   - hardenEbayUrl(): defensive LH_ItemCondition=3 query param on outbound eBay links
 //   - Serper resilience: 8s per-attempt timeout via AbortController + one retry
-//     on transient failures (5xx / network abort), no retry on 4xx
 // v6.5:
 //   - trustedSourceFilter(): new pipeline stage — drops non-UK / peer-to-peer
-//     marketplaces (Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb, etc.)
-//     before the dynamic ceiling anchors. TRUSTED_DOMAINS mirrors frontend
-//     UK_RETAILERS list (13 retailers).
-//   - ACCESSORY_TERMS extended with refurb euphemisms (grade b/c, pristine
-//     condition, scratched, blemished, cosmetic damage, dented, cracked,
-//     tested working) — kills the £89.99 "best price" knockoff problem.
+//     marketplaces. ACCESSORY_TERMS extended with refurb euphemisms.
 // v6.6:
-//   - Serper timeout reduced 8s → 5s; retry removed entirely (was compounding
-//     to 16s per call × 2 parallel from frontend, breaching Vercel's 15s
-//     function limit on cold starts and causing CDP timeouts during testing).
-//   - Frontend now fires a single /api/search call (shopping only); the
-//     second call was unused by the mapping step.
+//   - Serper timeout reduced 8s → 5s; retry removed entirely.
+//   - Frontend now fires a single /api/search call (shopping only).
 // v6.6.1:
-//   - Debug envelope (?debug=true): per-stage pipeline counts + raw/identity
-//     samples for diagnosing zero-result queries without crawling Vercel logs.
+//   - Debug envelope (?debug=true): per-stage pipeline counts.
 // v6.7:
-//   - Trust filter rewritten as two-tier: TLD-based (.co.uk/.uk) + explicit
-//     allowlist for UK-trading .com brands. Tier 1 used URL hostname match.
-//   - SUPERSEDED by v6.8 — Serper shopping links are all Google aggregator
-//     URLs, so hostname matching had no signal.
+//   - SUPERSEDED — TLD-based trust filter rejected legitimate UK retailers
+//     because Serper shopping links are all Google aggregator URLs.
 // v6.8:
 //   - Trust filter rewritten to match against the `source` field (retailer
-//     name string from Google Shopping). Diagnostic via debug envelope
-//     showed every Serper shopping link is https://www.google.com/search?...
-//     so URL-hostname filtering can never work for shopping results.
-//   - TRUSTED_SOURCE_TERMS — case-insensitive substring list covering the
-//     frontend UK_RETAILERS (13) + UK supermarkets and DIY chains.
-//   - URL/hostname check retained as fallback for the rare organic-snippet
-//     items where the link IS a real retailer URL.
+//     name string from Google Shopping).
 // v6.9:
 //   - UK site-restricted search (fetchSerperUKSites) — second Serper call in
 //     parallel with shopping, using site:currys.co.uk OR site:argos.co.uk
 //     OR ... to guarantee UK retailer coverage when the shopping endpoint
-//     biases toward US/global aggregators. Organic snippet prices extracted
-//     by the existing normaliseSerperOrganic. Strategy: stop relying on
-//     Awin acceptance for UK retailer data; make Serper deliver it directly.
+//     biases toward US/global aggregators.
+// v6.10:
+//   - extractRetailerName(): clean hostname extraction from URL or
+//     Serper displayLink. v6.9 occasionally surfaced "https:" as a source
+//     name when displayLink came back as a full URL — broke the trust filter
+//     and the frontend retailer-name display. Fix: parse protocol/www off
+//     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.9';
+const VERSION = 'search.js v6.10';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
 // HYBRID PRICE FILTER
-//
-// Two-layer ceiling — solves the fixed-ceiling problem (£689.97
-// was breaking TV / laptop / iPhone searches).
-//
-// Layer 1 — Hard ceiling £5,000 at intake (admitPrice)
-//   Applied to every result individually as it enters rawItems.
-//   Blocks anything absurd (£10,000 scam listings) regardless of product.
-//   Set high enough to cover any UK consumer product.
-//
-// Layer 2 — Dynamic ceiling after identityFilter (dynamicCeilingFilter)
-//   lowest_price × PRICE_MULTIPLIER (4).
-//   Only fires when 3+ results survive identityFilter (collapse protection).
-//   Adapts to the product: headphones at £230 → ceiling £920.
-//   TV at £800 → ceiling £3,200. iPhone at £1,089 → ceiling £4,356.
-//   Anchors off the cheapest *legitimate* result, not a noise value.
-//
-// Pipeline order (critical):
-//   admitPrice (intake) → nuclearFilter → identityFilter → trustedSourceFilter → dynamicCeilingFilter → dedup
-//   Dynamic ceiling runs AFTER identityFilter and trust filter so accessories
-//   and untrusted-source listings cannot become the anchor.
 // ─────────────────────────────────────────────────────────────
-const PRICE_CEILING_HARD  = 5000;  // absolute max — covers any UK consumer product
-const PRICE_FLOOR         = 0.50;  // anything below 50p is noise
-const PRICE_MULTIPLIER    = 4;     // dynamic ceiling = lowest × this
-const DYNAMIC_MIN_RESULTS = 3;     // minimum results needed to trust the anchor
+const PRICE_CEILING_HARD  = 5000;
+const PRICE_FLOOR         = 0.50;
+const PRICE_MULTIPLIER    = 4;
+const DYNAMIC_MIN_RESULTS = 3;
 
-// Nuclear sanitizer — strips every non-digit/dot character before parsing.
-// Handles: "£1,000.00", "1.000,00" (EU format), "$249", "GBP 249.99", "&pound;249"
 const cleanPrice = (val) => parseFloat(String(val).replace(/[^\d.]/g, ''));
 
-// Strict admission test — returns the clean numeric price or null.
-// null = reject. No exceptions.
-// Rounds to 2dp BEFORE the ceiling check so floating point artifacts
-// like 4999.9999999 are correctly handled.
 function admitPrice(val) {
   const raw = cleanPrice(val);
-  if (isNaN(raw))                return null; // unparseable — "Out of Stock", "", null
-  const n = Math.round(raw * 100) / 100;      // round to 2dp before any comparison
-  if (n < PRICE_FLOOR)           return null; // noise / zero / negative
-  if (n > PRICE_CEILING_HARD)    return null; // above hard ceiling — absurd listing
+  if (isNaN(raw))                return null;
+  const n = Math.round(raw * 100) / 100;
+  if (n < PRICE_FLOOR)           return null;
+  if (n > PRICE_CEILING_HARD)    return null;
   return n;
 }
 
-// Nuclear filter — belt-and-suspenders pass on the full combined array.
-// Catches anything that slipped through admitPrice (e.g. type coercion edge cases).
 function nuclearFilter(items) {
   const before = items.length;
   const passed = items.filter(item => {
@@ -125,49 +83,32 @@ function nuclearFilter(items) {
     }
     return ok;
   });
-  console.log(`[${VERSION}] nuclearFilter: ${before} in → ${passed.length} out (hard ceiling=£${PRICE_CEILING_HARD})`);
+  console.log(`[${VERSION}] nuclearFilter: ${before} in → ${passed.length} out`);
   return passed;
 }
 
-// Dynamic ceiling filter — Layer 2.
-// Runs AFTER identityFilter so accessories cannot corrupt the anchor.
-// Skipped entirely when fewer than DYNAMIC_MIN_RESULTS items remain
-// (collapse protection — prevents a single bad anchor wiping everything).
 function dynamicCeilingFilter(items) {
   if (items.length < DYNAMIC_MIN_RESULTS) {
-    console.log(`[${VERSION}] dynamicCeiling: skipped (${items.length} items < min ${DYNAMIC_MIN_RESULTS})`);
+    console.log(`[${VERSION}] dynamicCeiling: skipped (${items.length} items < ${DYNAMIC_MIN_RESULTS})`);
     return items;
   }
   const prices  = items.map(i => i.price).sort((a, b) => a - b);
   const lowest  = prices[0];
   const ceiling = Math.round(lowest * PRICE_MULTIPLIER * 100) / 100;
-  console.log(`[${VERSION}] dynamicCeiling: lowest=£${lowest} × ${PRICE_MULTIPLIER} = ceiling £${ceiling}`);
+  console.log(`[${VERSION}] dynamicCeiling: lowest=£${lowest} × ${PRICE_MULTIPLIER} = £${ceiling}`);
   const before  = items.length;
   const passed  = items.filter(item => {
     const ok = item.price <= ceiling;
-    if (!ok) {
-      console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${item.price} > dynamic ceiling £${ceiling}`);
-    }
+    if (!ok) console.log(`[${VERSION}] Filtering out: ${item.title || item.source} £${item.price} > £${ceiling}`);
     return ok;
   });
   console.log(`[${VERSION}] dynamicCeiling: ${before} in → ${passed.length} out`);
   return passed;
 }
-// ─────────────────────────────────────────────────────────────
-// IDENTITY FILTER — Keyword Confidence Scoring
-// Solves the Identity Test failure: a TV search returning a £15 remote.
-// Two gates in sequence — both must pass.
-//
-// Gate 1 — Accessory blocklist
-//   If the result title contains an accessory term that the query did NOT
-//   mention, the item is a different product class. Hard discard.
-//
-// Gate 2 — Keyword confidence score
-//   Numeric tokens (model numbers, sizes): every one must appear verbatim
-//   in the title — a single miss is a hard fail (score 0).
-//   Text tokens: at least 60% must be present (CONFIDENCE_THRESHOLD).
-// ─────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────
+// IDENTITY FILTER
+// ─────────────────────────────────────────────────────────────
 const CONFIDENCE_THRESHOLD = 0.60;
 
 const STOP_WORDS = new Set([
@@ -177,14 +118,11 @@ const STOP_WORDS = new Set([
 ]);
 
 const ACCESSORY_TERMS = [
-  // Accessories — different product class
   'remote','cable','case','bracket','stand','mount','adapter','adaptor',
   'charger','lead','strap','skin','cover','screen protector','pouch',
   'bag','holder','clip','hook','wall plate','replacement','spare',
-  // Condition — non-New listings
   'refurbished','refurb','used','pre-owned','preowned','open box',
   'broken','faulty','damaged','spares or repair','for parts','not working',
-  // Refurb euphemisms + physical defects
   'grade b','grade c','scratched','blemished','pristine condition',
   'cosmetic damage','dented','cracked','tested working',
 ];
@@ -197,9 +135,7 @@ function tokenise(str) {
     .filter(w => w.length > 1 && !STOP_WORDS.has(w));
 }
 
-function isNumericToken(tok) {
-  return /\d/.test(tok);
-}
+function isNumericToken(tok) { return /\d/.test(tok); }
 
 function accessoryBlock(query, title) {
   const qLower = query.toLowerCase();
@@ -252,10 +188,8 @@ function identityFilter(items, query) {
   return passed;
 }
 
-
 // ─────────────────────────────────────────────────────────────
 // URL VALIDATION
-// Blocks category/search pages — only product-level URLs admitted.
 // ─────────────────────────────────────────────────────────────
 function isValidProductUrl(url) {
   if (!url) return false;
@@ -264,47 +198,32 @@ function isValidProductUrl(url) {
   return true;
 }
 
+// Pull a clean retailer hostname from any of the URL shapes Serper returns.
+//   "www.currys.co.uk"                       → "currys.co.uk"
+//   "https://www.currys.co.uk/products/sony" → "currys.co.uk"
+//   "currys.co.uk"                           → "currys.co.uk"
+//   "" / null / undefined                    → "Unknown"
+function extractRetailerName(link, displayLink) {
+  const raw = String(displayLink || link || '');
+  if (!raw) return 'Unknown';
+  const noProto = raw.replace(/^https?:\/\//i, '');
+  const noWww   = noProto.replace(/^www\./i, '');
+  const host    = noWww.split('/')[0];
+  return host || 'Unknown';
+}
+
 // ─────────────────────────────────────────────────────────────
 // TRUSTED SOURCE FILTER — source-name based
-//
-// Why source-name and not URL hostname:
-//   Serper's shopping API surfaces every result with link =
-//   https://www.google.com/search?... (a Google Shopping aggregator URL),
-//   not the underlying retailer URL. Hostname-based filtering therefore has
-//   no signal to work with. The reliable signal is the `source` field
-//   ("eBay", "Selfridges", "Currys", "Mercari" etc.) — short retailer-name
-//   strings populated by Google Shopping itself.
-//
-// We allow source names that contain any of TRUSTED_SOURCE_TERMS (case-
-// insensitive, substring match). The list covers the 13 frontend
-// UK_RETAILERS plus a few additional UK-trading retailers that surface
-// frequently on Serper UK searches.
-//
-// Rejected by exclusion: Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb,
-// Whatnot, Impulse, Best Buy (US), Walmart (US), Target (US), Unclaimed
-// Baggage, wafuu.com (JP), and the long tail of US/foreign aggregators
-// Serper returns despite gl=uk.
-//
-// Belt and braces: when a real retailer URL DOES surface (organic snippet
-// path), we also accept it via TLD or explicit-domain match — inexpensive
-// fallback that costs nothing when the link is a Google aggregator URL.
 // ─────────────────────────────────────────────────────────────
-
-// Source-name substrings (lowercase). A source field that includes any of
-// these is treated as a trusted UK retailer.
 const TRUSTED_SOURCE_TERMS = [
-  // Frontend UK_RETAILERS (13)
   'ebay', 'amazon', 'currys', 'argos', 'john lewis', 'ao.com',
   'very', 'richer sounds', 'richersounds', 'box.co.uk',
   'halfords', 'screwfix', 'boots', 'costco',
-  // UK-trading retailers that appear on Serper UK shopping
   'selfridges', 'mcgrocer', 'harvey nichols', 'fortnum',
   'marks & spencer', 'm&s', "sainsbury's", 'sainsburys', 'tesco',
   'asda', 'lidl', 'aldi', 'wickes', 'b&q', 'homebase',
-  'currysparts', 'ee.co.uk',
 ];
 
-// Hostname/domain fallback (for the rare organic-snippet item with a real URL)
 const UK_TLDS = ['.co.uk', '.uk'];
 const TRUSTED_DOMAINS = [
   'amazon.co.uk', 'currys.co.uk', 'johnlewis.com', 'argos.co.uk',
@@ -321,10 +240,8 @@ function extractHostname(url) {
 }
 
 function isTrustedSource(item) {
-  // Primary signal: source field name match
   const src = String(item.source || '').toLowerCase();
   if (src && TRUSTED_SOURCE_TERMS.some(t => src.includes(t))) return true;
-  // Fallback signal: real retailer hostname (organic results sometimes have these)
   const host = extractHostname(item.link || '');
   if (host && host !== 'google.com' && host !== 'www.google.com') {
     if (UK_TLDS.some(tld => host.endsWith(tld))) return true;
@@ -338,19 +255,13 @@ function trustedSourceFilter(items) {
   const before = items.length;
   const passed = items.filter(item => {
     const ok = isTrustedSource(item);
-    if (!ok) {
-      console.log(`[${VERSION}] TRUST BLOCK (untrusted source "${item.source}"): "${item.title || ''}"`);
-    }
+    if (!ok) console.log(`[${VERSION}] TRUST BLOCK (untrusted "${item.source}"): "${item.title || ''}"`);
     return ok;
   });
   console.log(`[${VERSION}] trustedSourceFilter: ${before} in → ${passed.length} out`);
   return passed;
 }
 
-// eBay listing pages support a condition filter via LH_ItemCondition=3 (New).
-// Many Serper-surfaced eBay /itm/ URLs land on the listing without that filter,
-// so we append it defensively. Harmless on listings that already have a
-// condition or for non-eBay URLs (we only touch ebay.* hosts).
 function hardenEbayUrl(url) {
   if (!url || !/ebay\./i.test(url)) return url;
   if (/[?&]LH_ItemCondition=/i.test(url)) return url;
@@ -374,7 +285,6 @@ function cseCircuitOk() {
   if (!cseCircuitOpen) return true;
   if (Date.now() - cseCircuitOpenAt > CSE_COOLDOWN_MS) {
     cseCircuitOpen = false;
-    console.log(`[${VERSION}] CSE circuit RESET`);
     return true;
   }
   return false;
@@ -437,12 +347,6 @@ async function fetchSerper(query, type, apiKey) {
   }
 }
 
-// UK site-restricted search — forces Serper to only surface organic results
-// from our trusted UK retailer set. The plain shopping endpoint biases hard
-// toward US/global aggregators (Mercari, Crutchfield etc.); this restores
-// UK retailer coverage by querying Google Search with explicit site:
-// operators OR'd together. Prices come from the snippet text via
-// normaliseSerperOrganic — same regex extraction we already use elsewhere.
 const UK_SITE_QUERY = [
   'site:amazon.co.uk', 'site:currys.co.uk', 'site:argos.co.uk',
   'site:johnlewis.com', 'site:ao.com', 'site:very.co.uk',
@@ -475,10 +379,7 @@ function normaliseSerperShopping(data, query) {
     .filter(item => isValidProductUrl(item.link))
     .map(item => {
       const price = admitPrice(item.price);
-      if (price === null) {
-        console.log(`[${VERSION}] Filtering out: ${item.title || item.source} because £${item.price} is over £${PRICE_CEILING_HARD} (intake)`);
-        return null;
-      }
+      if (price === null) return null;
       return {
         source:   item.source || 'Unknown',
         price,
@@ -501,7 +402,7 @@ function normaliseSerperOrganic(data, query) {
       const price = admitPrice(match[1]);
       if (price === null) return null;
       return {
-        source:   (item.displayLink || item.link || '').replace(/^www\./, '').split('/')[0],
+        source:   extractRetailerName(item.link, item.displayLink),
         price,
         link:     item.link || '',
         title:    item.title || query,
@@ -538,7 +439,7 @@ async function fetchCSE(query) {
         const price = admitPrice(match[1]);
         if (price === null) return null;
         return {
-          source:   (item.displayLink || '').replace(/^www\./, '').split('/')[0],
+          source:   extractRetailerName(item.link, item.displayLink),
           price,
           link:     item.link || '',
           title:    item.title || query,
@@ -558,7 +459,7 @@ async function fetchCSE(query) {
 function dedup(items) {
   const map = new Map();
   for (const item of items) {
-    const key = item.source.toLowerCase();
+    const key = String(item.source || '').toLowerCase();
     if (!map.has(key) || item.price < map.get(key).price) {
       map.set(key, item);
     }
@@ -572,7 +473,6 @@ function dedup(items) {
 export default async function handler(req, res) {
   console.log(`[${VERSION}] ${req.method} ${req.url}`);
 
-  // Security headers
   res.setHeader('Access-Control-Allow-Origin',  ORIGIN);
   res.setHeader('Vary',                          'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -589,10 +489,9 @@ export default async function handler(req, res) {
   const { q, type = 'shopping' } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
-  // ── Source priority ──────────────────────────────────────
   let rawItems = [];
 
-  // 1. Awin
+  // 1. Awin (if AWIN_API_KEY set)
   const AWIN_KEY = process.env.AWIN_API_KEY;
   if (AWIN_KEY) {
     const awin  = new AwinProductProvider(AWIN_KEY);
@@ -602,11 +501,6 @@ export default async function handler(req, res) {
   }
 
   // 2. Serper — TWO parallel calls
-  //    a) shopping endpoint — broad coverage, biased to US/global aggregators
-  //    b) UK site-restricted search — guarantees results from our trusted
-  //       UK retailer set even when shopping doesn't surface them
-  //    Both fire in parallel so total wall-clock is bounded by the slower one
-  //    (~5s timeout each, well under Vercel's 15s function ceiling).
   const [shoppingResult, ukSitesResult] = await Promise.allSettled([
     fetchSerper(q, type, SERPER_KEY),
     fetchSerperUKSites(q, SERPER_KEY),
@@ -616,7 +510,7 @@ export default async function handler(req, res) {
     const shopping = normaliseSerperShopping(shoppingResult.value, q);
     const organic  = normaliseSerperOrganic(shoppingResult.value, q);
     rawItems.push(...shopping, ...organic);
-    console.log(`[${VERSION}] Serper shopping endpoint: ${shopping.length} shopping + ${organic.length} organic`);
+    console.log(`[${VERSION}] Serper shopping: ${shopping.length} shopping + ${organic.length} organic`);
   } else {
     console.error(`[${VERSION}] Serper shopping failed:`, shoppingResult.reason?.message);
   }
@@ -627,11 +521,6 @@ export default async function handler(req, res) {
     console.log(`[${VERSION}] Serper UK-sites: ${ukOrganic.length} organic`);
   } else {
     console.error(`[${VERSION}] Serper UK-sites failed:`, ukSitesResult.reason?.message);
-  }
-
-  if (rawItems.length === 0) {
-    // Both Serper calls returned nothing — let CSE try (next stage) or fail through.
-    console.warn(`[${VERSION}] Serper produced 0 items for "${q}"`);
   }
 
   // 3. CSE top-up
@@ -646,21 +535,15 @@ export default async function handler(req, res) {
   const priced     = dynamicCeilingFilter(trusted);
   const results    = dedup(priced);
 
-  console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'} | hard=£${PRICE_CEILING_HARD} | dynamic=lowest×${PRICE_MULTIPLIER}`);
+  console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
 
-  // Debug envelope — exposes per-stage pipeline counts and the raw item set.
-  // Triggered by { debug: true } in request body.
   const debug = req.body && req.body.debug === true;
   const debugEnvelope = debug ? {
     counts: {
-      raw:        rawItems.length,
-      nuclear:    safe.length,
-      identity:   identified.length,
-      trusted:    trusted.length,
-      priced:     priced.length,
-      final:      results.length,
+      raw: rawItems.length, nuclear: safe.length, identity: identified.length,
+      trusted: trusted.length, priced: priced.length, final: results.length,
     },
-    rawSample:  rawItems.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
+    rawSample:      rawItems.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
     identitySample: identified.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
   } : undefined;
 
@@ -674,11 +557,11 @@ export default async function handler(req, res) {
     })),
     organic: [],
     _meta: {
-      version:      VERSION,
-      itemCount:    results.length,
+      version: VERSION,
+      itemCount: results.length,
       priceCeilingHard: PRICE_CEILING_HARD,
       priceMultiplier: PRICE_MULTIPLIER,
-      cheapest:     results[0]?.price ?? null,
+      cheapest: results[0]?.price ?? null,
     },
     _debug: debugEnvelope,
   });
