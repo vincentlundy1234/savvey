@@ -50,7 +50,7 @@
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.11';
+const VERSION = 'search.js v6.11.1';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -509,28 +509,39 @@ async function fetchCSE(query) {
 //   2. cheapest-per-bucket wins on collision.
 // ─────────────────────────────────────────────────────────────
 function canonicaliseSource(source, link) {
-  const haystack = `${link || ''} ${source || ''}`.toLowerCase();
+  // CRITICAL: Only check the SOURCE field for retailer matching, not the link.
+  // Serper shopping/site-restricted links are Google aggregator URLs like
+  //   https://www.google.com/search?q=Sony+WH+site:ebay.co.uk+OR+site:currys.co.uk+...
+  // — they encode the entire UK_SITE_QUERY in the URL. If we naively
+  // haystack.includes('ebay') against that URL, EVERY result collapses to
+  // 'ebay' regardless of actual retailer. (This was the v6.11 regression.)
+  // Source is the small retailer-name string Google Shopping populates
+  // ("eBay", "Selfridges", "Currys", etc.) — that's the reliable signal.
+  // For organic-snippet results where link IS a real retailer URL, we use
+  // the hostname instead (already cleaned by extractRetailerName upstream).
+  const src = String(source || '').toLowerCase();
+  if (!src) return '';
   // Order matters — most specific patterns first
-  if (haystack.includes('ebay')) return 'ebay';
-  if (haystack.includes('amazon')) return 'amazon';
-  if (haystack.includes('currys')) return 'currys';
-  if (haystack.includes('argos')) return 'argos';
-  if (haystack.includes('john lewis') || haystack.includes('johnlewis')) return 'john lewis';
-  if (haystack.includes('ao.com') || /\bao\b/.test(haystack)) return 'ao';
-  if (haystack.includes('very')) return 'very';
-  if (haystack.includes('richer sounds') || haystack.includes('richersounds')) return 'richer sounds';
-  if (haystack.includes('box.co.uk') || haystack.includes('box.com')) return 'box';
-  if (haystack.includes('halfords')) return 'halfords';
-  if (haystack.includes('screwfix')) return 'screwfix';
-  if (haystack.includes('boots')) return 'boots';
-  if (haystack.includes('costco')) return 'costco';
-  if (haystack.includes('selfridges')) return 'selfridges';
-  if (haystack.includes('mcgrocer')) return 'mcgrocer';
-  if (haystack.includes('harvey nichols')) return 'harvey nichols';
-  if (haystack.includes('marks & spencer') || haystack.includes('marksandspencer') || haystack.includes('m&s')) return 'm&s';
-  if (haystack.includes('fortnum')) return 'fortnum & mason';
+  if (src.includes('ebay')) return 'ebay';
+  if (src.includes('amazon')) return 'amazon';
+  if (src.includes('currys')) return 'currys';
+  if (src.includes('argos')) return 'argos';
+  if (src.includes('john lewis') || src.includes('johnlewis')) return 'john lewis';
+  if (src.includes('ao.com') || /\bao\b/.test(src)) return 'ao';
+  if (src.includes('very.co.uk') || /\bvery\b/.test(src)) return 'very';
+  if (src.includes('richer sounds') || src.includes('richersounds')) return 'richer sounds';
+  if (src.includes('box.co.uk') || src.includes('box.com')) return 'box';
+  if (src.includes('halfords')) return 'halfords';
+  if (src.includes('screwfix')) return 'screwfix';
+  if (src.includes('boots')) return 'boots';
+  if (src.includes('costco')) return 'costco';
+  if (src.includes('selfridges')) return 'selfridges';
+  if (src.includes('mcgrocer')) return 'mcgrocer';
+  if (src.includes('harvey nichols')) return 'harvey nichols';
+  if (src.includes('marks & spencer') || src.includes('marksandspencer') || src.includes('m&s')) return 'm&s';
+  if (src.includes('fortnum')) return 'fortnum & mason';
   // Fallback to lowercased raw source for anything we don't recognise
-  return String(source || '').toLowerCase();
+  return src;
 }
 
 function dedup(items) {

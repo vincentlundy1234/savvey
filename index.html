@@ -1483,10 +1483,13 @@ function fetchPrices(query){
     // any item whose URL doesn't match a UK retailer domain is dropped.
     const raw=(d1.shopping||[]);
     const mapped=raw.map(i=>{
-      // Pass BOTH link and source — link is usually a Google aggregator URL,
-      // source is the retailer name string. matchRetailer falls back to the
-      // per-retailer source-name substring list if URL match fails.
-      const ret=matchRetailer((i.link||'')+' '+(i.source||''));
+      // Match against source name ONLY — the link field for Serper shopping
+      // results is a Google aggregator URL that encodes our entire UK_SITE
+      // search query (site:ebay.co.uk OR site:currys.co.uk OR ...) which
+      // would falsely match against any retailer in the list. Source is the
+      // small retailer-name string Google Shopping populates ("Currys",
+      // "Selfridges", "eBay - sellerName") — that's the reliable signal.
+      const ret=matchRetailer(i.source||'');
       if(!ret)return null; // not a recognised UK retailer — discard
       const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
       return{
@@ -1700,11 +1703,64 @@ function witLine(spc,saving,retailer,bestRetailer){
   return 'A small gap, but it\'s yours to keep.';
 }
 
+// Direct retailer search URLs — used when the Serper-supplied link is a
+// Google Shopping aggregator URL (which would dump the user back on Google
+// instead of the retailer). Pre-fills the search query at the retailer's
+// own site so the user lands on a useful page immediately.
+function retailerSearchUrl(retailerName, query){
+  const q=encodeURIComponent(query||'');
+  if(!q)return null;
+  const r=String(retailerName||'').toLowerCase();
+  if(r.includes('amazon'))       return `https://www.amazon.co.uk/s?k=${q}`;
+  if(r.includes('currys'))       return `https://www.currys.co.uk/search?search=${q}`;
+  if(r.includes('argos'))        return `https://www.argos.co.uk/search/${q}/`;
+  if(r.includes('john lewis'))   return `https://www.johnlewis.com/search?search-term=${q}`;
+  if(r.includes('ao'))           return `https://ao.com/search/?searchString=${q}`;
+  if(r.includes('very'))         return `https://www.very.co.uk/search/${q}.end`;
+  if(r.includes('ebay'))         return `https://www.ebay.co.uk/sch/i.html?_nkw=${q}&LH_ItemCondition=3`;
+  if(r.includes('selfridges'))   return `https://www.selfridges.com/gb/en/search/?searchString=${q}`;
+  if(r.includes('halfords'))     return `https://www.halfords.com/search?q=${q}`;
+  if(r.includes('screwfix'))     return `https://www.screwfix.com/search?search=${q}`;
+  if(r.includes('boots'))        return `https://www.boots.com/sitesearch?searchTerm=${q}`;
+  if(r.includes('costco'))       return `https://www.costco.co.uk/search?text=${q}`;
+  if(r.includes('richer sounds'))return `https://www.richersounds.com/search/?q=${q}`;
+  if(r.includes('box'))          return `https://www.box.co.uk/search?text=${q}`;
+  if(r.includes('mcgrocer'))     return `https://www.mcgrocer.com/search?q=${q}`;
+  if(r.includes('harvey nichols'))return `https://www.harveynichols.com/search/?q=${q}`;
+  return null;
+}
+
+// Returns the best URL to send the user to when they tap Buy.
+// Preference order:
+//   1. The original Serper link IF it points to a real retailer page
+//      (anything that isn't a Google aggregator URL).
+//   2. A retailer search URL with the product name pre-filled.
+//   3. Fall back to the original link as last resort.
+function bestBuyUrl(scen){
+  if(!scen)return null;
+  const link=scen.bestLink||'';
+  const isGoogleAgg=/^https?:\/\/(?:www\.)?google\./i.test(link);
+  if(link&&!isGoogleAgg)return link;
+  const search=retailerSearchUrl(scen.bestRetailer,scen.query||liveQuery||'');
+  return search||link||null;
+}
+
+// Click handler for individual retailer rows in the results list — uses the
+// same URL preference logic as buyNow so users land on the retailer site
+// instead of a Google search page.
+function openRetailerRow(retailerName, link){
+  const isGoogleAgg=/^https?:\/\/(?:www\.)?google\./i.test(link||'');
+  if(link&&!isGoogleAgg){window.open(link,'_blank');return;}
+  const search=retailerSearchUrl(retailerName,liveQuery||'');
+  if(search)window.open(search,'_blank');
+  else if(link)window.open(link,'_blank');
+}
+
 function buyNow(){
   hasBoughtItem=true;
-  if(!liveScen||!liveScen.bestLink)return; // no real scen → nothing to open
-  const sc=liveScen;
-  if(sc.bestLink)window.open(sc.bestLink,'_blank');
+  if(!liveScen)return; // no real scen → nothing to open
+  const url=bestBuyUrl(liveScen);
+  if(url)window.open(url,'_blank');
   // Nudge share when they return
   document.addEventListener('visibilitychange',function onReturn(){
     if(document.visibilityState==='visible'){
@@ -1800,7 +1856,7 @@ function renderResults(sc){
   // ── Retailer list ──
   const list=document.getElementById('ret-list');
   list.innerHTML=(sc.rets||[]).map(r=>`
-    <div class="ret-row${r.best?' best':''}" onclick="${r.link?`window.open('${r.link}','_blank')`:''}">
+    <div class="ret-row${r.best?' best':''}" onclick="openRetailerRow('${(r.n||'').replace(/'/g,"\\'")}','${(r.link||'').replace(/'/g,"\\'")}')">
       <div class="ret-name-wrap">
         <div class="ret-name">${r.n}</div>
         <div class="ret-sub">${r.sub||''}</div>
