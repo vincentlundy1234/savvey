@@ -1953,6 +1953,26 @@ function buyNow(){
 //      verdict with "Best UK price" headline, show the cheapest + average
 //      + retailer list. Honest about what we can and can't tell them.
 function renderResults(sc){
+  // ── Restore default hero actions if they've been mutated ──
+  // renderNoResults swaps the actions HTML for empty-state buttons. If the
+  // user then refines into a real result, btn-buy-now no longer exists and
+  // the rest of this function would crash on null access. Restore on every
+  // render — cheap, idempotent, defensive.
+  const actions=document.querySelector('.hero-actions');
+  if(actions&&!document.getElementById('btn-buy-now')){
+    actions.innerHTML=`
+      <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it →</button>
+      <button class="hero-share" onclick="openShareCard()">📸 Share this — someone needs to know</button>
+      <button class="hero-new-search" onclick="goHome()">Check another product →</button>
+    `;
+  }
+  // Also restore the section label + email-track CTA in case they were
+  // hidden by an earlier renderNoResults pass.
+  const lblSection=document.querySelector('.res-section-lbl');
+  if(lblSection)lblSection.style.display='';
+  const track=document.getElementById('track-cta');
+  if(track)track.style.display='';
+
   const hasUserPrice = !!sc.uPrice;
   const spc=hasUserPrice ? sc.spc : 'green'; // discovery mode is always informational, not a verdict
   const overpayingRetailer=sc.rets&&sc.rets.filter(r=>!r.best)[0]?.n||'this retailer';
