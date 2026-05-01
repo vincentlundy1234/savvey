@@ -1,4 +1,16 @@
-// api/ai-search.js — Savvey AI Search v1.4
+// api/ai-search.js — Savvey AI Search v1.5
+//
+// v1.5 (1 May 2026, post-v1.4 verification):
+//   - Amazon-locked query now includes `inurl:dp` to force ASIN product
+//     URLs. v1.4 verification revealed Perplexity was returning
+//     music.amazon.co.uk catalogue pages for Sony WH-1000XM5 (Amazon Music
+//     surfaces artist pages on the same domain). inurl:dp pins it to
+//     /dp/ASIN URLs, which is what we actually want.
+//   - gatherRetailerHits now applies a per-host admission check via the
+//     new isAdmissibleAmazonUrl(): rejects anything on amazon.co.uk that
+//     isn't on www.amazon.co.uk AND on a /dp/ASIN or /gp/product/ASIN path.
+//     Stops music/aws/business subdomain pages reaching Haiku, saving
+//     extraction cost AND preventing a music page being mis-priced.
 //
 // v1.4 (1 May 2026, post-v1.3 verification):
 //   - Dual Perplexity call: one broad (all UK retailers EXCLUDING Amazon),
@@ -42,7 +54,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.4';
+const VERSION = 'ai-search.js v1.5';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -124,7 +136,9 @@ async function fetchPerplexitySearch(query, apiKey) {
     .map(r => `site:${r.host}`)
     .join(' OR ');
   const broadQuery  = `${query} buy UK price (${broadHosts})`;
-  const amazonQuery = `${query} buy UK price site:amazon.co.uk`;
+  // inurl:dp forces Perplexity to return ASIN product URLs only — without
+  // it we get music.amazon.co.uk and other non-retail subdomain pages.
+  const amazonQuery = `${query} buy UK price site:amazon.co.uk inurl:dp`;
 
   const [broadSettled, amazonSettled] = await Promise.allSettled([
     callPerplexity(broadQuery,  apiKey, 10),
@@ -166,6 +180,22 @@ async function fetchPerplexitySearch(query, apiKey) {
   return { results: combined, _amazonCallSucceeded: amazonSettled.status === 'fulfilled', _amazonHitCount: amazonCount };
 }
 
+// Amazon-specific admission check: a URL claiming amazon.co.uk must be on
+// the main retail subdomain (www.amazon.co.uk OR bare amazon.co.uk) AND on
+// a product path (/dp/ASIN or /gp/product/ASIN). Without this, Perplexity's
+// site:amazon.co.uk filter pulls in music.amazon.co.uk, business.amazon.co.uk,
+// aws.amazon.co.uk pages that aren't sellable products.
+function isAdmissibleAmazonUrl(url) {
+  if (!url) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  const host = parsed.hostname.toLowerCase();
+  // Reject any non-retail subdomain
+  if (host !== 'www.amazon.co.uk' && host !== 'amazon.co.uk') return false;
+  // Path must contain a product identifier
+  return /\/(?:[^\/]+\/)?(?:dp|gp\/product)\/[A-Z0-9]{10}/i.test(parsed.pathname);
+}
+
 function gatherRetailerHits(data, query) {
   const results = rawResultsOf(data);
   const hits = [];
@@ -175,6 +205,8 @@ function gatherRetailerHits(data, query) {
     const snippet = r.snippet || r.content || r.description || r.text || '';
     const retailer = matchRetailerByHost(url);
     if (!retailer) continue;
+    // Tighten Amazon admission — see isAdmissibleAmazonUrl().
+    if (retailer.host === 'amazon.co.uk' && !isAdmissibleAmazonUrl(url)) continue;
     hits.push({ url, title, snippet, retailer });
   }
   return hits;
