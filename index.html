@@ -46,6 +46,26 @@
       /* 8pt spacing scale */
       --sp-4:4px;--sp-8:8px;--sp-12:12px;--sp-16:16px;
       --sp-20:20px;--sp-24:24px;--sp-32:32px;--sp-40:40px;
+
+      /* ── motion: physics-based easings (added 1 May 2026) ── */
+      --ease-pop:    cubic-bezier(0.34, 1.56, 0.64, 1);     /* +14% overshoot — buttons */
+      --ease-quick:  cubic-bezier(0.16, 1, 0.30, 1);        /* sharp quick — Apple-style */
+      --ease-glide:  cubic-bezier(0.25, 0.46, 0.45, 0.94);  /* gentle glide — ambient */
+      --motion-fast: 120ms;
+      --motion-norm: 220ms;
+      --motion-slow: 340ms;
+
+      /* ── depth: consistent elevation across the system ── */
+      --depth-0: none;
+      --depth-1: 0 1px 2px rgba(15,17,20,0.04), 0 1px 4px rgba(15,17,20,0.06);
+      --depth-2: 0 6px 18px rgba(15,17,20,0.06), 0 2px 6px rgba(15,17,20,0.04);
+      --depth-3: 0 14px 40px rgba(15,17,20,0.10), 0 4px 12px rgba(15,17,20,0.06);
+      --depth-glow-green: 0 10px 32px rgba(42,107,34,0.32);
+    }
+    @media (prefers-reduced-motion: reduce){
+      :root{ --motion-fast:0ms; --motion-norm:0ms; --motion-slow:0ms; }
+      *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important;
+         transition-duration:0.001ms !important; }
     }
     *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
     html,body{height:100%;overflow:hidden;}
@@ -392,11 +412,15 @@
       background:linear-gradient(to bottom,rgba(0,0,0,0.65),transparent);
     }
     .cam-btn{
-      width:38px;height:38px;border-radius:50%;
+      width:44px;height:44px;border-radius:50%;
       background:rgba(255,255,255,0.14);backdrop-filter:blur(8px);
       border:none;cursor:pointer;
       display:flex;align-items:center;justify-content:center;color:#fff;
+      transition:transform var(--motion-fast) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
     }
+    .cam-btn:active{transform:scale(0.92);background:rgba(255,255,255,0.28);}
+    .cam-btn:focus-visible{outline:2px solid #fff;outline-offset:2px;}
     .cam-label{font-size:15px;font-weight:700;color:#fff;font-family:"Nunito",sans-serif;}
 
     /* Viewfinder */
@@ -828,6 +852,148 @@
     /* Toast */
     .toast{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 22px;border-radius:100px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none;}
     .toast.show{opacity:1;}
+
+    /* ═══════════════════════════════════════════════════════════
+       2026 DESIGN SYSTEM — added 1 May 2026
+       Layered ON TOP of existing classes. Older buttons keep
+       working (back-compat); new screens/components use these.
+       ═══════════════════════════════════════════════════════════ */
+
+    /* ── Button hierarchy (3 tiers) ── */
+    .btn-primary{
+      background:linear-gradient(132deg,#3d9435 0%,#2a6b22 100%);
+      color:#fff;
+      font:700 16px/1 "Nunito",sans-serif;
+      letter-spacing:-0.2px;
+      padding:18px 24px;border:none;
+      border-radius:var(--r);
+      box-shadow:var(--depth-glow-green);
+      cursor:pointer;
+      display:inline-flex;align-items:center;justify-content:center;gap:10px;
+      min-height:52px;
+      transition:transform var(--motion-fast) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
+    }
+    .btn-primary:active{transform:scale(0.965);box-shadow:var(--depth-2);}
+    .btn-primary:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
+
+    .btn-secondary{
+      background:var(--card);
+      color:var(--ink);
+      font:600 15px/1 "Nunito",sans-serif;
+      padding:14px 18px;border:1px solid var(--border);
+      border-radius:var(--r);
+      box-shadow:var(--depth-1);
+      cursor:pointer;
+      min-height:48px;
+      transition:transform var(--motion-fast) var(--ease-quick),
+                 border-color var(--motion-norm) var(--ease-quick);
+    }
+    .btn-secondary:active{transform:scale(0.97);border-color:var(--green-bd);}
+    .btn-secondary:focus-visible{outline:3px solid var(--green-bd);outline-offset:2px;}
+
+    .btn-ghost{
+      background:transparent;
+      color:var(--ink3);
+      font:600 13px/1 "Inter",sans-serif;
+      padding:10px 14px;border:none;cursor:pointer;
+      min-height:44px;
+      transition:color var(--motion-fast) var(--ease-quick);
+    }
+    .btn-ghost:hover,.btn-ghost:active{color:var(--ink);}
+    .btn-ghost:focus-visible{outline:2px solid var(--green-bd);outline-offset:2px;border-radius:6px;}
+
+    /* ── Universal active-press feedback ──
+       All clickable surfaces tightened: scales down 3%, no jitter. */
+    .press{transition:transform var(--motion-fast) var(--ease-quick);}
+    .press:active{transform:scale(0.97);}
+
+    /* ── Verdict card entry animation (Wave 2) ── */
+    @keyframes verdict-land{
+      from{opacity:0;transform:scale(0.96);filter:blur(2px);}
+      to  {opacity:1;transform:scale(1);   filter:blur(0);}
+    }
+    .verdict-land{animation:verdict-land 340ms var(--ease-pop) both;}
+
+    /* ── Retailer row stagger ── */
+    @keyframes row-in{
+      from{opacity:0;transform:translateY(6px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+    .ret-row{animation:row-in 220ms var(--ease-quick) both;}
+    .ret-row:nth-child(1){animation-delay:40ms;}
+    .ret-row:nth-child(2){animation-delay:80ms;}
+    .ret-row:nth-child(3){animation-delay:120ms;}
+    .ret-row:nth-child(4){animation-delay:160ms;}
+    .ret-row:nth-child(5){animation-delay:200ms;}
+    .ret-row:nth-child(6){animation-delay:240ms;}
+    .ret-row:nth-child(7){animation-delay:280ms;}
+
+    /* ── Skeleton loader ── */
+    .skel{
+      background:linear-gradient(90deg,var(--border) 0%,#f4f1ec 50%,var(--border) 100%);
+      background-size:200% 100%;
+      animation:skel-shimmer 1400ms linear infinite;
+      border-radius:var(--r-sm);
+    }
+    @keyframes skel-shimmer{
+      from{background-position:200% 0;}
+      to  {background-position:-200% 0;}
+    }
+    .skel-row{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:18px 16px;background:var(--card);
+      border-radius:var(--r);margin-bottom:8px;
+      box-shadow:var(--depth-1);
+    }
+    .skel-line-name{width:48%;height:14px;}
+    .skel-line-sub {width:30%;height:11px;margin-top:6px;}
+    .skel-line-price{width:64px;height:18px;}
+
+    /* ── Logo as tap target (Wave 3) ── */
+    [data-logo-home]{cursor:pointer;transition:transform var(--motion-fast) var(--ease-quick);}
+    [data-logo-home]:active{transform:scale(0.94);}
+    [data-logo-home]:focus-visible{outline:3px solid var(--green-bd);outline-offset:4px;border-radius:8px;}
+
+    /* ── Screen slide transitions (Wave 3) ──
+       When a screen is entered/exited via swipe, it slides in/out
+       horizontally instead of the default fade. JS toggles
+       data-slide-dir="left" or "right" on the screen as it transitions. */
+    .screen[data-slide-dir]{
+      transition:transform var(--motion-norm) var(--ease-quick),
+                 opacity var(--motion-norm) var(--ease-quick);
+    }
+    .screen.active[data-slide-dir="left"] {animation:slide-in-from-right var(--motion-norm) var(--ease-quick) both;}
+    .screen.active[data-slide-dir="right"]{animation:slide-in-from-left  var(--motion-norm) var(--ease-quick) both;}
+    @keyframes slide-in-from-right{from{transform:translateX(28px);opacity:0;} to{transform:translateX(0);opacity:1;}}
+    @keyframes slide-in-from-left {from{transform:translateX(-28px);opacity:0;} to{transform:translateX(0);opacity:1;}}
+
+    /* ── Swipe-hint indicator at bottom of swipeable screens ──
+       Tiny dot pager that shows current screen position in the rotation. */
+    .swipe-pager{
+      position:absolute;left:50%;transform:translateX(-50%);
+      bottom:calc(8px + env(safe-area-inset-bottom));
+      display:flex;gap:6px;
+      pointer-events:none;z-index:50;
+    }
+    .swipe-dot{
+      width:6px;height:6px;border-radius:50%;
+      background:var(--ink4);opacity:0.4;
+      transition:all var(--motion-norm) var(--ease-quick);
+    }
+    .swipe-dot.active{background:var(--green);opacity:1;width:18px;border-radius:3px;}
+    /* On dark camera screens, dots invert */
+    #screen-scan .swipe-pager .swipe-dot,
+    #screen-snap .swipe-pager .swipe-dot{background:rgba(255,255,255,0.5);}
+    #screen-scan .swipe-pager .swipe-dot.active,
+    #screen-snap .swipe-pager .swipe-dot.active{background:#fff;opacity:1;}
+
+    /* ── Quality-audit pass: focus-visible everywhere, tap targets ── */
+    button,a,[role="button"]{min-height:44px;}
+    button.cam-btn,button.h-pill,button.trend-chip,button.cam-found-cta{min-height:auto;}
+    *:focus-visible:not([data-logo-home]):not(.btn-primary):not(.btn-secondary):not(.btn-ghost){
+      outline:2px solid var(--green);outline-offset:2px;border-radius:6px;
+    }
   </style>
 </head>
 <body>
@@ -999,11 +1165,11 @@
         <button class="cam-alt" style="margin-top:8px;" onclick="stopScanner();goHome()">Search instead</button>
       </div>
       <div class="cam-bar">
-        <button class="cam-btn" onclick="stopScanner();goHome()">
+        <button class="cam-btn" onclick="stopScanner();goHome()" aria-label="Close scanner and go home">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="cam-label">In-store checker</div>
-        <button class="cam-btn" id="torch-btn" onclick="toggleTorch()">
+        <button class="cam-btn" id="torch-btn" onclick="toggleTorch()" aria-label="Toggle torch">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M8 2h8l-1 7h-6L8 2z"/><path d="M9 9l-1 13h8L15 9"/></svg>
         </button>
       </div>
@@ -1048,11 +1214,11 @@
         <button class="cam-alt" style="margin-top:8px;" onclick="stopSnapper();goHome()">Search instead</button>
       </div>
       <div class="cam-bar">
-        <button class="cam-btn" onclick="stopSnapper();goHome()">
+        <button class="cam-btn" onclick="stopSnapper();goHome()" aria-label="Close snapper and go home">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <div class="cam-label">Snap a product</div>
-        <div style="width:36px"></div>
+        <div style="width:36px" aria-hidden="true"></div>
       </div>
       <div class="snap-hint">Frame the product, then tap the shutter</div>
       <button class="snap-capture-btn" id="snap-capture-btn" onclick="captureSnap()" aria-label="Capture photo"></button>
@@ -1273,7 +1439,7 @@
     <div class="modal-icon">🔔</div>
     <div class="modal-title">Track this price</div>
     <div class="modal-sub">We'll email you the moment this gets cheaper anywhere in the UK.</div>
-    <input class="modal-in" id="modal-email" type="email" placeholder="your@email.com"/>
+    <input class="modal-in" id="modal-email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your@email.com"/>
     <button class="modal-go" onclick="submitEmail()">Start tracking</button>
     <button class="modal-skip" onclick="closeEmailModal()">Not now</button>
   </div>
@@ -1384,6 +1550,40 @@ window.addEventListener('appinstalled',()=>{
 window.addEventListener('load',()=>{
   if(isIOS()&&!isStandalonePWA())setTimeout(showInstallBanner,1200);
 
+  // ── Inject swipe-pager into each swipeable screen (Wave 3) ──
+  // Creates a 4-dot pager pinned to the bottom of home/scan/snap/paste.
+  // Doing this in JS rather than in markup keeps the four insertions
+  // co-located and avoids drift if the rotation list changes.
+  SWIPE_ROTATION.forEach(name => {
+    const screen = document.getElementById('screen-' + name);
+    if(!screen || screen.querySelector('.swipe-pager')) return;
+    const pager = document.createElement('div');
+    pager.className = 'swipe-pager';
+    pager.setAttribute('aria-hidden', 'true');
+    SWIPE_ROTATION.forEach(target => {
+      const dot = document.createElement('div');
+      dot.className = 'swipe-dot' + (target === name ? ' active' : '');
+      dot.dataset.target = target;
+      pager.appendChild(dot);
+    });
+    screen.appendChild(pager);
+  });
+  updateSwipePager();
+
+  // ── Wire the home + welcome logos as tap-to-home (Wave 3) ──
+  // Marks every Savvey logo instance as a clickable home button. New
+  // logos added in future automatically inherit by adding [data-logo-home].
+  document.querySelectorAll('#screen-home .s-badge, #screen-welcome .s-badge').forEach(el => {
+    el.setAttribute('data-logo-home', '');
+    el.setAttribute('role', 'button');
+    el.setAttribute('aria-label', 'Go to home');
+    el.setAttribute('tabindex', '0');
+    el.addEventListener('click', (e) => { e.stopPropagation(); goHome(); });
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); goHome(); }
+    });
+  });
+
   // Deep-link handling — if the URL has ?q=Sony+WH-1000XM5 (e.g. from a
   // shared Savvey link), skip the welcome screen and run the search
   // immediately. This is the viral mechanic: shared link → recipient
@@ -1443,23 +1643,105 @@ function goBackFromResults(){
   goHome();
 }
 
-function goTo(screen){
+function goTo(screen, opts){
   if(currentScreen===screen)return;
   // Stop scanner when leaving scan screen
   if(currentScreen==='scan'&&screen!=='scan')stopScanner();
   if(currentScreen==='snap'&&screen!=='snap')stopSnapper();
   document.getElementById('screen-'+currentScreen).classList.remove('active');
   const entering=document.getElementById('screen-'+screen);
+  // Slide direction (Wave 3): when set, the screen plays a horizontal slide
+  // animation instead of the default fade. Only set by swipe handler — direct
+  // taps clear it so they fade as before.
+  if(opts && opts.slideDir){
+    entering.setAttribute('data-slide-dir', opts.slideDir);
+  } else {
+    entering.removeAttribute('data-slide-dir');
+  }
   entering.classList.add('active');
   // Always land at the top of the new screen — prevents mid-page entry
   entering.scrollTop=0;
   if(typeof window!=='undefined'&&window.scrollTo)window.scrollTo(0,0);
   currentScreen=screen;
+  updateSwipePager();
   // Screen entry actions
   if(screen==='home'){
     silentGeo();
     renderTrending(activeCat);
   }
+}
+
+// ── Swipe navigation (Wave 3 design pass) ──
+//
+// Swipeable rotation on the four "input method" peers. Swipe-left advances
+// to the next screen, swipe-right returns. Linear (not circular) — no loop
+// around — so the user always knows roughly where they are in the flow.
+//
+// On scan/snap entry we kick off the camera flow that the matching button
+// would normally trigger. That keeps the "swipe to scan" UX seamless: the
+// camera is warming the moment the user lands on the panel.
+const SWIPE_ROTATION = ['home', 'scan', 'snap', 'paste'];
+const SWIPE_THRESHOLD_PX = 60;
+const SWIPE_MAX_TIME_MS  = 600;
+const SWIPE_HORIZ_RATIO  = 2.5; // |dx| / |dy| must exceed this to count as horizontal
+let _swipeStart = null;
+
+function _swipeStartAllowed(target){
+  // Don't intercept gestures inside form fields, buttons, links, or
+  // horizontally-scrollable containers (e.g. the trending chip strip).
+  if(!target) return false;
+  if(target.closest && target.closest('input, textarea, select, button, a, [contenteditable], [data-no-swipe], .home-trending-scroll, .r-chips')) return false;
+  return true;
+}
+
+document.addEventListener('pointerdown', (e) => {
+  if(!SWIPE_ROTATION.includes(currentScreen)) return;
+  if(!_swipeStartAllowed(e.target)) return;
+  _swipeStart = { x: e.clientX, y: e.clientY, t: Date.now() };
+}, { passive: true });
+
+document.addEventListener('pointerup', (e) => {
+  if(!_swipeStart) return;
+  const dx = e.clientX - _swipeStart.x;
+  const dy = e.clientY - _swipeStart.y;
+  const dt = Date.now() - _swipeStart.t;
+  _swipeStart = null;
+  if(dt > SWIPE_MAX_TIME_MS) return;
+  if(Math.abs(dx) < SWIPE_THRESHOLD_PX) return;
+  if(Math.abs(dx) < SWIPE_HORIZ_RATIO * Math.abs(dy)) return;
+
+  const idx = SWIPE_ROTATION.indexOf(currentScreen);
+  if(idx === -1) return;
+
+  if(dx < 0){
+    // Swipe-left: next screen
+    if(idx + 1 < SWIPE_ROTATION.length){
+      navigateSwipe(SWIPE_ROTATION[idx + 1], 'left');
+    }
+  } else {
+    // Swipe-right: previous screen
+    if(idx - 1 >= 0){
+      navigateSwipe(SWIPE_ROTATION[idx - 1], 'right');
+    }
+  }
+}, { passive: true });
+
+// Cancel swipe tracking if pointer is cancelled (e.g. browser scrolling)
+document.addEventListener('pointercancel', () => { _swipeStart = null; }, { passive: true });
+
+function navigateSwipe(targetScreen, dir){
+  goTo(targetScreen, { slideDir: dir });
+  if(targetScreen === 'scan')  startScanner();
+  if(targetScreen === 'snap')  startSnapper();
+}
+
+// Update the dot pager on every screen change
+function updateSwipePager(){
+  document.querySelectorAll('.swipe-pager').forEach(pager => {
+    pager.querySelectorAll('.swipe-dot').forEach(dot => {
+      dot.classList.toggle('active', dot.dataset.target === currentScreen);
+    });
+  });
 }
 
 // ── goHome() ─ always use this instead of goHome() directly ──
@@ -2349,6 +2631,17 @@ function buyNow(){
 //      verdict with "Best UK price" headline, show the cheapest + average
 //      + retailer list. Honest about what we can and can't tell them.
 function renderResults(sc){
+  // ── Verdict card "land" animation (Wave 2 design pass).
+  // Re-trigger the verdict-land keyframe on every render so the card feels
+  // like it just dropped in, even when the user refines a search and stays
+  // on this screen. Force-reflow trick keeps the animation reliable.
+  const heroCard=document.getElementById('hero-card');
+  if(heroCard){
+    heroCard.classList.remove('verdict-land');
+    void heroCard.offsetWidth; // force reflow so re-add re-triggers anim
+    heroCard.classList.add('verdict-land');
+  }
+
   // ── Restore default hero actions if they've been mutated ──
   // renderNoResults swaps the actions HTML for empty-state buttons. If the
   // user then refines into a real result, btn-buy-now no longer exists and
