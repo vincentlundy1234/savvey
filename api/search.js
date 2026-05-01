@@ -598,6 +598,23 @@ export default async function handler(req, res) {
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'} | hard=£${PRICE_CEILING_HARD} | dynamic=lowest×${PRICE_MULTIPLIER}`);
 
+  // Debug envelope — exposes per-stage pipeline counts and the raw item set
+  // so we can diagnose why a query produced no results without having to
+  // crawl Vercel function logs. Triggered by { debug: true } in request body.
+  const debug = req.body && req.body.debug === true;
+  const debugEnvelope = debug ? {
+    counts: {
+      raw:        rawItems.length,
+      nuclear:    safe.length,
+      identity:   identified.length,
+      trusted:    trusted.length,
+      priced:     priced.length,
+      final:      results.length,
+    },
+    rawSample:  rawItems.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
+    identitySample: identified.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
+  } : undefined;
+
   // Return in the shape the frontend's buildScen() expects
   return res.status(200).json({
     shopping: results.map(r => ({
@@ -615,5 +632,6 @@ export default async function handler(req, res) {
       priceMultiplier: PRICE_MULTIPLIER,
       cheapest:     results[0]?.price ?? null,
     },
+    _debug: debugEnvelope,
   });
 }
