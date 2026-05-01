@@ -737,13 +737,22 @@
     .hero-verdict.amber{background:var(--amber-lt);border-bottom:1.5px solid var(--amber-bd);}
     .hero-verdict.green{background:var(--green-lt);border-bottom:1.5px solid var(--green-bd);}
     .hero-verdict-pips{display:flex;gap:6px;align-items:center;}
-    .v-pip{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:"Nunito",sans-serif;font-weight:900;font-size:12px;transition:all 0.22s;}
-    .v-pip.lit-red{background:var(--red);color:#fff;transform:scale(1.15);}
-    .v-pip.lit-amber{background:var(--amber);color:#fff;transform:scale(1.15);}
-    .v-pip.lit-green{background:var(--green);color:#fff;transform:scale(1.15);}
-    .v-pip.dim-red{background:var(--red-bd);color:var(--red);opacity:0.5;}
-    .v-pip.dim-amber{background:var(--amber-bd);color:var(--amber);opacity:0.5;}
-    .v-pip.dim-green{background:var(--green-bd);color:var(--green);opacity:0.5;}
+    .v-pip{
+      width:28px;height:28px;border-radius:50%;
+      display:flex;align-items:center;justify-content:center;
+      font:900 12px/1 "Nunito",sans-serif;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 color var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-slow) var(--ease-pop),
+                 opacity var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
+    }
+    .v-pip.lit-red  {background:var(--red);  color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(224,53,53,0.35);}
+    .v-pip.lit-amber{background:var(--amber);color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(212,130,10,0.35);}
+    .v-pip.lit-green{background:var(--green);color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(42,107,34,0.35);}
+    .v-pip.dim-red  {background:var(--red-bd);  color:var(--red);  opacity:0.6;}
+    .v-pip.dim-amber{background:var(--amber-bd);color:var(--amber);opacity:0.6;}
+    .v-pip.dim-green{background:var(--green-bd);color:var(--green);opacity:0.6;}
     .v-pip.off{background:rgba(0,0,0,0.06);color:var(--ink4);}
     .hero-verdict-text{flex:1;}
     .hero-verdict-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
@@ -781,15 +790,17 @@
     .hero-buy:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
     .hero-share{
       width:100%;padding:15px;border-radius:var(--r);
-      background:var(--card);border:1px solid var(--border);
-      font:700 14px/1 "Nunito",sans-serif;
-      color:var(--ink2);cursor:pointer;
-      box-shadow:var(--depth-1);
+      background:var(--green-lt);border:1.5px solid var(--green-bd);
+      font:700 15px/1 "Nunito",sans-serif;
+      color:var(--green);cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      box-shadow:0 2px 8px rgba(42,107,34,0.08);
       transition:transform var(--motion-fast) var(--ease-quick),
                  background var(--motion-norm) var(--ease-quick),
                  border-color var(--motion-norm) var(--ease-quick);
     }
-    .hero-share:active{background:var(--green-lt);border-color:var(--green-bd);transform:scale(0.98);}
+    .hero-share:active{background:var(--green-bd);transform:scale(0.98);}
+    .hero-share svg{flex-shrink:0;}
     .hero-new-search{
       width:100%;padding:12px;border-radius:var(--r);
       background:transparent;border:none;
@@ -870,11 +881,14 @@
     }
     .track:active{background:var(--green-lt);border-color:var(--green-bd);transform:scale(0.98);}
     .track-ico{
-      width:38px;height:38px;border-radius:11px;
+      width:40px;height:40px;border-radius:12px;
       background:var(--green-lt);
+      color:var(--green);
       display:flex;align-items:center;justify-content:center;
-      font-size:18px;flex-shrink:0;
+      flex-shrink:0;
+      transition:transform var(--motion-norm) var(--ease-pop);
     }
+    .track:active .track-ico{transform:rotate(-12deg) scale(1.05);}
     .track-body{flex:1;}
     .track-title{font:700 14px/1.2 "Nunito",sans-serif;color:var(--ink);letter-spacing:-0.1px;}
     .track-sub{font:500 12px/1.3 "Inter",sans-serif;color:var(--ink3);margin-top:2px;}
@@ -929,12 +943,75 @@
        SHARE CARD
     ───────────────────────────────────────── */
     .share-overlay{
-      position:absolute;inset:0;background:rgba(0,0,0,0.92);
+      position:absolute;inset:0;
+      background:rgba(0,0,0,0.92);
+      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
       z-index:200;display:none;flex-direction:column;
       align-items:center;justify-content:center;padding:24px;
+      padding-top:calc(24px + env(safe-area-inset-top));
+      padding-bottom:calc(24px + env(safe-area-inset-bottom));
+      animation:share-fade var(--motion-norm) var(--ease-quick) both;
     }
+    @keyframes share-fade{from{opacity:0;}to{opacity:1;}}
     .share-overlay.open{display:flex;}
-    .share-wrap{width:100%;max-width:320px;border-radius:20px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,0.5);}
+    .share-wrap{
+      width:100%;max-width:320px;
+      border-radius:20px;overflow:hidden;
+      box-shadow:0 24px 60px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.06);
+      animation:share-card-in 380ms var(--ease-pop) both;
+    }
+    @keyframes share-card-in{
+      from{opacity:0;transform:scale(0.92) translateY(8px);}
+      to  {opacity:1;transform:scale(1)    translateY(0);}
+    }
+    .share-actions{
+      display:grid;
+      grid-template-columns:1fr 1fr 1fr;
+      gap:8px;
+      padding:14px;
+      width:100%;max-width:320px;
+    }
+    .share-shr{
+      grid-column:1 / -1;
+      background:linear-gradient(132deg,#3d9435 0%,#2a6b22 100%);
+      color:#fff;border:none;
+      padding:16px;border-radius:14px;
+      font:800 16px/1 "Nunito",sans-serif;
+      cursor:pointer;
+      box-shadow:var(--depth-glow-green);
+      min-height:54px;
+      transition:transform var(--motion-fast) var(--ease-pop);
+    }
+    .share-shr:active{transform:scale(0.97);}
+    .share-channel{
+      display:flex;align-items:center;justify-content:center;gap:6px;
+      background:rgba(255,255,255,0.08);
+      color:#fff;
+      border:1px solid rgba(255,255,255,0.12);
+      padding:12px 8px;border-radius:12px;
+      font:700 12px/1 "Nunito",sans-serif;
+      cursor:pointer;
+      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+      transition:transform var(--motion-fast) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
+    }
+    .share-channel .sc-emoji{font-size:14px;}
+    .share-channel:active{transform:scale(0.95);background:rgba(255,255,255,0.16);}
+    .sc-whatsapp{background:rgba(37,211,102,0.16);border-color:rgba(37,211,102,0.4);}
+    .sc-whatsapp:active{background:rgba(37,211,102,0.3);}
+    .sc-twitter{background:rgba(255,255,255,0.06);}
+    .share-save,.share-cancel{
+      grid-column:span 3;
+      background:transparent;border:none;
+      padding:10px;
+      font:600 13px/1 "Inter",sans-serif;
+      cursor:pointer;
+      transition:color var(--motion-fast) var(--ease-quick);
+    }
+    .share-save{color:rgba(255,255,255,0.85);}
+    .share-save:active,.share-save:hover{color:#fff;}
+    .share-cancel{color:rgba(255,255,255,0.5);}
+    .share-cancel:active,.share-cancel:hover{color:rgba(255,255,255,0.85);}
     #share-canvas{width:100%;display:block;}
     .share-actions{width:100%;max-width:320px;margin-top:14px;display:flex;flex-direction:column;gap:8px;}
     .share-save{padding:15px;border:none;border-radius:14px;background:#fff;color:var(--green);font-size:15px;font-weight:800;font-family:"Nunito",sans-serif;cursor:pointer;}
@@ -1091,6 +1168,77 @@
     #screen-scan .swipe-pager .swipe-dot.active,
     #screen-snap .swipe-pager .swipe-dot.active{background:#fff;opacity:1;}
 
+    /* ═══════════════════════════════════════════════════════════
+       Wave 11 — Liquid-glass bottom nav.
+       Floats above all screens (except welcome / privacy). Frosted
+       backdrop blur + saturate makes it adapt to any background
+       (light bento, dark camera, green welcome). Active tab shows
+       a green-tint pill highlight that morphs across positions.
+       ═══════════════════════════════════════════════════════════ */
+    .botnav{
+      position:absolute;left:50%;
+      bottom:calc(12px + env(safe-area-inset-bottom));
+      transform:translateX(-50%);
+      display:none;
+      align-items:center;
+      gap:2px;
+      padding:6px;
+      background:rgba(255,255,255,0.72);
+      backdrop-filter:blur(24px) saturate(180%);
+      -webkit-backdrop-filter:blur(24px) saturate(180%);
+      border:1px solid rgba(255,255,255,0.6);
+      border-radius:var(--r-pill,999px);
+      box-shadow:0 8px 32px rgba(15,17,20,0.16),
+                 0 1px 0 rgba(255,255,255,0.7) inset;
+      z-index:60;
+      animation:botnav-in var(--motion-norm) var(--ease-pop) both;
+    }
+    .botnav.show{display:flex;}
+    @keyframes botnav-in{
+      from{opacity:0;transform:translateX(-50%) translateY(8px);}
+      to  {opacity:1;transform:translateX(-50%) translateY(0);}
+    }
+    /* Dark-bg variant — used over camera screens */
+    .botnav.dark{
+      background:rgba(20,20,22,0.5);
+      border-color:rgba(255,255,255,0.12);
+      box-shadow:0 8px 32px rgba(0,0,0,0.4),
+                 0 1px 0 rgba(255,255,255,0.08) inset;
+    }
+    .botnav.dark .botnav-tab{color:rgba(255,255,255,0.6);}
+    .botnav.dark .botnav-tab.active{background:rgba(255,255,255,0.12);color:#fff;}
+
+    .botnav-tab{
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      gap:2px;
+      padding:8px 14px;min-width:62px;
+      background:transparent;border:none;cursor:pointer;
+      color:var(--ink3);
+      border-radius:var(--r-pill,999px);
+      min-height:auto;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 color var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop);
+    }
+    .botnav-tab:active{transform:scale(0.92);}
+    .botnav-tab:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+    .botnav-tab.active{
+      background:linear-gradient(132deg,rgba(86,184,77,0.18) 0%,rgba(42,107,34,0.22) 100%);
+      color:var(--green);
+    }
+    .botnav-ico{
+      display:flex;align-items:center;justify-content:center;
+      width:22px;height:22px;
+    }
+    .botnav-lbl{font:700 10px/1 "Nunito",sans-serif;letter-spacing:0.1px;}
+
+    /* Reserve space at the bottom of scrollable content so nav doesn't
+       cover anything. Applied via .has-botnav modifier on body. */
+    body.has-botnav .bento{padding-bottom:calc(110px + env(safe-area-inset-bottom));}
+    body.has-botnav .res-scroll{padding-bottom:calc(110px + env(safe-area-inset-bottom));}
+    body.has-botnav .paste-body{padding-bottom:calc(110px + env(safe-area-inset-bottom));}
+    body.has-botnav .swipe-pager{display:none;} /* dot pager is now redundant — bottom nav shows position */
+
     /* ── Quality-audit pass: focus-visible everywhere, tap targets ── */
     button,a,[role="button"]{min-height:44px;}
     button.cam-btn,button.h-pill,button.trend-chip,button.cam-found-cta,button.bento-go,button.trend-tile,button.mode-tile,button.modal-skip,button.share-channel,button.share-cancel,button.share-save,button.paste-chip{min-height:auto;}
@@ -1151,6 +1299,19 @@
       30%,50%,70%{transform:translateX(-4px);}
       40%,60%{transform:translateX(4px);}
     }
+    .bento-clear{
+      flex-shrink:0;
+      width:26px;height:26px;border-radius:50%;
+      background:var(--ink4);color:#fff;
+      border:none;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;
+      opacity:0;transform:scale(0.7);
+      transition:opacity var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop);
+    }
+    .bento-clear[hidden]{display:none;}
+    .bento-clear.show{opacity:0.6;transform:scale(1);}
+    .bento-clear.show:hover,.bento-clear.show:active{opacity:1;background:var(--ink2);}
     .bento-go{
       flex-shrink:0;
       width:40px;height:40px;border-radius:11px;
@@ -1316,6 +1477,21 @@
       display:flex;align-items:center;justify-content:center;
       margin-bottom:4px;
     }
+    /* New designed badges (replace emoji) — coloured circle + line SVG icon */
+    .trend-tile-badge{
+      display:flex;align-items:center;justify-content:center;
+      width:40px;height:40px;border-radius:12px;
+      margin-bottom:6px;flex-shrink:0;
+      transition:transform var(--motion-norm) var(--ease-pop);
+    }
+    .trend-tile:active .trend-tile-badge{transform:scale(1.06) rotate(-3deg);}
+    .cat-audio   .trend-tile-badge{background:#eef2ff;color:#3b46ff;}
+    .cat-gaming  .trend-tile-badge{background:#fef0fa;color:#c0428a;}
+    .cat-home    .trend-tile-badge{background:#e8f7e0;color:#2a6b22;}
+    .cat-tv      .trend-tile-badge{background:#fff4e0;color:#a35f0d;}
+    .cat-phone   .trend-tile-badge{background:#e7f4f8;color:#0e6b85;}
+    .cat-kitchen .trend-tile-badge{background:#fff0e8;color:#bd4400;}
+    .cat-fashion .trend-tile-badge{background:#f5e8ff;color:#6b2eb8;}
     .trend-tile-name{
       font:700 13px/1.2 "Nunito",sans-serif;
       color:var(--ink);letter-spacing:-0.1px;
@@ -1444,7 +1620,11 @@
           </svg>
           <input id="search-input" type="text" placeholder="any product"
             autocomplete="off" enterkeyhint="search" inputmode="search"
+            oninput="toggleSearchClear(this.value)"
             onkeydown="if(event.key==='Enter')handleSearchClick()"/>
+          <button id="search-clear-btn" class="bento-clear" onclick="clearSearchInput()" aria-label="Clear search" tabindex="-1" type="button" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
           <button id="btn-search" class="bento-go" onclick="handleSearchClick()" aria-label="Check prices">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </button>
@@ -1492,35 +1672,47 @@
         <span class="bento-trending-pulse" aria-hidden="true"></span>
       </div>
       <div class="bento-trending" data-no-swipe>
-        <button class="trend-tile" onclick="trendSearch('Apple AirPods Pro 2')">
-          <div class="trend-tile-emoji" aria-hidden="true">🎧</div>
-          <div class="trend-tile-name">AirPods Pro 2</div>
-          <div class="trend-tile-cat">Audio</div>
+        <button class="trend-tile cat-audio" onclick="trendSearch('Apple AirPods Pro 2')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3v4z"/><path d="M3 19a2 2 0 0 0 2 2h1v-6H3v4z"/></svg>
+          </span>
+          <span class="trend-tile-name">AirPods Pro 2</span>
+          <span class="trend-tile-cat">Audio</span>
         </button>
-        <button class="trend-tile" onclick="trendSearch('Sony WH-1000XM5')">
-          <div class="trend-tile-emoji" aria-hidden="true">🎧</div>
-          <div class="trend-tile-name">Sony WH-1000XM5</div>
-          <div class="trend-tile-cat">Audio</div>
+        <button class="trend-tile cat-audio" onclick="trendSearch('Sony WH-1000XM5')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1v-6h3v4z"/><path d="M3 19a2 2 0 0 0 2 2h1v-6H3v4z"/></svg>
+          </span>
+          <span class="trend-tile-name">Sony WH-1000XM5</span>
+          <span class="trend-tile-cat">Audio</span>
         </button>
-        <button class="trend-tile" onclick="trendSearch('Nintendo Switch OLED')">
-          <div class="trend-tile-emoji" aria-hidden="true">🎮</div>
-          <div class="trend-tile-name">Switch OLED</div>
-          <div class="trend-tile-cat">Gaming</div>
+        <button class="trend-tile cat-gaming" onclick="trendSearch('Nintendo Switch OLED')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="12" x2="10" y2="12"/><line x1="8" y1="10" x2="8" y2="14"/><line x1="15" y1="13" x2="15.01" y2="13"/><line x1="18" y1="11" x2="18.01" y2="11"/><rect x="2" y="6" width="20" height="12" rx="2"/></svg>
+          </span>
+          <span class="trend-tile-name">Switch OLED</span>
+          <span class="trend-tile-cat">Gaming</span>
         </button>
-        <button class="trend-tile" onclick="trendSearch('Dyson V15 Detect')">
-          <div class="trend-tile-emoji" aria-hidden="true">🌪️</div>
-          <div class="trend-tile-name">Dyson V15</div>
-          <div class="trend-tile-cat">Home</div>
+        <button class="trend-tile cat-home" onclick="trendSearch('Dyson V15 Detect')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M2 12h4M18 12h4M12 18v4"/><circle cx="12" cy="12" r="4"/></svg>
+          </span>
+          <span class="trend-tile-name">Dyson V15</span>
+          <span class="trend-tile-cat">Home</span>
         </button>
-        <button class="trend-tile" onclick="trendSearch('Samsung 65 QLED TV')">
-          <div class="trend-tile-emoji" aria-hidden="true">📺</div>
-          <div class="trend-tile-name">Samsung QLED</div>
-          <div class="trend-tile-cat">TV</div>
+        <button class="trend-tile cat-tv" onclick="trendSearch('Samsung 65 QLED TV')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><line x1="8" y1="22" x2="16" y2="22"/><line x1="12" y1="18" x2="12" y2="22"/></svg>
+          </span>
+          <span class="trend-tile-name">Samsung QLED</span>
+          <span class="trend-tile-cat">TV</span>
         </button>
-        <button class="trend-tile" onclick="trendSearch('iPhone 15 Pro 256GB')">
-          <div class="trend-tile-emoji" aria-hidden="true">📱</div>
-          <div class="trend-tile-name">iPhone 15 Pro</div>
-          <div class="trend-tile-cat">Phone</div>
+        <button class="trend-tile cat-phone" onclick="trendSearch('iPhone 15 Pro 256GB')">
+          <span class="trend-tile-badge" aria-hidden="true">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+          </span>
+          <span class="trend-tile-name">iPhone 15 Pro</span>
+          <span class="trend-tile-cat">Phone</span>
         </button>
       </div>
     </div>
@@ -1749,7 +1941,10 @@
           <div class="hero-where" id="hero-where"><strong>Amazon UK</strong> has it for <strong>£249</strong> right now.</div>
           <div class="hero-actions">
             <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it on Amazon UK →</button>
-            <button class="hero-share" onclick="openShareCard()">📸 Share this — someone needs to know</button>
+            <button class="hero-share" onclick="openShareCard()" aria-label="Share this price">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span>Share this price</span>
+      </button>
             <button class="hero-new-search" onclick="goHome()">Check another product →</button>
           </div>
         </div>
@@ -1778,8 +1973,10 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
 
-      <div class="track" id="track-cta" onclick="showEmailModal()">
-        <div class="track-ico">🔔</div>
+      <div class="track" id="track-cta" onclick="showEmailModal()" role="button" tabindex="0">
+        <div class="track-ico" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        </div>
         <div class="track-body">
           <div class="track-title">Track this price</div>
           <div class="track-sub">We'll email you the moment it drops</div>
@@ -1831,17 +2028,54 @@
   <div class="share-wrap">
     <canvas id="share-canvas" width="640" height="820"></canvas>
   </div>
-  <div class="share-actions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:14px;">
-    <button class="share-shr" onclick="shareCard()" style="flex:1 0 100%;background:#2a6b22;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;">Share →</button>
-    <button class="share-channel" onclick="shareToWhatsApp()" style="flex:1 1 calc(33% - 6px);background:#25d366;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">WhatsApp</button>
-    <button class="share-channel" onclick="shareToTwitter()" style="flex:1 1 calc(33% - 6px);background:#000;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">X / Twitter</button>
-    <button class="share-channel" onclick="copyShareText()" style="flex:1 1 calc(33% - 6px);background:#f0f0ee;color:#1c1c1c;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">Copy link</button>
-    <button class="share-save" onclick="saveCard()" style="flex:1 1 calc(50% - 4px);background:transparent;color:#2a6b22;border:1px solid #2a6b22;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">Save image</button>
-    <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')" style="flex:1 1 calc(50% - 4px);background:transparent;color:#767676;border:none;padding:11px;font-weight:600;font-size:13px;cursor:pointer;">Cancel</button>
+  <div class="share-actions">
+    <button class="share-shr" onclick="shareCard()">Share →</button>
+    <button class="share-channel sc-whatsapp" onclick="shareToWhatsApp()">
+      <span class="sc-emoji">💬</span> WhatsApp
+    </button>
+    <button class="share-channel sc-twitter" onclick="shareToTwitter()">
+      <span class="sc-emoji">𝕏</span> Twitter
+    </button>
+    <button class="share-channel sc-copy" onclick="copyShareText()">
+      <span class="sc-emoji">🔗</span> Copy
+    </button>
+    <button class="share-save" onclick="saveCard()">📥 Save image</button>
+    <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')">Cancel</button>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
+
+<!-- ══════ BOTTOM NAV (liquid glass) ══════
+     Persistent across home/scan/snap/paste/results/searching. Hidden on
+     welcome and privacy. Tab tap = navigateSwipe to that screen. The
+     active item shows the green pill highlight; others sit muted. -->
+<nav class="botnav" id="botnav" aria-label="Primary">
+  <button class="botnav-tab" data-tab="home" onclick="navigateBotnav('home')">
+    <span class="botnav-ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11.5L12 4l9 7.5"/><path d="M5 10v10h14V10"/></svg>
+    </span>
+    <span class="botnav-lbl">Home</span>
+  </button>
+  <button class="botnav-tab" data-tab="scan" onclick="navigateBotnav('scan')">
+    <span class="botnav-ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="7" y2="12"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="12" x2="17" y2="12"/></svg>
+    </span>
+    <span class="botnav-lbl">Scan</span>
+  </button>
+  <button class="botnav-tab" data-tab="snap" onclick="navigateBotnav('snap')">
+    <span class="botnav-ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/><path d="M19 5l1 1M19 7l1-1"/></svg>
+    </span>
+    <span class="botnav-lbl">Snap</span>
+  </button>
+  <button class="botnav-tab" data-tab="paste" onclick="navigateBotnav('paste')">
+    <span class="botnav-ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+    </span>
+    <span class="botnav-lbl">Paste</span>
+  </button>
+</nav>
 
 
 <script>
@@ -1931,6 +2165,20 @@ window.addEventListener('appinstalled',()=>{
 window.addEventListener('load',()=>{
   if(isIOS()&&!isStandalonePWA())setTimeout(showInstallBanner,1200);
 
+  // ── Returning-user auto-skip welcome (Wave 9) ──
+  // First visit: stay on welcome (brand moment, install banner, etc).
+  // Returning visit: skip straight to home — they know what the app does.
+  // The flag flips on first goTo away from welcome.
+  try{
+    if(localStorage.getItem('savvey_returning_user') === '1'){
+      // Defer one frame so the screen-active class on welcome doesn't flash
+      requestAnimationFrame(() => { goTo('home'); });
+    }
+  }catch(e){ /* localStorage blocked — show welcome as before */ }
+
+  // ── Boot the rotating placeholder ── (idle visual interest)
+  startPlaceholderRotation();
+
   // ── Inject swipe-pager into each swipeable screen (Wave 3) ──
   // Creates a 4-dot pager pinned to the bottom of home/scan/snap/paste.
   // Doing this in JS rather than in markup keeps the four insertions
@@ -1950,6 +2198,7 @@ window.addEventListener('load',()=>{
     screen.appendChild(pager);
   });
   updateSwipePager();
+  updateBotnav();
 
   // ── Wire the home + welcome logos as tap-to-home (Wave 3) ──
   // Marks every Savvey logo instance as a clickable home button. New
@@ -2026,6 +2275,11 @@ function goBackFromResults(){
 
 function goTo(screen, opts){
   if(currentScreen===screen)return;
+  // Mark returning-user the first time the user leaves welcome — used by
+  // the next page-load to skip welcome and land on home directly.
+  if(currentScreen==='welcome' && screen!=='welcome'){
+    try{ localStorage.setItem('savvey_returning_user','1'); }catch(e){}
+  }
   // Stop scanner when leaving scan screen
   if(currentScreen==='scan'&&screen!=='scan')stopScanner();
   if(currentScreen==='snap'&&screen!=='snap')stopSnapper();
@@ -2045,6 +2299,7 @@ function goTo(screen, opts){
   if(typeof window!=='undefined'&&window.scrollTo)window.scrollTo(0,0);
   currentScreen=screen;
   updateSwipePager();
+  updateBotnav();
   // Screen entry actions
   if(screen==='home'){
     silentGeo();
@@ -2072,9 +2327,74 @@ function handleSearchClick(){
       inp.classList.add('shake');
       inp.focus();
     }
+    haptic(20);
     return;
   }
+  haptic(10);
   doLiveSearch();
+}
+
+// ── Clear-input button (Wave 9) ──
+function toggleSearchClear(val){
+  const btn = document.getElementById('search-clear-btn');
+  if(!btn) return;
+  const has = !!(val && val.trim());
+  btn.hidden = !has;
+  // CSS transition won't run on display:none → display:flex change without
+  // a frame between, so we add the .show class after a frame.
+  if(has){
+    requestAnimationFrame(()=>btn.classList.add('show'));
+  } else {
+    btn.classList.remove('show');
+  }
+}
+function clearSearchInput(){
+  const inp = document.getElementById('search-input');
+  if(!inp) return;
+  inp.value = '';
+  toggleSearchClear('');
+  inp.focus();
+  haptic(8);
+}
+
+// ── Haptic feedback (Wave 9) ──
+//
+// Tiny vibrations on key interactions — adds a satisfying physical feel on
+// devices that support it. Silently no-ops on iOS Safari (which doesn't
+// expose the Vibration API), and on desktop browsers.
+function haptic(ms){
+  try{ if(navigator.vibrate) navigator.vibrate(ms); }catch(e){}
+}
+
+// ── Rotating placeholder examples (Wave 9) ──
+//
+// Cycles through real product names every 3 seconds while the input is
+// empty and unfocused. Stops the moment the user focuses or types,
+// resumes if they blur with empty input. Communicates capability without
+// being a tutorial.
+const PLACEHOLDER_EXAMPLES = [
+  'Sony WH-1000XM5',
+  'Switch OLED',
+  'Dyson V15',
+  'AirPods Pro',
+  'iPhone 15 Pro',
+  'Ninja Foodi',
+  'any product',
+];
+let _placeholderTimer = null;
+let _placeholderIdx = 0;
+function startPlaceholderRotation(){
+  const inp = document.getElementById('search-input');
+  if(!inp) return;
+  stopPlaceholderRotation();
+  _placeholderTimer = setInterval(() => {
+    if(document.activeElement === inp || (inp.value && inp.value.trim())) return;
+    _placeholderIdx = (_placeholderIdx + 1) % PLACEHOLDER_EXAMPLES.length;
+    inp.placeholder = PLACEHOLDER_EXAMPLES[_placeholderIdx];
+  }, 3000);
+}
+function stopPlaceholderRotation(){
+  if(_placeholderTimer){ clearInterval(_placeholderTimer); _placeholderTimer = null; }
 }
 
 // ── First-visit swipe coach pill (Wave 5) ──
@@ -2171,6 +2491,7 @@ document.addEventListener('pointercancel', () => { _swipeStart = null; }, { pass
 
 function navigateSwipe(targetScreen, dir){
   dismissSwipeCoach();
+  haptic(12); // confirms the gesture/tap registered
   goTo(targetScreen, { slideDir: dir });
   if(targetScreen === 'scan')  startScanner();
   if(targetScreen === 'snap')  startSnapper();
@@ -2183,6 +2504,52 @@ function updateSwipePager(){
       dot.classList.toggle('active', dot.dataset.target === currentScreen);
     });
   });
+}
+
+// ── Bottom nav (Wave 11) ──
+//
+// Liquid-glass tab bar floating above content. Visible on the four input
+// screens + results + searching. Hidden on welcome and privacy. Active
+// tab gets the green pill highlight; tab tap navigates via the existing
+// swipe machinery so the slide animation still fires.
+const BOTNAV_VISIBLE_ON = new Set(['home','scan','snap','paste','results','searching']);
+const BOTNAV_DARK_ON    = new Set(['scan','snap']);
+
+function updateBotnav(){
+  const nav = document.getElementById('botnav');
+  if(!nav) return;
+  const show = BOTNAV_VISIBLE_ON.has(currentScreen);
+  nav.classList.toggle('show', show);
+  nav.classList.toggle('dark', BOTNAV_DARK_ON.has(currentScreen));
+  document.body.classList.toggle('has-botnav', show);
+  // Active tab — for results/searching, mirror the input method that
+  // produced this view so users see context.
+  let activeTab = currentScreen;
+  if(currentScreen === 'results' || currentScreen === 'searching'){
+    activeTab = (typeof inputMethod === 'string' && ['scan','snap','paste'].includes(inputMethod)) ? inputMethod : 'home';
+  }
+  nav.querySelectorAll('.botnav-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.tab === activeTab);
+  });
+}
+
+// Tap handler for tabs. Reuses navigateSwipe for slide animations + camera
+// warming. Direction is computed based on rotation order so the slide
+// matches the gesture you'd have used.
+function navigateBotnav(target){
+  if(currentScreen === target) return;
+  const fromIdx = SWIPE_ROTATION.indexOf(currentScreen);
+  const toIdx   = SWIPE_ROTATION.indexOf(target);
+  // Off-rotation screens (results/searching) → treat as fade-style
+  if(fromIdx === -1 || toIdx === -1){
+    haptic(12);
+    goTo(target);
+    if(target === 'scan')  startScanner();
+    if(target === 'snap')  startSnapper();
+    return;
+  }
+  const dir = toIdx > fromIdx ? 'left' : 'right';
+  navigateSwipe(target, dir);
 }
 
 // ── goHome() ─ always use this instead of goHome() directly ──
@@ -3092,7 +3459,10 @@ function renderResults(sc){
   if(actions&&!document.getElementById('btn-buy-now')){
     actions.innerHTML=`
       <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it →</button>
-      <button class="hero-share" onclick="openShareCard()">📸 Share this — someone needs to know</button>
+      <button class="hero-share" onclick="openShareCard()" aria-label="Share this price">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        <span>Share this price</span>
+      </button>
       <button class="hero-new-search" onclick="goHome()">Check another product →</button>
     `;
   }
@@ -3945,13 +4315,22 @@ function openShareCard(){
 function drawCard(sc){
   const canvas=document.getElementById('share-canvas');
   const ctx=canvas.getContext('2d');
-  const W=640,H=800;
+  const W=640,H=820;
   canvas.width=W;canvas.height=H;
 
   const verdictCol=sc.spc==='red'?'#e03535':sc.spc==='amber'?'#d4820a':'#2a6b22';
   const verdictLt =sc.spc==='red'?'#fff1f1':sc.spc==='amber'?'#fff8ec':'#edfae9';
   const verdictBd =sc.spc==='red'?'#fac8c8':sc.spc==='amber'?'#fce0a8':'#c2e8bb';
   const brand='#2a6b22';
+
+  // Verdict emoji per state — matches the dry, witty brand voice.
+  // Walk away → 🚨, Better deal → ⚠️, Worth a look → 👀, Pretty good → 👍, Best price → ✅
+  const verdictEmoji =
+    sc.score === 1 ? '🚨' :
+    sc.score === 2 ? '⚠️' :
+    sc.score === 3 ? '👀' :
+    sc.score === 4 ? '👍' :
+    sc.score === 5 ? '✅' : '🛒';
 
   // ── Background ──
   ctx.fillStyle='#ffffff';ctx.fillRect(0,0,W,H);
@@ -3965,7 +4344,7 @@ function drawCard(sc){
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('S',60,48);
 
-  // SAVVEY wordmark
+  // SAVVEY wordmark + tagline
   ctx.fillStyle='#fff';ctx.font='900 28px Arial,sans-serif';
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText('SAVVEY',108,40);
@@ -3977,20 +4356,34 @@ function drawCard(sc){
   ctx.textAlign='right';ctx.textBaseline='middle';
   ctx.fillText('savvey.app',W-32,48);
 
-  // ── Verdict colour band ──
-  ctx.fillStyle=verdictLt;ctx.fillRect(0,96,W,80);
-  ctx.fillStyle=verdictBd;ctx.fillRect(0,175,W,1.5);
+  // ── Verdict colour band with emoji ──
+  ctx.fillStyle=verdictLt;ctx.fillRect(0,96,W,96);
+  ctx.fillStyle=verdictBd;ctx.fillRect(0,191,W,1.5);
 
-  // Verdict label + title centred in band
+  // Emoji on the left of the band
+  ctx.font='700 38px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",Arial,sans-serif';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText(verdictEmoji, 32, 144);
+
+  // Verdict label + title (centred, after emoji space)
   ctx.fillStyle=verdictCol;
   ctx.font='700 11px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('SAVVEY SCORE',W/2,115);
-  ctx.font='900 26px Arial,sans-serif';
-  ctx.fillText(sc.vTitle||'Result',W/2,150);
+  ctx.fillText('SAVVEY SCORE',W/2,124);
+  ctx.font='900 28px Arial,sans-serif';
+  ctx.fillText(sc.vTitle||'Result',W/2,160);
+
+  // Score chip on the right of the band ("4 / 5")
+  if(sc.score){
+    const chipX=W-100, chipY=144, chipW=64, chipH=32;
+    ctx.fillStyle=verdictCol;rr(ctx, chipX-chipW/2, chipY-chipH/2, chipW, chipH, 16);ctx.fill();
+    ctx.fillStyle='#fff';ctx.font='900 16px Arial,sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(sc.score+' / 5', chipX, chipY+1);
+  }
 
   // ── Pips row ──
-  const pipY=230;const pipR=28;const pipGap=72;
+  const pipY=246;const pipR=26;const pipGap=68;
   const pipStartX=W/2-(2*pipGap);
   for(let i=1;i<=5;i++){
     const px=pipStartX+(i-1)*pipGap;
@@ -4013,54 +4406,111 @@ function drawCard(sc){
     }
   }
 
-  // ── Product name ──
-  const q=(sc.query||liveQuery||'Product').toUpperCase();
+  // ── Product line: emoji + name (what they searched) ──
+  const productEmoji = guessProductEmoji(sc.query || liveQuery || '');
+  const qRaw=(sc.query||liveQuery||'Product');
+  const q=qRaw.length>30?qRaw.slice(0,28)+'…':qRaw;
   ctx.fillStyle='#b0b5be';ctx.font='700 11px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('PRODUCT',W/2,292);
-  ctx.fillStyle='#0f1114';ctx.font='700 22px Arial,sans-serif';
-  const qShort=q.length>34?q.slice(0,32)+'…':q;
-  ctx.fillText(qShort,W/2,322);
+  ctx.fillText('YOU SEARCHED FOR',W/2,302);
+  ctx.fillStyle='#0f1114';
+  ctx.font='800 24px Arial,sans-serif';
+  ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillText(productEmoji + '  ' + q, W/2, 332);
 
-  // ── Big saving number ──
+  // ── Big saving / price number ──
   if(sc.spc==='green'){
-    // Green: show best price as the hero
-    ctx.fillStyle=brand;ctx.font='900 88px Arial,sans-serif';
+    ctx.fillStyle=brand;ctx.font='900 96px Arial,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText('£'+sc.bestPrice,W/2,430);
-    ctx.fillStyle='#3d4148';ctx.font='600 20px Arial,sans-serif';
-    ctx.fillText('Best price in the UK right now',W/2,490);
+    ctx.fillText('£'+sc.bestPrice,W/2,432);
+    ctx.fillStyle='#3d4148';ctx.font='700 18px Arial,sans-serif';
+    ctx.fillText('✓  Best price in the UK · ' + (sc.bestRetailer||'right here'),W/2,492);
   }else{
-    // Red/amber: show saving as hero
-    ctx.fillStyle=verdictCol;ctx.font='900 104px Arial,sans-serif';
+    ctx.fillStyle=verdictCol;ctx.font='900 108px Arial,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText('£'+(sc.saving||0),W/2,430);
-    ctx.fillStyle='#3d4148';ctx.font='600 18px Arial,sans-serif';
-    ctx.fillText('cheaper at '+sc.bestRetailer,W/2,488);
+    ctx.fillText('£'+(sc.saving||0),W/2,432);
+    ctx.fillStyle='#3d4148';ctx.font='700 18px Arial,sans-serif';
+    ctx.fillText('💸  cheaper at ' + sc.bestRetailer + ' · £' + sc.bestPrice,W/2,492);
   }
 
-  // ── Wit line ──
-  const wit=witLine(sc.spc,sc.saving||0,'the shop',sc.bestRetailer||'Amazon UK');
-  ctx.fillStyle='#767c88';ctx.font='italic 500 15px Arial,sans-serif';
+  // ── AI wit quote — hero with proper quote marks ──
+  const wit=sc.witLine || witLine(sc.spc,sc.saving||0,'the shop',sc.bestRetailer||'Amazon UK');
+  // Open-quote glyph
+  ctx.fillStyle=verdictBd;ctx.font='900 64px Georgia,"Times New Roman",serif';
+  ctx.textAlign='left';ctx.textBaseline='middle';
+  ctx.fillText('“', 56, 558);
+  // Wit body — wrap to two lines if needed
+  ctx.fillStyle='#3d4148';ctx.font='italic 600 17px Georgia,"Times New Roman",serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  const witShort=wit.length>58?wit.slice(0,56)+'…':wit;
-  ctx.fillText('"'+witShort+'"',W/2,536);
+  wrapText(ctx, wit, W/2, 552, W-160, 24, 2);
+  // Close-quote glyph
+  ctx.fillStyle=verdictBd;ctx.font='900 64px Georgia,"Times New Roman",serif';
+  ctx.textAlign='right';ctx.textBaseline='middle';
+  ctx.fillText('”', W-56, 590);
 
   // ── CTA strip ──
-  ctx.fillStyle=brand;rr(ctx,40,572,W-80,64,16);ctx.fill();
+  ctx.fillStyle=brand;rr(ctx,40,648,W-80,72,18);ctx.fill();
   ctx.fillStyle='#fff';ctx.font='900 20px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   if(sc.spc==='green'){
-    ctx.fillText('Best price confirmed — savvey.app',W/2,604);
+    ctx.fillText('🎯  Best UK price · savvey.app',W/2,684);
   }else{
-    ctx.fillText('Save £'+(sc.saving||0)+' — check savvey.app',W/2,604);
+    ctx.fillText('💰  Save £'+(sc.saving||0)+' · savvey.app',W/2,684);
   }
 
   // ── Bottom footer ──
   ctx.fillStyle='#f5f5f7';ctx.fillRect(0,H-72,W,72);
   ctx.fillStyle='#b0b5be';ctx.font='500 12px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('Free · No account needed · UK retailers only',W/2,H-36);
+  ctx.fillText('Free · No account needed · 40+ UK retailers',W/2,H-36);
+}
+
+// Picks a category emoji from the product name. Generic shopping bag if
+// nothing matches — keeps the card visually consistent.
+function guessProductEmoji(q){
+  const s=String(q||'').toLowerCase();
+  if(/airpod|headphone|wh-1000|earbud|bose|soundbar|jbl|galaxy buds/.test(s))return '🎧';
+  if(/iphone|samsung galaxy|pixel|android|smartphone/.test(s))return '📱';
+  if(/ipad|tablet|kindle|fire tv stick/.test(s))return '📲';
+  if(/macbook|laptop|chromebook|surface/.test(s))return '💻';
+  if(/tv\b|qled|oled tv|samsung tv|lg tv|sony tv/.test(s))return '📺';
+  if(/switch|playstation|ps5|xbox|nintendo|console/.test(s))return '🎮';
+  if(/dyson|vacuum|hoover|shark/.test(s))return '🌪️';
+  if(/coffee|nespresso|kettle|toaster|microwave|air fryer|ninja foodi|instant pot/.test(s))return '🍳';
+  if(/fridge|freezer|washing machine|dishwasher/.test(s))return '🏠';
+  if(/echo|alexa|google home|nest|smart speaker/.test(s))return '🔊';
+  if(/camera|gopro|canon|nikon|sony alpha/.test(s))return '📷';
+  if(/watch|fitbit|garmin|apple watch/.test(s))return '⌚';
+  if(/ring\b|doorbell|hue|smart bulb/.test(s))return '💡';
+  if(/lego|playmobil|barbie|toy/.test(s))return '🧸';
+  if(/perfume|lipstick|skincare|moisturiser/.test(s))return '💄';
+  if(/baby|pram|stroller|nappy|nappies/.test(s))return '👶';
+  return '🛒';
+}
+
+// Simple canvas word-wrap with line cap. Uses ctx's existing font/style.
+function wrapText(ctx, text, x, y, maxWidth, lineHeight, maxLines){
+  const words=String(text||'').split(/\s+/);
+  const lines=[];
+  let cur='';
+  for(const w of words){
+    const test=cur?(cur+' '+w):w;
+    if(ctx.measureText(test).width > maxWidth && cur){
+      lines.push(cur);
+      cur=w;
+      if(lines.length >= maxLines-1) break;
+    } else {
+      cur=test;
+    }
+  }
+  if(cur && lines.length < maxLines) lines.push(cur);
+  // If we broke before consuming all words, append ellipsis
+  const consumed = lines.join(' ');
+  if(consumed.replace(/\s+/g,'').length < text.replace(/\s+/g,'').length){
+    lines[lines.length-1] = lines[lines.length-1].replace(/\s*\S*$/,'') + '…';
+  }
+  const startY = y - ((lines.length-1) * lineHeight) / 2;
+  lines.forEach((ln, i) => ctx.fillText(ln, x, startY + i*lineHeight));
 }
 function rr(ctx,x,y,w,h,r){
   ctx.beginPath();ctx.moveTo(x+r,y);
