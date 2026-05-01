@@ -1,4 +1,17 @@
-// api/search.js — Savvey Search Proxy v6.10
+// api/search.js — Savvey Search Proxy v6.13
+import { createHash, createHmac } from 'node:crypto';
+//
+// Reverse-chronological change log up top:
+//
+// v6.13:
+//   - AmazonProductProvider class (PAAPI 5.0 SearchItems with AWS SigV4
+//     signing). Activates when AMAZON_ACCESS_KEY + AMAZON_SECRET_KEY +
+//     AMAZON_PARTNER_TAG are set in Vercel env vars. Becomes Tier 1
+//     primary data alongside Awin (when Awin lands) — Serper drops to
+//     fallback. Returns structured Amazon UK pricing with affiliate
+//     tag baked into DetailPageURL.
+//
+//
 // Change log v6.0:
 //   - PRICE_CEILING hard constant replaces dynamic lowest×3 anchor
 //   - Nuclear cleanPrice() sanitizer applied at every intake point
@@ -50,7 +63,7 @@
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.12';
+const VERSION = 'search.js v6.13';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -342,6 +355,147 @@ function cseCircuitOk() {
 }
 
 // ─────────────────────────────────────────────────────────────
+// AMAZON PRODUCT PROVIDER — PAAPI 5.0
+//
+// Activates the moment all three env vars are present in Vercel:
+//   AMAZON_ACCESS_KEY    — generated in Associates Central → Tools →
+//                          Product Advertising API → Manage Credentials
+//   AMAZON_SECRET_KEY    — paired secret from same screen
+//   AMAZON_PARTNER_TAG   — your Associates ID, e.g. "savvey-21"
+//
+// PAAPI 5.0 docs: https://webservices.amazon.co.uk/paapi5/documentation/
+// Endpoint:       https://webservices.amazon.co.uk/paapi5/searchitems
+// Region:         eu-west-1
+// Service:        ProductAdvertisingAPI
+//
+// Rate limit: starts at 1 request/second. Doubles after a few sales
+// flow through the Associates account. We cap to 5 items per request
+// to keep payloads small and fall through gracefully on rate-limit
+// (429/503) so the rest of the search pipeline still produces results.
+//
+// The DetailPageURL Amazon returns already includes the partner tag —
+// commission tracking is automatic on click-through.
+// ─────────────────────────────────────────────────────────────
+class AmazonProductProvider {
+  constructor(accessKey, secretKey, partnerTag) {
+    this.accessKey   = accessKey;
+    this.secretKey   = secretKey;
+    this.partnerTag  = partnerTag;
+    this.host        = 'webservices.amazon.co.uk';
+    this.region      = 'eu-west-1';
+    this.service     = 'ProductAdvertisingAPI';
+    this.path        = '/paapi5/searchitems';
+    this.target      = 'com.amazon.paapi5.v1.ProductAdvertisingAPIv1.SearchItems';
+    this.marketplace = 'www.amazon.co.uk';
+  }
+
+  async search(query) {
+    try {
+      const body = JSON.stringify({
+        PartnerTag:   this.partnerTag,
+        PartnerType:  'Associates',
+        Marketplace:  this.marketplace,
+        Keywords:     query,
+        SearchIndex:  'All',
+        ItemCount:    5,
+        Resources: [
+          'ItemInfo.Title',
+          'Offers.Listings.Price',
+          'Images.Primary.Medium',
+        ],
+      });
+
+      const headers = this._signRequest(body);
+
+      const r = await fetch(`https://${this.host}${this.path}`, {
+        method:  'POST',
+        headers,
+        body,
+      });
+
+      if (!r.ok) {
+        const errText = await r.text().catch(() => '');
+        console.error(`[${VERSION}] Amazon PAAPI ${r.status}:`, errText.slice(0, 240));
+        return [];
+      }
+
+      const data  = await r.json();
+      const items = (data && data.SearchResult && data.SearchResult.Items) || [];
+
+      return items.map(it => {
+        const listing     = it && it.Offers && it.Offers.Listings && it.Offers.Listings[0];
+        const priceAmount = listing && listing.Price && listing.Price.Amount;
+        if (priceAmount === undefined || priceAmount === null) return null;
+        const price = admitPrice(priceAmount);
+        if (price === null) return null;
+        return {
+          source:   'Amazon UK',
+          price,
+          link:     (it && it.DetailPageURL) || '', // already carries partner tag
+          title:    (it && it.ItemInfo && it.ItemInfo.Title && it.ItemInfo.Title.DisplayValue) || query,
+          delivery: '',
+        };
+      }).filter(Boolean);
+    } catch (e) {
+      console.error(`[${VERSION}] Amazon PAAPI error:`, e.message);
+      return [];
+    }
+  }
+
+  // AWS Signature v4 — manual implementation so we don't pull in the
+  // ~5 MB aws-sdk just for this one signed call. Standard SigV4 flow:
+  //   1. canonical request → 2. string to sign → 3. derived signing key →
+  //   4. HMAC-SHA256 signature → 5. Authorization header.
+  _signRequest(body) {
+    const now       = new Date();
+    const amzDate   = now.toISOString().replace(/[:\-]|\.\d{3}/g, ''); // 20240101T120000Z
+    const dateShort = amzDate.slice(0, 8);                              // 20240101
+
+    const headersToSign = {
+      'content-encoding': 'amz-1.0',
+      'content-type':     'application/json; charset=utf-8',
+      'host':             this.host,
+      'x-amz-date':       amzDate,
+      'x-amz-target':     this.target,
+    };
+
+    const sortedKeys     = Object.keys(headersToSign).sort();
+    const signedHeaders  = sortedKeys.join(';');
+    const canonHeaders   = sortedKeys.map(k => `${k}:${headersToSign[k]}`).join('\n') + '\n';
+    const payloadHash    = createHash('sha256').update(body).digest('hex');
+
+    const canonicalRequest = [
+      'POST',
+      this.path,
+      '',                  // empty query string
+      canonHeaders,
+      signedHeaders,
+      payloadHash,
+    ].join('\n');
+
+    const credentialScope = `${dateShort}/${this.region}/${this.service}/aws4_request`;
+
+    const stringToSign = [
+      'AWS4-HMAC-SHA256',
+      amzDate,
+      credentialScope,
+      createHash('sha256').update(canonicalRequest).digest('hex'),
+    ].join('\n');
+
+    const kDate    = createHmac('sha256', `AWS4${this.secretKey}`).update(dateShort).digest();
+    const kRegion  = createHmac('sha256', kDate).update(this.region).digest();
+    const kService = createHmac('sha256', kRegion).update(this.service).digest();
+    const kSigning = createHmac('sha256', kService).update('aws4_request').digest();
+    const signature = createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+
+    return {
+      ...headersToSign,
+      'Authorization': `AWS4-HMAC-SHA256 Credential=${this.accessKey}/${credentialScope}, SignedHeaders=${signedHeaders}, Signature=${signature}`,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
 // AWIN PRODUCT PROVIDER
 // ─────────────────────────────────────────────────────────────
 class AwinProductProvider {
@@ -588,13 +742,34 @@ export default async function handler(req, res) {
 
   let rawItems = [];
 
-  // 1. Awin (if AWIN_API_KEY set)
-  const AWIN_KEY = process.env.AWIN_API_KEY;
+  // 1. Tier 1 sources — Amazon PAAPI + Awin in parallel.
+  //    Both stay dormant until their env vars are set, so this no-ops
+  //    safely on a fresh deploy.
+  const AMAZON_KEY    = process.env.AMAZON_ACCESS_KEY;
+  const AMAZON_SECRET = process.env.AMAZON_SECRET_KEY;
+  const AMAZON_TAG    = process.env.AMAZON_PARTNER_TAG;
+  const AWIN_KEY      = process.env.AWIN_API_KEY;
+
+  const tier1Promises = [];
+  if (AMAZON_KEY && AMAZON_SECRET && AMAZON_TAG) {
+    const amazon = new AmazonProductProvider(AMAZON_KEY, AMAZON_SECRET, AMAZON_TAG);
+    tier1Promises.push(amazon.search(q).then(items => ({ name: 'Amazon', items })));
+  }
   if (AWIN_KEY) {
-    const awin  = new AwinProductProvider(AWIN_KEY);
-    const awinR = await awin.search(q);
-    rawItems.push(...awinR);
-    console.log(`[${VERSION}] Awin: ${awinR.length} items`);
+    const awin = new AwinProductProvider(AWIN_KEY);
+    tier1Promises.push(awin.search(q).then(items => ({ name: 'Awin', items })));
+  }
+
+  if (tier1Promises.length > 0) {
+    const tier1Results = await Promise.allSettled(tier1Promises);
+    for (const r of tier1Results) {
+      if (r.status === 'fulfilled') {
+        rawItems.push(...r.value.items);
+        console.log(`[${VERSION}] ${r.value.name}: ${r.value.items.length} items`);
+      } else {
+        console.error(`[${VERSION}] tier-1 source failed:`, r.reason?.message);
+      }
+    }
   }
 
   // 2. Serper — TWO parallel calls

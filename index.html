@@ -1710,6 +1710,12 @@ function witLine(spc,saving,retailer,bestRetailer){
   return 'A small gap, but it\'s yours to keep.';
 }
 
+// Affiliate tags — apply automatically when the Buy URL points to a
+// retailer we have a commission relationship with.
+const AFFILIATE_TAGS={
+  amazon:'savvey-21', // Amazon Associates UK — approved 1 May 2026
+};
+
 // Direct retailer search URLs — used when the Serper-supplied link is a
 // Google Shopping aggregator URL (which would dump the user back on Google
 // instead of the retailer). Pre-fills the search query at the retailer's
@@ -1718,7 +1724,7 @@ function retailerSearchUrl(retailerName, query){
   const q=encodeURIComponent(query||'');
   if(!q)return null;
   const r=String(retailerName||'').toLowerCase();
-  if(r.includes('amazon'))       return `https://www.amazon.co.uk/s?k=${q}`;
+  if(r.includes('amazon'))       return `https://www.amazon.co.uk/s?k=${q}&tag=${AFFILIATE_TAGS.amazon}`;
   if(r.includes('currys'))       return `https://www.currys.co.uk/search?search=${q}`;
   if(r.includes('argos'))        return `https://www.argos.co.uk/search/${q}/`;
   if(r.includes('john lewis'))   return `https://www.johnlewis.com/search?search-term=${q}`;
