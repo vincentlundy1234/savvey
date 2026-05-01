@@ -1318,26 +1318,40 @@ function cleanQuery(raw){
 }
 
 // ── UK Retailers ──
+// Indexed by domain (used as the canonical key) + a list of source-name
+// substrings (lowercase) that Google Shopping populates for each retailer.
+// We have to match by source name because Serper's shopping API surfaces
+// every item with a Google aggregator URL — see search.js v6.8 change log.
 const UK_RETAILERS={
-  'amazon.co.uk':  {name:'Amazon UK',    aff:'?tag=savvey-21'},
-  'currys.co.uk':  {name:'Currys',       aff:''},
-  'johnlewis.com': {name:'John Lewis',   aff:''},
-  'argos.co.uk':   {name:'Argos',        aff:''},
-  'ao.com':        {name:'AO.com',       aff:''},
-  'very.co.uk':    {name:'Very',         aff:''},
-  'richersounds.com':{name:'Richer Sounds',aff:''},
-  'box.co.uk':     {name:'Box.co.uk',    aff:''},
-  'ebay.co.uk':    {name:'eBay UK',      aff:''},
-  'halfords.com':  {name:'Halfords',     aff:''},
-  'screwfix.com':  {name:'Screwfix',     aff:''},
-  'boots.com':     {name:'Boots',        aff:''},
-  'costco.co.uk':  {name:'Costco UK',    aff:''},
+  'amazon.co.uk':    {name:'Amazon UK',     aff:'?tag=savvey-21', srcTerms:['amazon']},
+  'currys.co.uk':    {name:'Currys',        aff:'', srcTerms:['currys']},
+  'johnlewis.com':   {name:'John Lewis',    aff:'', srcTerms:['john lewis']},
+  'argos.co.uk':     {name:'Argos',         aff:'', srcTerms:['argos']},
+  'ao.com':          {name:'AO.com',        aff:'', srcTerms:['ao.com',' ao ']},
+  'very.co.uk':      {name:'Very',          aff:'', srcTerms:['very.co.uk','very ']},
+  'richersounds.com':{name:'Richer Sounds', aff:'', srcTerms:['richer sounds','richersounds']},
+  'box.co.uk':       {name:'Box.co.uk',     aff:'', srcTerms:['box.co.uk','box.com']},
+  'ebay.co.uk':      {name:'eBay UK',       aff:'', srcTerms:['ebay']},
+  'halfords.com':    {name:'Halfords',      aff:'', srcTerms:['halfords']},
+  'screwfix.com':    {name:'Screwfix',      aff:'', srcTerms:['screwfix']},
+  'boots.com':       {name:'Boots',         aff:'', srcTerms:['boots']},
+  'costco.co.uk':    {name:'Costco UK',     aff:'', srcTerms:['costco']},
+  'selfridges.com':  {name:'Selfridges',    aff:'', srcTerms:['selfridges']},
+  'mcgrocer.com':    {name:'McGrocer',      aff:'', srcTerms:['mcgrocer']},
+  'harveynichols.com':{name:'Harvey Nichols',aff:'', srcTerms:['harvey nichols']},
 };
 
-function matchRetailer(url){
-  if(!url)return null;
+// matchRetailer accepts either a URL or a source name (or both — pass them
+// concatenated). Tries hostname/domain match first, falls back to the
+// per-retailer source-name substring list.
+function matchRetailer(input){
+  if(!input)return null;
+  const s=String(input).toLowerCase();
   for(const [domain,data] of Object.entries(UK_RETAILERS)){
-    if(url.includes(domain))return{domain,...data};
+    if(s.includes(domain))return{domain,...data};
+  }
+  for(const [domain,data] of Object.entries(UK_RETAILERS)){
+    if((data.srcTerms||[]).some(t=>s.includes(t)))return{domain,...data};
   }
   return null;
 }
@@ -1473,7 +1487,10 @@ function fetchPrices(query){
     // any item whose URL doesn't match a UK retailer domain is dropped.
     const raw=(d1.shopping||[]);
     const mapped=raw.map(i=>{
-      const ret=matchRetailer(i.link||i.source||'');
+      // Pass BOTH link and source — link is usually a Google aggregator URL,
+      // source is the retailer name string. matchRetailer falls back to the
+      // per-retailer source-name substring list if URL match fails.
+      const ret=matchRetailer((i.link||'')+' '+(i.source||''));
       if(!ret)return null; // not a recognised UK retailer — discard
       const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
       return{
