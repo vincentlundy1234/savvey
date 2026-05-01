@@ -1,4 +1,4 @@
-// api/search.js — Savvey Search Proxy v6.3
+// api/search.js — Savvey Search Proxy v6.4
 // Change log v6.0:
 //   - PRICE_CEILING hard constant replaces dynamic lowest×3 anchor
 //   - Nuclear cleanPrice() sanitizer applied at every intake point
@@ -19,8 +19,14 @@
 //   - Dynamic skipped when <3 results (collapse protection)
 //   - Circuit breaker on Google CSE (429/403 → bypass for 1hr)
 //   - Security headers locked to ALLOWED_ORIGIN
+// v6.4:
+//   - eBay/Amazon hygiene: condition blocklist (refurb/used/spares/broken/etc.)
+//     extended into ACCESSORY_TERMS so non-New listings get killed by identityFilter
+//   - hardenEbayUrl(): defensive LH_ItemCondition=3 query param on outbound eBay links
+//   - Serper resilience: 8s per-attempt timeout via AbortController + one retry
+//     on transient failures (5xx / network abort), no retry on 4xx
 
-const VERSION = 'search.js v6.3';
+const VERSION = 'search.js v6.4';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -138,11 +144,21 @@ const STOP_WORDS = new Set([
   'buy','uk','price','cheap','best','new','deal','sale',
 ]);
 
-// Accessory terms: if present in title but absent from query → discard
+// Accessory + condition terms: if present in title but absent from query → discard
+// Covers two distinct identity failures:
+//   (a) wrong product class — "remote", "cable", "case" etc.
+//   (b) wrong product condition — refurb / used / damaged listings on eBay
+//       and Amazon Marketplace that pollute "New" search results
+// If a user explicitly searches "refurbished iPhone" the term is in the query,
+// so the gate doesn't fire. Behaviour is symmetric with the accessory case.
 const ACCESSORY_TERMS = [
+  // Accessories — different product class
   'remote','cable','case','bracket','stand','mount','adapter','adaptor',
   'charger','lead','strap','skin','cover','screen protector','pouch',
   'bag','holder','clip','hook','wall plate','replacement','spare',
+  // Condition — non-New listings
+  'refurbished','refurb','used','pre-owned','preowned','open box',
+  'broken','faulty','damaged','spares or repair','for parts','not working',
 ];
 
 function tokenise(str) {
@@ -229,6 +245,17 @@ function isValidProductUrl(url) {
   return true;
 }
 
+// eBay listing pages support a condition filter via LH_ItemCondition=3 (New).
+// Many Serper-surfaced eBay /itm/ URLs land on the listing without that filter,
+// so we append it defensively. Harmless on listings that already have a
+// condition or for non-eBay URLs (we only touch ebay.* hosts).
+function hardenEbayUrl(url) {
+  if (!url || !/ebay\./i.test(url)) return url;
+  if (/[?&]LH_ItemCondition=/i.test(url)) return url;
+  const sep = url.includes('?') ? '&' : '?';
+  return `${url}${sep}LH_ItemCondition=3`;
+}
+
 // ─────────────────────────────────────────────────────────────
 // CIRCUIT BREAKER — Google CSE
 // Trips on 429 or 403. Bypasses CSE for 1 hour to protect quota.
@@ -287,20 +314,52 @@ class AwinProductProvider {
 
 // ─────────────────────────────────────────────────────────────
 // SERPER — shopping + organic results
+//
+// Resilience:
+//   - Per-attempt 8s hard timeout via AbortController + Promise.race.
+//   - One automatic retry on transient failure (network error or 5xx).
+//   - 4xx errors are NOT retried — they're permanent (bad key, bad query).
+//   - Total worst-case latency: 8s + 8s = 16s, inside Vercel's 15s function
+//     limit only on first attempt; the retry is best-effort and respects
+//     the upstream Vercel timeout.
 // ─────────────────────────────────────────────────────────────
+const SERPER_TIMEOUT_MS = 8000;
+
+async function fetchSerperOnce(endpoint, query, apiKey) {
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), SERPER_TIMEOUT_MS);
+  try {
+    const r = await fetch(endpoint, {
+      method:  'POST',
+      headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: 10 }),
+      signal:  ac.signal,
+    });
+    if (!r.ok) {
+      const err = Object.assign(new Error('Serper error'), { status: r.status });
+      err.transient = r.status >= 500;
+      throw err;
+    }
+    return await r.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function fetchSerper(query, type, apiKey) {
   const endpoint = type === 'search'
     ? 'https://google.serper.dev/search'
     : 'https://google.serper.dev/shopping';
 
-  const r = await fetch(endpoint, {
-    method:  'POST',
-    headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: 10 }),
-  });
-
-  if (!r.ok) throw Object.assign(new Error('Serper error'), { status: r.status });
-  return r.json();
+  try {
+    return await fetchSerperOnce(endpoint, query, apiKey);
+  } catch (e) {
+    // Retry once on abort (timeout) or transient 5xx — never on 4xx
+    const retryable = e.name === 'AbortError' || e.transient === true;
+    if (!retryable) throw e;
+    console.warn(`[${VERSION}] Serper retry (${e.name || 'status='+e.status})`);
+    return await fetchSerperOnce(endpoint, query, apiKey);
+  }
 }
 
 // Extract and normalise items from a Serper shopping response.
@@ -486,7 +545,7 @@ export default async function handler(req, res) {
     shopping: results.map(r => ({
       source:   r.source,
       price:    `£${r.price.toFixed(2)}`,
-      link:     r.link,
+      link:     hardenEbayUrl(r.link),
       title:    r.title,
       delivery: r.delivery,
     })),

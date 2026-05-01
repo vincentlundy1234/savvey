@@ -1180,7 +1180,11 @@ function goTo(screen){
   // Stop scanner when leaving scan screen
   if(currentScreen==='scan'&&screen!=='scan')stopScanner();
   document.getElementById('screen-'+currentScreen).classList.remove('active');
-  document.getElementById('screen-'+screen).classList.add('active');
+  const entering=document.getElementById('screen-'+screen);
+  entering.classList.add('active');
+  // Always land at the top of the new screen — prevents mid-page entry
+  entering.scrollTop=0;
+  if(typeof window!=='undefined'&&window.scrollTo)window.scrollTo(0,0);
   currentScreen=screen;
   // Screen entry actions
   if(screen==='home'){
@@ -1459,7 +1463,22 @@ function fetchPrices(query){
     const d1=r1.ok?await r1.json():{};
     const d2=r2.ok?await r2.json():{};
     if(searchGeneration!==gen)return null; // check again after await
-    const sc=buildScenV3(d1.shopping||[],userPrice,query);
+    // ── Map Serper response shape → buildScenV3 input shape ──
+    // Serper returns {source, price:'£89.99', link, title, delivery}
+    // buildScenV3 expects {retailer, price:89.99, link, sub}
+    const raw=(d1.shopping||[]);
+    const mapped=raw.map(i=>{
+      const ret=matchRetailer(i.link||i.source||'');
+      const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
+      return{
+        retailer:ret?ret.name:((i.source||'').split(' ')[0]||'Unknown'),
+        price,
+        link:i.link||'',
+        sub:i.delivery||'Check retailer'
+      };
+    }).filter(i=>i.price>1&&i.price<5000&&i.retailer&&i.retailer!=='Unknown');
+    console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length);
+    const sc=buildScenV3(mapped,userPrice,query);
     liveScen=sc;
     chipTimers.forEach(clearTimeout);
     return sc;
@@ -1517,8 +1536,10 @@ function startSearch(){
 }
 function skipPrice(){
   userPrice=null;bestPriceOnly=true;
+  const q=liveQuery;
+  if(!q){goHome();return;}
   goTo('searching');
-  showResults(fetchPrices(liveQuery));
+  showResults(fetchPrices(q));
 }
 
 // ── showResults — takes the fetch Promise directly. NO polling loop. ──
@@ -1536,17 +1557,8 @@ async function showResults(fetchPromise){
     return;
   }
 
-  // Rebuild scen with user price now that we have it
-  if(sc&&userPrice){
-    const rebuiltItems=sc.rets.map(r=>({
-      retailer:r.n,
-      price:parseFloat(r.p.replace(/[^0-9.]/g,'')),
-      link:r.link||'',
-      sub:r.sub||''
-    }));
-    const rebuilt=buildScenV3(rebuiltItems,userPrice,liveQuery);
-    if(rebuilt)sc=rebuilt;
-  }
+  // Note: userPrice is already passed into buildScenV3 inside fetchPrices,
+  // so the score/verdict already reflect it. No rebuild needed.
 
   liveScen=sc||null;
   const display=liveScen||DEMO_SCEN;
