@@ -747,7 +747,7 @@
         </div>
       </div>
       <div class="w-headline">Know<br>before<br>you buy.</div>
-      <div class="w-sub">Scan a barcode in any shop or paste a product link. We check 40+ UK retailers in seconds.</div>
+      <div class="w-sub">Scan a barcode, search by name, or paste a product link. We check 40+ UK retailers in seconds.</div>
     </div>
     <div class="w-sheet">
       <button class="w-primary" onclick="goTo('scan');startScanner()">
@@ -764,16 +764,16 @@
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
-      <button class="w-secondary" onclick="goTo('paste')">
+      <button class="w-secondary" onclick="goTo('home')">
         <div class="w-secondary-icon">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2" stroke-linecap="round">
-            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </div>
         <div class="w-secondary-body">
           <div class="w-secondary-title">Online checker</div>
-          <div class="w-secondary-sub">Paste any product link</div>
+          <div class="w-secondary-sub">Search by name or paste a link</div>
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink4)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
@@ -948,11 +948,11 @@
       <button class="nav-back" onclick="goHome()">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <div class="price-nav-product" id="price-header-product">What's the price tag say?</div>
+      <div class="price-nav-product" id="price-header-product">In-store price check</div>
     </div>
     <div class="price-body">
-      <div class="price-q">What's the<br>price tag?</div>
-      <div class="price-hint">Type the price you're seeing in-store or online — we'll calculate exactly how much you could save.</div>
+      <div class="price-q">What's the<br>shelf price?</div>
+      <div class="price-hint">Type the price on the sticker — we'll tell you if it's a fair deal vs the cheapest UK online price.</div>
       <div class="price-field">
         <div class="price-sym">£</div>
         <input class="price-num" id="price-num" type="number"
@@ -1164,15 +1164,10 @@ function isURL(str){
 
 // ── Navigation ──
 function goBackFromResults(){
-  // Go back to price entry if we have a query, pre-populated
-  if(liveQuery){
-    document.getElementById('price-header-product').textContent=liveQuery;
-    document.getElementById('price-num').value=userPrice||'';
-    document.getElementById('btn-score').disabled=!userPrice;
-    goTo('price');
-  }else{
-    goHome();
-  }
+  // Always go home from results — no point routing back to price-entry.
+  // Search and trending paths never see price entry; in-store scan path
+  // already passed through it. Home is the right destination.
+  goHome();
 }
 
 function goTo(screen){
@@ -1439,12 +1434,13 @@ async function doLiveSearch(forced){
   if(!forced&&inp&&query!==raw)inp.value=query;
   liveQuery=query;
   if(!forced)inputMethod='search';
+  userPrice=null;
+  bestPriceOnly=true;
 
-  document.getElementById('price-header-product').textContent=query;
-  document.getElementById('price-num').value='';
-  document.getElementById('btn-score').disabled=true;
-  goTo('price');
-  fetchPrices(query);
+  // Search flow goes straight to searching → results.
+  // No price entry — user is discovering prices, not validating one.
+  goTo('searching');
+  showResults(fetchPrices(query));
 }
 
 // ── fetchPrices — returns a Promise; cancelled via AbortController on globalReset ──
@@ -1623,13 +1619,13 @@ function renderNoResults(query){
   const lbl=document.getElementById('hero-verdict-label');
   if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Savvey Signal';}
   const ttl=document.getElementById('hero-verdict-title');
-  if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='No UK prices found.';}
+  if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='Couldn\'t reach the price data.';}
 
-  // Body — clear out price block, replace with empty-state copy
-  setText('hero-wit',`Couldn't pull reliable UK retailer prices for "${safeQ}".`);
+  // Body — honest about the data limitation, never blame the product or user.
+  setText('hero-wit',`We had trouble pulling fresh prices for "${safeQ}" just now.`);
   setText('hero-saving-num','');
   setText('hero-saving-label','');
-  setHTML('hero-where','Try a more specific product name, or check the spelling. Marketplace listings (eBay sellers, Mercari, etc.) were filtered out — Savvey only surfaces major UK retailers.');
+  setHTML('hero-where','This is a data-source hiccup, not a sign the product is unavailable. Most UK retailers stock popular items — try again in a moment, try a slightly different spelling, or paste a product link directly.');
 
   // Action buttons — retry + new search, drop buy + share
   const buy=document.getElementById('btn-buy-now');
@@ -1817,12 +1813,10 @@ function trendSearch(product){
   liveQuery=product;
   const si=document.getElementById('search-input');if(si)si.value=product;
   inputMethod='search';
-  document.getElementById('price-header-product').textContent=product;
-  document.getElementById('price-num').value='';
-  document.getElementById('btn-score').disabled=true;
-  userPrice=null;bestPriceOnly=false;
-  goTo('price');
-  fetchPrices(product);
+  userPrice=null;bestPriceOnly=true;
+  // Trending taps go straight to searching → results. No price entry.
+  goTo('searching');
+  showResults(fetchPrices(product));
 }
 
 // ── Scanner ──
