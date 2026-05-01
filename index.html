@@ -2029,11 +2029,13 @@ async function onBarcodeDetected(code){
   if(subEl)subEl.textContent=code;
   if(detected)detected.classList.add('show');
   let name=null;
+  // 1) Open Food Facts — best for grocery / food (free, accurate for that niche)
   try{
     const r=await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
     const d=await r.json();
     if(d.status===1&&d.product)name=d.product.product_name_en||d.product.product_name||null;
   }catch(e){}
+  // 2) UPCitemdb — general products (limited free tier)
   if(!name){
     try{
       const r=await fetch(`https://api.upcitemdb.com/prod/trial/lookup?upc=${code}`);
@@ -2041,8 +2043,19 @@ async function onBarcodeDetected(code){
       if(d.items&&d.items.length)name=d.items[0].title||null;
     }catch(e){}
   }
+  // 3) Savvey-side Serper lookup — broadest coverage. The /api/search
+  //    endpoint accepts {barcode} and returns the resolved product name
+  //    by querying Google for the barcode and taking the top result's
+  //    title. Catches anything OFF and UPCitemdb miss (most non-grocery).
   if(!name){
-    // Both APIs failed — show error state, don't search with raw barcode
+    try{
+      const r=await fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({barcode:code})});
+      const d=await r.json();
+      if(d&&d.product)name=d.product;
+    }catch(e){}
+  }
+  if(!name){
+    // All three sources failed — show error state, don't search with raw barcode
     if(nameEl)nameEl.textContent='Product not recognised';
     if(subEl)subEl.innerHTML='<span style="color:rgba(255,255,255,0.35)">Barcode: '+code+'</span>';
     // Swap the CTA to redirect to search

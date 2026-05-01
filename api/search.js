@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.13';
+const VERSION = 'search.js v6.15';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -798,7 +798,44 @@ export default async function handler(req, res) {
   const SERPER_KEY = process.env.SERPER_KEY;
   if (!SERPER_KEY) return res.status(500).json({ error: 'SERPER_KEY not configured' });
 
-  const { q, type = 'shopping' } = req.body || {};
+  const { q, type = 'shopping', barcode } = req.body || {};
+
+  // ─── Barcode lookup mode ────────────────────────────────────
+  // Frontend sends { barcode: "5054697471236" } when QuaggaJS reads a
+  // barcode and Open Food Facts + UPCitemdb both fail. We resolve the
+  // barcode to a product name via Serper organic search (Google's index
+  // typically returns the right product page on the first hit) and
+  // return just the name. Frontend then re-fires a normal price search
+  // with the resolved name.
+  // No price pipeline runs in this branch — single Serper call,
+  // ~1s round trip, doesn't burn the rest of the search budget.
+  if (barcode) {
+    const code = String(barcode).replace(/[^0-9]/g, '');
+    if (!code || code.length < 6) {
+      return res.status(400).json({ error: 'invalid_barcode' });
+    }
+    try {
+      const data  = await fetchSerper(code, 'search', SERPER_KEY);
+      const items = (data && data.organic) || [];
+      const top   = items[0];
+      if (!top || !top.title) {
+        return res.status(200).json({ product: null, resolvedFrom: code });
+      }
+      // Clean common Google-style title suffixes ("— Amazon UK", "| Argos", etc.)
+      const cleanTitle = String(top.title)
+        .replace(/\s*[\|\-—–:]\s*Amazon(?:\s+UK)?(?:[^|]*)$/i, '')
+        .replace(/\s*[\|\-—–:]\s*eBay(?:[^|]*)$/i, '')
+        .replace(/\s*[\|\-—–:]\s*(Currys|Argos|John Lewis|AO\.com|Very|Halfords|Boots|Selfridges|Richer Sounds|Costco)(?:[^|]*)$/i, '')
+        .replace(/\s+\.\.\.$/, '')
+        .trim();
+      console.log(`[${VERSION}] Barcode ${code} resolved to: "${cleanTitle}"`);
+      return res.status(200).json({ product: cleanTitle, resolvedFrom: code });
+    } catch (e) {
+      console.error(`[${VERSION}] Barcode lookup error:`, e.message);
+      return res.status(200).json({ product: null, resolvedFrom: code });
+    }
+  }
+
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
   let rawItems = [];
