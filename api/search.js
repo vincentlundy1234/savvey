@@ -44,13 +44,20 @@
 //     samples for diagnosing zero-result queries without crawling Vercel logs.
 // v6.7:
 //   - Trust filter rewritten as two-tier: TLD-based (.co.uk/.uk) + explicit
-//     allowlist for UK-trading .com brands (Selfridges, McGrocer, Harvey
-//     Nichols, M&S, Next, Fortnum & Mason) + eBay global. Diagnostic via
-//     debug envelope showed v6.5/v6.6 trust filter rejected legitimate UK
-//     retailers like Selfridges/McGrocer because they weren't enumerated;
-//     TLD-based rule covers the long tail correctly.
+//     allowlist for UK-trading .com brands. Tier 1 used URL hostname match.
+//   - SUPERSEDED by v6.8 — Serper shopping links are all Google aggregator
+//     URLs, so hostname matching had no signal.
+// v6.8:
+//   - Trust filter rewritten to match against the `source` field (retailer
+//     name string from Google Shopping). Diagnostic via debug envelope
+//     showed every Serper shopping link is https://www.google.com/search?...
+//     so URL-hostname filtering can never work for shopping results.
+//   - TRUSTED_SOURCE_TERMS — case-insensitive substring list covering the
+//     frontend UK_RETAILERS (13) + UK supermarkets and DIY chains.
+//   - URL/hostname check retained as fallback for the rare organic-snippet
+//     items where the link IS a real retailer URL.
 
-const VERSION = 'search.js v6.7';
+const VERSION = 'search.js v6.8';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -251,45 +258,53 @@ function isValidProductUrl(url) {
 }
 
 // ─────────────────────────────────────────────────────────────
-// TRUSTED SOURCE FILTER — two-tier
+// TRUSTED SOURCE FILTER — source-name based
 //
-// Tier 1 — TLD allowlist
-//   Any URL whose hostname ends in .co.uk, .uk, or .com.gb is treated as
-//   UK-shoppable. This naturally excludes US-only marketplaces (Mercari,
-//   Poshmark, Whatnot, Crutchfield, Phonesrefurb, Unclaimed Baggage, Impulse,
-//   Reverb) without needing to enumerate every reject. The trade-off is that
-//   peer-to-peer .co.uk sellers could slip through; identityFilter's condition
-//   blocklist (refurb / grade b / scratched / pristine condition / etc.)
-//   handles the residual quality risk.
+// Why source-name and not URL hostname:
+//   Serper's shopping API surfaces every result with link =
+//   https://www.google.com/search?... (a Google Shopping aggregator URL),
+//   not the underlying retailer URL. Hostname-based filtering therefore has
+//   no signal to work with. The reliable signal is the `source` field
+//   ("eBay", "Selfridges", "Currys", "Mercari" etc.) — short retailer-name
+//   strings populated by Google Shopping itself.
 //
-// Tier 2 — explicit .com brands
-//   UK-trading retailers and global brands worth surfacing despite the .com
-//   TLD: Selfridges (UK luxury department store), McGrocer (UK grocery),
-//   Harvey Nichols (UK luxury), Marks & Spencer global, John Lewis global,
-//   Next, Fortnum & Mason, and eBay global (eBay's product URLs are often
-//   ebay.com even on UK-targeted Serper results; the LH_ItemCondition=3
-//   hardening + condition blocklist do the quality work).
+// We allow source names that contain any of TRUSTED_SOURCE_TERMS (case-
+// insensitive, substring match). The list covers the 13 frontend
+// UK_RETAILERS plus a few additional UK-trading retailers that surface
+// frequently on Serper UK searches.
+//
+// Rejected by exclusion: Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb,
+// Whatnot, Impulse, Best Buy (US), Walmart (US), Target (US), Unclaimed
+// Baggage, wafuu.com (JP), and the long tail of US/foreign aggregators
+// Serper returns despite gl=uk.
+//
+// Belt and braces: when a real retailer URL DOES surface (organic snippet
+// path), we also accept it via TLD or explicit-domain match — inexpensive
+// fallback that costs nothing when the link is a Google aggregator URL.
 // ─────────────────────────────────────────────────────────────
 
-// Tier 1: anything on these TLDs is UK-shoppable by definition
-const UK_TLDS = ['.co.uk', '.uk', '.com.gb'];
+// Source-name substrings (lowercase). A source field that includes any of
+// these is treated as a trusted UK retailer.
+const TRUSTED_SOURCE_TERMS = [
+  // Frontend UK_RETAILERS (13)
+  'ebay', 'amazon', 'currys', 'argos', 'john lewis', 'ao.com',
+  'very', 'richer sounds', 'richersounds', 'box.co.uk',
+  'halfords', 'screwfix', 'boots', 'costco',
+  // UK-trading retailers that appear on Serper UK shopping
+  'selfridges', 'mcgrocer', 'harvey nichols', 'fortnum',
+  'marks & spencer', 'm&s', "sainsbury's", 'sainsburys', 'tesco',
+  'asda', 'lidl', 'aldi', 'wickes', 'b&q', 'homebase',
+  'currysparts', 'ee.co.uk',
+];
 
-// Tier 2: explicit .com domains for UK-trading brands + global retailers
+// Hostname/domain fallback (for the rare organic-snippet item with a real URL)
+const UK_TLDS = ['.co.uk', '.uk'];
 const TRUSTED_DOMAINS = [
-  // Frontend-affiliated UK retailers (full set, retained from prior version)
   'amazon.co.uk', 'currys.co.uk', 'johnlewis.com', 'argos.co.uk',
   'ao.com', 'very.co.uk', 'richersounds.com', 'box.co.uk',
   'ebay.co.uk', 'halfords.com', 'screwfix.com', 'boots.com', 'costco.co.uk',
-  // Global brands that operate in UK and surface on Serper UK shopping
-  'ebay.com',                  // eBay global — listings often have .com URLs
-  'amazon.com',                // rare on UK searches but possible
-  // UK-trading .com retailers
-  'selfridges.com',            // UK luxury department store
-  'mcgrocer.com',              // UK grocery
-  'harveynichols.com',         // UK luxury
-  'marksandspencer.com',       // M&S global
-  'next.com',                  // Next global
-  'fortnumandmason.com',       // Fortnum & Mason
+  'ebay.com', 'selfridges.com', 'mcgrocer.com', 'harveynichols.com',
+  'marksandspencer.com', 'next.com', 'fortnumandmason.com',
 ];
 
 function extractHostname(url) {
@@ -299,12 +314,17 @@ function extractHostname(url) {
 }
 
 function isTrustedSource(item) {
+  // Primary signal: source field name match
+  const src = String(item.source || '').toLowerCase();
+  if (src && TRUSTED_SOURCE_TERMS.some(t => src.includes(t))) return true;
+  // Fallback signal: real retailer hostname (organic results sometimes have these)
   const host = extractHostname(item.link || '');
-  // Tier 1: UK TLD?
-  if (host && UK_TLDS.some(tld => host.endsWith(tld))) return true;
-  // Tier 2: explicit allowlist (matched against link + source for resilience)
-  const haystack = `${item.link || ''} ${item.source || ''}`.toLowerCase();
-  return TRUSTED_DOMAINS.some(d => haystack.includes(d));
+  if (host && host !== 'google.com' && host !== 'www.google.com') {
+    if (UK_TLDS.some(tld => host.endsWith(tld))) return true;
+    const haystack = `${item.link || ''} ${item.source || ''}`.toLowerCase();
+    if (TRUSTED_DOMAINS.some(d => haystack.includes(d))) return true;
+  }
+  return false;
 }
 
 function trustedSourceFilter(items) {
