@@ -33,8 +33,14 @@
 //   - ACCESSORY_TERMS extended with refurb euphemisms (grade b/c, pristine
 //     condition, scratched, blemished, cosmetic damage, dented, cracked,
 //     tested working) — kills the £89.99 "best price" knockoff problem.
+// v6.6:
+//   - Serper timeout reduced 8s → 5s; retry removed entirely (was compounding
+//     to 16s per call × 2 parallel from frontend, breaching Vercel's 15s
+//     function limit on cold starts and causing CDP timeouts during testing).
+//   - Frontend now fires a single /api/search call (shopping only); the
+//     second call was unused by the mapping step.
 
-const VERSION = 'search.js v6.5';
+const VERSION = 'search.js v6.6';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -378,17 +384,21 @@ class AwinProductProvider {
 // ─────────────────────────────────────────────────────────────
 // SERPER — shopping + organic results
 //
-// Resilience:
-//   - Per-attempt 8s hard timeout via AbortController + Promise.race.
-//   - One automatic retry on transient failure (network error or 5xx).
-//   - 4xx errors are NOT retried — they're permanent (bad key, bad query).
-//   - Total worst-case latency: 8s + 8s = 16s, inside Vercel's 15s function
-//     limit only on first attempt; the retry is best-effort and respects
-//     the upstream Vercel timeout.
+// Resilience tuned for Vercel's 15s function limit:
+//   - 5s per-attempt timeout via AbortController (was 8s + retry — that path
+//     compounded to 16s per call, and the frontend fires two calls in
+//     parallel, so the function would routinely exceed Vercel's limit
+//     during cold starts).
+//   - No retry — caller falls through to organic/CSE on failure. A failed
+//     primary call is better than a slow one.
 // ─────────────────────────────────────────────────────────────
-const SERPER_TIMEOUT_MS = 8000;
+const SERPER_TIMEOUT_MS = 5000;
 
-async function fetchSerperOnce(endpoint, query, apiKey) {
+async function fetchSerper(query, type, apiKey) {
+  const endpoint = type === 'search'
+    ? 'https://google.serper.dev/search'
+    : 'https://google.serper.dev/shopping';
+
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), SERPER_TIMEOUT_MS);
   try {
@@ -398,30 +408,10 @@ async function fetchSerperOnce(endpoint, query, apiKey) {
       body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: 10 }),
       signal:  ac.signal,
     });
-    if (!r.ok) {
-      const err = Object.assign(new Error('Serper error'), { status: r.status });
-      err.transient = r.status >= 500;
-      throw err;
-    }
+    if (!r.ok) throw Object.assign(new Error('Serper error'), { status: r.status });
     return await r.json();
   } finally {
     clearTimeout(timer);
-  }
-}
-
-async function fetchSerper(query, type, apiKey) {
-  const endpoint = type === 'search'
-    ? 'https://google.serper.dev/search'
-    : 'https://google.serper.dev/shopping';
-
-  try {
-    return await fetchSerperOnce(endpoint, query, apiKey);
-  } catch (e) {
-    // Retry once on abort (timeout) or transient 5xx — never on 4xx
-    const retryable = e.name === 'AbortError' || e.transient === true;
-    if (!retryable) throw e;
-    console.warn(`[${VERSION}] Serper retry (${e.name || 'status='+e.status})`);
-    return await fetchSerperOnce(endpoint, query, apiKey);
   }
 }
 

@@ -1452,16 +1452,18 @@ function fetchPrices(query){
 
   const timeout=setTimeout(()=>{if(activeController)activeController.abort();},12000);
 
-  const p=Promise.all([
-    fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},
-      signal:sig,body:JSON.stringify({q:`${query} buy UK price`,type:'shopping'})}),
-    fetch('/api/search',{method:'POST',headers:{'Content-Type':'application/json'},
-      signal:sig,body:JSON.stringify({q:`${query} price uk buy`,type:'search'})})
-  ]).then(async([r1,r2])=>{
+  // Single shopping call — the second call (organic /search) was always unused
+  // by the mapping step below, doubled Serper quota burn, and could push the
+  // serverless function past its 15s ceiling on cold starts.
+  const p=fetch('/api/search',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    signal:sig,
+    body:JSON.stringify({q:`${query} buy UK price`,type:'shopping'})
+  }).then(async r1=>{
     clearTimeout(timeout);
     if(searchGeneration!==gen){console.log('[fetchPrices] stale gen discarded');return null;}
     const d1=r1.ok?await r1.json():{};
-    const d2=r2.ok?await r2.json():{};
     if(searchGeneration!==gen)return null; // check again after await
     // ── Map Serper response shape → buildScenV3 input shape ──
     // Serper returns {source, price:'£89.99', link, title, delivery}
