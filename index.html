@@ -1164,10 +1164,13 @@
   <div class="share-wrap">
     <canvas id="share-canvas" width="640" height="820"></canvas>
   </div>
-  <div class="share-actions">
-    <button class="share-save" onclick="saveCard()">Save image</button>
-    <button class="share-shr" onclick="shareCard()">Share →</button>
-    <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')">Cancel</button>
+  <div class="share-actions" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;padding:14px;">
+    <button class="share-shr" onclick="shareCard()" style="flex:1 0 100%;background:#2a6b22;color:#fff;border:none;padding:14px;border-radius:12px;font-weight:700;font-size:15px;cursor:pointer;">Share →</button>
+    <button class="share-channel" onclick="shareToWhatsApp()" style="flex:1 1 calc(33% - 6px);background:#25d366;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">WhatsApp</button>
+    <button class="share-channel" onclick="shareToTwitter()" style="flex:1 1 calc(33% - 6px);background:#000;color:#fff;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">X / Twitter</button>
+    <button class="share-channel" onclick="copyShareText()" style="flex:1 1 calc(33% - 6px);background:#f0f0ee;color:#1c1c1c;border:none;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">Copy link</button>
+    <button class="share-save" onclick="saveCard()" style="flex:1 1 calc(50% - 4px);background:transparent;color:#2a6b22;border:1px solid #2a6b22;padding:11px;border-radius:10px;font-weight:600;font-size:13px;cursor:pointer;">Save image</button>
+    <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')" style="flex:1 1 calc(50% - 4px);background:transparent;color:#767676;border:none;padding:11px;font-weight:600;font-size:13px;cursor:pointer;">Cancel</button>
   </div>
 </div>
 
@@ -1255,6 +1258,23 @@ window.addEventListener('appinstalled',()=>{
 // after a short delay so the welcome screen has rendered first.
 window.addEventListener('load',()=>{
   if(isIOS()&&!isStandalonePWA())setTimeout(showInstallBanner,1200);
+
+  // Deep-link handling — if the URL has ?q=Sony+WH-1000XM5 (e.g. from a
+  // shared Savvey link), skip the welcome screen and run the search
+  // immediately. This is the viral mechanic: shared link → recipient
+  // gets value in 3 seconds without any onboarding friction.
+  try{
+    const params=new URLSearchParams(location.search);
+    const q=(params.get('q')||'').trim();
+    if(q&&q.length>1&&q.length<200){
+      // Skip welcome — go straight to the search/results path
+      setTimeout(()=>{
+        const inp=document.getElementById('search-input');
+        if(inp)inp.value=q;
+        doLiveSearch(q);
+      },150);
+    }
+  }catch(e){/* malformed URL — ignore */}
 });
 let hasSeenResult=false;
 let hasBoughtItem=false;
@@ -1854,36 +1874,206 @@ function retrySearch(){
 }
 
 // ── Wit copy engine ──
+// ─────────────────────────────────────────────────────────────
+// Wit copy engine — Savvey's voice.
+//
+// Rules:
+//   1. Never accusatory of the user. The retailer is the foil, not them.
+//   2. UK-cultural reference units (Tesco meal deal, Greggs, pints,
+//      train fares, Netflix subs, tank of petrol). Universal enough that
+//      a 22-year-old in Manchester and a 50-year-old in Devon both get it.
+//   3. Specific > generic. "Currys wanted £80 more" beats "they're expensive."
+//   4. Brevity. Most lines under 12 words. Designed to fit a share card.
+//   5. Per-retailer character: Currys = bumbling overcharge, John Lewis =
+//      aspirational, Argos = surprised they got caught, Amazon = clever
+//      algorithm gone wrong, Very = catalogue-pricing nostalgia, AO =
+//      sneaky delivery uplift, Selfridges = it's the postcode, eBay =
+//      seller's market interpretation.
+//
+// Returns one wit line. Random rotation within tier so users see variety
+// across multiple searches.
+// ─────────────────────────────────────────────────────────────
+const _pick=arr=>arr[Math.floor(Math.random()*arr.length)];
+
 function witLine(spc,saving,retailer,bestRetailer){
+  const r=String(retailer||'').toLowerCase();
+  const b=bestRetailer||'somewhere else';
+
+  // ── GREEN: best price found, celebrate ──
   if(spc==='green'){
-    const g=['Rare moment. This is genuinely the best price anywhere.',
-      'Nothing to see here. You\'ve already found the best deal.',
-      'For once, the first place you looked is the right one.',
-      'Well, that was easy.'];
-    return g[Math.floor(Math.random()*g.length)];
+    return _pick([
+      'Rare moment. You found the actual best UK price.',
+      'Don\'t overthink it. This is the one.',
+      'The first place you looked is the right one. For once.',
+      'Genuinely the cheapest. No notes.',
+      'Buy it. The internet has nothing better.',
+      'You\'ve out-Saveyed Savvey.',
+      'No better deal exists right now in the UK.',
+      'Take it. Tell your mates. Move on.',
+    ]);
   }
+
+  // ── AMBER: small gap, worth checking ──
   if(spc==='amber'){
-    const a=['Close. But '+bestRetailer+' has the edge.',
-      'Nearly there — but nearly only counts in horseshoes.',
-      'Worth a look before you commit.',
-      'A small saving is still a saving.'];
-    return a[Math.floor(Math.random()*a.length)];
+    return _pick([
+      'Close. But '+b+' nicks it.',
+      'A small saving is still a saving.',
+      'Nearly. '+b+' has the edge.',
+      'Within the margin. But why pay extra?',
+      'Not bad. But not best.',
+      'Worth a 60-second detour to '+b+'.',
+    ]);
   }
-  if(saving>=300)return 'That\'s a flight. '+retailer+' is having a moment.';
-  if(saving>=200)return retailer+' wanted £'+saving+' more than they needed to.';
-  if(saving>=150)return 'That\'s nearly a decent night out. Walk away.';
-  if(saving>=100)return 'Three figures more than necessary. Hard no.';
-  const isCurrys=retailer.toLowerCase().includes('currys');
-  const isArgos=retailer.toLowerCase().includes('argos');
-  const isJL=retailer.toLowerCase().includes('john lewis');
-  if(isCurrys)return 'Currys, more worries 😢';
-  if(isArgos&&saving>=40)return 'Argos has some explaining to do.';
-  if(isJL&&saving>=60)return 'John Lewis: aspirational pricing. As ever.';
-  if(saving>=80) return 'That\'s a tank of petrol '+retailer+' just tried to add on.';
-  if(saving>=60) return 'That\'s a round of drinks they quietly slipped in there.';
-  if(saving>=40) return retailer+' is optimistic about that price.';
-  if(saving>=25) return 'Not outrageous. But you could do better.';
-  return 'A small gap, but it\'s yours to keep.';
+
+  // ── RED: overpaying. Tier by saving amount, then retailer-specific ──
+
+  // £300+ — outrageous saving, big-ticket items
+  if(saving>=300){
+    return _pick([
+      'That\'s a flight to Italy. '+retailer+' is having a moment.',
+      retailer+' wanted £'+saving+' more. That\'s a weekend in Edinburgh.',
+      'A whole month of food shopping in the gap. Walk away.',
+      'That\'s a flight, a hotel, and pizza. Don\'t let '+retailer+' have it.',
+    ]);
+  }
+
+  // £200-299
+  if(saving>=200){
+    return _pick([
+      retailer+' wanted £'+saving+' more than '+b+'. Bold.',
+      'A new pair of trainers in the difference. Save it.',
+      'That\'s eight months of Netflix. Eight.',
+      'Two hundred and change. Just because you didn\'t check.',
+    ]);
+  }
+
+  // £150-199
+  if(saving>=150){
+    return _pick([
+      'That\'s a decent night out you\'re leaving on the table.',
+      retailer+' priced this with confidence. Misplaced confidence.',
+      'A train to London and back. From Manchester. Walk away.',
+      'Three months of gym membership. Save it for January guilt.',
+    ]);
+  }
+
+  // £100-149
+  if(saving>=100){
+    return _pick([
+      'Three figures more than necessary. Hard no.',
+      'A weekly food shop\'s worth. '+retailer+' fancy themselves.',
+      'Two months of phone bill. They\'re hoping you don\'t check.',
+      retailer+' rounded up. Aggressively.',
+    ]);
+  }
+
+  // ── Per-retailer at modest savings (£40-99) ──
+
+  if(r.includes('currys')){
+    return _pick([
+      'Currys, more worries 😢',
+      'Currys does that. Always.',
+      'Currys priced this on a Friday afternoon, clearly.',
+      'Currys: confident in numbers others find baffling.',
+    ]);
+  }
+  if(r.includes('john lewis')){
+    return saving>=60
+      ? _pick([
+          'John Lewis: aspirational pricing. As ever.',
+          'You\'re paying for the carpet at John Lewis. Walk on it elsewhere.',
+          'John Lewis, where prices have ambitions.',
+        ])
+      : _pick([
+          'John Lewis. Lovely shop. Optimistic till.',
+          'John Lewis being John Lewis again.',
+        ]);
+  }
+  if(r.includes('argos')){
+    return saving>=40
+      ? _pick([
+          'Argos has some explaining to do.',
+          'Argos hoped you\'d still be using the laminated catalogue.',
+          'The Argos pen wrote that price down wrong.',
+        ])
+      : 'Argos slightly off the pace today.';
+  }
+  if(r.includes('amazon')){
+    return _pick([
+      'Amazon\'s algorithm is having a self-confident day.',
+      'Amazon thinks you\'re not paying attention. Prove it.',
+      'The Amazon price changed three times today. The third time wasn\'t kind.',
+      'Bezos does not need your £'+saving+'.',
+    ]);
+  }
+  if(r.includes('very')){
+    return _pick([
+      'Very. The catalogue-pricing tradition lives on.',
+      'Very wants you on a 12-month payment plan. Cash beats it.',
+    ]);
+  }
+  if(r.includes('ao')){
+    return _pick([
+      'AO had a number. The number was wrong.',
+      'AO\'s confident pricing strikes again.',
+    ]);
+  }
+  if(r.includes('selfridges')){
+    return _pick([
+      'You\'re paying for the postcode at Selfridges.',
+      'Selfridges. Where the floor staff outnumber the bargains.',
+    ]);
+  }
+  if(r.includes('halfords')){
+    return _pick([
+      'Halfords is having an opinion on pricing today.',
+      'Halfords. Where every aisle thinks it\'s special.',
+    ]);
+  }
+  if(r.includes('boots')){
+    return 'Boots prices like the Advantage Card discount is mandatory. It isn\'t.';
+  }
+  if(r.includes('ebay')){
+    return _pick([
+      'eBay seller having a moment. '+b+' is the grown-up choice.',
+      'That eBay listing is a vibe. '+b+' is the actual deal.',
+    ]);
+  }
+
+  // ── Saving-amount fallbacks (£25-99, no retailer hook) ──
+  if(saving>=80){
+    return _pick([
+      'A tank of petrol\'s worth. '+retailer+' tried it on.',
+      'That\'s eight Tesco meal deals. Not worth it.',
+      retailer+' priced this with the heating on. Walk to '+b+'.',
+    ]);
+  }
+  if(saving>=60){
+    return _pick([
+      'A round of drinks they quietly slipped in there.',
+      'Twenty Greggs sausage rolls in the gap. Walk away.',
+      'Two months of Netflix. Save it.',
+    ]);
+  }
+  if(saving>=40){
+    return _pick([
+      retailer+' is optimistic about that price.',
+      'Ten Tesco meal deals you didn\'t know you were funding.',
+      'A train fare you didn\'t need to pay.',
+    ]);
+  }
+  if(saving>=25){
+    return _pick([
+      'Not outrageous. But you can still do better.',
+      'A few quid. Adds up.',
+      'Pizza-money\'s worth. Why give it to '+retailer+'?',
+    ]);
+  }
+  return _pick([
+    'A small gap. Yours to keep.',
+    'Marginal — but every quid is yours.',
+    'Tiny gap. Take it anyway.',
+  ]);
 }
 
 // Affiliate tags — apply automatically when the Buy URL points to a
@@ -2080,7 +2270,10 @@ function renderResults(sc){
   const witEl=document.getElementById('hero-wit');
 
   if(hasUserPrice){
-    witEl.textContent=witLine(spc,sc.saving||0,overpayingRetailer,sc.bestRetailer||'Amazon UK');
+    // Generate wit ONCE per render and store on the scen so shareText() and
+    // the canvas share card use the same line the user is reading on screen.
+    sc.witLine=witLine(spc,sc.saving||0,overpayingRetailer,sc.bestRetailer||'Amazon UK');
+    witEl.textContent=sc.witLine;
     if(spc==='green'){
       savNumEl.textContent='£'+sc.bestPrice;
       savLblEl.textContent='best price in the UK right now';
@@ -2092,7 +2285,8 @@ function renderResults(sc){
     }
   }else{
     // DISCOVERY: cheapest + average context line, no "saving" number
-    witEl.textContent='Found the lowest UK price right now.';
+    sc.witLine='Found the lowest UK price right now.';
+    witEl.textContent=sc.witLine;
     savNumEl.textContent='£'+sc.bestPrice;
     savNumEl.className='hero-num green';
     savLblEl.textContent='cheapest UK price';
@@ -2530,15 +2724,79 @@ function saveCard(){
   a.href=document.getElementById('share-canvas').toDataURL('image/png');
   a.click();
 }
+
+// ─────────────────────────────────────────────────────────────
+// Share helpers
+//
+// Every share carries a deep-link URL — savvey.vercel.app/?q=Sony+WH-1000XM5
+// The recipient taps it, lands on Savvey, and the search auto-runs.
+// That's the viral mechanic: share → recipient gets value → installs.
+// ─────────────────────────────────────────────────────────────
+function shareDeepLink(){
+  const q=encodeURIComponent(liveScen?.query||liveQuery||'');
+  return `${location.origin}/?q=${q}`;
+}
+
+// Builds the share text. Leans on the wit line (the social object) plus
+// a clean savings call-out and the deep-link URL.
+function shareText(){
+  if(!liveScen)return 'Check UK prices on Savvey — savvey.app';
+  const sc=liveScen;
+  const url=shareDeepLink();
+  if(sc.spc==='green'){
+    return `Found the cheapest UK price for ${sc.query} — £${sc.bestPrice} at ${sc.bestRetailer}. Confirmed by Savvey. ${url}`;
+  }
+  // red / amber: lead with the wit, follow with the saving
+  const wit=sc.witLine || witLine(sc.spc, sc.saving||0, 'this shop', sc.bestRetailer||'somewhere else');
+  return `${wit} Save £${sc.saving||0} on ${sc.query} — ${sc.bestRetailer} has it for £${sc.bestPrice}. ${url}`;
+}
+
 async function shareCard(){
-  if(!liveScen)return; // empty state — no share message to send
+  if(!liveScen)return;
+  // Try the native share sheet with image; fall back to text-only share
+  // or save the image if files aren't supported on this platform.
   document.getElementById('share-canvas').toBlob(async blob=>{
     const file=new File([blob],'savvey-score.png',{type:'image/png'});
-    if(navigator.canShare&&navigator.canShare({files:[file]})){
-      await navigator.share({files:[file],title:'My Savvey Score',
-        text:liveScen.shareMsg});
-    }else saveCard();
+    const text=shareText();
+    try{
+      if(navigator.canShare&&navigator.canShare({files:[file]})){
+        await navigator.share({files:[file],title:'My Savvey Score',text});
+        return;
+      }
+      if(navigator.share){
+        await navigator.share({title:'My Savvey Score',text});
+        return;
+      }
+    }catch(e){/* user cancelled or unsupported — fall through to save */}
+    saveCard();
   },'image/png');
+}
+
+function shareToWhatsApp(){
+  if(!liveScen)return;
+  const url=`https://wa.me/?text=${encodeURIComponent(shareText())}`;
+  window.open(url,'_blank');
+}
+
+function shareToTwitter(){
+  if(!liveScen)return;
+  const url=`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText())}`;
+  window.open(url,'_blank');
+}
+
+async function copyShareText(){
+  const text=shareText();
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('Copied — paste anywhere');
+  }catch(e){
+    // Fallback for older browsers / insecure contexts
+    const ta=document.createElement('textarea');
+    ta.value=text;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');showToast('Copied — paste anywhere');}
+    catch(_){showToast('Couldn\'t copy — try Save image');}
+    document.body.removeChild(ta);
+  }
 }
 
 // ── Toast ──
