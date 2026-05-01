@@ -1656,7 +1656,38 @@ function fetchPrices(query){
   return p;
 }
 
+// Extract a plausible product name from a retailer URL slug as a fallback
+// when server-side scraping fails (which happens often — Cloudflare/Akamai
+// WAFs on Currys/Argos/JL/AO routinely block Vercel's IPs regardless of
+// User-Agent). Examples:
+//   /products/sony-wh1000xm5-wireless-bluetooth-...-black-10246443.html
+//     → "sony wh1000xm5 wireless bluetooth black"
+//   /sony-wh-1000xm5-wireless-...-30-hour-battery-life/p109087170
+//     → "sony wh 1000xm5 wireless 30 hour battery life"
+function urlToProductGuess(url){
+  try{
+    const u=new URL(url);
+    const path=u.pathname.replace(/\.(html|aspx|php)$/i,'');
+    // Find the longest non-trivial path segment — usually the product slug
+    const segs=path.split('/').filter(s=>s.length>6);
+    if(!segs.length)return null;
+    // Prefer the longest segment (product slugs are typically the longest)
+    const slug=segs.reduce((a,b)=>b.length>a.length?b:a);
+    // Convert kebab/snake to spaces, drop digit-only and very short tokens
+    const words=slug.split(/[-_]+/).filter(w=>w&&w.length>1&&!/^\d+$/.test(w));
+    const guess=words.join(' ').replace(/\s+/g,' ').trim();
+    return guess.length>=4?guess:null;
+  }catch(e){return null;}
+}
+
 // ── Direct Scrape Mode — server-side fetch of a specific retailer URL ──
+//
+// Two-tier strategy:
+//   1. Try /api/scrape — gets the EXACT price the user is looking at
+//      (when the retailer's WAF lets us through, which is hit-or-miss).
+//   2. On scrape failure, extract a product name from the URL slug and
+//      fall back to a normal keyword search. The user gets a useful
+//      result instead of a dead-end empty state.
 function fetchScrape(url){
   const gen=searchGeneration;
   activeController=new AbortController();
@@ -1672,20 +1703,37 @@ function fetchScrape(url){
   }).then(async r=>{
     clearTimeout(timeout);
     if(searchGeneration!==gen)return null;
-    if(!r.ok)return null;
-    const d=await r.json();
+    const d=r.ok?await r.json():{error:'http_'+r.status};
     if(searchGeneration!==gen)return null;
-    if(!d.product||!d.price)return null;
-    // Use scraped price as userPrice and query
-    liveQuery=d.product;
-    userPrice=d.price;
-    inputMethod='paste';
-    // Now fire a normal keyword search to get comparison prices
-    return fetchPrices(d.product);
+    if(d&&d.product&&d.price){
+      // Scrape succeeded — exact price comparison
+      liveQuery=d.product;
+      userPrice=d.price;
+      inputMethod='paste';
+      return fetchPrices(d.product);
+    }
+    // Scrape failed — extract product name from URL slug as fallback
+    const guess=urlToProductGuess(url);
+    if(guess){
+      console.log('[fetchScrape] scrape failed ('+(d.error||'unknown')+'); falling back to keyword search for "'+guess+'"');
+      liveQuery=guess;
+      userPrice=null;          // no anchor price, switch to Discovery mode
+      bestPriceOnly=true;
+      inputMethod='paste';
+      return fetchPrices(guess);
+    }
+    // No useful slug — give up cleanly
+    return null;
   }).catch(e=>{
     clearTimeout(timeout);
     if(e.name==='AbortError')return null;
     console.error('[fetchScrape] error',e);
+    // Even on network error, try the URL-slug fallback
+    const guess=urlToProductGuess(url);
+    if(guess){
+      liveQuery=guess;userPrice=null;bestPriceOnly=true;inputMethod='paste';
+      return fetchPrices(guess);
+    }
     return null;
   });
 }
