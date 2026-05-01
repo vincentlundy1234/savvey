@@ -106,6 +106,31 @@ function dynamicCeilingFilter(items) {
   return passed;
 }
 
+// Price-anomaly floor — drops "too good to be true" outliers.
+// Mis-listings (a TV remote sneaking into a TV search, an air-fryer basket
+// into an air-fryer search) often pass identity filter on title tokens but
+// cost a fraction of the real product. Heuristic: if there are 2+ results
+// and the cheapest is less than ANOMALY_FLOOR_RATIO of the second-cheapest,
+// drop it as a probable mis-listing. Repeat once more so a chain of two
+// anomalies (e.g. £20 cable, £45 stand, £800 TV) both get caught.
+const ANOMALY_FLOOR_RATIO = 0.30;
+
+function priceAnomalyFloor(items) {
+  let working = items.slice().sort((a, b) => a.price - b.price);
+  for (let pass = 0; pass < 2; pass++) {
+    if (working.length < 2) break;
+    const cheapest = working[0];
+    const second   = working[1];
+    if (cheapest.price < second.price * ANOMALY_FLOOR_RATIO) {
+      console.log(`[${VERSION}] ANOMALY DROP: £${cheapest.price} (${cheapest.source}) is <${ANOMALY_FLOOR_RATIO * 100}% of next £${second.price} (${second.source}) — likely mis-listing "${cheapest.title || ''}"`);
+      working = working.slice(1);
+    } else {
+      break;
+    }
+  }
+  return working;
+}
+
 // ─────────────────────────────────────────────────────────────
 // IDENTITY FILTER
 // ─────────────────────────────────────────────────────────────
@@ -118,13 +143,24 @@ const STOP_WORDS = new Set([
 ]);
 
 const ACCESSORY_TERMS = [
+  // Accessories — different product class
   'remote','cable','case','bracket','stand','mount','adapter','adaptor',
   'charger','lead','strap','skin','cover','screen protector','pouch',
   'bag','holder','clip','hook','wall plate','replacement','spare',
+  // Condition — non-New listings
   'refurbished','refurb','used','pre-owned','preowned','open box',
   'broken','faulty','damaged','spares or repair','for parts','not working',
+  // Refurb euphemisms + physical defects
   'grade b','grade c','scratched','blemished','pristine condition',
   'cosmetic damage','dented','cracked','tested working',
+  // Cross-product mis-listings — sellers stuff popular model numbers into
+  // titles for unrelated cheaper products to game search ranking. Add
+  // distinctive product-line names that should NOT appear alongside the
+  // search query unless the user explicitly asked for them.
+  'ult wear',                  // Sony ULT WEAR — different cheaper headphone line
+  'lite version','mini version','kids edition','junior',
+  'replica','imitation','counterfeit','copy of',
+  'compatible with','fits',    // accessory-style mis-listings
 ];
 
 function tokenise(str) {
@@ -533,7 +569,10 @@ export default async function handler(req, res) {
   const identified = identityFilter(safe, q);
   const trusted    = trustedSourceFilter(identified);
   const priced     = dynamicCeilingFilter(trusted);
-  const results    = dedup(priced);
+  const deduped    = dedup(priced);
+  // Price-anomaly floor runs LAST — operates on the per-retailer cheapest set
+  // so it's comparing apples to apples (one Currys vs one Argos vs one eBay).
+  const results    = priceAnomalyFloor(deduped);
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
 
