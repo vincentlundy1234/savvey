@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
-  <title>Savvey — spend smart.</title>
+  <title>Savvey — shop smart.</title>
   <meta name="theme-color" content="#2a6b22"/>
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -743,7 +743,7 @@
         <div class="s-badge s-badge-md"><span class="s-letter">S</span></div>
         <div>
           <div class="w-name">SAVVEY</div>
-          <div class="w-tag">spend smart.</div>
+          <div class="w-tag">shop smart.</div>
         </div>
       </div>
       <div class="w-headline">Know<br>before<br>you buy.</div>
@@ -800,7 +800,7 @@
     <div class="h-nav">
       <div>
         <div class="h-wm">SAVVEY</div>
-        <div class="h-tag">spend smart.</div>
+        <div class="h-tag">shop smart.</div>
       </div>
       <div class="s-badge s-badge-sm"><span class="s-letter">S</span></div>
     </div>
@@ -1024,7 +1024,7 @@
             <div class="v-pip" id="vp-5">5</div>
           </div>
           <div class="hero-verdict-text">
-            <div class="hero-verdict-label red" id="hero-verdict-label">Savvey Signal</div>
+            <div class="hero-verdict-label red" id="hero-verdict-label">Savvey Score</div>
             <div class="hero-verdict-title red" id="hero-verdict-title">Walk away.</div>
           </div>
         </div>
@@ -1045,7 +1045,7 @@
       </div>
 
       <svg style="display:none"><circle id="score-arc"/></svg>
-      <div class="signal" id="signal-wrap" style="display:none"><div class="signal-text"><div class="signal-lbl">Savvey Signal</div><div class="signal-val" id="signal-verdict"></div></div></div>
+      <div class="signal" id="signal-wrap" style="display:none"><div class="signal-text"><div class="signal-lbl">Savvey Score</div><div class="signal-val" id="signal-verdict"></div></div></div>
 
       <div class="res-section-lbl">All prices found</div>
       <div id="ret-list"></div>
@@ -1713,7 +1713,7 @@ function renderNoResults(query){
     if(p){p.classList.remove('lit','active');}
   }
   const lbl=document.getElementById('hero-verdict-label');
-  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Savvey Signal';}
+  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Savvey Score';}
   const ttl=document.getElementById('hero-verdict-title');
   if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='Couldn\'t reach the price data.';}
 
@@ -1903,7 +1903,7 @@ function renderResults(sc){
   if(hasUserPrice){
     // VALIDATION mode — show Savvey Score
     if(pipsWrap)pipsWrap.style.display='';
-    vLabel.textContent='Savvey Signal';
+    vLabel.textContent='Savvey Score';
     vTitle.textContent=sc.vTitle;
 
     // Pip animation — fill up, no overshoot
@@ -2285,7 +2285,7 @@ function drawCard(sc){
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText('SAVVEY',108,40);
   ctx.fillStyle='rgba(255,255,255,0.55)';ctx.font='500 14px Arial,sans-serif';
-  ctx.fillText('spend smart.',109,62);
+  ctx.fillText('shop smart.',109,62);
 
   // savvey.app top right
   ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='600 13px Arial,sans-serif';
@@ -2300,7 +2300,7 @@ function drawCard(sc){
   ctx.fillStyle=verdictCol;
   ctx.font='700 11px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('SAVVEY SIGNAL',W/2,115);
+  ctx.fillText('SAVVEY SCORE',W/2,115);
   ctx.font='900 26px Arial,sans-serif';
   ctx.fillText(sc.vTitle||'Result',W/2,150);
 

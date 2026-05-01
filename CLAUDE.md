@@ -47,9 +47,10 @@ Fonts: Nunito + Inter (Google Fonts)
 BRAND
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Name: Savvey
-Tagline: spend smart.
+Tagline: shop smart.   (updated 2 May 2026 — was "spend smart.")
 Primary colour: #2a6b22 (green)
-Logo: Green S badge, red full stop only red element
+Logo: Green S badge, all-green (NO red dot — that earlier brand description is superseded as of 2 May 2026)
+Score name: Savvey Score   (renamed 2 May 2026 — was "Savvey Signal")
 Pips: 1-2 red / 3 amber / 4-5 green
 Verdicts: 1=Walk away / 2=Better deal available /
           3=Worth a look / 4=Pretty good / 5=Best price
