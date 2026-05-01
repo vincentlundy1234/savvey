@@ -25,8 +25,16 @@
 //   - hardenEbayUrl(): defensive LH_ItemCondition=3 query param on outbound eBay links
 //   - Serper resilience: 8s per-attempt timeout via AbortController + one retry
 //     on transient failures (5xx / network abort), no retry on 4xx
+// v6.5:
+//   - trustedSourceFilter(): new pipeline stage — drops non-UK / peer-to-peer
+//     marketplaces (Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb, etc.)
+//     before the dynamic ceiling anchors. TRUSTED_DOMAINS mirrors frontend
+//     UK_RETAILERS list (13 retailers).
+//   - ACCESSORY_TERMS extended with refurb euphemisms (grade b/c, pristine
+//     condition, scratched, blemished, cosmetic damage, dented, cracked,
+//     tested working) — kills the £89.99 "best price" knockoff problem.
 
-const VERSION = 'search.js v6.4';
+const VERSION = 'search.js v6.5';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -159,6 +167,11 @@ const ACCESSORY_TERMS = [
   // Condition — non-New listings
   'refurbished','refurb','used','pre-owned','preowned','open box',
   'broken','faulty','damaged','spares or repair','for parts','not working',
+  // Refurb euphemisms + physical defects
+  // ('grade a' is omitted — refurbishers use it but so do legitimate "Grade A
+  //  consumer" listings; rely on 'refurbished'/'refurb' keywords elsewhere.)
+  'grade b','grade c','scratched','blemished','pristine condition',
+  'cosmetic damage','dented','cracked','tested working',
 ];
 
 function tokenise(str) {
@@ -243,6 +256,56 @@ function isValidProductUrl(url) {
   if (url.includes('amazon') && !url.includes('/dp/'))    return false;
   if (url.includes('ebay')   && !url.includes('/itm/'))   return false;
   return true;
+}
+
+// ─────────────────────────────────────────────────────────────
+// TRUSTED RETAILER ALLOWLIST
+//
+// Why an allowlist not a blocklist:
+//   Serper surfaces a long tail of US-centric and peer-to-peer marketplaces
+//   (Mercari, Poshmark, Reverb, Crutchfield, Phonesrefurb, Impulse, Walmart, etc.)
+//   that are not relevant to a UK consumer and that pollute the dynamic-ceiling
+//   anchor with suspiciously cheap used/refurb listings. Mirroring the
+//   frontend's UK_RETAILERS list keeps the result set comparable across the
+//   13 retailers the app actually supports.
+//
+// eBay is allowed but its listings are tightened by:
+//   - isValidProductUrl   — must be /itm/ (no category pages)
+//   - hardenEbayUrl       — appends LH_ItemCondition=3
+//   - identityFilter      — condition blocklist on title (refurb/grade b/etc.)
+// ─────────────────────────────────────────────────────────────
+const TRUSTED_DOMAINS = [
+  'amazon.co.uk',
+  'currys.co.uk',
+  'johnlewis.com',
+  'argos.co.uk',
+  'ao.com',
+  'very.co.uk',
+  'richersounds.com',
+  'box.co.uk',
+  'ebay.co.uk',
+  'halfords.com',
+  'screwfix.com',
+  'boots.com',
+  'costco.co.uk',
+];
+
+function isTrustedSource(item) {
+  const haystack = `${item.link || ''} ${item.source || ''}`.toLowerCase();
+  return TRUSTED_DOMAINS.some(d => haystack.includes(d));
+}
+
+function trustedSourceFilter(items) {
+  const before = items.length;
+  const passed = items.filter(item => {
+    const ok = isTrustedSource(item);
+    if (!ok) {
+      console.log(`[${VERSION}] TRUST BLOCK (untrusted source "${item.source}"): "${item.title || ''}"`);
+    }
+    return ok;
+  });
+  console.log(`[${VERSION}] trustedSourceFilter: ${before} in → ${passed.length} out`);
+  return passed;
 }
 
 // eBay listing pages support a condition filter via LH_ItemCondition=3 (New).
@@ -527,13 +590,18 @@ export default async function handler(req, res) {
   const safe = nuclearFilter(rawItems);
 
   // ── IDENTITY FILTER — discard accessories + low-confidence items ──
-  // Runs after nuclearFilter, before dynamic ceiling.
+  // Runs after nuclearFilter, before trust filter.
   const identified = identityFilter(safe, q);
 
+  // ── TRUSTED SOURCE FILTER — drop non-UK / peer-to-peer listings ──
+  // Runs before the dynamic ceiling so peer-to-peer used listings cannot
+  // anchor an artificially low ceiling. Mirrors frontend UK_RETAILERS.
+  const trusted = trustedSourceFilter(identified);
+
   // ── DYNAMIC CEILING — lowest × 4, product-aware ──────────
-  // Runs after identityFilter so accessories cannot corrupt the anchor.
+  // Runs on trusted sources only — anchor is a legitimate UK retailer price.
   // Skipped if fewer than 3 results survive (collapse protection).
-  const priced = dynamicCeilingFilter(identified);
+  const priced = dynamicCeilingFilter(trusted);
 
   // ── Dedup + sort ──────────────────────────────────────────
   const results = dedup(priced);

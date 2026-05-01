@@ -1466,17 +1466,21 @@ function fetchPrices(query){
     // ── Map Serper response shape → buildScenV3 input shape ──
     // Serper returns {source, price:'£89.99', link, title, delivery}
     // buildScenV3 expects {retailer, price:89.99, link, sub}
+    // Defence in depth: backend now applies trustedSourceFilter, but we also
+    // require matchRetailer() to resolve to a known UK_RETAILERS entry here —
+    // any item whose URL doesn't match a UK retailer domain is dropped.
     const raw=(d1.shopping||[]);
     const mapped=raw.map(i=>{
       const ret=matchRetailer(i.link||i.source||'');
+      if(!ret)return null; // not a recognised UK retailer — discard
       const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
       return{
-        retailer:ret?ret.name:((i.source||'').split(' ')[0]||'Unknown'),
+        retailer:ret.name,
         price,
         link:i.link||'',
         sub:i.delivery||'Check retailer'
       };
-    }).filter(i=>i.price>1&&i.price<5000&&i.retailer&&i.retailer!=='Unknown');
+    }).filter(i=>i&&i.price>1&&i.price<5000);
     console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length);
     const sc=buildScenV3(mapped,userPrice,query);
     liveScen=sc;
