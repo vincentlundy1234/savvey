@@ -778,6 +778,20 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--ink4)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
       <div class="w-terms">Free · No account needed · UK only · <span onclick="goTo('privacy')">Privacy</span></div>
+
+      <!-- PWA install banner — appears only on browsers that support
+           installation AND only when Savvey isn't already running as an
+           installed PWA. Shortens the in-store journey by putting Savvey
+           on the home screen instead of buried in browser tabs. -->
+      <div id="install-banner" style="display:none;margin-top:14px;padding:12px 14px;background:#f0f7ee;border:1px solid #cfe5c5;border-radius:12px;display:flex;align-items:center;gap:10px;">
+        <div style="font-size:22px;flex-shrink:0;">📱</div>
+        <div style="flex:1;font-size:13px;color:#1a4015;line-height:1.35;">
+          <div style="font-weight:600;margin-bottom:2px;">Add Savvey to your home screen</div>
+          <div style="font-size:12px;color:#3a6932;" id="install-banner-sub">One tap from any shop — instant in-store price check</div>
+        </div>
+        <button id="install-banner-cta" onclick="triggerInstall()" style="background:var(--green);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">Install</button>
+        <button onclick="dismissInstallBanner()" aria-label="Dismiss" style="background:transparent;border:none;color:#3a6932;font-size:18px;padding:4px 6px;cursor:pointer;flex-shrink:0;">×</button>
+      </div>
     </div>
   </div>
 
@@ -930,14 +944,6 @@
           <div class="paste-found-tick">✓</div>
         </div>
         <button class="cta cta-green" onclick="handlePaste()">Check this price</button>
-      </div>
-      <div class="paste-or">or try a demo search</div>
-      <div class="paste-retailers">
-        <div class="paste-chip" onclick="simulatePaste('https://www.amazon.co.uk/dp/B09XS7JWHH','amazon')">Sony WH-1000XM5</div>
-        <div class="paste-chip" onclick="simulatePaste('https://www.currys.co.uk/products/sony','currys')">Sony headphones (Currys)</div>
-        <div class="paste-chip" onclick="simulatePaste('https://www.johnlewis.com/sony','johnlewis')">Sony at John Lewis</div>
-        <div class="paste-chip" onclick="simulatePaste('https://www.argos.co.uk/product/sony','argos')">Sony at Argos</div>
-        <div class="paste-chip" onclick="simulatePaste('https://www.halfords.com/product','halfords')">Nextbase Dash Cam</div>
       </div>
     </div>
   </div>
@@ -1141,6 +1147,67 @@ let userLat=null,userLng=null;
 let quaggaRunning=false,torchOn=false,torchTrack=null;
 let scannedBarcode=null,scannedProductName=null,scanDebounce=null;
 let chipTimers=[];
+
+// ── PWA install — captures the browser's install event and surfaces a
+//    visible "Install" CTA on the welcome screen. The faster Savvey gets
+//    onto a home screen, the shorter the in-store journey: tap-tap vs
+//    open-browser-find-bookmark-tap.
+let deferredInstallPrompt=null;
+function isStandalonePWA(){
+  return (window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches)
+      || window.navigator.standalone===true;
+}
+function isIOS(){
+  return /iPad|iPhone|iPod/i.test(navigator.userAgent||'')&&!window.MSStream;
+}
+function showInstallBanner(){
+  if(isStandalonePWA())return;
+  try{if(localStorage.getItem('savvey_install_dismissed')==='1')return;}catch(e){}
+  const banner=document.getElementById('install-banner');
+  if(!banner)return;
+  // iOS Safari can't programmatically prompt — give them the right copy
+  if(isIOS()&&!deferredInstallPrompt){
+    const sub=document.getElementById('install-banner-sub');
+    const cta=document.getElementById('install-banner-cta');
+    if(sub)sub.textContent='Tap Share, then "Add to Home Screen"';
+    if(cta)cta.textContent='How';
+  }
+  banner.style.display='flex';
+}
+function dismissInstallBanner(){
+  const banner=document.getElementById('install-banner');
+  if(banner)banner.style.display='none';
+  try{localStorage.setItem('savvey_install_dismissed','1');}catch(e){}
+}
+async function triggerInstall(){
+  if(deferredInstallPrompt){
+    try{
+      deferredInstallPrompt.prompt();
+      const choice=await deferredInstallPrompt.userChoice;
+      if(choice&&choice.outcome==='accepted'){
+        dismissInstallBanner();
+      }
+    }catch(e){console.warn('[install] prompt failed',e);}
+    deferredInstallPrompt=null;
+  }else if(isIOS()){
+    // Show a quick toast with the manual steps; iOS Safari has no API for this
+    showToast('Tap the Share icon (square with arrow), then "Add to Home Screen"');
+  }
+}
+window.addEventListener('beforeinstallprompt',e=>{
+  e.preventDefault();
+  deferredInstallPrompt=e;
+  showInstallBanner();
+});
+window.addEventListener('appinstalled',()=>{
+  dismissInstallBanner();
+  deferredInstallPrompt=null;
+});
+// On iOS the beforeinstallprompt event never fires — surface the banner
+// after a short delay so the welcome screen has rendered first.
+window.addEventListener('load',()=>{
+  if(isIOS()&&!isStandalonePWA())setTimeout(showInstallBanner,1200);
+});
 let hasSeenResult=false;
 let hasBoughtItem=false;
 
@@ -2085,15 +2152,22 @@ function useScannedProduct(){
 }
 
 // ── URL Paste — Direct Scrape Mode ──
+// Hostname patterns for friendly retailer detection on the paste screen.
+// Used purely to show "Currys detected · we'll fetch the real price" while
+// the user is mid-paste. No demo prices, no canned products — the actual
+// price/product comes from scrape.js when handlePaste runs against the
+// real URL.
 const PASTE_RETAILERS={
-  amazon:{name:'Amazon UK',icon:'📦',price:'£249',product:'Sony WH-1000XM5'},
-  currys:{name:'Currys',icon:'⚡',price:'£279',product:'Sony WH-1000XM5'},
-  johnlewis:{name:'John Lewis',icon:'🛍️',price:'£299',product:'Sony WH-1000XM5'},
-  argos:{name:'Argos',icon:'🔵',price:'£319',product:'Sony WH-1000XM5'},
-  halfords:{name:'Halfords',icon:'🚗',price:'£89',product:'Nextbase 522GW Dash Cam'},
-  ao:{name:'AO.com',icon:'🏠',price:'£269',product:'Sony WH-1000XM5'},
-  very:{name:'Very',icon:'🛒',price:'£289',product:'Sony WH-1000XM5'},
-  boots:{name:'Boots',icon:'💊',price:'£24',product:'Oral-B Smart 6 Toothbrush'},
+  amazon:    {name:'Amazon UK',   icon:'📦'},
+  currys:    {name:'Currys',      icon:'⚡'},
+  johnlewis: {name:'John Lewis',  icon:'🛍️'},
+  argos:     {name:'Argos',       icon:'🔵'},
+  halfords:  {name:'Halfords',    icon:'🚗'},
+  ao:        {name:'AO.com',      icon:'🏠'},
+  very:      {name:'Very',        icon:'🛒'},
+  boots:     {name:'Boots',       icon:'💊'},
+  selfridges:{name:'Selfridges',  icon:'🛍️'},
+  ebay:      {name:'eBay UK',     icon:'🏷️'},
 };
 let detectedRetailerKey=null;
 
@@ -2108,16 +2182,9 @@ function detectRetailer(url){
     detectedRetailerKey=matched;
     document.getElementById('paste-det-icon').textContent=r.icon;
     document.getElementById('paste-det-name').textContent=r.name+' detected';
-    document.getElementById('paste-det-sub').textContent=`"${r.product}" · ${r.price} — we'll find better deals`;
+    document.getElementById('paste-det-sub').textContent="We'll fetch the real price and check 8 other UK retailers";
     det.classList.add('show');
   }else{det.classList.remove('show');detectedRetailerKey=null;}
-}
-
-function simulatePaste(url,key){
-  const inp=document.getElementById('paste-input');
-  if(inp)inp.value=url;
-  detectedRetailerKey=key;detectRetailer(url);
-  setTimeout(handlePaste,400);
 }
 
 async function handlePaste(){
@@ -2128,7 +2195,9 @@ async function handlePaste(){
   globalReset();
   inputMethod='paste';
 
-  // ── Direct Scrape Mode — real URL entered ──
+  // ── Direct Scrape Mode — only path: real URL entered ──
+  // Removed the demo/pre-matched fallback (was rendering canned product
+  // names + prices that had nothing to do with the user's actual paste).
   if(isURL(rawUrl)){
     goTo('searching');
     document.getElementById('searching-product').textContent='Reading page…';
@@ -2138,18 +2207,8 @@ async function handlePaste(){
     return;
   }
 
-  // ── Demo / pre-matched retailer fallback ──
-  const r=detectedRetailerKey&&PASTE_RETAILERS[detectedRetailerKey];
-  if(r){
-    liveQuery=r.product;
-    userPrice=parseFloat(r.price.replace('£',''))||null;
-  }else{
-    // No URL, no retailer detected — go to text search
-    goHome();return;
-  }
-  bestPriceOnly=false;
-  goTo('searching');
-  showResults(fetchPrices(liveQuery));
+  // No valid URL — kick to home for text search instead.
+  goHome();
 }
 
 // ── Email modal ──
