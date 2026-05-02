@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.7';
+const VERSION = 'ai-search.js v1.8';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -138,13 +138,37 @@ async function callPerplexity(augmentedQuery, apiKey, maxResults = 10) {
   } finally { clearTimeout(timer); }
 }
 
-// Two parallel Perplexity calls:
+// ── Category detection (Wave 26) ──
+//
+// Lightweight keyword classifier to detect grocery / beauty / DIY queries.
+// When a category matches, we fire an additional Perplexity call locked to
+// that category's retailers only — same architectural pattern as the
+// Amazon-locked call, which solved Perplexity's thin-index problem there.
+// Default = no category match = no extra call (no waste).
+const GROCERY_KEYWORDS = /\b(heinz|cadbury|nestle|kelloggs|weetabix|warburtons|hovis|pepsi|coca[\s-]?cola|coke|pringles|walkers|mcvities|hobnobs|baked beans|cornflakes|cereal|biscuits?|crisps|chocolate|pasta|rice|bread|milk|butter|cheese|yog[hou]+rt|bacon|sausage|mince|chicken|coffee|tea bags|flour|sugar|olive oil|tomato|tinned|frozen|beer|wine|cider|vodka|whisky|gin|rum)\b/i;
+const BEAUTY_KEYWORDS = /\b(lipstick|mascara|foundation|concealer|blusher|bronzer|eyeshadow|eyeliner|nail polish|nail varnish|perfume|fragrance|cologne|aftershave|shampoo|conditioner|hair (?:dye|colour|spray)|cleanser|moisturi[sz]er|serum|toner|sunscreen|spf\s*\d|exfoliat|face mask|body wash|deodorant|razor|shaver|charlotte tilbury|chanel|dior|ysl|estee lauder|clinique|mac\b|maybelline|loreal|l'oreal|nivea|olay|nyx|fenty|elf cosmetics|drunk elephant|the ordinary|cerave|la roche|paula's choice)\b/i;
+const DIY_KEYWORDS = /\b(drill|saw|hammer|screwdriver|wrench|spanner|paint|brush|roller|sandpaper|nail|screw|bolt|lawnmower|lawn mower|strimmer|hedge trimmer|leaf blower|hose|wheelbarrow|spade|fork|secateurs|cement|grout|silicone|polyfilla|filler|wallpaper|tile|laminate|decking|flymo|bosch (?:drill|saw)|dewalt|makita|stanley|black\s*\+?\s*decker)\b/i;
+
+const GROCERY_HOSTS = ['tesco.com', 'sainsburys.co.uk', 'asda.com', 'groceries.asda.com', 'morrisons.com', 'groceries.morrisons.com', 'waitrose.com'];
+const BEAUTY_HOSTS  = ['superdrug.com', 'cultbeauty.co.uk', 'lookfantastic.com', 'spacenk.com', 'theperfumeshop.com', 'beautybay.com', 'boots.com'];
+const DIY_HOSTS     = ['diy.com', 'wickes.co.uk', 'toolstation.com', 'screwfix.com'];
+
+function detectCategoryLock(query) {
+  const q = String(query || '');
+  if (GROCERY_KEYWORDS.test(q)) return { name: 'grocery', hosts: GROCERY_HOSTS };
+  if (BEAUTY_KEYWORDS.test(q))  return { name: 'beauty',  hosts: BEAUTY_HOSTS };
+  if (DIY_KEYWORDS.test(q))     return { name: 'diy',     hosts: DIY_HOSTS };
+  return null;
+}
+
+// Multi parallel Perplexity calls:
 //   - Broad: all UK retailers EXCEPT Amazon, OR'd together (10 results)
 //   - Amazon-locked: site:amazon.co.uk ONLY (10 results)
+//   - Category-locked (optional, Wave 26): if query matches grocery/beauty/DIY
+//     keywords, fire a third call locked to that category's retailers
 //
-// Merge by URL (dedup) so a single result that appears in both buckets
-// only counts once. If either call fails, the other still wins — graceful
-// degrade rather than 502'ing the whole search.
+// Merge by URL (dedup) so a single result that appears in multiple buckets
+// only counts once. If a call fails, the others still win — graceful degrade.
 async function fetchPerplexitySearch(query, apiKey) {
   const broadHosts = UK_RETAILERS
     .filter(r => r.host !== 'amazon.co.uk')
@@ -155,44 +179,73 @@ async function fetchPerplexitySearch(query, apiKey) {
   // it we get music.amazon.co.uk and other non-retail subdomain pages.
   const amazonQuery = `${query} buy UK price site:amazon.co.uk inurl:dp`;
 
-  const [broadSettled, amazonSettled] = await Promise.allSettled([
+  // Wave 26 — category-locked call (only when category detected)
+  const categoryLock = detectCategoryLock(query);
+  let categoryQuery = null;
+  if (categoryLock) {
+    const catSites = categoryLock.hosts.map(h => `site:${h}`).join(' OR ');
+    categoryQuery = `${query} buy UK (${catSites})`;
+  }
+
+  const calls = [
     callPerplexity(broadQuery,  apiKey, 10),
     callPerplexity(amazonQuery, apiKey, 10),
-  ]);
+  ];
+  if (categoryQuery) calls.push(callPerplexity(categoryQuery, apiKey, 10));
 
-  // Surface fatal errors only when BOTH calls failed. Single-call failure
-  // just means we operate with the surviving call's results.
-  if (broadSettled.status === 'rejected' && amazonSettled.status === 'rejected') {
-    throw broadSettled.reason; // either failure is representative
+  const settled = await Promise.allSettled(calls);
+  const [broadSettled, amazonSettled, categorySettled] = settled;
+
+  // Surface fatal errors only when ALL calls failed.
+  if (settled.every(s => s.status === 'rejected')) {
+    throw broadSettled.reason;
   }
 
-  const broadData  = broadSettled.status  === 'fulfilled' ? broadSettled.value  : null;
-  const amazonData = amazonSettled.status === 'fulfilled' ? amazonSettled.value : null;
+  const broadData    = broadSettled?.status    === 'fulfilled' ? broadSettled.value    : null;
+  const amazonData   = amazonSettled?.status   === 'fulfilled' ? amazonSettled.value   : null;
+  const categoryData = categorySettled?.status === 'fulfilled' ? categorySettled.value : null;
 
-  // Diagnostic logging — track which call contributed what.
-  const broadCount  = rawResultsOf(broadData).length;
-  const amazonCount = rawResultsOf(amazonData).length;
-  if (broadSettled.status === 'rejected') {
-    console.warn(`[${VERSION}] broad Perplexity call failed:`, broadSettled.reason?.message || broadSettled.reason);
+  // Diagnostic logging
+  const broadCount    = rawResultsOf(broadData).length;
+  const amazonCount   = rawResultsOf(amazonData).length;
+  const categoryCount = rawResultsOf(categoryData).length;
+  if (broadSettled?.status === 'rejected') {
+    console.warn(`[${VERSION}] broad Perplexity failed:`, broadSettled.reason?.message);
   }
-  if (amazonSettled.status === 'rejected') {
-    console.warn(`[${VERSION}] amazon Perplexity call failed:`, amazonSettled.reason?.message || amazonSettled.reason);
+  if (amazonSettled?.status === 'rejected') {
+    console.warn(`[${VERSION}] amazon Perplexity failed:`, amazonSettled.reason?.message);
   }
-  console.log(`[${VERSION}] perplexity dual: broad=${broadCount} amazon=${amazonCount}`);
+  if (categorySettled?.status === 'rejected') {
+    console.warn(`[${VERSION}] ${categoryLock.name} Perplexity failed:`, categorySettled.reason?.message);
+  }
+  if (categoryLock) {
+    console.log(`[${VERSION}] perplexity tri: broad=${broadCount} amazon=${amazonCount} ${categoryLock.name}=${categoryCount}`);
+  } else {
+    console.log(`[${VERSION}] perplexity dual: broad=${broadCount} amazon=${amazonCount}`);
+  }
 
-  // Merge + dedup by URL. Order: broad first, then Amazon, so broad's
-  // canonical hit wins if there's overlap (rare since broad excludes Amazon).
+  // Merge + dedup by URL.
   const seen     = new Set();
   const combined = [];
-  for (const r of [...rawResultsOf(broadData), ...rawResultsOf(amazonData)]) {
+  const sources = [
+    ...rawResultsOf(broadData),
+    ...rawResultsOf(amazonData),
+    ...rawResultsOf(categoryData),
+  ];
+  for (const r of sources) {
     const url = r.url || r.link || '';
     if (!url || seen.has(url)) continue;
     seen.add(url);
     combined.push(r);
   }
 
-  // Return in the same shape the rest of the pipeline expects.
-  return { results: combined, _amazonCallSucceeded: amazonSettled.status === 'fulfilled', _amazonHitCount: amazonCount };
+  return {
+    results: combined,
+    _amazonCallSucceeded: amazonSettled?.status === 'fulfilled',
+    _amazonHitCount: amazonCount,
+    _categoryLock: categoryLock?.name || null,
+    _categoryHitCount: categoryCount,
+  };
 }
 
 // Amazon-specific admission check: a URL claiming amazon.co.uk must be on
