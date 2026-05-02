@@ -1324,7 +1324,7 @@
       background:linear-gradient(180deg, #f3fbef 0%, #ebf7e6 100%);
     }
     .hero-verdict.green::after{background:var(--green-bd);}
-    .hero-verdict-pips{display:flex;gap:6px;align-items:center;}
+    .hero-verdict-pips{display:flex;gap:5px;align-items:center;flex-shrink:0;}
     /* Wave 49 — pip refinement. Slightly larger, premium inset highlight
        on lit state, softer dim background. Animation easing kept. */
     .v-pip{
@@ -1344,12 +1344,27 @@
     .v-pip.dim-amber{background:#fae9c5;color:var(--amber);opacity:0.7;}
     .v-pip.dim-green{background:#dff0d8;color:var(--green);opacity:0.7;}
     .v-pip.off{background:rgba(15,17,20,0.05);color:var(--ink4);}
-    .hero-verdict-text{flex:1;}
-    .hero-verdict-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
+    .hero-verdict-text{flex:1;min-width:0;}
+    .hero-verdict-label{
+      font:800 10px/1 "Inter",sans-serif;
+      text-transform:uppercase;letter-spacing:1px;
+      margin-bottom:3px;
+      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    }
     .hero-verdict-label.red{color:var(--red);}
     .hero-verdict-label.amber{color:var(--amber);}
     .hero-verdict-label.green{color:var(--green);}
-    .hero-verdict-title{font-family:"Nunito",sans-serif;font-weight:900;font-size:18px;letter-spacing:-0.3px;}
+    /* Wave 60 — verdict title gets nowrap + ellipsis so it can never wrap
+       to a second line and get clipped by the bar's padding (Vincent
+       screenshot showed "Worth a..." cut off). 17px lets "Worth a look."
+       fit comfortably in the ~150px verdict-text column on a 380px screen. */
+    .hero-verdict-title{
+      font:900 17px/1.15 "Nunito",sans-serif;
+      letter-spacing:-0.3px;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
     .hero-verdict-title.red{color:var(--red);}
     .hero-verdict-title.amber{color:var(--amber);}
     .hero-verdict-title.green{color:var(--green);}
@@ -1558,6 +1573,156 @@
       border-radius:10px;
       font:500 12px/1.45 "Inter",sans-serif;
       color:var(--ink3);
+    }
+
+    /* Wave 56 — AI estimate panel. Rendered into the no-results hero body
+       above the retailer-shortcut grid when /api/ai-estimate returns a
+       useful price band. Premium dark surface with amber AI accent so it
+       reads as "intelligence layer", not another grey card. */
+    .ai-estimate-panel{
+      margin:14px 0 10px;
+      padding:16px 16px 14px;
+      background:linear-gradient(160deg, #1d2026 0%, #0f1114 100%);
+      border:1px solid rgba(245,183,66,0.22);
+      border-radius:16px;
+      color:#fff;
+      box-shadow:0 12px 32px rgba(15,17,20,0.18),
+                 inset 0 1px 0 rgba(255,255,255,0.06);
+    }
+    .ai-estimate-head{
+      display:flex;align-items:center;gap:8px;
+      margin-bottom:8px;flex-wrap:wrap;
+    }
+    .ai-estimate-spark{
+      width:14px;height:14px;
+      color:var(--amber-2);
+      flex-shrink:0;
+    }
+    .ai-estimate-eyebrow{
+      font:900 10px/1 "Inter",sans-serif;
+      color:var(--amber-2);
+      letter-spacing:1.4px;text-transform:uppercase;
+    }
+    .ai-estimate-future{
+      font:700 9px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.78);
+      background:rgba(245,183,66,0.18);
+      padding:4px 7px;border-radius:99px;
+      letter-spacing:0.4px;text-transform:uppercase;
+    }
+    .ai-estimate-family{
+      font:900 18px/1.1 "Nunito",sans-serif;
+      color:#fff;
+      letter-spacing:-0.4px;
+      margin-bottom:6px;
+    }
+    .ai-estimate-range{
+      font:600 14px/1.4 "Inter",sans-serif;
+      color:rgba(255,255,255,0.86);
+      margin-bottom:8px;
+    }
+    .ai-estimate-range strong{color:var(--amber-2);font-weight:800;}
+    .ai-estimate-reason{
+      font:500 12.5px/1.5 "Inter",sans-serif;
+      color:rgba(255,255,255,0.66);
+      margin-bottom:12px;
+      font-style:italic;
+      padding-left:10px;
+      border-left:2px solid rgba(245,183,66,0.32);
+    }
+    .ai-estimate-retailers{
+      display:flex;flex-wrap:wrap;gap:6px;
+      margin-bottom:10px;
+    }
+    .ai-estimate-retailer{
+      display:inline-flex;align-items:center;gap:5px;
+      padding:7px 11px;
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.14);
+      border-radius:99px;
+      font:700 12px/1 "Inter",sans-serif;
+      color:#fff;
+      text-decoration:none;
+      transition:background 200ms ease, border-color 200ms ease, transform 120ms ease;
+    }
+    .ai-estimate-retailer::after{
+      content:"→";
+      color:var(--amber-2);
+      font-weight:900;
+      margin-left:2px;
+    }
+    .ai-estimate-retailer:active{
+      background:rgba(255,255,255,0.14);
+      border-color:rgba(245,183,66,0.36);
+      transform:scale(0.97);
+    }
+    .ai-estimate-comparable{
+      width:100%;
+      padding:10px 14px;
+      background:rgba(245,183,66,0.18);
+      border:1px solid rgba(245,183,66,0.36);
+      border-radius:11px;
+      color:var(--amber-2);
+      font:800 13px/1 "Nunito",sans-serif;
+      letter-spacing:-0.1px;
+      cursor:pointer;
+      min-height:auto;
+      transition:background 200ms ease, transform 120ms ease;
+    }
+    .ai-estimate-comparable:active{
+      background:rgba(245,183,66,0.28);
+      transform:scale(0.98);
+    }
+
+    /* Wave 56b — AI estimate strip inside the regular result hero. Sits
+       between hero-where and hero-actions. Less prominent than the
+       no-results panel — supplementary "context" rather than headline. */
+    .ai-estimate-strip{
+      margin:0 0 14px;
+      padding:12px 14px;
+      background:linear-gradient(160deg, rgba(15,17,20,0.04) 0%, rgba(15,17,20,0.02) 100%);
+      border:1px solid var(--border);
+      border-radius:13px;
+      animation:ai-strip-in 320ms var(--ease-pop) both;
+    }
+    @keyframes ai-strip-in{
+      from{opacity:0;transform:translateY(-4px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+    .ai-estimate-strip-head{
+      display:flex;align-items:center;gap:6px;
+      margin-bottom:5px;
+    }
+    .ai-estimate-strip-head .ai-estimate-spark{
+      color:var(--amber);width:13px;height:13px;
+    }
+    .ai-estimate-strip-label{
+      font:800 10px/1 "Inter",sans-serif;
+      color:var(--amber);
+      letter-spacing:1.2px;text-transform:uppercase;
+    }
+    .ai-estimate-strip-band{
+      font:900 16px/1.1 "Nunito",sans-serif;
+      color:var(--ink);
+      letter-spacing:-0.3px;
+      margin-bottom:4px;
+    }
+    .ai-estimate-strip-avg{
+      font:600 12px/1 "Inter",sans-serif;
+      color:var(--ink3);
+      margin-left:4px;
+      letter-spacing:0;
+    }
+    .ai-estimate-strip-position{
+      font:500 13px/1.4 "Inter",sans-serif;
+      color:var(--ink2);
+      margin-bottom:5px;
+    }
+    .ai-estimate-strip-position strong{color:var(--ink);font-weight:800;}
+    .ai-estimate-strip-reason{
+      font:500 12px/1.45 "Inter",sans-serif;
+      color:var(--ink3);
+      font-style:italic;
     }
 
     /* Wave 38 — Snap generic-match banner. Soft amber tint, lives at the
@@ -2149,9 +2314,23 @@
     /* ── Quality-audit pass: focus-visible everywhere, tap targets ── */
     button,a,[role="button"]{min-height:44px;}
     button.cam-btn,button.h-pill,button.trend-chip,button.cam-found-cta,button.bento-go,button.trend-tile,button.mode-tile,button.modal-skip,button.share-channel,button.share-cancel,button.share-save,button.paste-chip{min-height:auto;}
-    *:focus-visible:not([data-logo-home]):not(.btn-primary):not(.btn-secondary):not(.btn-ghost){
+    /* Wave 55 — exclude form inputs from the catch-all green-outline focus
+       ring. The .bento-search-card already provides a refined 3px green
+       focus ring on focus-within, so nesting another outline directly on
+       the <input> reads as a dated 2010-style hard border (Vincent's
+       screenshot). Same logic for the price-num and any other text input. */
+    *:focus-visible:not([data-logo-home]):not(.btn-primary):not(.btn-secondary):not(.btn-ghost):not(input):not(textarea):not(select){
       outline:2px solid var(--green);outline-offset:2px;border-radius:6px;
     }
+    /* Wave 55 — Inputs only get chrome reset, NOT a full border/background
+       reset (other rules style individual inputs). Prevents iOS Safari from
+       drawing the dated dark border + glow on focused text fields. */
+    input,textarea,select{
+      -webkit-appearance:none;
+      appearance:none;
+      font-family:inherit;
+    }
+    input:focus,textarea:focus,select:focus{outline:none;}
 
     /* ═══════════════════════════════════════════════════════════
        Wave 6 — Proper bento home redesign.
@@ -2474,8 +2653,8 @@
     }
     .bento-search-card:focus-within{
       background:var(--card);
-      border-color:var(--green-bd);
-      box-shadow:0 0 0 3px rgba(86,184,77,0.12), var(--depth-1);
+      border-color:var(--green);
+      box-shadow:0 0 0 4px rgba(86,184,77,0.18), var(--depth-2);
     }
     .bento-eyebrow{
       font:600 11px/1 "Inter",sans-serif;
@@ -2685,6 +2864,15 @@
       width:14px;height:14px;color:var(--ink4);flex-shrink:0;
       display:flex;align-items:center;justify-content:center;
     }
+    /* Wave 58 — recent-chip image variant. When we have a cached product
+       image for this query, render a circular thumbnail instead of the
+       clock icon. Bigger visual, instantly recognisable. */
+    .recent-chip-img{
+      width:22px;height:22px;flex-shrink:0;
+      border-radius:50%;
+      background:#fff center/cover no-repeat;
+      box-shadow:0 0 0 1px rgba(15,17,20,0.08);
+    }
 
     /* ── Trending header with pulsing live dot ── */
     .bento-trending-head{
@@ -2766,6 +2954,20 @@
       width:40px;height:40px;border-radius:12px;
       margin-bottom:6px;flex-shrink:0;
       transition:transform var(--motion-norm) var(--ease-pop);
+      background-size:cover;
+      background-position:center;
+      background-repeat:no-repeat;
+    }
+    /* Wave 58 — when a real product image is cached, the badge becomes an
+       image preview (background-image set inline by JS). Slightly bigger
+       so the photo reads, white border + soft shadow give it a polaroid feel. */
+    .trend-tile-badge.with-image{
+      width:52px;height:52px;
+      border-radius:13px;
+      background-color:#fff;
+      box-shadow:0 4px 12px rgba(15,17,20,0.12),
+                 inset 0 0 0 1px rgba(15,17,20,0.06);
+      margin-bottom:8px;
     }
     .trend-tile:active .trend-tile-badge{transform:scale(1.06) rotate(-3deg);}
     .cat-audio   .trend-tile-badge{background:#eef2ff;color:#3b46ff;}
@@ -3829,6 +4031,7 @@ function goTo(screen, opts){
     renderTrending(activeCat);
     renderRecentSearches();
     renderSavingsHero();   // Wave 28 — savings centerpiece animated count-up
+    enhanceTrendingTilesWithImages();  // Wave 58 — swap badges for cached product images
     // First-visit swipe coach
     setTimeout(showSwipeCoachIfFirstVisit, 350);
     // Wave 22 — fire the swipe-nudge animation once per session so the
@@ -3987,12 +4190,46 @@ function renderRecentSearches(){
     return;
   }
   wrap.hidden = false;
+  // Wave 58 — render a real product thumbnail when we have one cached
+  // from a previous search. Falls back to the clock icon otherwise.
   list.innerHTML = recent.map(q => {
-    return '<button class="recent-chip" onclick="trendSearch(\'' + escJsAttr(q) + '\')">' +
-      '<span class="recent-chip-ico" aria-hidden="true">' +
-        '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
-      '</span>' + escHtml(q) + '</button>';
+    const img = getProductImage(q);
+    const safeQ = escJsAttr(q);
+    const visualHtml = img
+      ? `<span class="recent-chip-img" aria-hidden="true" style="background-image:url(${escHtml(img).replace(/'/g,'%27')});"></span>`
+      : '<span class="recent-chip-ico" aria-hidden="true">'
+        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
+        + '</span>';
+    return `<button class="recent-chip" onclick="trendSearch('${safeQ}')">${visualHtml}${escHtml(q)}</button>`;
   }).join('');
+}
+
+// Wave 58 — Enhance trending tiles with cached product images.
+// Trending tiles are hardcoded in markup with SVG badges. After the home
+// screen mounts we replace the badge with a real product thumbnail when
+// we have one cached. The lookup uses each tile's onclick query string.
+function enhanceTrendingTilesWithImages(){
+  const tiles = document.querySelectorAll('#screen-home .trend-tile');
+  tiles.forEach(tile => {
+    const onclick = tile.getAttribute('onclick') || '';
+    const m = onclick.match(/trendSearch\(['"]([^'"]+)['"]\)/);
+    if(!m) return;
+    const query = m[1];
+    const url = getProductImage(query);
+    const badge = tile.querySelector('.trend-tile-badge');
+    if(!badge) return;
+    if(url){
+      // Swap badge to image-mode. Preserve background colour as fallback
+      // tint behind the image.
+      badge.classList.add('with-image');
+      badge.style.backgroundImage = `url("${url.replace(/"/g,'%22')}")`;
+      badge.innerHTML = '';
+    } else {
+      // Reset back to icon mode in case a stale image-mode style lingered.
+      badge.classList.remove('with-image');
+      badge.style.backgroundImage = '';
+    }
+  });
 }
 
 // ── Rotating placeholder examples (Wave 9) ──
@@ -4489,6 +4726,17 @@ async function doLiveSearch(forced){
   userPrice=null;
   bestPriceOnly=true;
 
+  // Wave 55 — short-circuit known future-product queries (iPhone 17,
+  // Galaxy S26, etc) BEFORE firing the search. Otherwise Perplexity
+  // returns previous-gen listings and the user sees something that
+  // doesn't match what they typed. detectFutureProduct returns null for
+  // current/past products so this only triggers on bleeding-edge queries.
+  if(detectFutureProduct(query)){
+    goTo('results');
+    renderNoResults(query);
+    return;
+  }
+
   // Search flow goes straight to searching → results.
   // No price entry — user is discovering prices, not validating one.
   goTo('searching');
@@ -4625,6 +4873,12 @@ function processSearchResponse(d1, query){
     sc.onlyEbay=!!d1._meta.onlyEbay;
     sc.dataSource=d1._meta.source||'serper';
     sc._heroImage=d1._meta.heroImage||null;  // Wave 24
+    // Wave 58 — cache the hero image keyed by query so trending + recent
+    // tiles on the home screen can render real product imagery on the
+    // next visit. 7-day TTL.
+    if(sc._heroImage && sc._heroImage.url){
+      cacheProductImage(query, sc._heroImage.url);
+    }
   }
   // Wave 38 — attach Snap match metadata if the search came in via Snap.
   // renderResults reads this to surface a "Generic match" banner and
@@ -4837,11 +5091,79 @@ async function showResults(fetchPromise){
   renderResults(liveScen);
   goTo('results');
 
+  // Wave 56b — fire the AI typical-UK-price estimate for EVERY result so
+  // users always see the "average info" Vincent asked for, regardless of
+  // whether retailer search returned hits or empty. Lands async; injected
+  // into the hero body when ready. Generation-guarded so a stale render
+  // can't overwrite a newer one.
+  const _estGen = searchGeneration;
+  fetch('/api/ai-estimate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ product: liveScen.query || liveQuery || '' }),
+  }).then(r => r.ok ? r.json() : null).then(d => {
+    if(searchGeneration !== _estGen) return;
+    if(!d || !d.estimate || !d.estimate.family) return;
+    // Attach to scen so share-card and re-renders pick it up
+    liveScen.aiEstimate = d.estimate;
+    renderAiEstimateInResults(d.estimate, liveScen);
+  }).catch(() => {/* AI failed silently */});
+
   if(!hasSeenResult){
     hasSeenResult=true;
     if(liveScen.spc!=='green'){
       setTimeout(()=>{if(!hasBoughtItem)showEmailModal();},8000);
     }
+  }
+}
+
+// Wave 56b — Render the AI typical-UK-price estimate INSIDE the result
+// hero (between the verdict body and the retailer list section). Compares
+// our actual cheapest find against the AI's typical band so the user
+// always has context.
+function renderAiEstimateInResults(est, sc){
+  const heroBody = document.querySelector('#hero-card .hero-body');
+  if(!heroBody) return;
+  // Don't double-render
+  const existing = heroBody.querySelector('.ai-estimate-strip');
+  if(existing) existing.remove();
+
+  const lo  = est.typical_low;
+  const hi  = est.typical_high;
+  const avg = est.typical_avg;
+  if(!lo || !hi || !avg) return;
+
+  // Compare cheapest found vs AI typical average
+  const cheapest = sc.bestPrice;
+  let positionLine = '';
+  if(cheapest){
+    const diff = avg - cheapest;
+    if(diff > 5){
+      positionLine = `<strong>£${diff} below</strong> the typical UK average.`;
+    } else if(diff < -5){
+      positionLine = `<strong>£${Math.abs(diff)} above</strong> the typical UK average — keep looking.`;
+    } else {
+      positionLine = `Right around the typical UK average.`;
+    }
+  }
+
+  const strip = document.createElement('div');
+  strip.className = 'ai-estimate-strip';
+  strip.innerHTML =
+    '<div class="ai-estimate-strip-head">'
+    + '<svg class="ai-estimate-spark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>'
+    + '<span class="ai-estimate-strip-label">Typical UK price</span>'
+    + '</div>'
+    + `<div class="ai-estimate-strip-band">£${lo}–£${hi} <span class="ai-estimate-strip-avg">avg £${avg}</span></div>`
+    + (positionLine ? `<div class="ai-estimate-strip-position">${positionLine}</div>` : '')
+    + (est.reasoning ? `<div class="ai-estimate-strip-reason">${escHtml(est.reasoning)}</div>` : '');
+
+  // Insert before .hero-actions so it sits in the body flow
+  const actions = heroBody.querySelector('.hero-actions') || heroBody.querySelector('.shelf-refine');
+  if(actions){
+    heroBody.insertBefore(strip, actions);
+  } else {
+    heroBody.appendChild(strip);
   }
 }
 
@@ -5003,6 +5325,78 @@ function renderNoResults(query){
   if(track)track.style.display='none';
   const amazonCta=document.getElementById('amazon-cta-card');
   if(amazonCta)amazonCta.style.display='none';
+
+  // Wave 56 — AI takeover for future/obscure products. Fire /api/ai-estimate
+  // in the background. When it lands, inject a "AI estimate" panel above
+  // the retailer shortcuts so the user gets a useful price band even though
+  // the live retailer-pipeline came up empty. Vincent: "if searching for say
+  // iphone 17 ai should take over - the iphone typically costs the average
+  // is xx... here's a link to buy save score".
+  const estGen = searchGeneration; // capture so a stale render doesn't overwrite
+  fetch('/api/ai-estimate', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ product: safeQ }),
+  }).then(r => r.ok ? r.json() : null).then(d => {
+    if(searchGeneration !== estGen) return;
+    if(!d || !d.estimate) return;
+    renderAiEstimatePanel(d.estimate, safeQ);
+  }).catch(() => {/* AI failed, empty state stays as-is */});
+}
+
+// Wave 56 — render the AI-estimate panel into the no-results hero body.
+// Slots above the retailer-shortcut grid so the user reads "here's roughly
+// what this costs" before "and here are direct retailer searches to verify".
+function renderAiEstimatePanel(est, query){
+  if(!est || !est.family) return;
+  const where = document.getElementById('hero-where');
+  if(!where) return;
+  // Don't double-render if a previous call already injected
+  if(where.querySelector('.ai-estimate-panel')) return;
+
+  const lo  = est.typical_low;
+  const hi  = est.typical_high;
+  const avg = est.typical_avg;
+  const hasNumbers = lo && hi && avg;
+  const rangeLine = hasNumbers
+    ? `Typical UK price <strong>£${lo}–£${hi}</strong> · average <strong>£${avg}</strong>`
+    : 'AI couldn\'t lock onto a typical UK price band for this one.';
+  const reasoning = String(est.reasoning || '').replace(/[<>]/g, '');
+  const closest = est.closest_comparable
+    ? `<button class="ai-estimate-comparable" onclick="trendSearch('${String(est.closest_comparable).replace(/'/g, "\\'")}')">Compare with ${escHtml(est.closest_comparable)} →</button>`
+    : '';
+  // Buy retailer chips — only render the ones we have a search URL for
+  const retailers = (est.buy_retailers || []).filter(r => retailerSearchUrl(r, query));
+  const retailerChipsHtml = retailers.length
+    ? `<div class="ai-estimate-retailers">${
+        retailers.slice(0,4).map(r => {
+          const url = retailerSearchUrl(r, query) || '';
+          return `<a class="ai-estimate-retailer" href="${url.replace(/"/g,'&quot;')}" target="_blank" rel="noopener">${escHtml(r)}</a>`;
+        }).join('')
+      }</div>`
+    : '';
+
+  const futureBadge = est.future_release
+    ? '<span class="ai-estimate-future">Likely not yet released in the UK</span>'
+    : '';
+
+  const panelHtml =
+    '<div class="ai-estimate-panel">'
+    + '<div class="ai-estimate-head">'
+    +   '<svg class="ai-estimate-spark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>'
+    +   '<span class="ai-estimate-eyebrow">AI ESTIMATE</span>'
+    +   futureBadge
+    + '</div>'
+    + `<div class="ai-estimate-family">${escHtml(est.family)}</div>`
+    + `<div class="ai-estimate-range">${rangeLine}</div>`
+    + (reasoning ? `<div class="ai-estimate-reason">${escHtml(reasoning)}</div>` : '')
+    + retailerChipsHtml
+    + closest
+    + '</div>';
+
+  // Inject ABOVE the existing empty-shortcuts so AI estimate reads first.
+  const current = where.innerHTML;
+  where.innerHTML = panelHtml + current;
 }
 
 function retrySearch(){
@@ -5235,6 +5629,7 @@ function retailerSearchUrl(retailerName, query){
   if(!q)return null;
   const r=String(retailerName||'').toLowerCase();
   if(r.includes('amazon'))       return `https://www.amazon.co.uk/s?k=${q}&tag=${AFFILIATE_TAGS.amazon}`;
+  if(r.includes('apple'))        return `https://www.apple.com/uk/search/${q}?src=globalnav`;
   if(r.includes('currys'))       return `https://www.currys.co.uk/search?search=${q}`;
   if(r.includes('argos'))        return `https://www.argos.co.uk/search/${q}/`;
   if(r.includes('john lewis'))   return `https://www.johnlewis.com/search?search-term=${q}`;
@@ -5587,11 +5982,23 @@ function renderResults(sc){
   const witEl=document.getElementById('hero-wit');
 
   if(hasUserPrice){
+    // Wave 60 — when the user's anchor price is CHEAPER than every retailer
+    // we surfaced, they already have the best deal (e.g. Amazon flash deal
+    // not yet indexed by Perplexity). Show their price as the headline.
+    const userIsCheaper = sc.uPrice && sc.bestPrice && sc.uPrice < sc.bestPrice;
     // Generate wit ONCE per render and store on the scen so shareText() and
     // the canvas share card use the same line the user is reading on screen.
     sc.witLine=witLine(spc,sc.saving||0,overpayingRetailer,sc.bestRetailer||'Amazon UK');
     witEl.textContent=sc.witLine;
-    if(spc==='green'){
+    if(userIsCheaper){
+      // User's anchor beats every UK retailer we found — explicitly call it.
+      sc.witLine = `You're already £${Math.round(sc.bestPrice - sc.uPrice)} below the cheapest UK retailer we found. Snap that up.`;
+      witEl.textContent = sc.witLine;
+      savNumEl.textContent = '£' + Math.round(sc.uPrice);
+      savNumEl.className = 'hero-num green';
+      savLblEl.textContent = 'best price you\'ve found';
+      where.innerHTML = `Cheapest other UK retailer right now: <strong>${sc.bestRetailer}</strong> at <strong>£${sc.bestPrice}</strong>. You\'ve already beaten them.`;
+    } else if(spc==='green'){
       savNumEl.textContent='£'+sc.bestPrice;
       savLblEl.textContent='best price in the UK right now';
       where.innerHTML='You\'re at the best available price. <strong>Buy with confidence.</strong>';
@@ -6700,6 +7107,51 @@ function escJsAttr(s){
 // can show "you've saved £X with Savvey" — motivational return-driver.
 // Stored on-device, no server. Increment-only with a session-flag guard so
 // the same search rendering twice doesn't double-count.
+// ── Wave 58 — Product image cache ──
+//
+// Every successful search returns a hero-image URL (Serper Images via the
+// ai-search _meta.heroImage field). We cache it here keyed by the search
+// query so trending + recent tiles on home can render real product
+// imagery on subsequent visits. 7-day TTL keeps stale images out.
+const PRODUCT_IMAGE_KEY  = 'savvey_product_images';
+const PRODUCT_IMAGE_TTL  = 7 * 24 * 60 * 60 * 1000; // 7 days
+function getProductImageMap(){
+  try{
+    const raw = localStorage.getItem(PRODUCT_IMAGE_KEY);
+    if(!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  }catch(e){ return {}; }
+}
+function _normaliseImageKey(q){
+  return String(q||'').toLowerCase().trim().replace(/\s+/g,' ').slice(0,80);
+}
+function cacheProductImage(query, url){
+  if(!query || !url) return;
+  try{
+    const map = getProductImageMap();
+    const key = _normaliseImageKey(query);
+    if(!key) return;
+    map[key] = { url: String(url).slice(0,500), t: Date.now() };
+    // Cap cache at 60 entries — drop oldest if we go over
+    const keys = Object.keys(map);
+    if(keys.length > 60){
+      const sorted = keys.sort((a,b) => (map[a].t||0) - (map[b].t||0));
+      sorted.slice(0, keys.length - 60).forEach(k => delete map[k]);
+    }
+    localStorage.setItem(PRODUCT_IMAGE_KEY, JSON.stringify(map));
+  }catch(e){}
+}
+function getProductImage(query){
+  if(!query) return null;
+  const map = getProductImageMap();
+  const key = _normaliseImageKey(query);
+  const entry = map[key];
+  if(!entry || !entry.url) return null;
+  if(Date.now() - (entry.t||0) > PRODUCT_IMAGE_TTL) return null;
+  return entry.url;
+}
+
 const SAVINGS_KEY = 'savvey_total_savings';
 const SAVINGS_COUNT_KEY = 'savvey_savings_count';
 const SAVINGS_RECORDED_KEY = 'savvey_savings_recorded_in_session';

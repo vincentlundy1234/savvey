@@ -276,6 +276,8 @@ function isAdmissibleAmazonUrl(url) {
 // page" for that retailer — verified against live URL conventions. Hits
 // from these retailers that don't match the pattern are dropped.
 const PRODUCT_URL_PATTERNS = {
+  // Wave 55 — Apple direct (apple.com/uk-buy-iphone, /shop/buy-mac, etc.)
+  'apple.com':         /\/(uk|gb)\/(?:shop|buy)|\/(?:shop|buy)-/i,
   'currys.co.uk':      /\/products\/[a-z0-9-]+-\d{6,}/i,    // /products/sony-...-10245678
   'argos.co.uk':       /\/product\/\d{6,}/i,                // /product/8447423
   'johnlewis.com':     /\/p\d{6,}/i,                        // /sony.../p7060324

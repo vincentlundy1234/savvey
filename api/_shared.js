@@ -19,6 +19,7 @@
 // ─────────────────────────────────────────────────────────────
 export const UK_RETAILERS = [
   { host: 'amazon.co.uk',      name: 'Amazon UK',      srcTerms: ['amazon'] },
+  { host: 'apple.com',          name: 'Apple',         srcTerms: ['apple.com', 'apple uk', 'apple store'] },
   { host: 'currys.co.uk',      name: 'Currys',         srcTerms: ['currys'] },
   { host: 'argos.co.uk',       name: 'Argos',          srcTerms: ['argos'] },
   { host: 'johnlewis.com',     name: 'John Lewis',     srcTerms: ['john lewis', 'johnlewis'] },
