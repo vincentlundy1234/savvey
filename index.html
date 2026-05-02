@@ -2015,6 +2015,18 @@
       transition:transform var(--motion-fast) var(--ease-quick),
                  border-color var(--motion-norm) var(--ease-quick),
                  box-shadow var(--motion-norm) var(--ease-quick);
+      /* Wave 75 — stagger entrance. Each row fades + lifts in sequence.
+         The animation-delay is applied via inline style in render so
+         later rows arrive after earlier ones. Reduced-motion users get
+         the row instantly visible (no transform/opacity). */
+      opacity:0;transform:translateY(6px);
+      animation:ret-row-in 320ms var(--ease-out, cubic-bezier(.2,.7,.2,1)) forwards;
+    }
+    @keyframes ret-row-in{
+      to { opacity:1; transform:translateY(0); }
+    }
+    @media (prefers-reduced-motion: reduce){
+      .ret-row{ opacity:1; transform:none; animation:none; }
     }
     /* Brand-coloured left rail (3px) — driven by data-brand attribute set
        in renderResults. Falls back to a neutral grey if no brand match. */
@@ -3294,25 +3306,29 @@
       margin-bottom:4px;
     }
     /* New designed badges (replace emoji) — coloured circle + line SVG icon */
+    /* Wave 75 — fixed 48x48 in BOTH states (icon mode and with-image mode)
+       so tile heights don't jump when images hydrate in async (Wave 69 lazy
+       loading made this visible — tiles re-laid out as each image arrived). */
     .trend-tile-badge{
       display:flex;align-items:center;justify-content:center;
-      width:40px;height:40px;border-radius:12px;
+      width:48px;height:48px;border-radius:12px;
       margin-bottom:6px;flex-shrink:0;
-      transition:transform var(--motion-norm) var(--ease-pop);
+      transition:transform var(--motion-norm) var(--ease-pop),
+                 background-color var(--motion-norm) var(--ease-quick);
       background-size:cover;
       background-position:center;
       background-repeat:no-repeat;
     }
-    /* Wave 58 — when a real product image is cached, the badge becomes an
-       image preview (background-image set inline by JS). Slightly bigger
-       so the photo reads, white border + soft shadow give it a polaroid feel. */
+    /* When a real product image hydrates in, swap chrome but KEEP same
+       footprint so layout doesn't reflow. Polaroid feel via white pad +
+       soft shadow rather than size bump. */
     .trend-tile-badge.with-image{
-      width:52px;height:52px;
-      border-radius:13px;
+      width:48px;height:48px;
+      border-radius:12px;
       background-color:#fff;
       box-shadow:0 4px 12px rgba(15,17,20,0.12),
                  inset 0 0 0 1px rgba(15,17,20,0.06);
-      margin-bottom:8px;
+      margin-bottom:6px;
     }
     .trend-tile:active .trend-tile-badge{transform:scale(1.06) rotate(-3deg);}
     .cat-audio   .trend-tile-badge{background:#eef2ff;color:#3b46ff;}
@@ -4489,6 +4505,24 @@ function goTo(screen, opts){
   currentScreen=screen;
   updateSwipePager();
   updateBotnav();
+  // Wave 75 — focus management on screen change. Move focus into the
+  // new screen so keyboard users land in context (was leaving focus on
+  // a button on the previous screen, which then read as stale to a
+  // screen reader). We pick the first heading or first interactive
+  // element. tabindex=-1 keeps it programmatically focusable without
+  // adding it to the tab order.
+  setTimeout(() => {
+    if(currentScreen !== screen) return;
+    const target = entering.querySelector('[data-focus-on-enter]')
+                || entering.querySelector('h1, h2, .nav-title, .srch-h, .priv-h')
+                || entering.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    if(target){
+      try {
+        if(!target.hasAttribute('tabindex')) target.setAttribute('tabindex', '-1');
+        target.focus({ preventScroll: true });
+      } catch(e){}
+    }
+  }, 60);
   // Wave 63 — settings screen entry: refresh row stats so user sees
   // current data sizes when they open it.
   if(screen === 'settings'){
@@ -4727,7 +4761,7 @@ function settingsResetSaveScore(){
     try{
       localStorage.removeItem(SAVINGS_KEY);
       localStorage.removeItem(SAVINGS_COUNT_KEY);
-      sessionStorage.removeItem(SAVINGS_RECORDED_KEY);
+      localStorage.removeItem(SAVINGS_RECORDED_KEY);
     }catch(e){}
   });
 }
@@ -5930,7 +5964,16 @@ async function showResults(fetchPromise){
   let sc=null;
 
   if(fetchPromise){
-    sc=await fetchPromise; // awaits AbortController-backed Promise
+    // Wave 75 — catch errors thrown anywhere in the fetchPrices chain
+    // so the user never gets stranded on the loading screen. Without
+    // this, an unexpected throw (Haiku 500, JSON parse blowup, etc)
+    // left the searching screen visible indefinitely.
+    try {
+      sc = await fetchPromise; // awaits AbortController-backed Promise
+    } catch (err) {
+      console.error('[showResults] fetch threw:', err && err.message);
+      sc = null;
+    }
   }
 
   // Generation guard — if a newer search fired while we awaited, discard
@@ -5961,11 +6004,19 @@ async function showResults(fetchPromise){
   // Demo data masquerading as a real verdict is the bug we just spent two
   // deploys killing; it cannot creep back in via a null-coalesce.
   if(!liveScen){
+    track('no_results', { q: (liveQuery||'').slice(0, 40) });
     renderNoResults(liveQuery||'that product');
     goTo('results');
     return;
   }
 
+  track('scenario_rendered', {
+    spc: liveScen.spc,
+    score: liveScen.score,
+    retailers: liveScen.retailerCount || 0,
+    saving: liveScen.saving || 0,
+    basis: liveScen.scoreBasis || 'unknown',
+  });
   renderResults(liveScen);
   goTo('results');
 
@@ -5984,6 +6035,7 @@ async function showResults(fetchPromise){
     liveScen.onlyEbay;
   if(retailerCoverageThin){
     injectAiEstimateSkeleton();
+    track('ai_estimate_fired', { reason: liveScen.coverage === 'limited' ? 'limited_coverage' : (liveScen.onlyEbay ? 'ebay_only' : 'thin_retailer_count') });
     const _estGen = searchGeneration;
     fetch('/api/ai-estimate', {
       method:'POST',
@@ -5997,6 +6049,7 @@ async function showResults(fetchPromise){
         return;
       }
       liveScen.aiEstimate = d.estimate;
+      track('ai_estimate_returned', { confidence: d.estimate.confidence, family: (d.estimate.family || '').slice(0, 24) });
       renderAiEstimateInResults(d.estimate, liveScen);
     }).catch(() => {
       const sk = document.querySelector('#hero-card .ai-estimate-skel');
@@ -6770,7 +6823,13 @@ function renderResults(sc){
       saved = sc.savingVsAvg;
     }
     if(saved > 0){
-      const queryKey = (sc.query || liveQuery || '') + '|' + (sc.bestPrice || '') + '|' + (sc.uPrice || sc.avgPrice || '');
+      // Wave 75 — dedupe key is now (query, day) instead of
+      // (query, bestPrice, avgPrice). The old key changed every time
+      // the API returned a slightly different avg, so the counter
+      // double-counted the same logical search. The new key keeps
+      // the counter honest: one search per query per day.
+      const today = new Date().toISOString().slice(0,10);
+      const queryKey = (sc.query || liveQuery || '').toLowerCase().trim() + '|' + today;
       recordSaving(saved, queryKey);
     }
   }
@@ -7096,13 +7155,16 @@ function renderResults(sc){
   // anyway. For others we say "View at [host]". When real delivery
   // text exists from the source, it wins.
   const list=document.getElementById('ret-list');
-  list.innerHTML=(sc.rets||[]).map(r=>{
+  list.innerHTML=(sc.rets||[]).map((r, idx)=>{
     const brandKey = retailerBrandKey(r.n||'');
     const safeN = (r.n||'').replace(/'/g,"\\'");
     const safeLink = (r.link||'').replace(/'/g,"\\'");
     const meaningfulSub = retailerSubLine(r);
+    // Wave 75 — stagger delay (40ms per row) so rows tumble in instead
+    // of slamming as a block. Best-price row first, then top-3 in turn.
+    const delay = Math.min(idx * 40, 280);
     return `
-    <div class="ret-row${r.best?' best':''}" data-brand="${brandKey}" onclick="openRetailerRow('${safeN}','${safeLink}')">
+    <div class="ret-row${r.best?' best':''}" data-brand="${brandKey}" style="animation-delay:${delay}ms" onclick="openRetailerRow('${safeN}','${safeLink}')">
       <div class="ret-name-wrap">
         <div class="ret-name">${r.n}</div>
         <div class="ret-sub">${meaningfulSub}</div>
@@ -8151,7 +8213,11 @@ function getProductImage(query){
 
 const SAVINGS_KEY = 'savvey_total_savings';
 const SAVINGS_COUNT_KEY = 'savvey_savings_count';
-const SAVINGS_RECORDED_KEY = 'savvey_savings_recorded_in_session';
+// Wave 75 — moved dedupe to localStorage so it survives tab close /
+// re-open within the same day (was sessionStorage which dropped on
+// close → user could reopen, re-run the same search, double-count).
+// Entries are auto-pruned to last 30 days.
+const SAVINGS_RECORDED_KEY = 'savvey_savings_recorded_v2';
 
 function getTotalSavings(){
   try{ return parseFloat(localStorage.getItem(SAVINGS_KEY) || '0') || 0; }
@@ -8161,16 +8227,32 @@ function getSavingsCount(){
   try{ return parseInt(localStorage.getItem(SAVINGS_COUNT_KEY) || '0', 10) || 0; }
   catch(e){ return 0; }
 }
+function _readRecordedMap(){
+  try{
+    const raw = localStorage.getItem(SAVINGS_RECORDED_KEY);
+    if(!raw) return {};
+    const obj = JSON.parse(raw);
+    return obj && typeof obj === 'object' ? obj : {};
+  }catch(e){ return {}; }
+}
+function _writeRecordedMap(map){
+  try{
+    // Prune any entries older than 30 days so the dedupe map can't grow
+    // unbounded.
+    const cutoff = Date.now() - 30 * 24 * 3600 * 1000;
+    Object.keys(map).forEach(k => {
+      if((map[k] || 0) < cutoff) delete map[k];
+    });
+    localStorage.setItem(SAVINGS_RECORDED_KEY, JSON.stringify(map));
+  }catch(e){}
+}
 function recordSaving(amount, queryKey){
   if(!amount || amount <= 0) return;
-  // Don't double-count the same query within a session
-  const recordedSet = (function(){
-    try{ return new Set(JSON.parse(sessionStorage.getItem(SAVINGS_RECORDED_KEY) || '[]')); }
-    catch(e){ return new Set(); }
-  })();
-  if(recordedSet.has(queryKey)) return;
-  recordedSet.add(queryKey);
-  try{ sessionStorage.setItem(SAVINGS_RECORDED_KEY, JSON.stringify([...recordedSet])); }catch(e){}
+  if(!queryKey) return;
+  const map = _readRecordedMap();
+  if(map[queryKey]) return; // already recorded
+  map[queryKey] = Date.now();
+  _writeRecordedMap(map);
   try{
     const current = getTotalSavings();
     const count = getSavingsCount();
@@ -8388,9 +8470,16 @@ function buildShareSheetHtml(mode){
 }
 
 // ── Share card ──
+// Wave 75 — share-card draw token. Each call to openShareCard /
+// shareSavingsCounter increments the token; if a slow fonts.ready
+// resolve fires AFTER a more recent open, the older draw is discarded.
+// Stops the blank-canvas race when the user opens, closes, and reopens
+// the share sheet faster than fonts.ready resolves.
+let _shareDrawToken = 0;
 function openShareCard(){
   haptic(12); // confirms share-button tap before the card animates in
   if(!liveScen)return; // empty state — nothing to share
+  track('share_opened', { kind: 'result', spc: liveScen.spc, saving: liveScen.saving || 0 });
   // Wave 63 — restore the share-sheet markup (in case savings-mode was
   // showing previously) before drawing.
   const overlay = document.getElementById('share-overlay');
@@ -8399,11 +8488,16 @@ function openShareCard(){
   }
   if(overlay) overlay.setAttribute('aria-hidden', 'false');
   const sc=liveScen;
+  const myToken = ++_shareDrawToken;
   // Wave 63 — wait for Nunito/Inter to be ready so canvas uses them
   // instead of falling back to Arial. Promise resolves immediately if
   // fonts already loaded.
   const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
-  fontsReady.then(() => drawCard(sc));
+  fontsReady.then(() => {
+    // Wave 75 — drop stale draws (user opened a newer card already).
+    if(myToken !== _shareDrawToken) return;
+    drawCard(sc);
+  });
   if(overlay) overlay.classList.add('open');
 }
 function drawCard(sc){
@@ -8617,9 +8711,13 @@ function shareSavingsCounter(){
   // wires the canvas/share/save channels to the savings-card variants
   // instead of the result-card variants.
   overlay.innerHTML = buildShareSheetHtml('savings');
+  const myToken = ++_shareDrawToken;
   // Wave 63 — fonts.ready guard so canvas uses Nunito/Inter
   const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
-  fontsReady.then(() => drawSavingsCard(total, count));
+  fontsReady.then(() => {
+    if(myToken !== _shareDrawToken) return; // Wave 75 — stale draw guard
+    drawSavingsCard(total, count);
+  });
   overlay.setAttribute('aria-hidden','false');
   overlay.classList.add('open');
 }
@@ -8941,6 +9039,26 @@ function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// Wave 75 — lightweight telemetry. Fire-and-forget, never blocks UI.
+// Per-session ID generated once and held in memory; not persisted —
+// privacy default is "ephemeral session, no cross-session linkage".
+const _savveySid = (function(){
+  try { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36).slice(-4); }
+  catch (e) { return 'nosid'; }
+})();
+function track(event, props){
+  try {
+    const body = JSON.stringify({ event, props: props || {}, sid: _savveySid });
+    // sendBeacon when available — survives page unload, doesn't block.
+    if(navigator.sendBeacon){
+      const blob = new Blob([body], { type: 'application/json' });
+      navigator.sendBeacon('/api/track', blob);
+    } else {
+      fetch('/api/track', { method:'POST', headers:{'Content-Type':'application/json'}, body, keepalive:true }).catch(() => {});
+    }
+  } catch (e) { /* swallow — telemetry must never break the app */ }
 }
 
 // Wave 74 — SW update toast. Sticky (no auto-dismiss) until tapped or

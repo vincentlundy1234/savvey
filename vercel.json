@@ -19,6 +19,10 @@
     "api/image.js": {
       "memory": 256,
       "maxDuration": 4
+    },
+    "api/track.js": {
+      "memory": 128,
+      "maxDuration": 3
     }
   },
   "headers": [
