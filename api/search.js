@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.18';
+const VERSION = 'search.js v6.19';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // Wave 82 — Haiku grading constants. Used by gradeResultsViaHaiku to
@@ -102,6 +102,28 @@ function demoteEbayIfNotUsed(items, query){
     console.log(`[${VERSION}] demoting ${ebayItems.length} eBay listing(s); query had no used-intent keywords`);
   }
   return otherItems;
+}
+
+// Wave 83 — price-anomaly floor. Deterministic backstop after Haiku
+// grading. Drops listings graded "similar" (not exact) whose price is
+// suspiciously low vs the cluster median — almost always a clone,
+// accessory, or wrong-product. "exact" listings are trusted regardless
+// of price (legit budget retailers like Lakeland £40 cordless vacuum).
+// Skips when fewer than 3 items in cluster (no reliable median).
+function priceAnomalyFloorPostHaiku(items){
+  if (!items || items.length < 3) return items;
+  const prices = items.map(i => i.price).filter(p => typeof p === 'number' && p > 0).sort((a, b) => a - b);
+  if (prices.length < 3) return items;
+  const median = prices[Math.floor(prices.length / 2)];
+  if (median <= 0) return items;
+  const floor = median * 0.25; // 25% of median = lower bound
+  const filtered = items.filter(it => {
+    if (it.query_match === 'exact') return true; // trust Haiku exacts
+    if (typeof it.price !== 'number' || it.price >= floor) return true;
+    console.log(`[${VERSION}] price-anomaly drop: ${it.source} £${it.price.toFixed(2)} (median £${median.toFixed(0)}, floor £${floor.toFixed(2)}) — graded "${it.query_match}"`);
+    return false;
+  });
+  return filtered;
 }
 
 // Wave 82 — Haiku grading on Tier 2 results. Fires ONE Haiku call with
@@ -1098,7 +1120,17 @@ export default async function handler(req, res) {
   // "different" items. Both gracefully no-op if dependencies missing.
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   const ebayDemoted  = demoteEbayIfNotUsed(anomaly, q);
-  const results      = await gradeResultsViaHaiku(ebayDemoted, q, ANTHROPIC_KEY);
+  const haikuGraded  = await gradeResultsViaHaiku(ebayDemoted, q, ANTHROPIC_KEY);
+  // Wave 83 — price-anomaly floor on post-Haiku items. Haiku is the
+  // smart layer; this is the deterministic backstop. Rule: if a
+  // listing is graded "similar" (not exact) AND its price is below
+  // 25% of the cluster median, drop it as suspect — almost always
+  // a clone, accessory, or wrong-product. "exact" listings are
+  // trusted regardless of price (Lakeland £40 cordless vacuum is
+  // legitimately budget; Haiku graded it as the right product).
+  // Catches the cases Haiku was too generous on (Dunelm £3.95 yoga
+  // mat strap, Selfridges £5 wrong-product, etc).
+  const results = priceAnomalyFloorPostHaiku(haikuGraded);
   const priced       = trusted; // backwards-compat alias for debug envelope
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
