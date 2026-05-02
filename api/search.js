@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.20';
+const VERSION = 'search.js v6.21';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // Wave 82 — Haiku grading constants. Used by gradeResultsViaHaiku to
@@ -793,6 +793,17 @@ const PER_RETAILER_SITES = [
   { source: 'Wayfair',       site: 'wayfair.co.uk' },
   { source: 'Habitat',       site: 'habitat.co.uk' },
   { source: 'Homebase',      site: 'homebase.co.uk' },
+  // Wave 85 — Major UK supermarkets. Vincent's call: supermarkets
+  // should be in the fan-out for non-grocery items too — they sell
+  // PS5s, lawn mowers, homeware, garden tools, all deliver. Tesco
+  // (limited general merchandise but still indexed), ASDA (George
+  // covers clothing + general), Sainsbury's (Tu + Argos siblings),
+  // Morrisons (limited but tries). If they don't return for a query
+  // the fan-out just gets nothing for that retailer — no harm.
+  { source: 'Tesco',         site: 'tesco.com' },
+  { source: 'ASDA',          site: 'asda.com' },
+  { source: "Sainsbury's",   site: 'sainsburys.co.uk' },
+  { source: 'Morrisons',     site: 'morrisons.com' },
 ];
 
 async function fetchSerperOneRetailer(query, retailer, apiKey) {
