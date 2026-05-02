@@ -538,11 +538,21 @@ async function fetchSerper(query, type, apiKey) {
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), SERPER_TIMEOUT_MS);
+  // Wave 77 — bumped num 10→40 for shopping. Vincent's "cordless vacuum
+  // cleaner" test surfaced only 5 retailer rows from Serper Shopping
+  // when Google Shopping itself has dozens of budget Amazon listings
+  // sub-£50 (Cryfokt £38). At num:10 we were getting a thin slice of
+  // Google Shopping's full result set; budget tier was systematically
+  // missing because Google's default sort puts headline/branded items
+  // first. num:40 widens the pool so budget listings have a chance to
+  // appear. Search endpoint stays at 10 (organic results don't suffer
+  // the same headline-bias issue).
+  const numResults = type === 'shopping' ? 40 : 10;
   try {
     const r = await fetch(endpoint, {
       method:  'POST',
       headers: { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: 10 }),
+      body:    JSON.stringify({ q: query, gl: 'uk', hl: 'en', num: numResults }),
       signal:  ac.signal,
     });
     if (!r.ok) throw Object.assign(new Error('Serper error'), { status: r.status });
@@ -588,7 +598,15 @@ async function fetchSerperUKSites(query, apiKey) {
 //
 // Each retailer is fired in parallel so total wall-clock is ~5s (the per-call
 // timeout), not 5×N. Failure of one retailer doesn't block the others.
+// Wave 77 — Amazon UK ADDED to per-retailer fan-out. Vincent's live test
+// on "cordless vacuum cleaner" showed Halfords/Very/AO surfacing but no
+// Amazon — yet Amazon UK has £30-50 budget cordless vacuums (Cryfokt
+// £38) that any real shopper would expect to see. Without Amazon in the
+// fan-out, Tier 2 totally misses budget-tier listings on the biggest UK
+// retailer. Amazon is hit early in the array so it joins the parallel
+// fan-out without delaying others.
 const PER_RETAILER_SITES = [
+  { source: 'Amazon UK',    site: 'amazon.co.uk' },
   { source: 'Currys',       site: 'currys.co.uk' },
   { source: 'Argos',        site: 'argos.co.uk' },
   { source: 'John Lewis',   site: 'johnlewis.com' },
