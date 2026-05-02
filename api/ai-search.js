@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.6';
+const VERSION = 'ai-search.js v1.7';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -237,6 +237,15 @@ const PRODUCT_URL_PATTERNS = {
   'selfridges.com':    /\/cat\/[^/]+\/[^/]+\/\d+\/?$/i,
   'mcgrocer.com':      /\/products\/[a-z0-9-]+/i,
   'harveynichols.com': /\/product\/[a-z0-9-]+/i,
+  // DIY (Wave 24)
+  'diy.com':           /\/details\/[a-z0-9-]+\/\d+/i,            // B&Q: /details/.../12345
+  'wickes.co.uk':      /\/Product\/p\/\d+/i,                     // Wickes: /Product/p/123456
+  'toolstation.com':   /\/[a-z0-9-]+\/p\d+/i,                    // Toolstation: /slug/p12345
+  // Books (Wave 24)
+  'waterstones.com':   /\/book\/[a-z0-9-]+\/[a-z0-9-]+\/\d+/i,   // Waterstones: /book/title/author/9780...
+  'whsmith.co.uk':     /\/products\/[a-z0-9-]+\/[a-z0-9-]+/i,    // WHSmith: /products/title/9780...
+  'worldofbooks.com':  /\/en-gb\/products\/[a-z0-9-]+/i,         // World of Books: /en-gb/products/title-isbn
+  'blackwells.co.uk':  /\/bookshop\/product\/[a-z0-9-]+/i,       // Blackwell's
   // ebay.co.uk / ebay.com — already handled separately by the /itm/ check
   'ebay.co.uk':        /\/itm\/\d+/i,
   'ebay.com':          /\/itm\/\d+/i,
@@ -403,6 +412,36 @@ async function verifyUrls(items) {
   return verified;
 }
 
+// Fetch a single hero product image via Serper Images (v1.6+).
+// Cheap (~£0.0005), fires in parallel with URL HEAD checks so it doesn't add
+// to total latency. Returns { url, thumbnail } or null. Uses an AbortSignal
+// timeout so a slow image API can't hold up the whole search.
+async function fetchHeroImage(query, serperKey) {
+  if (!serperKey || !query) return null;
+  try {
+    const ac = new AbortController();
+    const t  = setTimeout(() => ac.abort(), 3000);
+    const r = await fetch('https://google.serper.dev/images', {
+      method: 'POST',
+      headers: { 'X-API-KEY': serperKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: query + ' product', gl: 'uk', num: 3 }),
+      signal: ac.signal,
+    });
+    clearTimeout(t);
+    if (!r.ok) return null;
+    const d = await r.json();
+    const img = (d && d.images && d.images[0]) || null;
+    if (!img || !img.imageUrl) return null;
+    return {
+      url: img.imageUrl,
+      thumbnail: img.thumbnailUrl || img.imageUrl,
+      source: img.source || null,
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 // Append the Amazon Associates tag to any amazon.co.uk URL. No-op for other
 // hosts and no-op if AMAZON_TAG is empty (operator disabled).
 //
@@ -496,10 +535,16 @@ export default async function handler(req, res) {
 
   let items = combineHitsWithPrices(hits, priceData);
 
-  // URL HEAD verification — drop any link that's dead BEFORE the user sees it.
-  // Optional via { verify: false } in request body for testing/debug paths.
+  // URL HEAD verification + hero image fetch — fired in parallel so the
+  // image API call doesn't add to total latency. Image is optional; null
+  // if Serper returns nothing or fails.
   const beforeVerify = items.length;
-  if (verify) items = await verifyUrls(items);
+  const SERPER_KEY_FOR_IMG = process.env.SERPER_API_KEY || process.env.SERPER_KEY || null;
+  const [verifiedItems, heroImage] = await Promise.all([
+    verify ? verifyUrls(items) : Promise.resolve(items),
+    fetchHeroImage(q, SERPER_KEY_FOR_IMG),
+  ]);
+  items = verifiedItems;
   const verifiedDropped = beforeVerify - items.length;
 
   const results = dedup(items);
@@ -544,6 +589,7 @@ export default async function handler(req, res) {
       verified:          verify,
       verifiedDropped,
       amazonTagged:      Boolean(AMAZON_TAG),
+      heroImage:         heroImage,  // { url, thumbnail, source } or null
     },
     _debug: debugEnvelope,
   });

@@ -35,6 +35,15 @@ export const UK_RETAILERS = [
   { host: 'selfridges.com',    name: 'Selfridges',     srcTerms: ['selfridges'] },
   { host: 'mcgrocer.com',      name: 'McGrocer',       srcTerms: ['mcgrocer'] },
   { host: 'harveynichols.com', name: 'Harvey Nichols', srcTerms: ['harvey nichols'] },
+  // DIY (added Wave 24)
+  { host: 'diy.com',           name: 'B&Q',            srcTerms: ['b&q', 'diy.com', 'b and q'] },
+  { host: 'wickes.co.uk',      name: 'Wickes',         srcTerms: ['wickes'] },
+  { host: 'toolstation.com',   name: 'Toolstation',    srcTerms: ['toolstation'] },
+  // Books / media (added Wave 24)
+  { host: 'waterstones.com',   name: 'Waterstones',    srcTerms: ['waterstones'] },
+  { host: 'whsmith.co.uk',     name: 'WHSmith',        srcTerms: ['whsmith', 'wh smith'] },
+  { host: 'worldofbooks.com',  name: 'World of Books', srcTerms: ['world of books', 'worldofbooks'] },
+  { host: 'blackwells.co.uk',  name: 'Blackwell\'s',   srcTerms: ['blackwell'] },
 ];
 
 // ─────────────────────────────────────────────────────────────

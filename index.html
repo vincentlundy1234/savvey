@@ -521,26 +521,24 @@
     .cam-btn:focus-visible{outline:2px solid #fff;outline-offset:2px;}
     .cam-label{font-size:15px;font-weight:700;color:#fff;font-family:"Nunito",sans-serif;}
 
-    /* Viewfinder */
-    .vf{position:absolute;top:50%;left:50%;transform:translate(-50%,-56%);width:250px;height:160px;z-index:5;}
-    .vf-c{position:absolute;width:24px;height:24px;border-color:rgba(255,255,255,0.9);border-style:solid;}
-    .vf-c.tl{top:0;left:0;border-width:3px 0 0 3px;border-radius:5px 0 0 0;}
-    .vf-c.tr{top:0;right:0;border-width:3px 3px 0 0;border-radius:0 5px 0 0;}
-    .vf-c.bl{bottom:0;left:0;border-width:0 0 3px 3px;border-radius:0 0 0 5px;}
-    .vf-c.br{bottom:0;right:0;border-width:0 3px 3px 0;border-radius:0 0 5px 0;}
-    .vf-beam{
-      position:absolute;left:6px;right:6px;height:2px;
-      background:linear-gradient(90deg,transparent,var(--green3),var(--green3),transparent);
-      box-shadow:0 0 10px var(--green3);
-      animation:beam 2.2s ease-in-out infinite;
-    }
-    @keyframes beam{0%,100%{top:8%}50%{top:86%}}
+    /* Viewfinder — Wave 23 M&S-inspired cleanup. Removed the corner
+       brackets and animated scanning beam line; both read as 2010s scanner
+       chrome. Now the camera is full-bleed and the lockon glow is the
+       only visual feedback when a barcode is detected. The user aims by
+       intuition (mid-frame) — same pattern M&S, Co-op, Sainsbury's all use. */
+    .vf{position:absolute;top:50%;left:50%;transform:translate(-50%,-56%);width:280px;height:180px;z-index:5;pointer-events:none;}
+    .vf-c{display:none;}        /* legacy corner brackets — hidden */
+    .vf-beam{display:none;}     /* legacy scanning beam — hidden */
     .vf-lock{
-      position:absolute;inset:0;border:2.5px solid var(--green3);
-      border-radius:5px;opacity:0;transition:opacity 0.28s;
-      box-shadow:0 0 24px rgba(86,184,77,0.25),inset 0 0 24px rgba(86,184,77,0.1);
+      position:absolute;inset:0;
+      border:3px solid var(--green3);
+      border-radius:14px;
+      opacity:0;
+      transition:opacity 0.28s, transform 0.28s var(--ease-pop);
+      transform:scale(0.95);
+      box-shadow:0 0 40px rgba(86,184,77,0.5),inset 0 0 32px rgba(86,184,77,0.18);
     }
-    .vf-lock.show{opacity:1;}
+    .vf-lock.show{opacity:1;transform:scale(1);}
 
     /* Detected card */
     .cam-found{
@@ -757,14 +755,57 @@
     .srch-h{font-family:"Nunito",sans-serif;font-weight:900;font-size:24px;color:#fff;letter-spacing:-0.5px;}
     .srch-p{font-size:15px;color:rgba(255,255,255,0.65);font-weight:500;max-width:260px;line-height:1.4;}
     .srch-s{font-size:13px;color:rgba(255,255,255,0.4);}
-    .r-chips{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;max-width:300px;}
-    .r-chip{
-      padding:5px 13px;border-radius:100px;
-      background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.15);
-      font-size:12px;font-weight:600;color:rgba(255,255,255,0.4);
-      transition:all 0.3s;
+    /* Wave 23 — branded retailer pills */
+    .r-pills{
+      display:flex;flex-wrap:wrap;gap:7px;justify-content:center;
+      max-width:340px;margin-top:4px;
     }
-    .r-chip.lit{background:rgba(255,255,255,0.22);border-color:rgba(255,255,255,0.5);color:#fff;}
+    .r-pill{
+      position:relative;
+      padding:7px 14px;border-radius:100px;
+      background:rgba(255,255,255,0.06);
+      border:1.5px solid rgba(255,255,255,0.18);
+      font:800 13px/1 "Nunito",sans-serif;
+      color:rgba(255,255,255,0.55);
+      letter-spacing:-0.2px;
+      transition:background 0.4s, border-color 0.4s, color 0.4s, transform 0.4s, box-shadow 0.4s;
+    }
+    .r-pill span{display:inline-block;}
+    /* Brand-specific colour palette — picked to match each retailer's
+       actual brand wordmark. White text always for contrast on the
+       searching screen's deep-green background. */
+    .r-pill[data-brand="amazon"].lit { background:#FF9900; border-color:#FF9900; color:#111; }
+    .r-pill[data-brand="argos"].lit  { background:#ED1B24; border-color:#ED1B24; color:#fff; }
+    .r-pill[data-brand="jl"].lit     { background:#000;    border-color:#000;    color:#fff; }
+    .r-pill[data-brand="currys"].lit { background:#4C12A1; border-color:#4C12A1; color:#fff; }
+    .r-pill[data-brand="ao"].lit     { background:#0072CE; border-color:#0072CE; color:#fff; }
+    .r-pill[data-brand="very"].lit   { background:#E6007E; border-color:#E6007E; color:#fff; }
+    .r-pill[data-brand="richer"].lit { background:#C8102E; border-color:#C8102E; color:#fff; }
+    .r-pill[data-brand="box"].lit    { background:#002F6C; border-color:#002F6C; color:#fff; }
+    .r-pill.lit{
+      transform:scale(1.04);
+      box-shadow:0 4px 14px rgba(0,0,0,0.18);
+      animation:r-pill-pulse 1.6s ease-in-out infinite;
+    }
+    @keyframes r-pill-pulse{
+      0%,100%{ filter:brightness(1); }
+      50%    { filter:brightness(1.18); }
+    }
+    /* Done state — filled with a soft tint + tick. Stops pulsing. */
+    .r-pill.done{
+      background:rgba(255,255,255,0.16);
+      border-color:rgba(255,255,255,0.35);
+      color:#fff;
+      transform:scale(1);
+      animation:none;
+      box-shadow:none;
+    }
+    .r-pill.done::after{
+      content:"✓";
+      margin-left:6px;
+      color:rgba(255,255,255,0.85);
+      font-weight:900;
+    }
 
     /* ─────────────────────────────────────────
        RESULTS
@@ -787,7 +828,7 @@
     .res-back:active{background:var(--green-lt);transform:scale(0.94);}
     .res-back:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
     .res-meta{flex:1;min-width:0;}
-    .res-mode{font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
+    .res-mode{font-size:10px;font-weight:700;color:var(--amber);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;}
     /* Inline refine-search bar — replaces the static product label so users
        can edit/refine the query without navigating away from the results. */
     .res-refine{
@@ -822,6 +863,27 @@
 
     /* ── Hero card — verdict first, number second ── */
     .hero{background:var(--card);border-radius:var(--r-lg);overflow:hidden;}
+    /* Wave 24 — hero product image strip */
+    .hero-image-wrap{
+      width:100%;height:160px;
+      background:#f5f3ee;
+      display:flex;align-items:center;justify-content:center;
+      overflow:hidden;
+      position:relative;
+    }
+    .hero-image-wrap[hidden]{display:none;}
+    .hero-image{
+      width:100%;height:100%;
+      object-fit:contain;
+      object-position:center;
+      padding:14px;
+      display:block;
+      animation:hero-img-in 480ms var(--ease-pop) both;
+    }
+    @keyframes hero-img-in{
+      from{opacity:0;transform:scale(0.94);}
+      to  {opacity:1;transform:scale(1);}
+    }
 
     /* Verdict banner — coloured top strip */
     .hero-verdict{
@@ -1628,12 +1690,12 @@
     }
     .bento-trending-pulse{
       width:6px;height:6px;border-radius:50%;
-      background:var(--green);
+      background:var(--amber);
       animation:trend-pulse 2.4s ease-in-out infinite;
     }
     @keyframes trend-pulse{
       0%,100%{opacity:0.4;transform:scale(1);}
-      50%    {opacity:1;  transform:scale(1.3);box-shadow:0 0 0 3px rgba(42,107,34,0.18);}
+      50%    {opacity:1;  transform:scale(1.3);box-shadow:0 0 0 3px rgba(212,130,10,0.22);}
     }
 
     /* ── Trending — horizontal scroll (Wave 22) ──
@@ -2097,6 +2159,11 @@
   </div>
 
   <!-- ══════ SEARCHING ══════ -->
+  <!-- Wave 23: real retailer-branded pills replace the abstract chips.
+       Each pill renders the retailer's wordmark in their actual brand
+       colour. Pills cycle through three states: pending (white outline),
+       checking (pulsing brand-coloured), done (filled + tick). Telegraphs
+       to the user exactly which retailers we're checking. -->
   <div class="screen" id="screen-searching">
     <div class="spin-shell">
       <div class="spin-track"></div>
@@ -2109,16 +2176,16 @@
     </div>
     <div class="srch-h">Checking prices</div>
     <div class="srch-p" id="searching-product">Sony WH-1000XM5</div>
-    <div class="srch-s">Scanning UK retailers…</div>
-    <div class="r-chips">
-      <div class="r-chip" id="rc-0">Amazon UK</div>
-      <div class="r-chip" id="rc-1">Currys</div>
-      <div class="r-chip" id="rc-2">John Lewis</div>
-      <div class="r-chip" id="rc-3">Argos</div>
-      <div class="r-chip" id="rc-4">AO</div>
-      <div class="r-chip" id="rc-5">Very</div>
-      <div class="r-chip" id="rc-6">Richer Sounds</div>
-      <div class="r-chip" id="rc-7">Box</div>
+    <div class="srch-s">Across the UK's biggest retailers</div>
+    <div class="r-pills" aria-hidden="true">
+      <div class="r-pill" data-brand="amazon"  id="rc-0"><span>amazon</span></div>
+      <div class="r-pill" data-brand="argos"   id="rc-1"><span>Argos</span></div>
+      <div class="r-pill" data-brand="jl"      id="rc-2"><span>John Lewis</span></div>
+      <div class="r-pill" data-brand="currys"  id="rc-3"><span>Currys</span></div>
+      <div class="r-pill" data-brand="ao"      id="rc-4"><span>AO.com</span></div>
+      <div class="r-pill" data-brand="very"    id="rc-5"><span>Very</span></div>
+      <div class="r-pill" data-brand="richer"  id="rc-6"><span>Richer Sounds</span></div>
+      <div class="r-pill" data-brand="box"     id="rc-7"><span>Box</span></div>
     </div>
   </div>
 
@@ -2155,6 +2222,11 @@
     </div>
     <div class="res-scroll">
       <div class="hero" id="hero-card">
+        <!-- Wave 24: hero product image, populated from /api/ai-search _meta.heroImage.
+             Hidden by default; shown when the search returns an image URL. -->
+        <div class="hero-image-wrap" id="hero-image-wrap" hidden>
+          <img class="hero-image" id="hero-image" alt="" loading="eager" decoding="async"/>
+        </div>
         <!-- Verdict banner — colour-coded, pips inside -->
         <div class="hero-verdict red" id="hero-verdict-bar">
           <div class="hero-verdict-pips">
@@ -2511,9 +2583,9 @@ function globalReset(){
   const vBar=document.getElementById('hero-verdict-bar');
   if(vBar)vBar.className='hero-verdict';
   for(let i=1;i<=5;i++){const p=document.getElementById('vp-'+i);if(p){p.className='v-pip off';p.textContent=i;}}
-  // 5. Reset chip animations
+  // 5. Reset chip animations + branded pills
   chipTimers.forEach(clearTimeout);chipTimers=[];
-  for(let i=0;i<8;i++){const c=document.getElementById('rc-'+i);if(c)c.classList.remove('lit');}
+  for(let i=0;i<8;i++){const c=document.getElementById('rc-'+i);if(c){c.classList.remove('lit');c.classList.remove('done');}}
   console.log('%c[globalReset] generation='+searchGeneration,'color:#e03535;font-weight:bold');
 }
 
@@ -3193,12 +3265,23 @@ function fetchPrices(query){
 
   document.getElementById('searching-product').textContent=query;
   chipTimers.forEach(clearTimeout);chipTimers=[];
+  // Wave 23 — pill state machine: pending → lit (pulsing brand colour) →
+  // done (✓). Each pill spends ~700ms in the lit state then transitions
+  // to done. Visualises the work as if we're checking each retailer in
+  // sequence — which we *are*, just in parallel server-side.
   for(let i=0;i<8;i++){
-    const t=setTimeout(()=>{
-      if(searchGeneration!==gen)return; // stale — discard
-      const c=document.getElementById('rc-'+i);if(c)c.classList.add('lit');
-    },200+i*300);
-    chipTimers.push(t);
+    const litAt = 180 + i * 240;
+    const doneAt = litAt + 900;
+    chipTimers.push(setTimeout(() => {
+      if(searchGeneration !== gen) return;
+      const c = document.getElementById('rc-'+i);
+      if(c) c.classList.add('lit');
+    }, litAt));
+    chipTimers.push(setTimeout(() => {
+      if(searchGeneration !== gen) return;
+      const c = document.getElementById('rc-'+i);
+      if(c){ c.classList.remove('lit'); c.classList.add('done'); }
+    }, doneAt));
   }
 
   const timeout=setTimeout(()=>{if(activeController)activeController.abort();},14000);
@@ -3281,6 +3364,7 @@ function processSearchResponse(d1, query){
     sc.coverage=d1._meta.coverage||'good';
     sc.onlyEbay=!!d1._meta.onlyEbay;
     sc.dataSource=d1._meta.source||'serper';
+    sc._heroImage=d1._meta.heroImage||null;  // Wave 24
   }
   liveScen=sc;
   chipTimers.forEach(clearTimeout);
@@ -3867,6 +3951,23 @@ function isVagueQuery(q){
 }
 
 function renderResults(sc){
+  // ── Hero product image (Wave 24) ──
+  // sc._heroImage is set by showResults() after the ai-search response
+  // arrives. Hidden if no image; shown with fade-in spring if present.
+  const imgWrap = document.getElementById('hero-image-wrap');
+  const imgEl = document.getElementById('hero-image');
+  if(imgWrap && imgEl){
+    const heroImg = sc._heroImage || (sc._meta && sc._meta.heroImage) || null;
+    if(heroImg && heroImg.url){
+      imgEl.src = heroImg.url;
+      imgEl.alt = sc.query || liveQuery || 'Product image';
+      imgWrap.hidden = false;
+    } else {
+      imgWrap.hidden = true;
+      imgEl.removeAttribute('src');
+    }
+  }
+
   // ── Verdict card "land" animation (Wave 2 design pass).
   // Re-trigger the verdict-land keyframe on every render so the card feels
   // like it just dropped in, even when the user refines a search and stays
