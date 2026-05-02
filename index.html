@@ -2059,6 +2059,14 @@
     .ret-row[data-brand="dunelm"]::before     { background:#0066B2; }
     .ret-row[data-brand="homebase"]::before   { background:#00833E; }
     .ret-row[data-brand="screwfix"]::before   { background:#0072CE; }
+    /* Wave 84 — books + furniture brand rails */
+    .ret-row[data-brand="waterstones"]::before { background:#0E5C2F; }
+    .ret-row[data-brand="whsmith"]::before     { background:#003DA5; }
+    .ret-row[data-brand="worldofbooks"]::before{ background:#FFB81C; }
+    .ret-row[data-brand="blackwells"]::before  { background:#000; }
+    .ret-row[data-brand="ikea"]::before        { background:#0058AB; }
+    .ret-row[data-brand="wayfair"]::before     { background:#7B1FA2; }
+    .ret-row[data-brand="habitat"]::before     { background:#FF6E15; }
     .ret-row.best{background:var(--green-lt);border-color:var(--green-bd);box-shadow:var(--depth-2);}
     .ret-row.best::before{background:var(--green);}
     .ret-row:active{transform:scale(0.98);border-color:var(--green-bd);box-shadow:var(--depth-2);}
@@ -5318,6 +5326,10 @@ const UK_RETAILERS={
   'homebase.co.uk':  {name:'Homebase',      aff:'', srcTerms:['homebase']},
   'lakeland.co.uk':  {name:'Lakeland',      aff:'', srcTerms:['lakeland']},
   'dunelm.com':      {name:'Dunelm',        aff:'', srcTerms:['dunelm']},
+  // Wave 84 — Furniture / home
+  'ikea.com':        {name:'IKEA',          aff:'', srcTerms:['ikea']},
+  'wayfair.co.uk':   {name:'Wayfair',       aff:'', srcTerms:['wayfair']},
+  'habitat.co.uk':   {name:'Habitat',       aff:'', srcTerms:['habitat']},
   // Beauty
   'superdrug.com':         {name:'Superdrug',         aff:'', srcTerms:['superdrug']},
   'cultbeauty.co.uk':      {name:'Cult Beauty',       aff:'', srcTerms:['cult beauty','cultbeauty']},
@@ -6735,6 +6747,10 @@ function retailerSearchUrl(retailerName, query){
   if(r.includes('homebase'))     return `https://www.homebase.co.uk/search?q=${q}`;
   if(r.includes('lakeland'))     return `https://www.lakeland.co.uk/search?q=${q}`;
   if(r.includes('dunelm'))       return `https://www.dunelm.com/search?searchTerm=${q}`;
+  // Wave 84 — books + furniture retailer search URLs
+  if(r.includes('ikea'))         return `https://www.ikea.com/gb/en/search/?q=${q}`;
+  if(r.includes('wayfair'))      return `https://www.wayfair.co.uk/keyword.php?keyword=${q}`;
+  if(r.includes('habitat'))      return `https://www.habitat.co.uk/search?q=${q}`;
   // Books / media
   if(r.includes('waterstones'))  return `https://www.waterstones.com/books/search/term/${q}`;
   if(r.includes('whsmith')||r.includes('wh smith')) return `https://www.whsmith.co.uk/search?w=${q}`;
@@ -8021,6 +8037,14 @@ function retailerBrandKey(name){
   if(/dunelm/.test(s))            return 'dunelm';
   if(/homebase/.test(s))          return 'homebase';
   if(/screwfix/.test(s))          return 'screwfix';
+  // Wave 84 — books + furniture
+  if(/waterstones/.test(s))       return 'waterstones';
+  if(/whsmith|wh\s*smith/.test(s))return 'whsmith';
+  if(/world\s*of\s*books/.test(s))return 'worldofbooks';
+  if(/blackwell/.test(s))         return 'blackwells';
+  if(/ikea/.test(s))              return 'ikea';
+  if(/wayfair/.test(s))           return 'wayfair';
+  if(/habitat/.test(s))           return 'habitat';
   return 'generic';
 }
 

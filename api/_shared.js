@@ -47,6 +47,12 @@ export const UK_RETAILERS = [
   // electronics-led list misses.
   { host: 'lakeland.co.uk',    name: 'Lakeland',       srcTerms: ['lakeland'] },
   { host: 'dunelm.com',        name: 'Dunelm',         srcTerms: ['dunelm'] },
+  // Wave 84 — Furniture / home category coverage. IKEA dominates UK
+  // furniture; Wayfair has the broadest mattress / bedding catalogue;
+  // Habitat (now Argos-owned) covers mid-market home.
+  { host: 'ikea.com',          name: 'IKEA',           srcTerms: ['ikea'] },
+  { host: 'wayfair.co.uk',     name: 'Wayfair',        srcTerms: ['wayfair'] },
+  { host: 'habitat.co.uk',     name: 'Habitat',        srcTerms: ['habitat'] },
   // Books / media (added Wave 24)
   { host: 'waterstones.com',   name: 'Waterstones',    srcTerms: ['waterstones'] },
   { host: 'whsmith.co.uk',     name: 'WHSmith',        srcTerms: ['whsmith', 'wh smith'] },

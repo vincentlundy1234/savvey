@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.19';
+const VERSION = 'search.js v6.20';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // Wave 82 — Haiku grading constants. Used by gradeResultsViaHaiku to
@@ -408,6 +408,9 @@ const TRUSTED_SOURCE_TERMS = [
   // for kitchen + home queries (Lakeland is huge for kitchen gadgets,
   // Dunelm for vacuums / home appliances).
   'lakeland', 'dunelm',
+  // Wave 84 — books + home + furniture
+  'waterstones', 'whsmith', 'wh smith', 'world of books', 'worldofbooks', 'blackwell',
+  'ikea', 'wayfair', 'habitat',
 ];
 
 const UK_TLDS = ['.co.uk', '.uk'];
@@ -424,6 +427,14 @@ const TRUSTED_DOMAINS = [
   'lakeland.co.uk',
   'dunelm.com',
   'homebase.co.uk',
+  // Wave 84 — books + furniture retailers
+  'waterstones.com',
+  'whsmith.co.uk',
+  'worldofbooks.com',
+  'blackwells.co.uk',
+  'ikea.com',
+  'wayfair.co.uk',
+  'habitat.co.uk',
 ];
 
 function extractHostname(url) {
@@ -707,6 +718,9 @@ const UK_SITE_QUERY = [
   'site:costco.co.uk', 'site:selfridges.com', 'site:harveynichols.com',
   // Wave 77 — DIY + home + kitchen
   'site:diy.com', 'site:wickes.co.uk', 'site:lakeland.co.uk', 'site:dunelm.com',
+  // Wave 84 — books + home + furniture coverage
+  'site:waterstones.com', 'site:whsmith.co.uk', 'site:worldofbooks.com', 'site:blackwells.co.uk',
+  'site:ikea.com', 'site:wayfair.co.uk', 'site:habitat.co.uk', 'site:homebase.co.uk',
 ].join(' OR ');
 
 async function fetchSerperUKSites(query, apiKey) {
@@ -764,6 +778,21 @@ const PER_RETAILER_SITES = [
   { source: 'Screwfix',     site: 'screwfix.com' },
   { source: 'Lakeland',     site: 'lakeland.co.uk' },
   { source: 'Dunelm',       site: 'dunelm.com' },
+  // Wave 84 — Books fan-out. Live test on "Atomic Habits book" only
+  // surfaced eBay; the book retailers weren't in the per-retailer
+  // search list. Adding Waterstones / WHSmith / World of Books /
+  // Blackwell's so any book query gets full UK book retailer coverage.
+  { source: 'Waterstones',   site: 'waterstones.com' },
+  { source: 'WHSmith',       site: 'whsmith.co.uk' },
+  { source: 'World of Books',site: 'worldofbooks.com' },
+  { source: "Blackwell's",   site: 'blackwells.co.uk' },
+  // Wave 84 — Home / furniture / bedding fan-out. IKEA dominates UK
+  // furniture; Wayfair has huge mattress + bedding catalogue; Habitat
+  // (now Argos-owned but distinct site) covers mid-market home.
+  { source: 'IKEA',          site: 'ikea.com' },
+  { source: 'Wayfair',       site: 'wayfair.co.uk' },
+  { source: 'Habitat',       site: 'habitat.co.uk' },
+  { source: 'Homebase',      site: 'homebase.co.uk' },
 ];
 
 async function fetchSerperOneRetailer(query, retailer, apiKey) {
