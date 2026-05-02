@@ -10,7 +10,7 @@
   <link rel="manifest" href="/manifest.json"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" fetchpriority="high"/>
 
   <!-- Global crash-screen — first script in <head> so any subsequent script
        error gets caught and rendered as a useful "reload" UI instead of a
@@ -70,6 +70,27 @@
        DESIGN TOKENS
        One source of truth. Every value from here.
     ───────────────────────────────────────── */
+    /* ── Font fallback metric overrides (Wave 18) ──
+       Eliminates CLS during the Google Fonts swap. Maps Arial's metrics
+       to closely match Nunito + Inter so the system fallback occupies
+       the same visual footprint as the eventual web font. Numbers tuned
+       per web.dev's font-fallback calculator — refine if branding moves. */
+    @font-face {
+      font-family: 'Nunito-fallback';
+      src: local('Arial');
+      size-adjust: 99%;
+      ascent-override: 102%;
+      descent-override: 34%;
+      line-gap-override: 0%;
+    }
+    @font-face {
+      font-family: 'Inter-fallback';
+      src: local('Arial');
+      size-adjust: 107%;
+      ascent-override: 90%;
+      descent-override: 22%;
+      line-gap-override: 0%;
+    }
     :root{
       --green:    #2a6b22;
       --green2:   #3d9435;
@@ -122,7 +143,7 @@
     }
     html,body{height:100%;overflow:hidden;}
     body{
-      font-family:"Inter",system-ui,sans-serif;
+      font-family:"Inter","Inter-fallback",system-ui,sans-serif;
       background:#111;
       display:flex;align-items:center;justify-content:center;
     }
@@ -2179,11 +2200,11 @@
 </div><!-- /app -->
 
 <!-- EMAIL MODAL -->
-<div class="modal-overlay" id="email-modal">
+<div class="modal-overlay" id="email-modal" role="dialog" aria-modal="true" aria-labelledby="email-modal-title" aria-hidden="true">
   <div class="modal-sheet">
-    <div class="modal-handle"></div>
+    <div class="modal-handle" aria-hidden="true"></div>
     <div class="modal-icon">🔔</div>
-    <div class="modal-title">Track this price</div>
+    <div class="modal-title" id="email-modal-title">Track this price</div>
     <div class="modal-sub">We'll email you the moment this gets cheaper anywhere in the UK.</div>
     <input class="modal-in" id="modal-email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your@email.com"/>
     <button class="modal-go" onclick="submitEmail()">Start tracking</button>
@@ -2192,9 +2213,9 @@
 </div>
 
 <!-- SHARE CARD -->
-<div class="share-overlay" id="share-overlay">
+<div class="share-overlay" id="share-overlay" role="dialog" aria-modal="true" aria-label="Share this price card" aria-hidden="true">
   <div class="share-wrap">
-    <canvas id="share-canvas" width="640" height="820"></canvas>
+    <canvas id="share-canvas" width="640" height="820" aria-label="Savvey result share card"></canvas>
   </div>
   <div class="share-actions">
     <button class="share-shr" onclick="shareCard()">Share →</button>
@@ -2551,37 +2572,36 @@ function haptic(ms){
 //   • Esc key → close
 // Wired here for #email-modal (.modal-overlay) and #share-overlay.
 function setupModalDismiss(){
+  function closeModal(modalEl){
+    if(!modalEl) return;
+    modalEl.classList.remove('open');
+    modalEl.setAttribute('aria-hidden', 'true');
+    haptic(8);
+  }
   // Click-outside for email modal
   const emailModal = document.getElementById('email-modal');
   if(emailModal){
     emailModal.addEventListener('click', (e) => {
-      if(e.target === emailModal){
-        emailModal.classList.remove('open');
-        haptic(8);
-      }
+      if(e.target === emailModal) closeModal(emailModal);
     });
   }
   // Click-outside for share overlay
   const shareOverlay = document.getElementById('share-overlay');
   if(shareOverlay){
     shareOverlay.addEventListener('click', (e) => {
-      // Only close if click was on the dim background (not the card or actions)
-      if(e.target === shareOverlay){
-        shareOverlay.classList.remove('open');
-        haptic(8);
-      }
+      if(e.target === shareOverlay) closeModal(shareOverlay);
     });
   }
   // Escape key
   document.addEventListener('keydown', (e) => {
     if(e.key !== 'Escape') return;
     if(emailModal && emailModal.classList.contains('open')){
-      emailModal.classList.remove('open');
+      closeModal(emailModal);
       e.preventDefault();
       return;
     }
     if(shareOverlay && shareOverlay.classList.contains('open')){
-      shareOverlay.classList.remove('open');
+      closeModal(shareOverlay);
       e.preventDefault();
       return;
     }
@@ -4692,11 +4712,17 @@ async function handlePaste(){
 // ── Email modal ──
 function showEmailModal(){
   haptic(10); // confirms the track-CTA tap
-  document.getElementById('email-modal').classList.add('open');
+  const modal = document.getElementById('email-modal');
+  modal.classList.add('open');
+  modal.setAttribute('aria-hidden', 'false');
+  // Move focus to the email input for keyboard / screen-reader users
+  setTimeout(() => document.getElementById('modal-email')?.focus(), 280);
 }
 function closeEmailModal(){
   haptic(8);
-  document.getElementById('email-modal').classList.remove('open');
+  const modal = document.getElementById('email-modal');
+  modal.classList.remove('open');
+  modal.setAttribute('aria-hidden', 'true');
 }
 async function submitEmail(){
   const inp=document.getElementById('modal-email');
@@ -4734,6 +4760,7 @@ async function submitEmail(){
 function openShareCard(){
   haptic(12); // confirms share-button tap before the card animates in
   if(!liveScen)return; // empty state — nothing to share
+  document.getElementById('share-overlay').setAttribute('aria-hidden', 'false');
   const sc=liveScen;
   drawCard(sc);
   document.getElementById('share-overlay').classList.add('open');
