@@ -4714,19 +4714,22 @@ function calcScore(userP,bestP){
   if(gap<=0.40)return 2; // 20-40% more — don't
   return 1;              // >40% over — walk away
 }
-// Wave 61 — DISCOVERY mode score: how much cheaper is the best UK
-// retailer vs the average across all UK retailers we found? This is the
-// "is the user about to score a good deal?" signal. Wave 60 was using
-// calcScore(avg, best) which inverted the interpretation and flagged
-// every Discovery result as "Walk away" red — Vincent's Samsung TV bug.
+// Wave 61 / Wave 62 — DISCOVERY mode score: did Savvey help the user find
+// a good deal? When retailers cluster tight (Sony WH-1000XM5 at £229/£230),
+// they've effectively found the market rate — that's NOT a bad outcome
+// and should never score red. Live test (Sony WH-1000XM5 → John Lewis
+// £229 / Argos £230) was returning red 2/5 which read as "walk away" for
+// what is in fact the cheapest UK price the user could pay. Bumped the
+// floor: even matching market rate scores 4 ("pretty good — you're at
+// typical UK price"). Only an actual anomaly (best > avg) scores below 4.
 function calcDiscoveryScore(avgP, bestP){
   if(!avgP || !bestP || avgP <= 0) return 5;
   const savingPct = (avgP - bestP) / avgP; // positive = best is below avg
-  if(savingPct >= 0.20) return 5; // best is 20%+ below avg — great deal
-  if(savingPct >= 0.10) return 4; // best 10-20% below avg — pretty good
-  if(savingPct >= 0.03) return 3; // best 3-10% below — worth a look
-  if(savingPct >= -0.03) return 2; // best matches avg — fine but no win
-  return 1; // best is somehow above avg — anomaly
+  if(savingPct >= 0.15) return 5; // best is 15%+ below avg — big win
+  if(savingPct >= 0.05) return 4; // best 5-15% below avg — pretty good
+  if(savingPct >= 0)    return 4; // matched typical UK price — still pretty good
+  if(savingPct >= -0.05) return 3; // best slightly above avg — worth a look
+  return 2; // best meaningfully above avg — better deal available somewhere
 }
 function scoreToSpc(s){return s>=4?'green':s===3?'amber':'red';}
 
