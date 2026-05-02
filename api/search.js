@@ -63,7 +63,38 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.21';
+const VERSION = 'search.js v6.22';
+
+// Wave 86 — CRITICAL FIX. Category / listing / search-results pages were
+// being admitted as if they were specific product pages. Vincent's case:
+// "kettle" search → Asda George kettle CATEGORY page → snippet contained
+// "from £24" → we surfaced as "Asda has it for £24" → user tapped through
+// and found the page actually has kettles ranging £8-£24+. Breaks the
+// core trust promise. Rejecting URLs that pattern-match as category /
+// listing / browse / search pages — only product-page URLs admitted.
+const CATEGORY_URL_PATTERNS = [
+  /,sc\.html?(?:$|\?)/i,            // Asda George category (Vincent's case)
+  /,default,sc\.html?/i,            // Asda George default category
+  /\/category\//i,                   // generic /category/
+  /\/categories\//i,
+  /\/shop\/?(?:[^\/]+\/?)?$/i,      // /shop or /shop/foo (no product depth)
+  /\/browse\//i,                     // /browse/...
+  /\/c\/[^\/]+\/?$/i,                // ending with /c/foo (category)
+  /\/sitesearch\?/i,                 // Boots search
+  /\/search[\/\?]/i,                 // generic /search
+  /\/searchresults/i,                // searchresults pages
+  /-c-\d+\.html?(?:$|\?)/i,          // /...-c-123.html (Marks etc category)
+  /\/all-[^\/]+\/?$/i,               // /all-kettles
+  /\/(?:browse|departments?|cats?)\?/i,
+  /\/listings?\//i,                  // /listing or /listings
+  /\/cat-?\d/i,                      // /cat-123 / cat123 indexed cats
+  /\?(?:q|query|search|searchterm|search-term|searchString|keyword|keywords|w|term)=/i, // search query URLs
+];
+
+function isLikelyCategoryPage(url){
+  if (!url || typeof url !== 'string') return false;
+  return CATEGORY_URL_PATTERNS.some(p => p.test(url));
+}
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // Wave 82 — Haiku grading constants. Used by gradeResultsViaHaiku to
@@ -1147,7 +1178,20 @@ export default async function handler(req, res) {
   // priceAnomalyFloor) cover the same defensive ground without the false
   // negatives.
   const safe       = nuclearFilter(rawItems);
-  const identified = identityFilter(safe, q);
+  // Wave 86 — drop category / listing / search-results pages BEFORE any
+  // other filtering. Vincent's "kettle" case: Asda George category page
+  // was leaking through with "from £24" extracted as if it were a
+  // product price, when the actual page has kettles £8-£24+. The
+  // listing-page price is meaningless as a "best price" claim.
+  const productOnly = safe.filter(it => {
+    const link = String((it && it.link) || '');
+    if (isLikelyCategoryPage(link)) {
+      console.log(`[${VERSION}] dropping category page: ${link.slice(0, 80)}`);
+      return false;
+    }
+    return true;
+  });
+  const identified = identityFilter(productOnly, q);
   const trusted    = trustedSourceFilter(identified);
   const deduped    = dedup(trusted);
   // Price-anomaly floor runs LAST — operates on the per-retailer cheapest set
