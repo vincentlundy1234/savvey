@@ -1562,6 +1562,124 @@
       gap:14px;
     }
 
+    /* ── Savings centerpiece (Wave 28) — Revolut-balance pattern ──
+       Big number dominant, the motivational hero of the home page.
+       Hidden until first saving recorded. */
+    .savings-hero{
+      text-align:center;
+      padding:18px 16px 14px;
+      background:linear-gradient(160deg, #2a6b22 0%, #1d5019 100%);
+      border-radius:var(--r-lg);
+      box-shadow:var(--depth-glow-green);
+      color:#fff;
+      position:relative;
+      overflow:hidden;
+    }
+    .savings-hero[hidden]{display:none;}
+    /* Subtle decorative ring */
+    .savings-hero::before{
+      content:"";
+      position:absolute;
+      top:-30%;right:-15%;
+      width:200px;height:200px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(245,183,66,0.18) 0%, transparent 65%);
+      pointer-events:none;
+    }
+    .savings-eyebrow{
+      font:700 11px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.65);
+      letter-spacing:1.2px;
+      margin-bottom:6px;
+      position:relative;z-index:1;
+    }
+    .savings-amount{
+      display:flex;align-items:baseline;justify-content:center;
+      gap:2px;
+      font-family:"Nunito",sans-serif;
+      color:#fff;
+      letter-spacing:-2px;
+      line-height:1;
+      margin-bottom:6px;
+      position:relative;z-index:1;
+    }
+    .savings-currency{
+      font-weight:700;
+      font-size:32px;
+      color:rgba(255,255,255,0.85);
+      align-self:flex-start;
+      margin-top:8px;
+    }
+    .savings-num{
+      font-weight:900;
+      font-size:56px;
+      letter-spacing:-2.5px;
+    }
+    .savings-context{
+      font:500 13px/1.4 "Inter",sans-serif;
+      color:rgba(255,255,255,0.75);
+      position:relative;z-index:1;
+    }
+    /* First-time greeting — replaces the savings hero before any savings */
+    .savings-welcome{
+      padding:8px 4px 10px;
+    }
+    .savings-welcome[hidden]{display:none;}
+    .savings-welcome-eyebrow{
+      font:700 11px/1 "Inter",sans-serif;
+      color:var(--green);
+      letter-spacing:1.2px;
+      margin-bottom:8px;
+    }
+    .savings-welcome-headline{
+      font:900 28px/1.1 "Nunito",sans-serif;
+      color:var(--ink);
+      letter-spacing:-1px;
+      margin-bottom:8px;
+    }
+    .savings-welcome-sub{
+      font:500 14px/1.45 "Inter",sans-serif;
+      color:var(--ink3);
+    }
+
+    /* ── 4-tile action row (Wave 28) — Revolut quick-actions ── */
+    .bento-actions{
+      display:grid;
+      grid-template-columns:repeat(4, 1fr);
+      gap:8px;
+    }
+    .action-tile{
+      display:flex;flex-direction:column;align-items:center;gap:6px;
+      padding:14px 6px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      cursor:pointer;
+      box-shadow:var(--depth-1);
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 border-color var(--motion-norm) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
+    }
+    .action-tile:active{
+      transform:scale(0.95);
+      background:var(--green-lt);
+      border-color:var(--green-bd);
+    }
+    .action-tile-ico{
+      width:40px;height:40px;border-radius:12px;
+      background:var(--green-lt);color:var(--green);
+      display:flex;align-items:center;justify-content:center;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 color var(--motion-norm) var(--ease-quick);
+    }
+    .action-tile:active .action-tile-ico{
+      background:var(--green);color:#fff;
+    }
+    .action-tile-label{
+      font:700 12px/1 "Nunito",sans-serif;
+      color:var(--ink);
+    }
+
     /* ── Search hero card ── */
     .bento-search-card{
       background:var(--card);
@@ -1973,14 +2091,65 @@
       <div class="s-badge s-badge-sm"><span class="s-letter">S</span></div>
     </div>
 
-    <!-- Home is now the SEARCH panel of the swipe deck. Bento layout —
-         search hero on top, 4-mode bento grid (also tappable nav), then
-         trending tiles. Modes are reachable BOTH by tap and by swipe. -->
+    <!-- Wave 28: Revolut-style centerpiece home.
+         Total-savings tracker is the hero (motivational, return-driver).
+         4 mode tiles in a row match bottom nav exactly.
+         Search bar below the actions.
+         Saved items feed + popular searches beneath.
+         Lesson: show users what they want to see — for a price-comparison
+         app, that's the savings they've already made. -->
     <div class="bento">
 
-      <!-- Search hero card — the most prominent thing on the screen. -->
+      <!-- ── Savings centerpiece (Wave 28) ──
+           Big motivational tracker. Like Revolut showing your balance,
+           this shows the user the value Savvey has delivered for them.
+           Animated count-up on load. Hidden if zero (first-time user). -->
+      <div class="savings-hero" id="savings-hero" hidden>
+        <div class="savings-eyebrow">YOU'VE SAVED WITH SAVVEY</div>
+        <div class="savings-amount">
+          <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0</span>
+        </div>
+        <div class="savings-context" id="savings-context">across your checks</div>
+      </div>
+
+      <!-- First-time greeting — shown when no savings yet. -->
+      <div class="savings-welcome" id="savings-welcome">
+        <div class="savings-welcome-eyebrow">SHOP SMART</div>
+        <div class="savings-welcome-headline">Find a fair price<br>for any product.</div>
+        <div class="savings-welcome-sub">Scan, snap, paste a link, or search — we'll check the UK's biggest retailers in seconds.</div>
+      </div>
+
+      <!-- 4-tile action row — matches bottom nav, Revolut quick-actions pattern -->
+      <div class="bento-actions" data-no-swipe>
+        <button class="action-tile" onclick="document.getElementById('search-input').focus()">
+          <div class="action-tile-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <div class="action-tile-label">Search</div>
+        </button>
+        <button class="action-tile" onclick="navigateSwipe('scan','left')">
+          <div class="action-tile-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/></svg>
+          </div>
+          <div class="action-tile-label">Scan</div>
+        </button>
+        <button class="action-tile" onclick="navigateSwipe('snap','left')">
+          <div class="action-tile-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </div>
+          <div class="action-tile-label">Snap</div>
+        </button>
+        <button class="action-tile" onclick="navigateSwipe('paste','right')">
+          <div class="action-tile-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          </div>
+          <div class="action-tile-label">Paste</div>
+        </button>
+      </div>
+
+      <!-- Search input — moved below the action row. Still the most
+           common action; just no longer the visual hero. -->
       <div class="bento-search-card">
-        <div class="bento-eyebrow">Find a fair price for</div>
         <div class="bento-search">
           <svg class="bento-search-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/>
@@ -1998,42 +2167,6 @@
           </button>
         </div>
       </div>
-
-      <!-- TWO big directional tiles — iPhone lockscreen pattern. Home is
-           the centre; left tile + swipe-right both go to online checker;
-           right tile + swipe-left both go to scan. The tiles literally
-           SHOW the swipe direction with an arrow chevron. Tap or swipe —
-           same destination either way. -->
-      <div class="bento-dirs" data-no-swipe>
-        <button class="dir-tile dir-left" onclick="navigateSwipe('paste','right')">
-          <div class="dir-tile-arrow" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-          </div>
-          <div class="dir-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          </div>
-          <div class="dir-tile-text">
-            <div class="dir-tile-label">Online checker</div>
-            <div class="dir-tile-sub">Paste any link</div>
-          </div>
-        </button>
-        <button class="dir-tile dir-right" onclick="navigateSwipe('scan','left')">
-          <div class="dir-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="7" width="20" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3"/><path d="M9 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>
-          </div>
-          <div class="dir-tile-text">
-            <div class="dir-tile-label">Scan in-store</div>
-            <div class="dir-tile-sub">Barcode · instant</div>
-          </div>
-          <div class="dir-tile-arrow" aria-hidden="true">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-          </div>
-        </button>
-      </div>
-
-      <!-- Swipe hint removed Wave 14 — the bottom nav now shows all four
-           tabs with the active one highlighted, so positioning is implicit.
-           The dir-tile arrows already pulse toward their swipe direction. -->
 
       <!-- Recent searches — populated by JS from localStorage. Hidden until
            the user has at least one prior search. -->
@@ -2725,6 +2858,7 @@ function goTo(screen, opts){
     silentGeo();
     renderTrending(activeCat);
     renderRecentSearches();
+    renderSavingsHero();   // Wave 28 — savings centerpiece animated count-up
     // First-visit swipe coach
     setTimeout(showSwipeCoachIfFirstVisit, 350);
     // Wave 22 — fire the swipe-nudge animation once per session so the
@@ -4046,6 +4180,15 @@ function isVagueQuery(q){
 }
 
 function renderResults(sc){
+  // ── Record saving for the home centerpiece (Wave 28) ──
+  // Only counts when user provided a reference price (Validation mode)
+  // AND we found something cheaper. Session-flag guards against double
+  // counting on re-renders / refines.
+  if(sc && sc.spc && sc.spc !== 'green' && typeof sc.saving === 'number' && sc.saving > 0){
+    const queryKey = (sc.query || liveQuery || '') + '|' + (sc.bestPrice || '') + '|' + (sc.uPrice || '');
+    recordSaving(sc.saving, queryKey);
+  }
+
   // ── Hero product image (Wave 24) ──
   // sc._heroImage is set by showResults() after the ai-search response
   // arrives. Hidden if no image; shown with fade-in spring if present.
@@ -5059,6 +5202,82 @@ function escJsAttr(s){
     .replace(/'/g,"\\'")
     .replace(/"/g,'&quot;')
     .replace(/</g,'&lt;');
+}
+
+// ── Total savings tracker (Wave 28) ──
+//
+// Revolut-balance pattern. Records every Validation-mode saving so the home
+// can show "you've saved £X with Savvey" — motivational return-driver.
+// Stored on-device, no server. Increment-only with a session-flag guard so
+// the same search rendering twice doesn't double-count.
+const SAVINGS_KEY = 'savvey_total_savings';
+const SAVINGS_COUNT_KEY = 'savvey_savings_count';
+const SAVINGS_RECORDED_KEY = 'savvey_savings_recorded_in_session';
+
+function getTotalSavings(){
+  try{ return parseFloat(localStorage.getItem(SAVINGS_KEY) || '0') || 0; }
+  catch(e){ return 0; }
+}
+function getSavingsCount(){
+  try{ return parseInt(localStorage.getItem(SAVINGS_COUNT_KEY) || '0', 10) || 0; }
+  catch(e){ return 0; }
+}
+function recordSaving(amount, queryKey){
+  if(!amount || amount <= 0) return;
+  // Don't double-count the same query within a session
+  const recordedSet = (function(){
+    try{ return new Set(JSON.parse(sessionStorage.getItem(SAVINGS_RECORDED_KEY) || '[]')); }
+    catch(e){ return new Set(); }
+  })();
+  if(recordedSet.has(queryKey)) return;
+  recordedSet.add(queryKey);
+  try{ sessionStorage.setItem(SAVINGS_RECORDED_KEY, JSON.stringify([...recordedSet])); }catch(e){}
+  try{
+    const current = getTotalSavings();
+    const count = getSavingsCount();
+    localStorage.setItem(SAVINGS_KEY, (current + amount).toFixed(2));
+    localStorage.setItem(SAVINGS_COUNT_KEY, String(count + 1));
+  }catch(e){}
+}
+
+// Render the savings hero. Animated count-up on first reveal feels alive,
+// like Wolt's wow-factor moment. If zero savings, show the welcome card
+// instead — we never want a "£0" staring at first-time users.
+function renderSavingsHero(){
+  const hero = document.getElementById('savings-hero');
+  const welcome = document.getElementById('savings-welcome');
+  const numEl = document.getElementById('savings-num');
+  const ctxEl = document.getElementById('savings-context');
+  if(!hero || !welcome || !numEl) return;
+  const total = getTotalSavings();
+  const count = getSavingsCount();
+  if(total < 0.5){
+    // Less than 50p — treat as "no savings yet", show welcome card
+    hero.hidden = true;
+    welcome.hidden = false;
+    return;
+  }
+  hero.hidden = false;
+  welcome.hidden = true;
+  // Animated count-up
+  const targetWhole = Math.round(total);
+  const targetText = total < 100 ? total.toFixed(2) : Math.round(total).toLocaleString('en-GB');
+  const duration = 900;
+  const startedAt = performance.now();
+  const tick = (now) => {
+    const t = Math.min(1, (now - startedAt) / duration);
+    const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
+    const cur = total * eased;
+    numEl.textContent = cur < 100 ? cur.toFixed(2) : Math.round(cur).toLocaleString('en-GB');
+    if(t < 1) requestAnimationFrame(tick);
+    else numEl.textContent = targetText;
+  };
+  requestAnimationFrame(tick);
+  if(ctxEl){
+    ctxEl.textContent = count === 1
+      ? 'across 1 check'
+      : `across ${count.toLocaleString('en-GB')} checks`;
+  }
 }
 
 // ── Local saved-items store (Wave 19) ──
