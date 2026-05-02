@@ -768,52 +768,134 @@
     }
 
     /* ─────────────────────────────────────────
-       SEARCHING — Wave 27 wallpaper layout.
-       Retailer pills tile the page; large Savvey badge centred on top.
+       SEARCHING — Wave 31 cleaner layout.
+       Tight centred composition: Savvey wordmark at top, big pulsing badge
+       + product name in the middle, retailer logo grid below. Replaces the
+       wallpaper-grid pattern that left awkward empty space and didn't read
+       as branded enough on Vincent's phone test (IMG_1658).
     ───────────────────────────────────────── */
     #screen-searching{
       background:linear-gradient(160deg,#1a3d17 0%,#2a6b22 60%,#1d5019 100%);
-      align-items:center;justify-content:center;
+      align-items:stretch;justify-content:flex-start;
       padding:0;text-align:center;
       position:relative;overflow:hidden;
     }
-    .srch-wallpaper{
-      position:absolute;inset:0;
-      display:grid;
-      grid-template-columns:repeat(2, 1fr);
-      grid-auto-rows:min-content;
-      align-content:space-between;
-      justify-items:center;
-      padding:calc(48px + env(safe-area-inset-top)) 16px calc(48px + env(safe-area-inset-bottom));
-      gap:14px 8px;
-      pointer-events:none;
-    }
-    /* Centre cutout — leave clear space in the middle ~30% of viewport */
-    .srch-wallpaper::before{
-      content:"";
-      position:absolute;
-      top:50%;left:50%;
-      transform:translate(-50%, -50%);
-      width:280px;height:280px;
-      background:radial-gradient(circle, rgba(26,61,23,0.95) 0%, rgba(26,61,23,0.92) 50%, rgba(26,61,23,0) 80%);
-      pointer-events:none;
-      z-index:1;
-    }
-    /* Pills shrink + reflow to feel ambient/wallpaper-like */
-    .srch-wallpaper .r-pill{
-      padding:8px 14px;
-      font:800 13px/1 "Nunito",sans-serif;
-      pointer-events:auto;
-    }
-    /* Centre column — stacked content over the wallpaper */
-    .srch-centre{
-      position:relative;
-      z-index:5;
-      display:flex;flex-direction:column;
-      align-items:center;
+    .srch-stack{
+      flex:1;
+      display:flex;flex-direction:column;align-items:center;
+      padding:calc(28px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom));
       gap:18px;
-      padding:0 24px;
+      width:100%;
+      max-width:480px;margin:0 auto;
+    }
+    /* Top wordmark row */
+    .srch-wordmark{
+      font:900 26px/1 "Nunito",sans-serif;
+      color:#fff;letter-spacing:-0.6px;
+      display:flex;align-items:center;gap:1px;
+      margin-top:4px;
+    }
+    .srch-wordmark .y{color:var(--amber);}
+    /* Big pulsing centre */
+    .srch-centre{
+      display:flex;flex-direction:column;align-items:center;
+      gap:14px;
+      margin-top:22px;
+    }
+    .srch-product-line{
+      display:flex;align-items:center;gap:8px;
+      padding:10px 18px;
+      background:rgba(255,255,255,0.10);
+      border:1px solid rgba(255,255,255,0.18);
+      border-radius:100px;
       max-width:340px;
+      backdrop-filter:blur(6px);
+    }
+    .srch-product-icon{
+      width:14px;height:14px;flex-shrink:0;color:rgba(255,255,255,0.7);
+    }
+    .srch-product-name{
+      font:700 14px/1.2 "Nunito",sans-serif;
+      color:#fff;letter-spacing:-0.2px;
+      overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+      max-width:280px;
+    }
+    /* Retailer brand grid — tight 4-col grid below centre */
+    .srch-brand-grid{
+      display:grid;
+      grid-template-columns:repeat(4, 1fr);
+      gap:8px;
+      width:100%;
+      max-width:380px;
+      margin-top:18px;
+    }
+    .srch-brand-tile{
+      aspect-ratio:1.2/1;
+      border-radius:14px;
+      background:rgba(255,255,255,0.08);
+      border:1.5px solid rgba(255,255,255,0.16);
+      display:flex;align-items:center;justify-content:center;
+      padding:6px 4px;
+      transition:background 0.4s, border-color 0.4s, transform 0.4s, box-shadow 0.4s;
+      position:relative;overflow:hidden;
+    }
+    .srch-brand-logo{
+      font:900 11px/1 "Inter",-apple-system,sans-serif;
+      color:rgba(255,255,255,0.55);
+      letter-spacing:-0.1px;
+      text-align:center;
+      transition:color 0.4s;
+      max-width:100%;
+      overflow:hidden;text-overflow:ellipsis;
+      padding:0 4px;
+    }
+    /* Brand-coloured "lit" + "done" states */
+    .srch-brand-tile.lit{
+      transform:scale(1.06);
+      box-shadow:0 6px 18px rgba(0,0,0,0.22);
+      animation:srch-tile-pulse 1.6s ease-in-out infinite;
+    }
+    .srch-brand-tile.lit .srch-brand-logo{color:#fff;}
+    @keyframes srch-tile-pulse{
+      0%,100%{filter:brightness(1);}
+      50%   {filter:brightness(1.18);}
+    }
+    .srch-brand-tile.done{
+      background:rgba(255,255,255,0.18);
+      border-color:rgba(255,255,255,0.32);
+    }
+    .srch-brand-tile.done .srch-brand-logo{color:#fff;}
+    .srch-brand-tile.done::after{
+      content:"✓";
+      position:absolute;top:4px;right:6px;
+      font:800 10px/1 sans-serif;
+      color:rgba(255,255,255,0.75);
+    }
+    /* Brand colour palette — applied via data-brand */
+    .srch-brand-tile[data-brand="amazon"].lit     { background:#FF9900; border-color:#FF9900; }
+    .srch-brand-tile[data-brand="amazon"].lit .srch-brand-logo { color:#111; }
+    .srch-brand-tile[data-brand="argos"].lit      { background:#ED1B24; border-color:#ED1B24; }
+    .srch-brand-tile[data-brand="jl"].lit         { background:#000;    border-color:#000; }
+    .srch-brand-tile[data-brand="currys"].lit     { background:#4C12A1; border-color:#4C12A1; }
+    .srch-brand-tile[data-brand="ao"].lit         { background:#0072CE; border-color:#0072CE; }
+    .srch-brand-tile[data-brand="very"].lit       { background:#E6007E; border-color:#E6007E; }
+    .srch-brand-tile[data-brand="richer"].lit     { background:#C8102E; border-color:#C8102E; }
+    .srch-brand-tile[data-brand="box"].lit        { background:#002F6C; border-color:#002F6C; }
+    .srch-brand-tile[data-brand="boots"].lit      { background:#005EB8; border-color:#005EB8; }
+    .srch-brand-tile[data-brand="superdrug"].lit  { background:#E5007D; border-color:#E5007D; }
+    .srch-brand-tile[data-brand="tesco"].lit      { background:#EE1C2E; border-color:#EE1C2E; }
+    .srch-brand-tile[data-brand="sainsburys"].lit { background:#F06C00; border-color:#F06C00; }
+    .srch-brand-tile[data-brand="bandq"].lit      { background:#FF6900; border-color:#FF6900; }
+    .srch-brand-tile[data-brand="wickes"].lit     { background:#005CA9; border-color:#005CA9; }
+    .srch-brand-tile[data-brand="halfords"].lit   { background:#E51010; border-color:#E51010; }
+    .srch-brand-tile[data-brand="ebay"].lit       { background:#E53238; border-color:#E53238; }
+    /* Footer caption */
+    .srch-footer{
+      margin-top:auto;
+      padding-bottom:8px;
+      font:500 12px/1.4 "Inter",sans-serif;
+      color:rgba(255,255,255,0.55);
+      letter-spacing:0.2px;
     }
     /* Big Savvey badge — pulsing centerpiece, the dominant focal point */
     .srch-savvey-badge{
@@ -1101,6 +1183,168 @@
     }
     .vague-hint-try:active{background:var(--amber);color:#fff;transform:scale(0.95);}
     .hero-actions{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
+
+    /* Wave 33 — optional shelf-price refinement UI on the results screen.
+       Pill is the resting state; tapping reveals an inline form. */
+    .shelf-refine{margin:6px 0 4px;}
+    .shelf-refine-pill{
+      width:100%;
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      padding:11px 14px;
+      background:#f5f7f4;
+      border:1.5px dashed #cfd9c8;
+      border-radius:14px;
+      font:600 13px/1.2 "Inter",sans-serif;
+      color:#496a40;
+      cursor:pointer;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 border-color var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop);
+    }
+    .shelf-refine-pill:active{transform:scale(0.985);background:#e8efe5;border-color:var(--green-bd);}
+    .shelf-refine-pill[hidden]{display:none;}
+    .shelf-refine-pill svg{flex-shrink:0;color:var(--green);}
+    .shelf-refine-form{
+      background:#f5f7f4;
+      border:1.5px solid #cfd9c8;
+      border-radius:14px;
+      padding:14px;
+      display:flex;flex-direction:column;gap:10px;
+      animation:shelf-refine-in 280ms var(--ease-pop) both;
+    }
+    .shelf-refine-form[hidden]{display:none;}
+    @keyframes shelf-refine-in{
+      from{opacity:0;transform:translateY(-6px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+    .shelf-refine-label{
+      font:800 11px/1 "Inter",sans-serif;
+      color:var(--ink3);
+      letter-spacing:0.6px;
+      text-transform:uppercase;
+    }
+    .shelf-refine-row{
+      display:flex;align-items:stretch;gap:8px;
+    }
+    .shelf-refine-sym{
+      display:flex;align-items:center;justify-content:center;
+      width:42px;
+      background:var(--green-lt);
+      border:1px solid var(--green-bd);
+      border-radius:11px;
+      font:900 18px/1 "Nunito",sans-serif;
+      color:var(--green);
+    }
+    .shelf-refine-input{
+      flex:1;
+      padding:0 14px;
+      background:#fff;
+      border:1px solid var(--border);
+      border-radius:11px;
+      font:800 18px/1 "Nunito",sans-serif;
+      color:var(--ink);
+      min-width:0;
+    }
+    .shelf-refine-input:focus{outline:none;border-color:var(--green);}
+    .shelf-refine-go{
+      padding:0 14px;
+      background:var(--green);color:#fff;border:none;
+      border-radius:11px;
+      font:800 13px/1 "Nunito",sans-serif;
+      cursor:pointer;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop);
+    }
+    .shelf-refine-go:active{transform:scale(0.97);background:#1d5019;}
+    .shelf-refine-cancel{
+      align-self:flex-end;
+      background:transparent;border:none;
+      font:600 12px/1 "Inter",sans-serif;
+      color:var(--ink4);
+      cursor:pointer;
+      padding:6px 8px;
+    }
+    .shelf-refine-cancel:active,.shelf-refine-cancel:hover{color:var(--ink2);}
+
+    /* Wave 34 — empty-state retailer shortcuts. Replaces the old wall of
+       "data-source hiccup" copy with action-oriented direct retailer chips
+       so users always have a next step. */
+    .empty-shortcuts{
+      display:grid;
+      grid-template-columns:repeat(2, 1fr);
+      gap:8px;
+      margin:14px 0 10px;
+    }
+    .empty-shortcut{
+      display:flex;align-items:center;justify-content:space-between;
+      gap:8px;
+      padding:12px 14px;
+      background:#fff;
+      border:1.5px solid var(--border);
+      border-radius:13px;
+      text-decoration:none;
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 border-color var(--motion-norm) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
+      min-height:48px;
+    }
+    .empty-shortcut:active{transform:scale(0.97);background:var(--green-lt);border-color:var(--green-bd);}
+    .empty-shortcut-name{
+      font:800 13px/1 "Nunito",sans-serif;
+      color:var(--ink);
+      letter-spacing:-0.1px;
+    }
+    .empty-shortcut-arrow{
+      font:700 16px/1 "Nunito",sans-serif;
+      color:var(--ink4);
+    }
+    /* Brand-coloured left rail on each chip — instantly recognisable */
+    .empty-shortcut[data-brand="amazon"]   { border-left:3px solid #FF9900; }
+    .empty-shortcut[data-brand="argos"]    { border-left:3px solid #ED1B24; }
+    .empty-shortcut[data-brand="jl"]       { border-left:3px solid #000; }
+    .empty-shortcut[data-brand="currys"]   { border-left:3px solid #4C12A1; }
+    .empty-shortcut[data-brand="ebay"]     { border-left:3px solid #E53238; }
+    .empty-shortcut[data-brand="halfords"] { border-left:3px solid #E51010; }
+    .empty-tip{
+      margin-top:6px;
+      padding:10px 12px;
+      background:var(--surface);
+      border-radius:10px;
+      font:500 12px/1.45 "Inter",sans-serif;
+      color:var(--ink3);
+    }
+
+    /* Wave 38 — Snap generic-match banner. Soft amber tint, lives at the
+       top of the hero card so users immediately see this is a category
+       comparison not an exact-product match. */
+    .snap-generic-banner{
+      display:flex;align-items:flex-start;gap:10px;
+      padding:10px 12px;
+      background:#fff8e6;
+      border:1px solid #f0c674;
+      border-radius:12px;
+      margin:0 0 14px;
+      animation:snap-generic-in 320ms var(--ease-pop) both;
+    }
+    @keyframes snap-generic-in{
+      from{opacity:0;transform:translateY(-4px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+    .snap-generic-banner svg{
+      width:18px;height:18px;flex-shrink:0;color:#a35f0d;margin-top:1px;
+    }
+    .snap-generic-text{flex:1;min-width:0;}
+    .snap-generic-title{
+      font:800 12px/1 "Nunito",sans-serif;
+      color:#7a5a00;
+      letter-spacing:0.2px;
+      margin-bottom:3px;
+    }
+    .snap-generic-sub{
+      font:500 12px/1.4 "Inter",sans-serif;
+      color:#7a5a00;
+    }
+    .snap-generic-sub strong{color:#5a4400;}
     .hero-buy{
       width:100%;padding:18px;border:none;border-radius:var(--r);
       font:800 16px/1 "Nunito",sans-serif;
@@ -1142,32 +1386,71 @@
     .signal-val{font-size:13px;font-weight:700;color:var(--ink2);}
     .score-arc{fill:none;}
 
-    /* Retailer rows */
-    .res-section-lbl{font:700 10px/1 "Inter";color:var(--ink3);text-transform:uppercase;letter-spacing:0.8px;padding:8px 4px 4px;}
+    /* Retailer rows — Wave 36 polish: brand-coloured left rail per retailer
+       (instant visual recognition), tighter padding rhythm, cleaner typography
+       hierarchy. Best-price row keeps its green-tint highlight. */
+    .res-section-lbl{
+      font:800 10px/1 "Inter";
+      color:var(--ink3);
+      text-transform:uppercase;
+      letter-spacing:1px;
+      padding:14px 4px 6px;
+    }
     .ret-row{
-      background:var(--card);border:1px solid var(--border);border-radius:var(--r);
-      padding:14px 16px;display:flex;align-items:center;gap:12px;
+      position:relative;
+      background:var(--card);border:1px solid var(--border);border-radius:14px;
+      padding:14px 16px 14px 19px;
+      display:flex;align-items:center;gap:12px;
       cursor:pointer;
       box-shadow:var(--depth-1);
+      overflow:hidden;
       transition:transform var(--motion-fast) var(--ease-quick),
-                 border-color var(--motion-norm) var(--ease-quick);
+                 border-color var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
+    /* Brand-coloured left rail (3px) — driven by data-brand attribute set
+       in renderResults. Falls back to a neutral grey if no brand match. */
+    .ret-row::before{
+      content:"";
+      position:absolute;top:0;bottom:0;left:0;width:3px;
+      background:var(--ink4);
+      border-top-left-radius:14px;border-bottom-left-radius:14px;
+    }
+    .ret-row[data-brand="amazon"]::before     { background:#FF9900; }
+    .ret-row[data-brand="argos"]::before      { background:#ED1B24; }
+    .ret-row[data-brand="jl"]::before         { background:#000; }
+    .ret-row[data-brand="currys"]::before     { background:#4C12A1; }
+    .ret-row[data-brand="ao"]::before         { background:#0072CE; }
+    .ret-row[data-brand="very"]::before       { background:#E6007E; }
+    .ret-row[data-brand="richer"]::before     { background:#C8102E; }
+    .ret-row[data-brand="box"]::before        { background:#002F6C; }
+    .ret-row[data-brand="boots"]::before      { background:#005EB8; }
+    .ret-row[data-brand="superdrug"]::before  { background:#E5007D; }
+    .ret-row[data-brand="tesco"]::before      { background:#EE1C2E; }
+    .ret-row[data-brand="sainsburys"]::before { background:#F06C00; }
+    .ret-row[data-brand="bandq"]::before      { background:#FF6900; }
+    .ret-row[data-brand="wickes"]::before     { background:#005CA9; }
+    .ret-row[data-brand="halfords"]::before   { background:#E51010; }
+    .ret-row[data-brand="ebay"]::before       { background:#E53238; }
+    .ret-row[data-brand="selfridges"]::before { background:#FFEC00; }
+    .ret-row[data-brand="harveynichols"]::before{ background:#000; }
     .ret-row.best{background:var(--green-lt);border-color:var(--green-bd);box-shadow:var(--depth-2);}
-    .ret-row:active{transform:scale(0.98);border-color:var(--green-bd);}
+    .ret-row.best::before{background:var(--green);}
+    .ret-row:active{transform:scale(0.98);border-color:var(--green-bd);box-shadow:var(--depth-2);}
     .ret-info{flex:1;min-width:0;}
-    .ret-name{font:700 14px/1.2 "Nunito",sans-serif;color:var(--ink);letter-spacing:-0.1px;}
-    .ret-sub{font:500 12px/1.3 "Inter",sans-serif;color:var(--ink4);margin-top:2px;}
+    .ret-name{font:800 14px/1.2 "Nunito",sans-serif;color:var(--ink);letter-spacing:-0.2px;}
+    .ret-sub{font:500 12px/1.3 "Inter",sans-serif;color:var(--ink4);margin-top:3px;}
     .ret-badge{
-      font:700 10px/1 "Inter",sans-serif;color:#fff;
+      font:800 10px/1 "Inter",sans-serif;color:#fff;
       background:var(--green);border-radius:6px;
-      padding:3px 8px;display:inline-block;margin-top:5px;
-      letter-spacing:0.3px;
+      padding:4px 8px;display:inline-block;margin-top:6px;
+      letter-spacing:0.4px;text-transform:uppercase;
     }
-    .ret-price{font:900 22px/1 "Nunito",sans-serif;text-align:right;flex-shrink:0;letter-spacing:-0.5px;}
+    .ret-price{font:900 22px/1 "Nunito",sans-serif;text-align:right;flex-shrink:0;letter-spacing:-0.6px;}
     .ret-price.best{color:var(--green);}
     .ret-price.mid{color:var(--ink2);}
     .ret-price.high{color:var(--ink3);}
-    .ret-diff{font-size:11px;color:var(--ink4);text-align:right;margin-top:2px;}
+    .ret-diff{font-size:11px;color:var(--ink4);text-align:right;margin-top:3px;font-weight:600;}
     .ret-diff.over{color:var(--red);}
 
     /* Affiliate disclosure footer (Wave 20) — sits below the Track CTA on
@@ -1599,19 +1882,30 @@
       gap:14px;
     }
 
-    /* ── Savings centerpiece (Wave 28) — Revolut-balance pattern ──
+    /* ── Savings centerpiece (Wave 29) — Revolut-balance pattern ──
        Big number dominant, the motivational hero of the home page.
-       Hidden until first saving recorded. */
+       Always visible, ticks up with every check. Tap-to-share opens the
+       share card so users can broadcast their savings (Wave 30 — key
+       marketing hook). All sized with width:100% + box-sizing:border-box
+       + min-width:0 so it can NEVER overflow viewport horizontally. */
     .savings-hero{
+      width:100%;
+      max-width:100%;
+      box-sizing:border-box;
+      min-width:0;
       text-align:center;
-      padding:18px 16px 14px;
+      padding:20px 18px 18px;
       background:linear-gradient(160deg, #2a6b22 0%, #1d5019 100%);
       border-radius:var(--r-lg);
       box-shadow:var(--depth-glow-green);
       color:#fff;
       position:relative;
       overflow:hidden;
+      cursor:pointer;
+      transition:transform var(--motion-fast) var(--ease-pop);
     }
+    .savings-hero:active{transform:scale(0.985);}
+    .savings-hero:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
     .savings-hero[hidden]{display:none;}
     /* Subtle decorative ring */
     .savings-hero::before{
@@ -1624,38 +1918,65 @@
       pointer-events:none;
     }
     .savings-eyebrow{
-      font:700 11px/1 "Inter",sans-serif;
-      color:rgba(255,255,255,0.65);
-      letter-spacing:1.2px;
-      margin-bottom:6px;
+      font:800 10px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.7);
+      letter-spacing:1.4px;
+      margin-bottom:8px;
       position:relative;z-index:1;
     }
     .savings-amount{
       display:flex;align-items:baseline;justify-content:center;
-      gap:2px;
+      gap:0;
       font-family:"Nunito",sans-serif;
       color:#fff;
-      letter-spacing:-2px;
+      letter-spacing:-1.8px;
       line-height:1;
-      margin-bottom:6px;
+      margin-bottom:8px;
       position:relative;z-index:1;
+      max-width:100%;
+      overflow:hidden;
+      white-space:nowrap;
     }
     .savings-currency{
       font-weight:700;
-      font-size:32px;
-      color:rgba(255,255,255,0.85);
+      font-size:28px;
+      color:rgba(255,255,255,0.88);
       align-self:flex-start;
-      margin-top:8px;
+      margin-top:6px;
+      margin-right:1px;
     }
     .savings-num{
       font-weight:900;
-      font-size:56px;
-      letter-spacing:-2.5px;
+      font-size:48px;
+      letter-spacing:-2px;
     }
     .savings-context{
-      font:500 13px/1.4 "Inter",sans-serif;
-      color:rgba(255,255,255,0.75);
+      font:500 12px/1.4 "Inter",sans-serif;
+      color:rgba(255,255,255,0.78);
       position:relative;z-index:1;
+      margin-bottom:10px;
+    }
+    /* Share affordance pill — sits under the context line, signals tap-to-share */
+    .savings-share-pill{
+      display:inline-flex;align-items:center;gap:6px;
+      padding:6px 12px;
+      background:rgba(255,255,255,0.18);
+      border:1px solid rgba(255,255,255,0.25);
+      border-radius:var(--r-pill,999px);
+      font:700 11px/1 "Inter",sans-serif;
+      color:#fff;
+      letter-spacing:0.4px;
+      position:relative;z-index:1;
+      pointer-events:none;
+    }
+    .savings-share-pill svg{width:13px;height:13px;}
+    /* Button-tag savings hero — reset default browser button chrome */
+    button.savings-hero{
+      font-family:inherit;
+      border:none;
+      -webkit-appearance:none;
+      appearance:none;
+      cursor:pointer;
     }
     /* First-time greeting — replaces the savings hero before any savings */
     .savings-welcome{
@@ -1715,6 +2036,32 @@
     .action-tile-label{
       font:700 12px/1 "Nunito",sans-serif;
       color:var(--ink);
+      display:inline-flex;align-items:center;gap:4px;
+    }
+    /* Wave 37 — Snap is the AI-first power move. Tile gets a soft green
+       gradient + AI tag pill so it visually anchors the row. */
+    .action-tile-feature{
+      background:linear-gradient(135deg, #f0f8ed 0%, #ffffff 100%);
+      border-color:var(--green-bd);
+      box-shadow:0 4px 14px rgba(42,107,34,0.10);
+    }
+    .action-tile-feature .action-tile-ico{
+      background:var(--green);color:#fff;
+    }
+    .action-tile-tag{
+      font:800 8px/1 "Inter",sans-serif;
+      color:#fff;background:var(--green);
+      padding:2px 5px;border-radius:5px;
+      letter-spacing:0.6px;
+      vertical-align:middle;
+      transform:translateY(-1px);
+    }
+    /* Bottom-nav feature variant — same Snap-leads treatment, more subtle */
+    .botnav-tab-feature .botnav-ico{
+      color:var(--green);
+    }
+    .botnav.dark .botnav-tab-feature .botnav-ico{
+      color:#88d97c;
     }
 
     /* ── Search hero card ── */
@@ -1963,19 +2310,25 @@
     }
     .bento-trending::-webkit-scrollbar{display:none;}
     .trend-tile{
-      flex:0 0 140px;
+      flex:0 0 144px;
       display:flex;flex-direction:column;
-      align-items:flex-start;gap:4px;
-      padding:12px 12px 11px;
+      align-items:flex-start;
+      gap:2px;
+      padding:12px 12px 12px;
       background:var(--card);
       border:1px solid var(--border);
       border-radius:var(--r);
       cursor:pointer;text-align:left;
       box-shadow:var(--depth-1);
-      min-height:96px;
+      /* Wave 29: explicit height was clipping the labels on iOS Safari when
+         tiles sat near the bottom-nav padding boundary. Use a defined fixed
+         height so name + cat are guaranteed visible. */
+      height:108px;
+      min-height:108px;
       scroll-snap-align:start;
       transition:transform var(--motion-fast) var(--ease-pop),
                  border-color var(--motion-norm) var(--ease-quick);
+      overflow:hidden;
     }
     .trend-tile:active{
       transform:scale(0.96);
@@ -2006,11 +2359,17 @@
     .trend-tile-name{
       font:700 13px/1.2 "Nunito",sans-serif;
       color:var(--ink);letter-spacing:-0.1px;
+      width:100%;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      margin-top:2px;
     }
     .trend-tile-cat{
-      font:500 10px/1 "Inter",sans-serif;
+      font:600 10px/1 "Inter",sans-serif;
       color:var(--ink3);
-      letter-spacing:0.3px;text-transform:uppercase;
+      letter-spacing:0.4px;text-transform:uppercase;
+      margin-top:3px;
     }
 
     /* Wave 22 — Swipe nudge animation. On first home view per session,
@@ -2137,18 +2496,23 @@
          app, that's the savings they've already made. -->
     <div class="bento">
 
-      <!-- ── Savings centerpiece (Wave 28d) ──
-           Big motivational tracker. Like Revolut showing your balance,
-           this shows the user the value Savvey has delivered for them.
-           ALWAYS visible — at £0 reads as a starting line that ticks up
-           with every check. Animated count-up on load (skipped at zero). -->
-      <div class="savings-hero" id="savings-hero">
+      <!-- ── Savings centerpiece (Wave 29) ──
+           Always visible Revolut-balance pattern. Tap-to-share pulls up the
+           dedicated savings share card (Wave 30 marketing hook). Sized
+           defensively (width:100%, box-sizing) so it can never overflow. -->
+      <button class="savings-hero" id="savings-hero" type="button"
+              onclick="shareSavingsCounter()"
+              aria-label="Share your Savvey savings">
         <div class="savings-eyebrow">SAVVEY SAVINGS FOUND</div>
         <div class="savings-amount">
           <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0.00</span>
         </div>
         <div class="savings-context" id="savings-context">your savings tick up here as you check prices</div>
-      </div>
+        <span class="savings-share-pill" id="savings-share-pill" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+          Tap to share
+        </span>
+      </button>
 
       <!-- Legacy welcome card — kept hidden for back-compat with anything that
            might query it. Wave 28d superseded this with always-on hero. -->
@@ -2158,8 +2522,16 @@
         <div class="savings-welcome-sub">Scan, snap, paste a link, or search — we'll check the UK's biggest retailers in seconds.</div>
       </div>
 
-      <!-- 4-tile action row — matches bottom nav, Revolut quick-actions pattern -->
+      <!-- Wave 37 — Snap leads the action row. Marked as 'feature' tile
+           so it visually anchors the row with a green-accent background +
+           AI sparkle badge. Order: Snap (AI), Search, Scan, Paste. -->
       <div class="bento-actions" data-no-swipe>
+        <button class="action-tile action-tile-feature" onclick="navigateSwipe('snap','left')">
+          <div class="action-tile-ico">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+          </div>
+          <div class="action-tile-label">Snap<span class="action-tile-tag">AI</span></div>
+        </button>
         <button class="action-tile" onclick="document.getElementById('search-input').focus()">
           <div class="action-tile-ico">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -2171,12 +2543,6 @@
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/></svg>
           </div>
           <div class="action-tile-label">Scan</div>
-        </button>
-        <button class="action-tile" onclick="navigateSwipe('snap','left')">
-          <div class="action-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
-          </div>
-          <div class="action-tile-label">Snap</div>
         </button>
         <button class="action-tile" onclick="navigateSwipe('paste','right')">
           <div class="action-tile-ico">
@@ -2314,7 +2680,7 @@
         <button class="cam-found-cta" id="cam-det-cta" onclick="useScannedProduct()">Check →</button>
       </div>
       <div class="cam-foot">
-        <div class="cam-hint-txt" id="cam-hint">Point at any barcode</div>
+        <div class="cam-hint-txt" id="cam-hint">Point at any barcode or QR code</div>
         <div class="cam-trouble" id="cam-trouble" hidden>
           <div class="cam-trouble-title">Trouble reading?</div>
           <div class="cam-trouble-tips">Hold the barcode 10–20 cm away · steady the camera · brighter light helps · try the torch</div>
@@ -2410,7 +2776,7 @@
       </div>
       <div class="price-actions">
         <button class="price-go" id="btn-score" disabled onclick="startSearch()">
-          Get my Savvey Score →
+          Get my Save Score →
         </button>
         <button class="price-skip" onclick="skipPrice()">Just show me the cheapest price →</button>
       </div>
@@ -2418,36 +2784,51 @@
   </div>
 
   <!-- ══════ SEARCHING ══════ -->
-  <!-- Wave 27: full retailer-wallpaper layout. Pills tile the screen as a
-       grid of branded chips around a large pulsing Savvey badge centre.
-       Pills cycle pending → lit → done as we work through retailers. -->
+  <!-- Wave 31 — cleaner loading layout. SAVVEY wordmark top, big pulsing
+       badge in middle, branded retailer tile grid below cycles through as
+       we sweep retailers. Each tile has the actual retailer wordmark text
+       in its corporate colour when "lit". The 16 ids (rc-0..rc-15) are
+       kept identical so the cycling animation in startSearchAnimation()
+       continues to work without modification. -->
   <div class="screen" id="screen-searching">
-    <div class="srch-wallpaper" aria-hidden="true">
-      <div class="r-pill" data-brand="amazon"     id="rc-0"><span>amazon</span></div>
-      <div class="r-pill" data-brand="argos"      id="rc-1"><span>Argos</span></div>
-      <div class="r-pill" data-brand="jl"         id="rc-2"><span>John Lewis</span></div>
-      <div class="r-pill" data-brand="currys"     id="rc-3"><span>Currys</span></div>
-      <div class="r-pill" data-brand="ao"         id="rc-4"><span>AO.com</span></div>
-      <div class="r-pill" data-brand="very"       id="rc-5"><span>Very</span></div>
-      <div class="r-pill" data-brand="richer"     id="rc-6"><span>Richer Sounds</span></div>
-      <div class="r-pill" data-brand="box"        id="rc-7"><span>Box</span></div>
-      <div class="r-pill" data-brand="boots"      id="rc-8"><span>Boots</span></div>
-      <div class="r-pill" data-brand="superdrug"  id="rc-9"><span>Superdrug</span></div>
-      <div class="r-pill" data-brand="tesco"      id="rc-10"><span>Tesco</span></div>
-      <div class="r-pill" data-brand="sainsburys" id="rc-11"><span>Sainsbury's</span></div>
-      <div class="r-pill" data-brand="bandq"      id="rc-12"><span>B&amp;Q</span></div>
-      <div class="r-pill" data-brand="wickes"     id="rc-13"><span>Wickes</span></div>
-      <div class="r-pill" data-brand="waterstones" id="rc-14"><span>Waterstones</span></div>
-      <div class="r-pill" data-brand="cultbeauty" id="rc-15"><span>Cult Beauty</span></div>
-    </div>
-    <div class="srch-centre">
-      <div class="srch-savvey-badge" aria-hidden="true">
-        <div class="srch-savvey-ring"></div>
-        <div class="srch-savvey-letter">S</div>
+    <div class="srch-stack">
+      <div class="srch-wordmark"><span>SAVVE</span><span class="y">Y</span></div>
+
+      <div class="srch-centre">
+        <div class="srch-savvey-badge" aria-hidden="true">
+          <div class="srch-savvey-ring"></div>
+          <div class="srch-savvey-letter">S</div>
+        </div>
+        <div class="srch-h">Checking prices</div>
+        <div class="srch-product-line" aria-live="polite">
+          <svg class="srch-product-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <div class="srch-product-name" id="searching-product">Loading…</div>
+        </div>
+        <div class="srch-s">Across the UK's biggest retailers</div>
       </div>
-      <div class="srch-h">Checking prices</div>
-      <div class="srch-p" id="searching-product">Sony WH-1000XM5</div>
-      <div class="srch-s">Across the UK's biggest retailers</div>
+
+      <div class="srch-brand-grid" aria-hidden="true">
+        <div class="srch-brand-tile" data-brand="amazon"     id="rc-0"><span class="srch-brand-logo">amazon</span></div>
+        <div class="srch-brand-tile" data-brand="argos"      id="rc-1"><span class="srch-brand-logo">Argos</span></div>
+        <div class="srch-brand-tile" data-brand="jl"         id="rc-2"><span class="srch-brand-logo">John Lewis</span></div>
+        <div class="srch-brand-tile" data-brand="currys"     id="rc-3"><span class="srch-brand-logo">Currys</span></div>
+        <div class="srch-brand-tile" data-brand="ao"         id="rc-4"><span class="srch-brand-logo">AO</span></div>
+        <div class="srch-brand-tile" data-brand="very"       id="rc-5"><span class="srch-brand-logo">Very</span></div>
+        <div class="srch-brand-tile" data-brand="richer"     id="rc-6"><span class="srch-brand-logo">Richer&nbsp;Sounds</span></div>
+        <div class="srch-brand-tile" data-brand="box"        id="rc-7"><span class="srch-brand-logo">Box</span></div>
+        <div class="srch-brand-tile" data-brand="boots"      id="rc-8"><span class="srch-brand-logo">Boots</span></div>
+        <div class="srch-brand-tile" data-brand="superdrug"  id="rc-9"><span class="srch-brand-logo">Superdrug</span></div>
+        <div class="srch-brand-tile" data-brand="tesco"      id="rc-10"><span class="srch-brand-logo">Tesco</span></div>
+        <div class="srch-brand-tile" data-brand="sainsburys" id="rc-11"><span class="srch-brand-logo">Sainsbury's</span></div>
+        <div class="srch-brand-tile" data-brand="bandq"      id="rc-12"><span class="srch-brand-logo">B&amp;Q</span></div>
+        <div class="srch-brand-tile" data-brand="wickes"     id="rc-13"><span class="srch-brand-logo">Wickes</span></div>
+        <div class="srch-brand-tile" data-brand="halfords"   id="rc-14"><span class="srch-brand-logo">Halfords</span></div>
+        <div class="srch-brand-tile" data-brand="ebay"       id="rc-15"><span class="srch-brand-logo">eBay</span></div>
+      </div>
+
+      <div class="srch-footer">UK retailer prices · live check</div>
     </div>
   </div>
 
@@ -2499,7 +2880,7 @@
             <div class="v-pip" id="vp-5">5</div>
           </div>
           <div class="hero-verdict-text">
-            <div class="hero-verdict-label red" id="hero-verdict-label">Savvey Score</div>
+            <div class="hero-verdict-label red" id="hero-verdict-label">Save Score</div>
             <div class="hero-verdict-title red" id="hero-verdict-title">Walk away.</div>
           </div>
         </div>
@@ -2511,6 +2892,36 @@
             <div class="hero-lbl" id="hero-saving-label">cheaper elsewhere</div>
           </div>
           <div class="hero-where" id="hero-where"><strong>Amazon UK</strong> has it for <strong>£249</strong> right now.</div>
+
+          <!-- Wave 33: Optional shelf-price refinement.
+               Default scan/search flow goes straight to results in
+               Discovery mode (Save Score vs UK average). If the user
+               wants a sharper Validation score against an actual shelf
+               price, they tap this pill and an inline price input
+               appears. Submitting it re-runs the search in Validation
+               mode with the entered price. -->
+          <div class="shelf-refine" id="shelf-refine">
+            <button class="shelf-refine-pill" id="shelf-refine-pill" type="button"
+                    onclick="openShelfRefine()" hidden>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+              <span>Got the shelf price? Add it for a sharper Save Score</span>
+            </button>
+            <form class="shelf-refine-form" id="shelf-refine-form" hidden
+                  onsubmit="event.preventDefault();submitShelfRefine();">
+              <div class="shelf-refine-label">In-store shelf price</div>
+              <div class="shelf-refine-row">
+                <div class="shelf-refine-sym">£</div>
+                <input class="shelf-refine-input" id="shelf-refine-input"
+                       type="number" min="0" step="0.01" inputmode="decimal"
+                       placeholder="0.00"
+                       aria-label="Shelf price"
+                       autocomplete="off"/>
+                <button type="submit" class="shelf-refine-go">Re-score →</button>
+              </div>
+              <button type="button" class="shelf-refine-cancel" onclick="closeShelfRefine()">Cancel</button>
+            </form>
+          </div>
+
           <div class="hero-actions">
             <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it on Amazon UK →</button>
             <button class="hero-share" onclick="openShareCard()" aria-label="Share this price">
@@ -2523,7 +2934,7 @@
       </div>
 
       <svg style="display:none"><circle id="score-arc"/></svg>
-      <div class="signal" id="signal-wrap" style="display:none"><div class="signal-text"><div class="signal-lbl">Savvey Score</div><div class="signal-val" id="signal-verdict"></div></div></div>
+      <div class="signal" id="signal-wrap" style="display:none"><div class="signal-text"><div class="signal-lbl">Save Score</div><div class="signal-val" id="signal-verdict"></div></div></div>
 
       <div class="res-section-lbl">All prices found</div>
       <div id="ret-list"></div>
@@ -2640,17 +3051,20 @@
     </span>
     <span class="botnav-lbl">Home</span>
   </button>
+  <!-- Wave 37: Snap promoted to second slot (was 3rd). Vincent: "snap ai
+       feature almost better than the scan...scan should maybe be more
+       prominent [become] less". Snap leads, Scan supports. -->
+  <button class="botnav-tab botnav-tab-feature" data-tab="snap" onclick="navigateBotnav('snap')">
+    <span class="botnav-ico" aria-hidden="true">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/><path d="M19 5l1 1M19 7l1-1"/></svg>
+    </span>
+    <span class="botnav-lbl">Snap</span>
+  </button>
   <button class="botnav-tab" data-tab="scan" onclick="navigateBotnav('scan')">
     <span class="botnav-ico" aria-hidden="true">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="7" y2="12"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/><line x1="17" y1="12" x2="17" y2="12"/></svg>
     </span>
     <span class="botnav-lbl">Scan</span>
-  </button>
-  <button class="botnav-tab" data-tab="snap" onclick="navigateBotnav('snap')">
-    <span class="botnav-ico" aria-hidden="true">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/><path d="M19 5l1 1M19 7l1-1"/></svg>
-    </span>
-    <span class="botnav-lbl">Snap</span>
   </button>
   <button class="botnav-tab" data-tab="paste" onclick="navigateBotnav('paste')">
     <span class="botnav-ico" aria-hidden="true">
@@ -2848,6 +3262,21 @@ function globalReset(){
   // 5. Reset chip animations + branded pills (Wave 27 = 16 pills)
   chipTimers.forEach(clearTimeout);chipTimers=[];
   for(let i=0;i<16;i++){const c=document.getElementById('rc-'+i);if(c){c.classList.remove('lit');c.classList.remove('done');}}
+  // 6. Wave 29: ALSO clear the refine-input + product-name + wit so a new
+  //    search rendering can never inherit stale strings from a prior one.
+  //    Vincent saw "iPhone 15 Pro 256GB" in the refine bar while the body
+  //    referenced a totally different prior query — that bug was here.
+  const ri=document.getElementById('results-refine-input');
+  if(ri)ri.value='';
+  const rp=document.getElementById('results-product');
+  if(rp)rp.textContent='';
+  const witEl=document.getElementById('hero-wit');
+  if(witEl)witEl.textContent='';
+  const heroImgWrap=document.getElementById('hero-image-wrap');
+  if(heroImgWrap)heroImgWrap.hidden=true;
+  // Wave 38: clear the snap-match meta so a Snap-confidence flag from a
+  // prior shot can't bleed into the next non-Snap search.
+  window._snapMatchMeta = null;
   console.log('%c[globalReset] generation='+searchGeneration,'color:#e03535;font-weight:bold');
 }
 
@@ -2892,6 +3321,26 @@ function goTo(screen, opts){
   currentScreen=screen;
   updateSwipePager();
   updateBotnav();
+  // Wave 29 — reset all scanner UI state when entering scan, regardless of
+  // how the user got there. Vincent's testing: after a successful scan +
+  // results, returning to scan still showed the prior product card hovered
+  // mid-screen. State now resets every entry.
+  if(screen==='scan'){
+    scannedBarcode = null;
+    scannedProductName = null;
+    const lockon = document.getElementById('vf-lockon');
+    if(lockon) lockon.classList.remove('show');
+    const detected = document.getElementById('cam-detected');
+    if(detected) detected.classList.remove('show');
+    const trouble = document.getElementById('cam-trouble');
+    if(trouble) trouble.hidden = true;
+    const nameEl = document.getElementById('cam-det-name');
+    if(nameEl) nameEl.textContent = 'Scanning…';
+    const subEl = document.getElementById('cam-det-sub');
+    if(subEl) subEl.textContent = '';
+    const cta = document.getElementById('cam-det-cta');
+    if(cta){ cta.textContent = 'Check →'; cta.onclick = useScannedProduct; }
+  }
   // Screen entry actions
   if(screen==='home'){
     silentGeo();
@@ -3138,7 +3587,11 @@ function dismissSwipeCoach(){
 // instant camera). Swipe RIGHT from home → online check (paste/search).
 // Continued left reaches snap (AI photo) as secondary. Each direction is
 // also tappable as a big tile on home — user chooses gesture or tap.
-const SWIPE_ROTATION = ['paste', 'home', 'scan', 'snap'];
+// Wave 37 — Snap promoted to centre-right of the swipe deck. Order is now:
+// paste ← home → snap → scan. Snap is the AI-first input mode and gets the
+// most thumb-natural slot (one swipe right from home). Scan stays a swipe
+// further out — still a primary mode, just no longer the headline.
+const SWIPE_ROTATION = ['paste', 'home', 'snap', 'scan'];
 // Wave 22 — tuned after live in-store feedback. The previous gate was too
 // strict for thumb swipes that aren't perfectly horizontal. Lower threshold
 // + looser ratio + longer max-time = swipe lands on the screen Vincent
@@ -3447,25 +3900,66 @@ function buildScenV3(items, uPrice, query){
   deduped[0].best=true;
   const bestP=deduped[0].price;
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
-  const score=calcScore(uPrice,bestP);
-  const spc=scoreToSpc(score);
-  const saving=uPrice?Math.round(uPrice-bestP):0;
-  const vTitle=['','Walk away.','Better deal available.','Worth a look.','Pretty good.','Best price.'][score];
-  const vSub=spc==='green'
-    ?(saving<=2?'Best price in the UK right now.':`Only £${saving} cheaper online.`)
-    :spc==='amber'
-    ?`${deduped[0].retailer} has it for £${bestP}.`
-    :`${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`;
+
+  // Wave 29 — average-based Save Score for Discovery mode.
+  // When the user didn't enter a shelf price (Discovery: search/snap), the
+  // user-reference is the UK retailer AVERAGE — Save Score reflects how
+  // much cheaper the best retailer is than the typical UK price.
+  // When the user DID enter a price (Validation: scan/paste), Save Score
+  // reflects shelf vs cheapest.
+  // Single retailer: there's no comparison, so we never claim a 5/5 — fall
+  // back to a neutral score (3 = "Worth a look") so we don't mislead.
+  const avgP = Math.round(deduped.reduce((sum,p)=>sum+p.price,0)/deduped.length);
+  const savingVsAvg = Math.max(0, avgP - bestP);
+  let score, spc, saving, scoreBasis;
+  if(deduped.length < 2){
+    // Single retailer found — no real comparison to make. Show as amber/3 to
+    // avoid the misleading "5/5 Best price" Vincent saw on eBay-only results.
+    score = 3;
+    spc = 'amber';
+    saving = uPrice ? Math.max(0, Math.round(uPrice - bestP)) : 0;
+    scoreBasis = 'single-retailer';
+  } else if(uPrice){
+    // Validation mode — score against shelf price
+    score = calcScore(uPrice, bestP);
+    spc = scoreToSpc(score);
+    saving = Math.max(0, Math.round(uPrice - bestP));
+    scoreBasis = 'shelf';
+  } else {
+    // Discovery mode — score against UK retailer average
+    score = calcScore(avgP, bestP);
+    spc = scoreToSpc(score);
+    saving = savingVsAvg;
+    scoreBasis = 'average';
+  }
+  // Verdict copy adapts to score basis so we never claim a verdict we can't back up.
+  const vTitle = deduped.length < 2
+    ? 'Only one UK retailer found.'
+    : ['','Walk away.','Better deal available.','Worth a look.','Pretty good.','Best price.'][score];
+  const vSub = deduped.length < 2
+    ? `${deduped[0].retailer} has it for £${bestP}. We couldn't surface a comparison from another UK retailer just now.`
+    : scoreBasis === 'shelf'
+      ? (spc==='green'
+          ? (saving<=2?'Best price in the UK right now.':`Only £${saving} cheaper online.`)
+          : spc==='amber'
+            ? `${deduped[0].retailer} has it for £${bestP}.`
+            : `${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`)
+      : scoreBasis === 'average'
+        ? (savingVsAvg<=2
+            ? `Cheapest UK price found (avg across ${deduped.length} retailers: £${avgP}).`
+            : `£${savingVsAvg} below the UK average across ${deduped.length} retailers.`)
+        : `${deduped[0].retailer} has it for £${bestP}.`;
   return{
     score,spc,vTitle,vSub,query,
     bestPrice:bestP,
     bestRetailer:deduped[0].retailer,
     bestLink:deduped[0].link||'',
     saving,uPrice,
-    // Average across all trusted retailers — shown on the results screen as
-    // a reference point so a user with no shelf-price comparison still gets
-    // meaningful context ("Cheapest £X · Average £Y").
-    avgPrice:Math.round(deduped.reduce((sum,p)=>sum+p.price,0)/deduped.length),
+    // Wave 29 — explicit basis flag the renderer + counter use to know which
+    // saving narrative to present.
+    scoreBasis,        // 'shelf' | 'average' | 'single-retailer'
+    savingVsAvg,       // always populated; 0 if we have <2 retailers
+    avgPrice:avgP,
     retailerCount:deduped.length,
     // Top 3 retailers, cheapest as standout. Dropped from 4 to 3 so the
     // result screen doesn't pad with marginal listings.
@@ -3634,6 +4128,13 @@ function processSearchResponse(d1, query){
     sc.dataSource=d1._meta.source||'serper';
     sc._heroImage=d1._meta.heroImage||null;  // Wave 24
   }
+  // Wave 38 — attach Snap match metadata if the search came in via Snap.
+  // renderResults reads this to surface a "Generic match" banner and
+  // reframe the saving copy ("vs similar UK products" instead of
+  // "vs the typical UK price").
+  if(sc && window._snapMatchMeta){
+    sc.snapMatch = window._snapMatchMeta;
+  }
   liveScen=sc;
   chipTimers.forEach(clearTimeout);
   return sc;
@@ -3722,6 +4223,11 @@ function fetchScrape(url){
 }
 
 // ── Price entry actions ──
+//
+// Wave 33 — startSearch / skipPrice are kept for any path that still uses
+// the dedicated #screen-price (currently nothing in the default UI flows
+// after Wave 33 — scan now goes straight to results). Useful for future
+// retailer-paste flows that may want to ask for a reference price.
 function startSearch(){
   const val=parseFloat(document.getElementById('price-num').value)||null;
   userPrice=val;bestPriceOnly=false;
@@ -3732,6 +4238,58 @@ function skipPrice(){
   userPrice=null;bestPriceOnly=true;
   const q=liveQuery;
   if(!q){goHome();return;}
+  goTo('searching');
+  showResults(fetchPrices(q));
+}
+
+// ── Inline shelf-price refinement (Wave 33) ──
+//
+// On the results screen, scan-mode users get a pill: "Got the shelf
+// price? Add it for a sharper Save Score." Tapping reveals an inline
+// price input. Submitting re-runs the search with userPrice set so the
+// score is shelf-vs-cheapest instead of avg-vs-cheapest.
+function openShelfRefine(){
+  haptic(8);
+  const pill = document.getElementById('shelf-refine-pill');
+  const form = document.getElementById('shelf-refine-form');
+  const inp  = document.getElementById('shelf-refine-input');
+  if(pill) pill.hidden = true;
+  if(form) form.hidden = false;
+  if(inp){
+    inp.value = '';
+    setTimeout(() => inp.focus(), 50);
+  }
+}
+function closeShelfRefine(){
+  const pill = document.getElementById('shelf-refine-pill');
+  const form = document.getElementById('shelf-refine-form');
+  if(pill) pill.hidden = false;
+  if(form) form.hidden = true;
+}
+function submitShelfRefine(){
+  const inp = document.getElementById('shelf-refine-input');
+  const val = parseFloat(inp && inp.value || '');
+  if(!val || val <= 0){
+    if(inp){
+      inp.classList.remove('shake');
+      void inp.offsetWidth;
+      inp.classList.add('shake');
+      inp.focus();
+    }
+    haptic(20);
+    return;
+  }
+  haptic(12);
+  // Re-run the search in Validation mode against the entered shelf price
+  // (use the same query, no globalReset — we want the existing scen to
+  // be replaced via the same generation guard).
+  const q = liveQuery || (liveScen && liveScen.query) || '';
+  if(!q) return;
+  globalReset();
+  liveQuery = q;
+  userPrice = val;
+  bestPriceOnly = false;
+  // inputMethod already set ('scan'/'paste'/'snap'/'search') — preserve it.
   goTo('searching');
   showResults(fetchPrices(q));
 }
@@ -3792,10 +4350,78 @@ async function showResults(fetchPromise){
 // ── No-results state ──
 // Mutates the existing results-screen hero card to a clean empty state.
 // Brand voice: helpful, dry, never accusatory.
+// Wave 40 — detect queries that look like a not-yet-released product so the
+// empty state can be honest about why we couldn't find prices. Conservative
+// list: only triggers on numbered-version products that look beyond what the
+// AI's training data + retailer indexes would plausibly cover. Returns
+// {label, suggestion} or null.
+function detectFutureProduct(query){
+  const q = String(query||'').toLowerCase().trim();
+  if(!q) return null;
+  // iPhone — current series in widespread retailer indexes is 16. Anything
+  // 17+ is either unreleased or only just announced.
+  let m;
+  if((m = q.match(/iphone\s*(\d{2,})/))){
+    const n = parseInt(m[1],10);
+    if(n >= 17) return {label:'iPhone '+n, suggestion:'iPhone 16 Pro 256GB'};
+  }
+  // Samsung Galaxy S — current is S25. S26+ is future.
+  if((m = q.match(/galaxy\s*s\s*(\d{2,})/))){
+    const n = parseInt(m[1],10);
+    if(n >= 26) return {label:'Galaxy S'+n, suggestion:'Samsung Galaxy S25 Ultra'};
+  }
+  // Pixel — current is 10. 11+ is future.
+  if((m = q.match(/pixel\s*(\d{2,})/))){
+    const n = parseInt(m[1],10);
+    if(n >= 11) return {label:'Pixel '+n, suggestion:'Google Pixel 10 Pro'};
+  }
+  // PlayStation — PS5 current, PS6 unreleased.
+  if(/\bps\s*6\b|playstation\s*6/.test(q)){
+    return {label:'PlayStation 6', suggestion:'PlayStation 5 Slim'};
+  }
+  // Xbox — Series X/S current. Anything else is speculative.
+  if(/xbox\s+series\s*z/.test(q)){
+    return {label:'Xbox Series Z', suggestion:'Xbox Series X'};
+  }
+  // MacBook M-chips — M4 current. M5+ is future.
+  if((m = q.match(/macbook[^a-z]*m\s*(\d+)/))){
+    const n = parseInt(m[1],10);
+    if(n >= 5) return {label:'MacBook M'+n, suggestion:'MacBook Air M4 13 inch'};
+  }
+  // Apple Watch — Series 10 current. 11+ future.
+  if((m = q.match(/apple\s*watch\s*(?:series\s*)?(\d+)/))){
+    const n = parseInt(m[1],10);
+    if(n >= 11) return {label:'Apple Watch Series '+n, suggestion:'Apple Watch Series 10'};
+  }
+  return null;
+}
+
 function renderNoResults(query){
   const safeQ=String(query||'that product').replace(/[<>]/g,'');
   const setText=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
   const setHTML=(id,html)=>{const el=document.getElementById(id);if(el)el.innerHTML=html;};
+  const future = detectFutureProduct(safeQ);
+
+  // Wave 29: keep the results-screen header in sync with the actual query
+  // we tried. Without this the refine-input could show a previous product
+  // name while the body referenced a different one — Vincent's screenshots
+  // (IMG_1637/1638/1651) showed "iPhone 15 Pro" up top with "Cartera push
+  // bike" in the body. Now the same string drives both.
+  const refineInput=document.getElementById('results-refine-input');
+  if(refineInput)refineInput.value=safeQ;
+  const rp=document.getElementById('results-product');
+  if(rp)rp.textContent=safeQ;
+  // Mode pill — show what the search was so users orient
+  const modeEl=document.getElementById('results-mode');
+  if(modeEl){
+    const now=new Date();
+    const hh=String(now.getHours()).padStart(2,'0');
+    const mm=String(now.getMinutes()).padStart(2,'0');
+    modeEl.textContent='🔍 Search  ·  prices '+hh+':'+mm;
+  }
+  // Hide hero image wrap from prior result
+  const heroImgWrap=document.getElementById('hero-image-wrap');
+  if(heroImgWrap)heroImgWrap.hidden=true;
 
   // Verdict banner — neutral / amber, no pips lit
   const bar=document.getElementById('hero-verdict-bar');
@@ -3805,15 +4431,52 @@ function renderNoResults(query){
     if(p){p.classList.remove('lit','active');}
   }
   const lbl=document.getElementById('hero-verdict-label');
-  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Savvey Score';}
+  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Save Score';}
   const ttl=document.getElementById('hero-verdict-title');
-  if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='Couldn\'t reach the price data.';}
+  if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='Let\'s check directly.';}
 
-  // Body — honest about the data limitation, never blame the product or user.
-  setText('hero-wit',`We had trouble pulling fresh prices for "${safeQ}" just now.`);
+  // Wave 34 — the empty state used to read like an error. Vincent saw it
+  // constantly during testing and it killed confidence in the app. New
+  // copy is action-oriented: tell the user what we tried, and give them
+  // direct retailer-search shortcuts so they always have a path forward.
+  // Wave 40 — when the query looks like an unreleased product, frame it
+  // honestly so the user understands WHY the comparison came up empty.
+  if(future){
+    if(ttl){ttl.textContent=future.label+' may not be out yet.';}
+    setText('hero-wit', `${future.label} doesn't have widespread UK retailer pricing yet — likely because it's not released or just landed. We've added direct retailer searches in case it has dropped.`);
+  } else {
+    setText('hero-wit', `We couldn't pull a fresh comparison for "${safeQ}" — but here are direct retailer searches you can tap.`);
+  }
   setText('hero-saving-num','');
   setText('hero-saving-label','');
-  setHTML('hero-where','This is a data-source hiccup, not a sign the product is unavailable. Most UK retailers stock popular items — try again in a moment, try a slightly different spelling, or paste a product link directly.');
+
+  // Build retailer search shortcuts — top 6 UK retailers, each links to
+  // their own search page for the user's query so the journey continues
+  // even when our pipeline came up empty.
+  const directRetailers = [
+    {key:'amazon',  label:'Amazon UK',     brand:'amazon',     name:'Amazon UK'},
+    {key:'argos',   label:'Argos',         brand:'argos',      name:'Argos'},
+    {key:'jl',      label:'John Lewis',    brand:'jl',         name:'John Lewis'},
+    {key:'currys',  label:'Currys',        brand:'currys',     name:'Currys'},
+    {key:'ebay',    label:'eBay UK',       brand:'ebay',       name:'eBay UK'},
+    {key:'halfords',label:'Halfords',      brand:'halfords',   name:'Halfords'},
+  ];
+  const shortcutsHtml = '<div class="empty-shortcuts" data-no-swipe>'
+    + directRetailers.map(r => {
+        const url = retailerSearchUrl(r.name, safeQ) || '';
+        const safeUrl = url.replace(/"/g,'&quot;');
+        return `<a class="empty-shortcut" data-brand="${r.brand}" href="${safeUrl}" target="_blank" rel="noopener">`
+          + `<span class="empty-shortcut-name">${r.label}</span>`
+          + `<span class="empty-shortcut-arrow">→</span>`
+          + `</a>`;
+      }).join('')
+    + '</div>';
+  // Wave 40 — when this is a future-product query, suggest the previous
+  // generation as a likely-comparable substitute they can tap to re-search.
+  const tipHtml = future
+    ? `<div class="empty-tip">Until ${future.label} is widely indexed, the closest comparable is <button class="vague-hint-try" onclick="trendSearch('${future.suggestion.replace(/'/g,"\\'")}')">${future.suggestion}</button>. Tap it to compare.</div>`
+    : `<div class="empty-tip">Tip — try a simpler name (just brand + model). Avoid SKU codes, sizes, or "refurbished" suffixes.</div>`;
+  setHTML('hero-where', shortcutsHtml + tipHtml);
 
   // Action buttons — retry + new search, drop buy + share
   const buy=document.getElementById('btn-buy-now');
@@ -3821,10 +4484,15 @@ function renderNoResults(query){
   const actions=document.querySelector('.hero-actions');
   if(actions){
     actions.innerHTML=`
-      <button class="hero-buy" onclick="retrySearch()" style="background:#2a6b22;">Try again →</button>
+      <button class="hero-buy" onclick="retrySearch()" style="background:#2a6b22;">Try again with same name →</button>
       <button class="hero-new-search" onclick="goHome()">Search for something else →</button>
     `;
   }
+  // Hide the shelf-refine pill on empty state (no scen to refine against)
+  const refinePill = document.getElementById('shelf-refine-pill');
+  const refineForm = document.getElementById('shelf-refine-form');
+  if(refinePill) refinePill.hidden = true;
+  if(refineForm) refineForm.hidden = true;
 
   // Empty the retailer list + section label
   const list=document.getElementById('ret-list');
@@ -4084,6 +4752,35 @@ function retailerSearchUrl(retailerName, query){
   if(r.includes('box'))          return `https://www.box.co.uk/search?text=${q}`;
   if(r.includes('mcgrocer'))     return `https://www.mcgrocer.com/search?q=${q}`;
   if(r.includes('harvey nichols'))return `https://www.harveynichols.com/search/?q=${q}`;
+  // Wave 39 — discount + variety stores
+  if(r.includes('home bargains')||r.includes('homebargains')) return `https://www.homebargains.co.uk/search?q=${q}`;
+  if(r.includes('lidl'))         return `https://www.lidl.co.uk/search?query=${q}`;
+  if(r.includes('aldi'))         return `https://groceries.aldi.co.uk/en-GB/Search?q=${q}`;
+  if(r.includes('the works'))    return `https://www.theworks.co.uk/search?w=${q}`;
+  if(r.includes('wilko'))        return `https://www.wilko.com/en-uk/search?text=${q}`;
+  if(r.includes('poundland'))    return `https://www.poundland.co.uk/search/?q=${q}`;
+  // Grocery
+  if(r.includes('tesco'))        return `https://www.tesco.com/groceries/en-GB/search?query=${q}`;
+  if(r.includes('sainsbury'))    return `https://www.sainsburys.co.uk/gol-ui/SearchResults/${q}`;
+  if(r.includes('asda'))         return `https://groceries.asda.com/search/${q}`;
+  if(r.includes('morrisons'))    return `https://groceries.morrisons.com/search?entry=${q}`;
+  if(r.includes('waitrose'))     return `https://www.waitrose.com/ecom/shop/search?searchTerm=${q}`;
+  // DIY
+  if(r.includes('b&q')||r.includes('diy.com')||r.includes('b and q')) return `https://www.diy.com/search?term=${q}`;
+  if(r.includes('wickes'))       return `https://www.wickes.co.uk/search?text=${q}`;
+  if(r.includes('toolstation'))  return `https://www.toolstation.com/search?q=${q}`;
+  // Books / media
+  if(r.includes('waterstones'))  return `https://www.waterstones.com/books/search/term/${q}`;
+  if(r.includes('whsmith')||r.includes('wh smith')) return `https://www.whsmith.co.uk/search?w=${q}`;
+  if(r.includes('world of books'))return `https://www.worldofbooks.com/en-gb/search?q=${q}`;
+  if(r.includes('blackwell'))    return `https://blackwells.co.uk/bookshop/search?keywords=${q}`;
+  // Beauty
+  if(r.includes('superdrug'))    return `https://www.superdrug.com/search?text=${q}`;
+  if(r.includes('cult beauty'))  return `https://www.cultbeauty.co.uk/search?q=${q}`;
+  if(r.includes('lookfantastic'))return `https://www.lookfantastic.com/search.list?search=${q}`;
+  if(r.includes('space nk'))     return `https://www.spacenk.com/uk/search?q=${q}`;
+  if(r.includes('perfume shop'))return `https://www.theperfumeshop.com/search?q=${q}`;
+  if(r.includes('beauty bay'))   return `https://www.beautybay.com/search/?q=${q}`;
   return null;
 }
 
@@ -4097,6 +4794,13 @@ function bestBuyUrl(scen){
   if(!scen)return null;
   const link=scen.bestLink||'';
   const isGoogleAgg=/^https?:\/\/(?:www\.)?google\./i.test(link);
+  // Wave 41 — volatile-retailer overrides apply to Buy button too. Better
+  // to land the user on the retailer's search than a Perplexity-returned
+  // URL that may 404. They tap the canonical product one click later.
+  if(scen.bestRetailer && PREFER_SEARCH_URL.test(scen.bestRetailer)){
+    const search = retailerSearchUrl(scen.bestRetailer, scen.query||liveQuery||'');
+    if(search) return search;
+  }
   if(link&&!isGoogleAgg)return link;
   const search=retailerSearchUrl(scen.bestRetailer,scen.query||liveQuery||'');
   return search||link||null;
@@ -4141,13 +4845,31 @@ function viewOnAmazon(){
 // Click handler for individual retailer rows in the results list — uses the
 // same URL preference logic as buyNow so users land on the retailer site
 // instead of a Google search page.
+//
+// Wave 41 — for retailers with known URL volatility (Argos especially, also
+// AO and Currys whose URLs change as products restock/respec), ALWAYS
+// prefer the retailer search URL with the product name pre-filled. The
+// Perplexity-returned URL was leading to 404s often enough that Vincent
+// hit one in his first test session. Search URLs land the user on the
+// retailer's own results page where the canonical product is one tap
+// away — much more reliable.
+const PREFER_SEARCH_URL = /argos|ao\.com|currys|wickes|toolstation|home\s*bargains|lidl|aldi|the works|wilko|poundland/i;
 function openRetailerRow(retailerName, link){
-  haptic(10); // confirms the row tap registered
-  const isGoogleAgg=/^https?:\/\/(?:www\.)?google\./i.test(link||'');
-  if(link&&!isGoogleAgg){window.open(link,'_blank');return;}
-  const search=retailerSearchUrl(retailerName,liveQuery||'');
-  if(search)window.open(search,'_blank');
-  else if(link)window.open(link,'_blank');
+  haptic(10);
+  const name = String(retailerName || '');
+  // Volatile retailers — always go via the retailer's own search to
+  // sidestep stale Perplexity URLs.
+  if(PREFER_SEARCH_URL.test(name)){
+    const search = retailerSearchUrl(name, liveQuery || '');
+    if(search){ window.open(search, '_blank'); return; }
+  }
+  // Otherwise honour the original URL if it's a real retailer page.
+  const isGoogleAgg = /^https?:\/\/(?:www\.)?google\./i.test(link || '');
+  if(link && !isGoogleAgg){ window.open(link, '_blank'); return; }
+  // Fall back to retailer search for everything else.
+  const search = retailerSearchUrl(name, liveQuery || '');
+  if(search){ window.open(search, '_blank'); return; }
+  if(link){ window.open(link, '_blank'); }
 }
 
 function buyNow(){
@@ -4219,13 +4941,27 @@ function isVagueQuery(q){
 }
 
 function renderResults(sc){
-  // ── Record saving for the home centerpiece (Wave 28) ──
-  // Only counts when user provided a reference price (Validation mode)
-  // AND we found something cheaper. Session-flag guards against double
-  // counting on re-renders / refines.
-  if(sc && sc.spc && sc.spc !== 'green' && typeof sc.saving === 'number' && sc.saving > 0){
-    const queryKey = (sc.query || liveQuery || '') + '|' + (sc.bestPrice || '') + '|' + (sc.uPrice || '');
-    recordSaving(sc.saving, queryKey);
+  // ── Record saving for the home centerpiece (Wave 29) ──
+  //
+  // The counter ticks for BOTH input modes. Vincent's testing made it
+  // clear users want to see savings regardless of how they searched:
+  //
+  //   Validation mode (scan/paste with shelf price): saving = shelf - cheapest
+  //   Discovery  mode (search/snap, no shelf):       saving = avg   - cheapest
+  //
+  // Both reflect real money the user would have lost paying the typical
+  // UK price. Single-retailer results are skipped — there's no comparison.
+  if(sc && sc.retailerCount >= 2){
+    let saved = 0;
+    if(sc.scoreBasis === 'shelf' && sc.saving > 0){
+      saved = sc.saving;
+    } else if(sc.scoreBasis === 'average' && sc.savingVsAvg > 0){
+      saved = sc.savingVsAvg;
+    }
+    if(saved > 0){
+      const queryKey = (sc.query || liveQuery || '') + '|' + (sc.bestPrice || '') + '|' + (sc.uPrice || sc.avgPrice || '');
+      recordSaving(saved, queryKey);
+    }
   }
 
   // ── Hero product image (Wave 24) ──
@@ -4279,9 +5015,26 @@ function renderResults(sc){
   const track=document.getElementById('track-cta');
   if(track)track.style.display='';
 
+  // Wave 29 — Save Score is shown for BOTH Validation and Discovery modes.
+  // The basis differs (shelf-vs-cheapest or avg-vs-cheapest) but in both
+  // cases the user wants to know "did I save money?" Single-retailer
+  // results are the only path that shows pips muted (no comparison made).
   const hasUserPrice = !!sc.uPrice;
-  const spc=hasUserPrice ? sc.spc : 'green'; // discovery mode is always informational, not a verdict
+  const spc = sc.spc; // honour the score from buildScenV3 in all modes
   const overpayingRetailer=sc.rets&&sc.rets.filter(r=>!r.best)[0]?.n||'this retailer';
+  const showPips = sc.retailerCount >= 2; // hide pips when no real comparison
+
+  // Wave 33 — show the optional shelf-price refine pill when the user is
+  // on a Discovery-mode result with multiple retailers. Hide if they
+  // already supplied a shelf price (Validation) or if there's nothing to
+  // compare against.
+  const refinePill = document.getElementById('shelf-refine-pill');
+  const refineForm = document.getElementById('shelf-refine-form');
+  if(refinePill && refineForm){
+    const showRefine = !hasUserPrice && sc.retailerCount >= 2;
+    refinePill.hidden = !showRefine;
+    refineForm.hidden = true;
+  }
 
   // ── Verdict banner ──
   const vBar=document.getElementById('hero-verdict-bar');
@@ -4293,12 +5046,10 @@ function renderResults(sc){
   vLabel.className='hero-verdict-label '+spc;
   vTitle.className='hero-verdict-title '+spc;
 
-  if(hasUserPrice){
-    // VALIDATION mode — show Savvey Score
+  if(showPips){
     if(pipsWrap)pipsWrap.style.display='';
-    vLabel.textContent='Savvey Score';
+    vLabel.textContent='Save Score';
     vTitle.textContent=sc.vTitle;
-
     // Pip animation — fill up, no overshoot
     for(let i=1;i<=5;i++){
       const p=document.getElementById('vp-'+i);
@@ -4323,10 +5074,10 @@ function renderResults(sc){
       }
       setTimeout(()=>lightPip(1),200);
     })();
-  }else{
-    // DISCOVERY mode — hide pips, headline cheapest UK price
+  } else {
+    // Single retailer — no real comparison. Headline cheapest, mute pips.
     if(pipsWrap)pipsWrap.style.display='none';
-    vLabel.textContent='Best UK Price';
+    vLabel.textContent='Only one retailer found';
     vTitle.textContent='£'+sc.bestPrice+' at '+sc.bestRetailer;
   }
 
@@ -4352,18 +5103,56 @@ function renderResults(sc){
       where.innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
     }
   }else{
-    // DISCOVERY: cheapest + average context line, no "saving" number
-    sc.witLine='Found the lowest UK price right now.';
-    witEl.textContent=sc.witLine;
-    savNumEl.textContent='£'+sc.bestPrice;
-    savNumEl.className='hero-num green';
-    savLblEl.textContent='cheapest UK price';
-    const avg=sc.avgPrice;
-    const n=sc.retailerCount||(sc.rets?sc.rets.length:0);
-    if(avg&&n>=2){
-      where.innerHTML='Average across '+n+' UK retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
-    }else{
-      where.innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
+    // DISCOVERY mode (Wave 29) — Save Score from cheapest vs UK average.
+    // Wave 38 — when this came from a low-confidence Snap match, frame
+    // the comparison as "similar UK products" so the user knows we're
+    // working from a category match, not an exact-product hit.
+    const avg = sc.avgPrice;
+    const n   = sc.retailerCount || (sc.rets ? sc.rets.length : 0);
+    const savedVsAvg = Math.max(0, sc.savingVsAvg || 0);
+    const isSnapGeneric = sc.snapMatch && sc.snapMatch.isGenericMatch;
+    const avgBasis = isSnapGeneric ? 'similar UK products\' average' : 'UK average';
+    const avgBasisShort = isSnapGeneric ? 'similar UK products' : 'UK average';
+    sc.witLine = sc.vTitle && n >= 2
+      ? sc.vTitle.replace(/\.$/, '') + (savedVsAvg > 0 ? ` Save £${savedVsAvg} vs ${avgBasis}.` : '')
+      : 'Found the lowest UK price right now.';
+    witEl.textContent = sc.witLine;
+    if(n >= 2 && savedVsAvg > 0){
+      savNumEl.textContent = '£'+savedVsAvg;
+      savNumEl.className = 'hero-num '+spc;
+      savLblEl.textContent = isSnapGeneric ? 'below similar products' : 'below the UK average';
+      where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+avgBasisShort+' across '+n+' retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>.';
+    } else if(n >= 2){
+      savNumEl.textContent = '£'+sc.bestPrice;
+      savNumEl.className = 'hero-num green';
+      savLblEl.textContent = isSnapGeneric ? 'matches similar products' : 'matches the UK average';
+      where.innerHTML = (isSnapGeneric ? 'Similar UK products' : 'Average') + ' across '+n+' UK retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
+    } else {
+      // Single retailer
+      savNumEl.textContent = '£'+sc.bestPrice;
+      savNumEl.className = 'hero-num';
+      savLblEl.textContent = 'only result found';
+      where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong>. We couldn\'t surface another UK retailer for direct comparison.';
+    }
+  }
+
+  // Wave 38 — Generic-match banner. Sits above the verdict for visibility.
+  // Shown when the Snap result was a low/medium confidence match so the user
+  // knows we're comparing against the category not the exact item.
+  const heroCardEl = document.getElementById('hero-card');
+  if(heroCardEl){
+    const existingBanner = heroCardEl.querySelector('.snap-generic-banner');
+    if(existingBanner) existingBanner.remove();
+    if(sc.snapMatch && sc.snapMatch.isGenericMatch){
+      const banner = document.createElement('div');
+      banner.className = 'snap-generic-banner';
+      banner.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>'
+        + '<div class="snap-generic-text">'
+        +   '<div class="snap-generic-title">Generic match</div>'
+        +   '<div class="snap-generic-sub">We couldn\'t lock onto a specific model. Comparing <strong>'+(sc.snapMatch.cleanedProduct||sc.query)+'</strong> against similar UK products.</div>'
+        + '</div>';
+      // Insert at the top of hero-card, before the image wrap or verdict bar
+      heroCardEl.insertBefore(banner, heroCardEl.firstChild);
     }
   }
 
@@ -4447,9 +5236,16 @@ function renderResults(sc){
   modeEl.textContent = modeLabel + '  ·  prices ' + hh + ':' + mm;
 
   // ── Retailer list ──
+  // Wave 36 — each row gets a data-brand attribute so the CSS can paint
+  // a brand-coloured left rail (instant retailer recognition without
+  // needing actual logo SVGs which would be a trademark/asset problem).
   const list=document.getElementById('ret-list');
-  list.innerHTML=(sc.rets||[]).map(r=>`
-    <div class="ret-row${r.best?' best':''}" onclick="openRetailerRow('${(r.n||'').replace(/'/g,"\\'")}','${(r.link||'').replace(/'/g,"\\'")}')">
+  list.innerHTML=(sc.rets||[]).map(r=>{
+    const brandKey = retailerBrandKey(r.n||'');
+    const safeN = (r.n||'').replace(/'/g,"\\'");
+    const safeLink = (r.link||'').replace(/'/g,"\\'");
+    return `
+    <div class="ret-row${r.best?' best':''}" data-brand="${brandKey}" onclick="openRetailerRow('${safeN}','${safeLink}')">
       <div class="ret-name-wrap">
         <div class="ret-name">${r.n}</div>
         <div class="ret-sub">${r.sub||''}</div>
@@ -4459,8 +5255,8 @@ function renderResults(sc){
         <div class="ret-price ${r.best?'best':r.bad?'high':'mid'}">${r.p}</div>
         ${r.diff?`<div class="ret-diff${r.bad?' over':''}">${r.diff}</div>`:''}
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 
   // ── Conditional Amazon CTA ──
   // Show "View on Amazon UK" only when no Amazon row appears in the list
@@ -4478,7 +5274,7 @@ const DEMO_SCEN={
   score:1,spc:'red',vTitle:'Walk away.',query:'Sony WH-1000XM5',
   vSub:'That\'s a tank of petrol Currys just tried to add on.',
   saving:80,bestRetailer:'Amazon UK',bestLink:'https://www.amazon.co.uk/dp/B09XS7JWHH?tag=savvey-21',bestPrice:249,uPrice:329,
-  shareMsg:'Scanned this in Currys. They wanted £329. Amazon has it for £249. Savvey Score: 24/100 — savvey.app',
+  shareMsg:'Scanned this in Currys. They wanted £329. Amazon has it for £249. Save Score: 24/100 — savvey.app',
   rets:[
     {n:'Amazon UK',p:'£249',link:'https://amazon.co.uk',best:true,bad:false,sub:'In stock · free delivery',diff:''},
     {n:'Currys',p:'£279',link:'',best:false,bad:true,sub:'In store and online',diff:'+£30 more'},
@@ -4540,7 +5336,11 @@ function showScanError(title, msg, detail){
 // Barcode formats we care about for UK retail. Chosen to match QuaggaJS's
 // previous coverage: EAN-13/8 (most product packaging), UPC-A/E (US imports
 // + some UK), Code 128 (logistics labels you sometimes see in store).
-const SCAN_FORMATS_NATIVE = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39'];
+// Wave 37: added 'qr_code' so the scanner also recognises QR codes. Many
+// products carry a QR linking to the manufacturer's product page —
+// handleScannedCode routes that through the URL-paste flow, so a QR scan
+// gives an exact-product match instead of needing a barcode lookup.
+const SCAN_FORMATS_NATIVE = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'qr_code'];
 
 // Resolve the best-available decode engine for this browser. Native first,
 // ZXing second. Cached on `scannerEngine` so repeated start/stop cycles
@@ -4591,7 +5391,8 @@ async function loadScannerEngine(){
   const wantedFormats = [];
   if(mod.BarcodeFormat){
     const F = mod.BarcodeFormat;
-    [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39].forEach(f => {
+    // Wave 37: QR_CODE added so the scanner doubles as a QR reader.
+    [F.EAN_13, F.EAN_8, F.UPC_A, F.UPC_E, F.CODE_128, F.CODE_39, F.QR_CODE].forEach(f => {
       if(typeof f !== 'undefined') wantedFormats.push(f);
     });
   }
@@ -4804,7 +5605,38 @@ function handleScannedCode(code){
     scannerActive = false; // halt further detection
     // Success haptic — double pulse celebrates the lockon (premium feel)
     try{ if(navigator.vibrate) navigator.vibrate([20,40,20]); }catch(e){}
-    onBarcodeDetected(code);
+
+    // Wave 37 — QR codes can carry URLs (e.g. manufacturer product page,
+    // retailer landing). Detect that case and route through the URL/paste
+    // pipeline so the user gets an exact-product result. Plain numeric
+    // codes still go through the barcode lookup. Anything else is
+    // treated as a free-text product name.
+    const trimmed = String(code).trim();
+    const isUrl = /^https?:\/\//i.test(trimmed) || /^www\./i.test(trimmed);
+    const isNumeric = /^\d{8,14}$/.test(trimmed);
+    if(isUrl){
+      console.log('[Scanner] QR contained URL, routing via paste pipeline:', trimmed);
+      stopScanner();
+      const pasteInp = document.getElementById('paste-input');
+      if(pasteInp) pasteInp.value = trimmed;
+      detectRetailer(trimmed);
+      goTo('paste');
+      setTimeout(() => handlePaste(), 180);
+      return;
+    }
+    if(isNumeric){
+      onBarcodeDetected(trimmed);
+      return;
+    }
+    // Free-text QR (e.g. a product name) — treat it as a search query.
+    console.log('[Scanner] QR contained text, routing via search:', trimmed);
+    stopScanner();
+    globalReset();
+    liveQuery = trimmed;
+    inputMethod = 'scan';
+    bestPriceOnly = true;
+    goTo('searching');
+    showResults(fetchPrices(trimmed));
   }, 300);
 }
 
@@ -5006,22 +5838,62 @@ async function captureSnap(){
         reason);
       return;
     }
-    const productName = d.product;
+    // Wave 29 — sanitise the Vision response. Haiku occasionally returns
+    // a noisy string ("Breville Mostra 4 Slice Toaster | VVT929 |
+    // Silver/Gold | Re-furb"); cleanLookupName strips the metadata so
+    // the price search has something Perplexity can actually find.
+    const productName = cleanLookupName(d.product) || d.product;
     const conf        = d.confidence || 'unknown';
-    console.log('[Snapper] identified: "' + productName + '" (' + conf + ')');
+    const category    = d.category   || 'other';
+    const notes       = d.notes      || '';
+    console.log('[Snapper] identified: "' + productName + '" (raw="' + d.product + '", ' + conf + ', ' + category + ')');
+
+    // Bail if cleanup left us with nothing useful (very short, all symbols)
+    if(!productName || productName.length < 3){
+      snapBusy = false;
+      if(busy) busy.classList.remove('show');
+      if(captureBtn) captureBtn.disabled = false;
+      showSnapError('Couldn\'t identify the product',
+        'The image didn\'t give us a clear product name — try framing tighter on the packaging.',
+        'name_post_clean_empty');
+      return;
+    }
+
+    // Wave 38 — when Vision confidence is low/medium, frame the upcoming
+    // result as a "similar products" comparison so the user knows we
+    // couldn't lock onto a specific model. The Save Score is still
+    // computed against the search-result average, but the framing tells
+    // them honestly that we're comparing against the category, not the
+    // exact item.
+    const isGenericMatch = conf === 'low' || conf === 'medium' || conf === 'unknown';
+    const snapMeta = {
+      isGenericMatch,
+      confidence: conf,
+      category,
+      notes,
+      rawProduct: d.product,
+      cleanedProduct: productName
+    };
 
     // Update the busy state so user sees what we found, then route into search.
-    if(busyMsg) busyMsg.textContent = 'Found: ' + productName;
-    if(busySub) busySub.textContent = 'Searching UK retailers…';
+    const foundLabel = isGenericMatch ? 'Looking at: ' : 'Found: ';
+    if(busyMsg) busyMsg.textContent = foundLabel + productName;
+    if(busySub) busySub.textContent = isGenericMatch
+      ? 'Comparing against similar UK products…'
+      : 'Searching UK retailers…';
 
     // Tear down the stream cleanly before navigating off the screen.
     stopSnapper();
 
-    // Drive the same path a typed search takes: set liveQuery, mark inputMethod
-    // as 'snap' so renderResults shows a "📸 Snap" mode pill, and call into
-    // the existing search flow.
+    // Reset all per-search state before kicking off the new fetch — without
+    // this, the prior query's wit/refine-input lingers across the new render.
+    // CRITICAL: globalReset() clears window._snapMatchMeta, so we must
+    // re-assign it AFTER reset, before fetchPrices runs.
+    globalReset();
+    window._snapMatchMeta = snapMeta;
     liveQuery    = productName;
     inputMethod  = 'snap';
+    bestPriceOnly = true; // snap is Discovery mode — no shelf reference price
     goTo('searching');
     showResults(fetchPrices(productName));
   }catch(e){
@@ -5038,6 +5910,73 @@ function toggleTorch(){
     const tb=document.getElementById('torch-btn');if(tb)tb.classList.toggle('on',torchOn);
   }catch(e){}
 }
+// Wave 36 — map a retailer display name to its brand-key used by the CSS
+// data-brand selector so we can paint each row's coloured left rail.
+function retailerBrandKey(name){
+  const s = String(name||'').toLowerCase();
+  if(/amazon/.test(s))            return 'amazon';
+  if(/argos/.test(s))             return 'argos';
+  if(/john\s*lewis/.test(s))      return 'jl';
+  if(/currys/.test(s))            return 'currys';
+  if(/^\s*ao(\s|\.|$)/.test(s) || /\bao\.com\b/.test(s)) return 'ao';
+  if(/very/.test(s))              return 'very';
+  if(/richer/.test(s))            return 'richer';
+  if(/\bbox\b/.test(s))           return 'box';
+  if(/boots/.test(s))             return 'boots';
+  if(/superdrug/.test(s))         return 'superdrug';
+  if(/tesco/.test(s))             return 'tesco';
+  if(/sainsbury/.test(s))         return 'sainsburys';
+  if(/b\s*&\s*q|bandq|b and q/.test(s)) return 'bandq';
+  if(/wickes/.test(s))            return 'wickes';
+  if(/halfords/.test(s))          return 'halfords';
+  if(/ebay/.test(s))              return 'ebay';
+  if(/selfridges/.test(s))        return 'selfridges';
+  if(/harvey\s*nichols/.test(s))  return 'harveynichols';
+  return 'generic';
+}
+
+// Wave 29: clean a raw lookup name from a Vision API or barcode-DB call so
+// the downstream price search isn't fed Facebook Marketplace listings,
+// patent abstracts, refurb metadata, or pipe-separated SKU strings.
+//
+// Vincent's testing surfaced these mis-identifications:
+//   "Cartera push bike surplus to requirements £350 Ono - Facebook"
+//   "Analyte sensing biointerface - Patent US-10667729-B2 - PubChem"
+//   "Breville Mostra 4 Slice Toaster | VVT929 | Silver/Gold | Re-furb"
+//   "On Running Women's The Roger Spin - Sound Feet Shoes"
+//
+// All of those produced "Couldn't reach price data" — Perplexity rightly
+// failed because they aren't clean product queries. Cleaning them up
+// front gives the search engine a fighting chance.
+function cleanLookupName(raw){
+  if(!raw) return '';
+  let s = String(raw).trim();
+  // Strip dash-suffix junk: "- Facebook", "- PubChem", "- Patent", "- eBay UK",
+  // "- Reviews", "- Vinted", "- Wikipedia", "- Etsy", "- Amazon.co.uk", etc.
+  // Take the first segment before any of these source markers.
+  const sourceJunk = /\s*[-–—]\s*(facebook|patent|pubchem|wikipedia|reviews?|vinted|etsy|google|youtube|amazon[\.\s]|ebay|marketplace|reddit|gumtree|pinterest|search results?|wiki).*$/i;
+  s = s.replace(sourceJunk, '');
+  // Strip pipe-separated metadata after the first pipe (SKU codes, refurb tags)
+  s = s.replace(/\s*\|.*$/, '');
+  // Strip price-haggle markers ("£350 Ono", "£100 OBO", "ono")
+  s = s.replace(/£\s*\d+\.?\d*\s*(ono|obo|nearest)?/ig, '');
+  // Strip "Re-furb" / "Refurbished" / "Used" qualifiers
+  s = s.replace(/\b(re-?furb(ished)?|used|second hand|seconds|brand new in box|bnib|nwt)\b/ig, '');
+  // Strip parenthetical clutter and brackets
+  s = s.replace(/\(.*?\)/g, '').replace(/\[.*?\]/g, '');
+  // Collapse repeated whitespace
+  s = s.replace(/\s+/g, ' ').trim();
+  // Cap length: 80 chars OR first 8 words
+  const words = s.split(/\s+/);
+  if(words.length > 8) s = words.slice(0, 8).join(' ');
+  if(s.length > 80) s = s.slice(0, 80).replace(/\s+\S*$/, '');
+  s = s.trim();
+  // Reject plainly-bad results (too short, all digits, all symbols)
+  if(s.length < 3) return '';
+  if(/^[\d\s.,£-]+$/.test(s)) return '';
+  return s;
+}
+
 async function onBarcodeDetected(code){
   // Halt the engine — handleScannedCode already set scannerActive=false but
   // we belt-and-brace it here in case onBarcodeDetected is called directly
@@ -5079,6 +6018,14 @@ async function onBarcodeDetected(code){
       if(d&&d.product)name=d.product;
     }catch(e){}
   }
+  // Wave 29 — sanitise the resolved name. Open Food Facts and UPCitemdb
+  // sometimes return Marketplace/Patent/PubChem-flavoured strings that
+  // tank the downstream price search. cleanLookupName strips the noise.
+  if(name){
+    const cleaned = cleanLookupName(name);
+    if(cleaned) name = cleaned;
+    else name = null;
+  }
   if(!name){
     // All three sources failed — show error state, don't search with raw barcode
     if(nameEl)nameEl.textContent='Product not recognised';
@@ -5098,15 +6045,21 @@ async function onBarcodeDetected(code){
 }
 function useScannedProduct(){
   if(!scannedProductName)return;
+  // Wave 33 — remove the shelf-price friction. Vincent's testing made it
+  // clear: typing a number on a numeric pad while standing in a shop
+  // wrecks the experience. Scan now goes STRAIGHT to results in Discovery
+  // mode (Save Score against UK retailer average). If the user wants a
+  // sharper Validation score, the results screen surfaces an "Add shelf
+  // price" affordance.
+  const cleaned = cleanLookupName(scannedProductName) || scannedProductName;
   globalReset();
-  liveQuery=scannedProductName;inputMethod='scan';
+  liveQuery = cleaned;
+  inputMethod = 'scan';
   stopScanner();
-  document.getElementById('price-header-product').textContent=scannedProductName;
-  document.getElementById('price-num').value='';
-  document.getElementById('btn-score').disabled=true;
-  userPrice=null;bestPriceOnly=false;
-  goTo('price');
-  fetchPrices(scannedProductName);
+  userPrice = null;
+  bestPriceOnly = true; // Discovery mode by default — score from UK average
+  goTo('searching');
+  showResults(fetchPrices(cleaned));
 }
 
 // ── URL Paste — Direct Scrape Mode ──
@@ -5507,7 +6460,7 @@ function drawCard(sc){
   ctx.fillStyle=verdictCol;
   ctx.font='700 11px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('SAVVEY SCORE',W/2,124);
+  ctx.fillText('SAVE SCORE',W/2,124);
   ctx.font='900 28px Arial,sans-serif';
   ctx.fillText(sc.vTitle||'Result',W/2,160);
 
@@ -5601,6 +6554,241 @@ function drawCard(sc){
   ctx.fillStyle='#b0b5be';ctx.font='500 12px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('Free · No account needed · UK retailers',W/2,H-36);
+}
+
+// ─────────────────────────────────────────────────────────────
+// Wave 30 — Shareable savings counter (KEY MARKETING HOOK)
+//
+// Tap on the home £ counter → opens share overlay with a dedicated card
+// celebrating the running total. This is Vincent's primary virality
+// lever: users post their savings, friends see it, friends install.
+//
+// The card is a 640×820 PNG drawn on canvas (Web Share API can attach
+// the image; falls back to text+URL). It uses the same brand palette
+// as the result-card share so they read as one product.
+// ─────────────────────────────────────────────────────────────
+function savingsCongratLine(total, count){
+  // Honest, branded, never cringe. Picks copy by milestone.
+  if(total < 0.5){
+    return 'Still calibrating — every check tightens the read on what\'s a fair UK price.';
+  }
+  if(total < 10){
+    return 'First few quid tucked in. The rest comes from never paying full sticker again.';
+  }
+  if(total < 50){
+    return 'A round of pints, on Savvey. Keep checking — these add up.';
+  }
+  if(total < 150){
+    return 'A weekly food shop\'s worth of difference, just by checking before you tap buy.';
+  }
+  if(total < 500){
+    return 'A long weekend away — paid for by stuff you would\'ve overpaid on anyway.';
+  }
+  if(total < 1500){
+    return 'A laptop\'s worth of savvy. You\'re running this app well.';
+  }
+  return 'Frankly, you\'re writing the playbook now. UK retail RRP is a suggestion, not a verdict.';
+}
+function fmtSavingsTotal(v){
+  return v < 100 ? v.toFixed(2) : Math.round(v).toLocaleString('en-GB');
+}
+function shareSavingsCounter(){
+  haptic(12);
+  const total = getTotalSavings();
+  const count = getSavingsCount();
+  // Open the share overlay with a savings-mode canvas
+  const overlay = document.getElementById('share-overlay');
+  if(!overlay) return;
+  // Reset overlay markup to share-card layout if it was repurposed by saved-items
+  overlay.innerHTML = '<div class="share-wrap"><canvas id="share-canvas" width="640" height="820" aria-label="Savvey savings share card"></canvas></div>' +
+    '<div class="share-actions">' +
+      '<button class="share-shr" onclick="shareSavingsCard()">Share my savings →</button>' +
+      '<button class="share-channel sc-whatsapp" onclick="shareSavingsToWhatsApp()"><span class="sc-emoji">💬</span> WhatsApp</button>' +
+      '<button class="share-channel sc-twitter" onclick="shareSavingsToTwitter()"><span class="sc-emoji">𝕏</span> Twitter</button>' +
+      '<button class="share-channel sc-copy" onclick="copySavingsShareText()"><span class="sc-emoji">🔗</span> Copy</button>' +
+      '<button class="share-save" onclick="saveSavingsCard()">📥 Save image</button>' +
+      '<button class="share-cancel" onclick="document.getElementById(\'share-overlay\').classList.remove(\'open\')">Cancel</button>' +
+    '</div>';
+  drawSavingsCard(total, count);
+  overlay.setAttribute('aria-hidden','false');
+  overlay.classList.add('open');
+}
+function drawSavingsCard(total, count){
+  const canvas = document.getElementById('share-canvas');
+  if(!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const W=640, H=820;
+  canvas.width=W; canvas.height=H;
+  const brand='#2a6b22', brandDark='#1d5019', amber='#f5b742';
+
+  // Full-bleed deep-green background with subtle decorative glow top-right
+  const grad = ctx.createLinearGradient(0,0,W,H);
+  grad.addColorStop(0,'#2a6b22');
+  grad.addColorStop(1,'#1d5019');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  // Decorative amber halo
+  const halo=ctx.createRadialGradient(W*0.85,H*0.15,40,W*0.85,H*0.15,360);
+  halo.addColorStop(0,'rgba(245,183,66,0.32)');
+  halo.addColorStop(1,'rgba(245,183,66,0)');
+  ctx.fillStyle=halo; ctx.fillRect(0,0,W,H);
+
+  // Brand wordmark
+  ctx.textAlign='left'; ctx.textBaseline='alphabetic';
+  ctx.fillStyle='#ffffff';
+  ctx.font='900 36px Arial,sans-serif';
+  ctx.fillText('SAVVE', 50, 90);
+  // Amber Y
+  const sw = ctx.measureText('SAVVE').width;
+  ctx.fillStyle=amber;
+  ctx.fillText('Y', 50+sw, 90);
+  // Tagline
+  ctx.fillStyle='rgba(255,255,255,0.78)';
+  ctx.font='500 17px Arial,sans-serif';
+  ctx.fillText('shop smart.', 50, 116);
+
+  // Eyebrow label centred
+  ctx.textAlign='center';
+  ctx.fillStyle='rgba(255,255,255,0.65)';
+  ctx.font='800 14px Arial,sans-serif';
+  ctx.fillText('SAVVEY SAVINGS FOUND', W/2, 230);
+
+  // Big amount — £ + total
+  const totalText = fmtSavingsTotal(total < 0.5 ? 0 : total);
+  ctx.fillStyle='#ffffff';
+  // Currency
+  ctx.textAlign='right';
+  ctx.font='800 64px Arial,sans-serif';
+  // Compute combined width to centre as a unit
+  ctx.font='900 130px Arial,sans-serif';
+  const numWidth = ctx.measureText(totalText).width;
+  ctx.font='800 64px Arial,sans-serif';
+  const curWidth = ctx.measureText('£').width;
+  const totalWidth = curWidth + 4 + numWidth;
+  const startX = (W - totalWidth)/2;
+  // Draw £
+  ctx.textAlign='left';
+  ctx.font='800 64px Arial,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.92)';
+  ctx.fillText('£', startX, 350);
+  // Draw number
+  ctx.font='900 130px Arial,sans-serif';
+  ctx.fillStyle='#ffffff';
+  ctx.fillText(totalText, startX + curWidth + 4, 360);
+
+  // Sub-line — count of checks
+  ctx.textAlign='center';
+  ctx.font='600 18px Arial,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.78)';
+  const subLine = count === 0
+    ? 'spotted across your first checks'
+    : count === 1
+    ? 'spotted across 1 check'
+    : `spotted across ${count.toLocaleString('en-GB')} checks`;
+  ctx.fillText(subLine, W/2, 405);
+
+  // Congratulatory line — wrapped over up to 3 lines
+  const congrat = savingsCongratLine(total, count);
+  ctx.fillStyle='#ffffff';
+  ctx.font='600 22px Georgia,serif';
+  const wrapped = wrapTextLines(ctx, '"'+congrat+'"', W-110);
+  let yLine = 490;
+  wrapped.slice(0,4).forEach(line => {
+    ctx.fillText(line, W/2, yLine);
+    yLine += 32;
+  });
+
+  // CTA panel near the bottom
+  const panelTop = 660, panelH = 96;
+  ctx.fillStyle='rgba(255,255,255,0.12)';
+  roundRect(ctx, 50, panelTop, W-100, panelH, 18);
+  ctx.fill();
+  ctx.fillStyle='#ffffff';
+  ctx.font='800 18px Arial,sans-serif';
+  ctx.fillText('Try it free — savvey.app', W/2, panelTop+38);
+  ctx.fillStyle='rgba(255,255,255,0.7)';
+  ctx.font='500 14px Arial,sans-serif';
+  ctx.fillText('Scan, snap or paste · UK retailer prices in seconds', W/2, panelTop+66);
+}
+function wrapTextLines(ctx, text, maxWidth){
+  const words = String(text||'').split(/\s+/);
+  const lines = [];
+  let cur = '';
+  words.forEach(w => {
+    const tryLine = cur ? cur + ' ' + w : w;
+    if(ctx.measureText(tryLine).width > maxWidth && cur){
+      lines.push(cur);
+      cur = w;
+    } else {
+      cur = tryLine;
+    }
+  });
+  if(cur) lines.push(cur);
+  return lines;
+}
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
+function savingsShareText(){
+  const total = getTotalSavings();
+  const count = getSavingsCount();
+  const url = `${location.origin}`;
+  const totalLabel = total < 0.5 ? '£0' : '£'+fmtSavingsTotal(total);
+  if(total < 0.5){
+    return `Just started using Savvey to check UK retailer prices before I buy. Try it: ${url}`;
+  }
+  return `Savvey has spotted ${totalLabel} of savings across ${count} ${count===1?'check':'checks'} for me. Try it free: ${url}`;
+}
+async function shareSavingsCard(){
+  const canvas = document.getElementById('share-canvas');
+  if(!canvas) return;
+  canvas.toBlob(async blob => {
+    const file = new File([blob],'savvey-savings.png',{type:'image/png'});
+    const text = savingsShareText();
+    try{
+      if(navigator.canShare && navigator.canShare({files:[file]})){
+        await navigator.share({files:[file], title:'My Savvey savings', text});
+        return;
+      }
+      if(navigator.share){
+        await navigator.share({title:'My Savvey savings', text});
+        return;
+      }
+    }catch(e){/* cancelled / unsupported */}
+    saveSavingsCard();
+  }, 'image/png');
+}
+function saveSavingsCard(){
+  const a=document.createElement('a');
+  a.download='savvey-savings.png';
+  a.href=document.getElementById('share-canvas').toDataURL('image/png');
+  a.click();
+}
+function shareSavingsToWhatsApp(){
+  const url=`https://wa.me/?text=${encodeURIComponent(savingsShareText())}`;
+  window.open(url,'_blank');
+}
+function shareSavingsToTwitter(){
+  const url=`https://twitter.com/intent/tweet?text=${encodeURIComponent(savingsShareText())}`;
+  window.open(url,'_blank');
+}
+async function copySavingsShareText(){
+  const text = savingsShareText();
+  try{
+    await navigator.clipboard.writeText(text);
+    showToast('Copied — paste anywhere');
+  }catch(e){
+    const ta=document.createElement('textarea');
+    ta.value=text; document.body.appendChild(ta); ta.select();
+    try{document.execCommand('copy'); showToast('Copied — paste anywhere');}
+    catch(_){showToast('Couldn\'t copy — try Save image');}
+    document.body.removeChild(ta);
+  }
 }
 
 // Picks a category emoji from the product name. Generic shopping bag if
@@ -5699,11 +6887,11 @@ async function shareCard(){
     const text=shareText();
     try{
       if(navigator.canShare&&navigator.canShare({files:[file]})){
-        await navigator.share({files:[file],title:'My Savvey Score',text});
+        await navigator.share({files:[file],title:'My Save Score',text});
         return;
       }
       if(navigator.share){
-        await navigator.share({title:'My Savvey Score',text});
+        await navigator.share({title:'My Save Score',text});
         return;
       }
     }catch(e){/* user cancelled or unsupported — fall through to save */}

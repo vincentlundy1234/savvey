@@ -62,6 +62,15 @@ export const UK_RETAILERS = [
   { host: 'morrisons.com',              name: 'Morrisons',     srcTerms: ['morrisons'] },
   { host: 'groceries.morrisons.com',    name: 'Morrisons',     srcTerms: ['morrisons'] },
   { host: 'waitrose.com',               name: 'Waitrose',      srcTerms: ['waitrose'] },
+  // Wave 39 — discount + variety stores Vincent specifically called out.
+  // Home Bargains rotates stock fast and stocks niche items often missing
+  // from major retailers. Lidl Plus + middle aisle = real price wins.
+  { host: 'homebargains.co.uk',         name: 'Home Bargains', srcTerms: ['home bargains', 'homebargains'] },
+  { host: 'lidl.co.uk',                 name: 'Lidl',          srcTerms: ['lidl'] },
+  { host: 'aldi.co.uk',                 name: 'Aldi',          srcTerms: ['aldi'] },
+  { host: 'theworks.co.uk',             name: 'The Works',     srcTerms: ['the works', 'theworks'] },
+  { host: 'wilko.com',                  name: 'Wilko',         srcTerms: ['wilko'] },
+  { host: 'poundland.co.uk',            name: 'Poundland',     srcTerms: ['poundland'] },
 ];
 
 // ─────────────────────────────────────────────────────────────

@@ -283,7 +283,13 @@ const PRODUCT_URL_PATTERNS = {
   'very.co.uk':        /\/[a-z0-9-]+\.prd/i,                // /sony-headphones.prd
   'richersounds.com':  /\/product\/[a-z0-9-]+/i,            // /product/sony-wh-1000xm5
   'box.co.uk':         /\/details\/[a-z0-9-]+\/\d+/i,       // /details/sony-headphones/123456
-  'halfords.com':      /\/[a-z0-9-]+-\d{6,}\.html/i,        // /...-456789.html
+  // Wave 39 — Halfords URLs come in three flavours:
+  //   /search/...-123456.html   (Search-result canonicalised)
+  //   /cycling/.../bike-name-123456.html   (Category-pathed)
+  //   /motoring/.../battery-name-123456    (Sometimes no .html)
+  // Plus the new B2B-shop URLs we don't want. Loosened to require a
+  // numeric segment ≥5 digits anywhere after the slug.
+  'halfords.com':      /\/[a-z0-9-]+-\d{5,}(\.html)?(?:[/?]|$)/i,
   'screwfix.com':      /\/p\/[a-z0-9-]+\/\d+/i,             // /p/product-name/12345
   'boots.com':         /\/[a-z0-9-]+-\d{6,}/i,              // /xxx-100123
   'costco.co.uk':      /\.product\.\d+\.html/i,             // .product.123456.html
@@ -317,6 +323,16 @@ const PRODUCT_URL_PATTERNS = {
   // ebay.co.uk / ebay.com — already handled separately by the /itm/ check
   'ebay.co.uk':        /\/itm\/\d+/i,
   'ebay.com':          /\/itm\/\d+/i,
+  // Wave 39 — discount + variety stores. Patterns are intentionally loose
+  // because these retailers' URL conventions vary and they don't always
+  // expose a stable product ID. Better to admit a soft category page than
+  // drop legitimate listings.
+  'homebargains.co.uk':/\/products\/[a-z0-9-]+|\/[a-z0-9-]+\/\d+/i,
+  'lidl.co.uk':        /\/p\/[a-z0-9-]+|\/online-shopping\/[a-z0-9-]+/i,
+  'aldi.co.uk':        /\/product\/[a-z0-9-]+|\/p\/[a-z0-9-]+/i,
+  'theworks.co.uk':    /\/p\/[a-z0-9-]+|\/products\/[a-z0-9-]+/i,
+  'wilko.com':         /\/[a-z0-9-]+-product\/[a-z0-9-]+/i,
+  'poundland.co.uk':   /\/product\/[a-z0-9-]+|\/p\/[a-z0-9-]+/i,
 };
 
 // Returns true if the URL is plausibly a product page for the given
