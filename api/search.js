@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.22';
+const VERSION = 'search.js v6.23';
 
 // Wave 86 — CRITICAL FIX. Category / listing / search-results pages were
 // being admitted as if they were specific product pages. Vincent's case:
@@ -72,13 +72,16 @@ const VERSION = 'search.js v6.22';
 // and found the page actually has kettles ranging £8-£24+. Breaks the
 // core trust promise. Rejecting URLs that pattern-match as category /
 // listing / browse / search pages — only product-page URLs admitted.
+// Wave 86 patterns + Wave 87 additions from live-test misses (B&Q .cat?,
+// AO /l/, JL /_/N-, Selfridges /cat/, Wickes /featured/, faceted-filter
+// query strings).
 const CATEGORY_URL_PATTERNS = [
   /,sc\.html?(?:$|\?)/i,            // Asda George category (Vincent's case)
   /,default,sc\.html?/i,            // Asda George default category
   /\/category\//i,                   // generic /category/
   /\/categories\//i,
   /\/shop\/?(?:[^\/]+\/?)?$/i,      // /shop or /shop/foo (no product depth)
-  /\/browse\//i,                     // /browse/...
+  /\/browse\//i,                     // /browse/... (JL legacy too)
   /\/c\/[^\/]+\/?$/i,                // ending with /c/foo (category)
   /\/sitesearch\?/i,                 // Boots search
   /\/search[\/\?]/i,                 // generic /search
@@ -89,6 +92,16 @@ const CATEGORY_URL_PATTERNS = [
   /\/listings?\//i,                  // /listing or /listings
   /\/cat-?\d/i,                      // /cat-123 / cat123 indexed cats
   /\?(?:q|query|search|searchterm|search-term|searchString|keyword|keywords|w|term)=/i, // search query URLs
+  // Wave 87 — extra patterns from live test misses
+  /\.cat(?:\?|$)/i,                  // B&Q faceted category (e.g. air-fryers.cat?Litre+capacity=8)
+  /\/l\/[a-z][a-z0-9_-]*-\d+\//i,   // AO listing pattern (/l/electric_toothbrushes-4028/...)
+  /\/_\/N-[a-z0-9]+/i,               // John Lewis catalog navigation (/_/N-1z13z3z...)
+  /\/cat\/[a-z]/i,                   // Selfridges and others /cat/ subpath
+  /\/featured\//i,                   // Wickes /featured/category-name
+  /\?(?:[A-Z][a-z]+(?:\+[A-Z][a-z]+)*)=/, // Faceted filter URLs (?Litre+capacity=8)
+  /\/products?\/?$/i,                // bare /product or /products with no further path = category
+  /\/range\//i,                      // /range/ (some retailers use this for categories)
+  /\/department\//i,
 ];
 
 function isLikelyCategoryPage(url){
@@ -1183,10 +1196,20 @@ export default async function handler(req, res) {
   // was leaking through with "from £24" extracted as if it were a
   // product price, when the actual page has kettles £8-£24+. The
   // listing-page price is meaningless as a "best price" claim.
+  // Wave 87 — also drop items whose TITLE smells like a category range
+  // ("from £X", "prices from", "ranges from £X to £Y"). The snippet
+  // backstop catches category pages even if the URL slipped past the
+  // pattern filter.
+  const RANGE_TITLE_RE = /\b(from\s+£\d|prices\s+from|ranges?\s+from|starting\s+at\s+£|\bfrom\s*£\s*\d)/i;
   const productOnly = safe.filter(it => {
     const link = String((it && it.link) || '');
     if (isLikelyCategoryPage(link)) {
       console.log(`[${VERSION}] dropping category page: ${link.slice(0, 80)}`);
+      return false;
+    }
+    const title = String((it && it.title) || '');
+    if (RANGE_TITLE_RE.test(title)) {
+      console.log(`[${VERSION}] dropping category-range title: "${title.slice(0, 80)}"`);
       return false;
     }
     return true;
