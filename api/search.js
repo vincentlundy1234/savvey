@@ -63,8 +63,112 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.17';
+const VERSION = 'search.js v6.18';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
+
+// Wave 82 — Haiku grading constants. Used by gradeResultsViaHaiku to
+// extend the Wave 79 broad-fix to Tier 2 (Serper) results, which
+// previously had NO semantic title-vs-query matching. Live testing
+// surfaced eBay £10.99 Olaplex (counterfeit), Selfridges £75 memory
+// foam mattress (wrong-product), Stanley flask Very £329 (mis-match)
+// all leaking through. Same Haiku model + same grading rules as
+// ai-search.js so the broad-fix is uniform across both tiers.
+const HAIKU_MODEL_FOR_GRADING = 'claude-haiku-4-5-20251001';
+const HAIKU_GRADING_TIMEOUT_MS = 4500;
+const ANTHROPIC_ENDPOINT = 'https://api.anthropic.com/v1/messages';
+
+// Wave 82 — eBay demotion. eBay UK is a marketplace not a retailer;
+// many listings are used/counterfeit/wrong-variant. We DEMOTE eBay
+// from results unless the user's query explicitly indicates they want
+// used/marketplace listings. Demote = drop the eBay row entirely from
+// Tier 2 results (Tier 1 ai-search was already handling this via the
+// refurb regex but Tier 2 wasn't). When eBay is the ONLY result we
+// keep it (better than nothing) and rely on the existing onlyEbay
+// coverage flag to warn the user.
+const USED_INTENT_RE = /\b(used|refurb|refurbished|second[-\s]?hand|pre[-\s]?owned|reconditioned|open[-\s]?box|renewed|vintage|broken)\b/i;
+function demoteEbayIfNotUsed(items, query){
+  const wantsUsed = USED_INTENT_RE.test(query || '');
+  if (wantsUsed) return items;
+  const isEbayItem = (it) => {
+    const src = String(it.source || '').toLowerCase();
+    const link = String(it.link || '').toLowerCase();
+    return src.includes('ebay') || link.includes('ebay.co.uk') || link.includes('ebay.com');
+  };
+  const ebayItems = items.filter(isEbayItem);
+  const otherItems = items.filter(i => !isEbayItem(i));
+  // Keep eBay only when it's the only signal we have (better than empty).
+  if (otherItems.length === 0) return items;
+  if (ebayItems.length > 0) {
+    console.log(`[${VERSION}] demoting ${ebayItems.length} eBay listing(s); query had no used-intent keywords`);
+  }
+  return otherItems;
+}
+
+// Wave 82 — Haiku grading on Tier 2 results. Fires ONE Haiku call with
+// all combined Serper items + the user's query, asks Haiku to grade
+// each as exact / similar / different. Drops "different" items. Same
+// rules as ai-search.js Wave 79. Falls back to passing items through
+// unchanged if Haiku fails (graceful degrade — never breaks the app).
+async function gradeResultsViaHaiku(items, query, anthropicKey){
+  if (!anthropicKey) return items;
+  if (!items || items.length === 0) return items;
+  if (!query) return items;
+  const numbered = items.map((it, i) => ({
+    index: i,
+    title: (it.title || '').slice(0, 200),
+    source: it.source || '',
+    price: it.price || null,
+  }));
+  const userPrompt = `You are a product match grader for a UK price-comparison app. The user searched for: "${query}"
+
+For each listing below, grade how well its TITLE matches the user's query semantically:
+- "exact": title is unambiguously the same product the user asked for. Same brand, same model line, same tier.
+- "similar": title is in the SAME category and roughly the same tier but not an identical product match. Same use case, comparable pricing band. For generic category queries (e.g. "kettle", "cordless drill", "yoga mat") this is normal — most listings will be "similar".
+- "different": title is clearly a different product, accessory, replacement part, fake/clone listing, wrong generation, wrong tier, or unrelated. Examples: query "Nintendo Switch" → "Nintendo Switch 2 Console" = different. Query "Stanley flask" → "Stanley Toolbox" = different. Query "yoga mat" → "yoga mat strap" or "yoga mat carrier" = different. Query "Atomic Habits book" → eBay listing for unrelated item = different.
+
+Be ASSERTIVE on "different" — wrong products surfacing as cheapest is far worse than dropping borderline-similar listings. When in doubt between similar and different, choose different.
+
+Return ONLY a JSON array, one entry per listing: {"index": N, "query_match": "exact" | "similar" | "different"}
+
+Listings:
+${JSON.stringify(numbered, null, 2)}
+
+Output ONLY the JSON array.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), HAIKU_GRADING_TIMEOUT_MS);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: HAIKU_MODEL_FOR_GRADING, max_tokens: 800, messages: [{ role: 'user', content: userPrompt }] }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[${VERSION}] Haiku grading failed: ${r.status}`);
+      return items;
+    }
+    const data = await r.json();
+    const text = ((data.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) return items;
+    const grades = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(grades)) return items;
+    const graded = items.map((it, i) => {
+      const g = grades.find(x => x && x.index === i);
+      return { ...it, query_match: (g && g.query_match) || 'similar' };
+    });
+    const beforeCount = graded.length;
+    const filtered = graded.filter(it => it.query_match !== 'different');
+    const dropped = beforeCount - filtered.length;
+    if (dropped > 0) console.log(`[${VERSION}] Haiku grading dropped ${dropped} "different" listing(s)`);
+    return filtered;
+  } catch (e) {
+    console.warn(`[${VERSION}] Haiku grading error:`, e.message);
+    return items;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // ─────────────────────────────────────────────────────────────
 // HYBRID PRICE FILTER
@@ -986,8 +1090,16 @@ export default async function handler(req, res) {
   const deduped    = dedup(trusted);
   // Price-anomaly floor runs LAST — operates on the per-retailer cheapest set
   // so it's comparing apples to apples (one Currys vs one Argos vs one eBay).
-  const results    = priceAnomalyFloor(deduped);
-  const priced     = trusted; // backwards-compat alias for debug envelope
+  const anomaly    = priceAnomalyFloor(deduped);
+  // Wave 82 — eBay demotion + Haiku grading layer.
+  // demoteEbayIfNotUsed: drop eBay listings unless query asked for used.
+  // gradeResultsViaHaiku: ONE Haiku call grading each remaining item's
+  // title-vs-query match (exact / similar / different) and dropping
+  // "different" items. Both gracefully no-op if dependencies missing.
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const ebayDemoted  = demoteEbayIfNotUsed(anomaly, q);
+  const results      = await gradeResultsViaHaiku(ebayDemoted, q, ANTHROPIC_KEY);
+  const priced       = trusted; // backwards-compat alias for debug envelope
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
 
@@ -1003,11 +1115,12 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     shopping: results.map(r => ({
-      source:   r.source,
-      price:    `£${r.price.toFixed(2)}`,
-      link:     hardenEbayUrl(r.link),
-      title:    r.title,
-      delivery: r.delivery,
+      source:      r.source,
+      price:       `£${r.price.toFixed(2)}`,
+      link:        hardenEbayUrl(r.link),
+      title:       r.title,
+      delivery:    r.delivery,
+      query_match: r.query_match || 'similar',  // Wave 82 — surface Haiku grade for frontend UX decisions
     })),
     organic: [],
     _meta: {
