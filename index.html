@@ -2054,6 +2054,11 @@
     .ret-row[data-brand="ebay"]::before       { background:#E53238; }
     .ret-row[data-brand="selfridges"]::before { background:#FFEC00; }
     .ret-row[data-brand="harveynichols"]::before{ background:#000; }
+    /* Wave 77 — Lakeland + Dunelm + Homebase + Screwfix brand rails */
+    .ret-row[data-brand="lakeland"]::before   { background:#3F1E5A; }
+    .ret-row[data-brand="dunelm"]::before     { background:#0066B2; }
+    .ret-row[data-brand="homebase"]::before   { background:#00833E; }
+    .ret-row[data-brand="screwfix"]::before   { background:#0072CE; }
     .ret-row.best{background:var(--green-lt);border-color:var(--green-bd);box-shadow:var(--depth-2);}
     .ret-row.best::before{background:var(--green);}
     .ret-row:active{transform:scale(0.98);border-color:var(--green-bd);box-shadow:var(--depth-2);}
@@ -7935,6 +7940,11 @@ function retailerBrandKey(name){
   if(/ebay/.test(s))              return 'ebay';
   if(/selfridges/.test(s))        return 'selfridges';
   if(/harvey\s*nichols/.test(s))  return 'harveynichols';
+  // Wave 77 — Lakeland + Dunelm + Homebase brand rails
+  if(/lakeland/.test(s))          return 'lakeland';
+  if(/dunelm/.test(s))            return 'dunelm';
+  if(/homebase/.test(s))          return 'homebase';
+  if(/screwfix/.test(s))          return 'screwfix';
   return 'generic';
 }
 

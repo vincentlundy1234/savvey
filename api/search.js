@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.16';
+const VERSION = 'search.js v6.17';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 // ─────────────────────────────────────────────────────────────
@@ -278,6 +278,10 @@ const TRUSTED_SOURCE_TERMS = [
   'selfridges', 'mcgrocer', 'harvey nichols', 'fortnum',
   'marks & spencer', 'm&s', "sainsbury's", 'sainsburys', 'tesco',
   'asda', 'lidl', 'aldi', 'wickes', 'b&q', 'homebase',
+  // Wave 77 — Vincent flagged Lakeland and Dunelm should be in the mix
+  // for kitchen + home queries (Lakeland is huge for kitchen gadgets,
+  // Dunelm for vacuums / home appliances).
+  'lakeland', 'dunelm',
 ];
 
 const UK_TLDS = ['.co.uk', '.uk'];
@@ -287,6 +291,13 @@ const TRUSTED_DOMAINS = [
   'ebay.co.uk', 'halfords.com', 'screwfix.com', 'boots.com', 'costco.co.uk',
   'ebay.com', 'selfridges.com', 'mcgrocer.com', 'harveynichols.com',
   'marksandspencer.com', 'next.com', 'fortnumandmason.com',
+  // Wave 77 — DIY + home + kitchen retailers
+  'diy.com',         // B&Q
+  'wickes.co.uk',
+  'screwfix.com',
+  'lakeland.co.uk',
+  'dunelm.com',
+  'homebase.co.uk',
 ];
 
 function extractHostname(url) {
@@ -568,6 +579,8 @@ const UK_SITE_QUERY = [
   'site:richersounds.com', 'site:box.co.uk', 'site:ebay.co.uk',
   'site:halfords.com', 'site:screwfix.com', 'site:boots.com',
   'site:costco.co.uk', 'site:selfridges.com', 'site:harveynichols.com',
+  // Wave 77 — DIY + home + kitchen
+  'site:diy.com', 'site:wickes.co.uk', 'site:lakeland.co.uk', 'site:dunelm.com',
 ].join(' OR ');
 
 async function fetchSerperUKSites(query, apiKey) {
@@ -616,6 +629,15 @@ const PER_RETAILER_SITES = [
   { source: 'Boots',        site: 'boots.com' },
   { source: 'Selfridges',   site: 'selfridges.com' },
   { source: 'Richer Sounds',site: 'richersounds.com' },
+  // Wave 77 — Vincent flagged: B&Q, Lakeland, Dunelm should be included
+  // for home / kitchen / DIY queries. Especially Dunelm and Lakeland —
+  // they carry vacuums, kitchen appliances, and home goods that the
+  // electronics-heavy retailer list above misses entirely.
+  { source: 'B&Q',          site: 'diy.com' },
+  { source: 'Wickes',       site: 'wickes.co.uk' },
+  { source: 'Screwfix',     site: 'screwfix.com' },
+  { source: 'Lakeland',     site: 'lakeland.co.uk' },
+  { source: 'Dunelm',       site: 'dunelm.com' },
 ];
 
 async function fetchSerperOneRetailer(query, retailer, apiKey) {

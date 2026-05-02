@@ -40,6 +40,13 @@ export const UK_RETAILERS = [
   { host: 'diy.com',           name: 'B&Q',            srcTerms: ['b&q', 'diy.com', 'b and q'] },
   { host: 'wickes.co.uk',      name: 'Wickes',         srcTerms: ['wickes'] },
   { host: 'toolstation.com',   name: 'Toolstation',    srcTerms: ['toolstation'] },
+  { host: 'homebase.co.uk',    name: 'Homebase',       srcTerms: ['homebase'] },
+  // Wave 77 — Home + kitchen retailers Vincent flagged. Lakeland is huge
+  // for kitchen gadgets / small appliances; Dunelm carries vacuums,
+  // bedding, kitchen, lighting — both fill genuine coverage gaps the
+  // electronics-led list misses.
+  { host: 'lakeland.co.uk',    name: 'Lakeland',       srcTerms: ['lakeland'] },
+  { host: 'dunelm.com',        name: 'Dunelm',         srcTerms: ['dunelm'] },
   // Books / media (added Wave 24)
   { host: 'waterstones.com',   name: 'Waterstones',    srcTerms: ['waterstones'] },
   { host: 'whsmith.co.uk',     name: 'WHSmith',        srcTerms: ['whsmith', 'wh smith'] },
