@@ -434,7 +434,7 @@ Below are search results from UK retailers. For each one, identify the actual CU
 Wave 59 inclusion rules — DO accept and mark as plausible:
 - Own-brand and store-brand products from Argos, Tesco, Sainsbury's, Asda, Wilko, B&M, Home Bargains, Lidl, Aldi (e.g. "Argos Pro 2-in-1 Cordless Vacuum", "Tesco Smart Kettle"). For category queries like "cordless vacuum cleaner", "kettle", "iron", "blender" the user CARES about budget-tier own-brand options — do not discriminate against them.
 - Budget price points well below typical premium-brand prices (£15 kettles, £40 vacuums, £25 blenders) — these are real products at real prices, not errors. The user wants the FULL spectrum of UK retail.
-- Refurbished / outlet products IF the snippet clearly states "Refurbished" or "Open box" AND the price is sensible — but DO note this in plausible reasoning.
+- DO NOT accept refurbished, renewed, "Amazon Renewed", "Open box", "Used", "Pre-owned", or "Reconditioned" listings UNLESS the user's search query explicitly contains the word "refurbished" or "used". Vincent's iPhone 17 test surfaced an "Amazon Renewed" listing at £681 as the best price — it was a refurbished iPhone 16, totally misleading. Mark these as plausible:false.
 
 Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean}
 - price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell

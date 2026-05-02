@@ -873,16 +873,22 @@
             scrolling past at a steady speed — feels alive, modern, ticker-
             like. Replaces the static 4×4 grid which read flat and dated.
     ───────────────────────────────────────── */
-    /* Wave 64 — searching screen layout simplified. Was using flex-grow on
-       the stack + margin-top:auto on the footer which produced inconsistent
-       spacing (Vincent saw whitespace at top + content at bottom). Now uses
-       justify-content:flex-start at the screen level with content stacked
-       naturally from the top. */
+    /* Wave 66 — ROOT CAUSE FIX. Vincent reported the loading screen broken
+       across 4-5 waves: whitespace at top, content stranded at bottom. The
+       culprit was `position:relative` on this rule (added in Wave 64), which
+       silently overrode the `position:absolute;inset:0` from the parent
+       `.screen` selector — collapsing the loading screen to the natural
+       height of its child content (.srch-stack ~360px) and letting the
+       prior screen's white background bleed through above. We re-assert
+       position:absolute + inset:0 here (matching .screen) so the green
+       gradient fills the entire viewport, and align/justify centre the
+       content vertically. */
     #screen-searching{
+      position:absolute;inset:0;
       background:linear-gradient(160deg,#1a3d17 0%,#2a6b22 60%,#1d5019 100%);
-      align-items:center;justify-content:flex-start;
+      align-items:center;justify-content:center;
       padding:0;text-align:center;
-      position:relative;overflow:hidden;
+      overflow:hidden;
     }
     .srch-stack{
       display:flex;flex-direction:column;align-items:center;
@@ -5278,17 +5284,25 @@ function buildScenV3(items, uPrice, query){
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
 
   // Wave 29 — average-based Save Score for Discovery mode.
-  // Wave 62 — typical UK price now uses a TRIMMED MEAN: drop the highest
-  // outlier when we have 4+ retailers so a single £426 AO listing doesn't
-  // drag the "typical" price up and inflate "saving £237" claims when most
-  // retailers cluster much lower (Vincent's cordless vacuum case).
-  let _usedForAvg = deduped.slice();
-  if(deduped.length >= 4){
-    // Drop the single highest outlier
-    _usedForAvg = deduped.slice(0, deduped.length - 1);
+  // Wave 62 — switched from full mean to TRIMMED MEAN (drop top outlier).
+  // Wave 66 — switched again to "average of the 3 cheapest retailers".
+  //   Reason: trimmed-mean still inflated when product variants leaked into
+  //   results (e.g. "iPhone 17" returning Pro / Pro Max / 512GB listings,
+  //   pushing the avg to £1085 vs the actual base of ~£849). The 3 cheapest
+  //   retailers compete on the base SKU, so they naturally cluster around
+  //   the real UK price; premium variants almost never undercut, so they
+  //   self-exclude. Falls back to mean of all when fewer than 3 retailers.
+  let _usedForAvg;
+  if(deduped.length >= 3){
+    _usedForAvg = deduped.slice(0, 3); // already sorted asc by price
+  } else {
+    _usedForAvg = deduped.slice();
   }
+  // Wave 65 — round both avg and savingVsAvg as integers to avoid float
+  // junk like "£403.549999999999 BELOW THE UK AVERAGE" (Vincent screenshot).
   const avgP = Math.round(_usedForAvg.reduce((sum,p)=>sum+p.price,0)/_usedForAvg.length);
-  const savingVsAvg = Math.max(0, avgP - bestP);
+  const avgBasisCount = _usedForAvg.length; // how many retailers fed the avg
+  const savingVsAvg = Math.max(0, Math.round(avgP - bestP));
   let score, spc, saving, scoreBasis;
   if(deduped.length < 2){
     // Single retailer found — no real comparison to make. Show as amber/3 to
@@ -5327,8 +5341,12 @@ function buildScenV3(items, uPrice, query){
             : `${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`)
       : scoreBasis === 'average'
         ? (savingVsAvg<=2
-            ? `Cheapest UK price found (avg across ${deduped.length} retailers: £${avgP}).`
-            : `£${savingVsAvg} below the UK average across ${deduped.length} retailers.`)
+            ? (avgBasisCount >= 3
+                ? `Cheapest UK price found (typical UK price: £${avgP}).`
+                : `Cheapest UK price found (avg across ${deduped.length} retailers: £${avgP}).`)
+            : (avgBasisCount >= 3
+                ? `£${savingVsAvg} below the typical UK price (£${avgP}).`
+                : `£${savingVsAvg} below the UK average across ${deduped.length} retailers.`))
         : `${deduped[0].retailer} has it for £${bestP}.`;
   return{
     score,spc,vTitle,vSub,query,
@@ -5533,11 +5551,22 @@ function fetchPrices(query){
 function processSearchResponse(d1, query, snapshotUserPrice){
   if(!d1)return null;
   const raw=(d1.shopping||[]);
+  // Wave 65 — frontend safety net: drop any item whose title clearly says
+  // it's refurbished / used / Renewed unless the user explicitly searched
+  // for those. Vincent saw Amazon Renewed iPhone 16 surface as best-price
+  // for an "iPhone 17" search — credibility hit.
+  const userWantsUsed = /\b(refurbished|used|renewed|pre[-\s]?owned|reconditioned|second[-\s]?hand|open[-\s]?box)\b/i.test(query || '');
+  const refurbRe = /\b(refurbished|renewed|amazon renewed|open box|pre[-\s]?owned|reconditioned|second[-\s]?hand|used [a-z])\b/i;
   const mapped=raw.map(i=>{
     // matchRetailer accepts source name OR URL — both data sources covered
     const haystack=(i.source||'')+' '+(i.link||'');
     const ret=matchRetailer(haystack);
     if(!ret)return null;
+    const titleStr = String(i.title || i.name || '');
+    if(!userWantsUsed && refurbRe.test(titleStr)){
+      console.log('[processSearchResponse] dropping refurbished listing:', titleStr.slice(0,80));
+      return null;
+    }
     const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
     return{
       retailer:ret.name,
@@ -5852,10 +5881,12 @@ function renderAiEstimateInResults(est, sc){
   if(!lo || !hi || !avg) return;
 
   // Compare cheapest found vs AI typical average
+  // Wave 65 — round to integer; raw float subtraction was producing
+  // "£417.54999999999995 below" on Vincent's iPhone 17 result.
   const cheapest = sc.bestPrice;
   let positionLine = '';
   if(cheapest){
-    const diff = avg - cheapest;
+    const diff = Math.round(avg - cheapest);
     if(diff > 5){
       positionLine = `<strong>£${diff} below</strong> the typical UK average.`;
     } else if(diff < -5){
@@ -8328,19 +8359,25 @@ function drawCard(sc){
   }
 
   // ── AI wit quote — hero with proper quote marks ──
+  // Wave 66 — Vincent screenshot: wit clipping mid-sentence ("You've nailed
+  // it — Amazon's got the goods, and…"). Was capped at 2 lines @ 17px in a
+  // 480px column; many wit lines overflow that. Bumped to 3 lines, dropped
+  // font 17→16, lineHeight 24→22, widened column to W-128. Three lines @
+  // 22px is 66px tall — comfortably fits between the score block (~end at
+  // 510) and the CTA strip at y=648.
   const wit=sc.witLine || witLine(sc.spc,sc.saving||0,'the shop',sc.bestRetailer||'Amazon UK');
   // Open-quote glyph
   ctx.fillStyle=verdictBd;ctx.font='900 64px Georgia,"Times New Roman",serif';
   ctx.textAlign='left';ctx.textBaseline='middle';
-  ctx.fillText('“', 56, 558);
-  // Wit body — wrap to two lines if needed
-  ctx.fillStyle='#3d4148';ctx.font='italic 600 17px Georgia,"Times New Roman",serif';
+  ctx.fillText('“', 48, 560);
+  // Wit body — wrap to three lines if needed
+  ctx.fillStyle='#3d4148';ctx.font='italic 600 16px Georgia,"Times New Roman",serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  wrapText(ctx, wit, W/2, 552, W-160, 24, 2);
+  wrapText(ctx, wit, W/2, 568, W-128, 22, 3);
   // Close-quote glyph
   ctx.fillStyle=verdictBd;ctx.font='900 64px Georgia,"Times New Roman",serif';
   ctx.textAlign='right';ctx.textBaseline='middle';
-  ctx.fillText('”', W-56, 590);
+  ctx.fillText('”', W-48, 600);
 
   // ── CTA strip ──
   ctx.fillStyle=brand;rr(ctx,40,648,W-80,72,18);ctx.fill();
