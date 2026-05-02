@@ -1479,7 +1479,10 @@
     }
     .bento-go:active{transform:scale(0.9);box-shadow:0 2px 8px rgba(42,107,34,0.28);}
 
-    /* ── Two big directional tiles (lockscreen pattern) ── */
+    /* ── Two directional tiles — Wave 22 thinner row layout ──
+       Was: 130px tall stacked-column tiles (icon top, label below).
+       Now: 88px tall row tiles (icon left, label/sub right). Frees ~40px
+       of vertical space, leaves more room for trending without clipping. */
     .bento-dirs{
       display:grid;
       grid-template-columns:1fr 1fr;
@@ -1487,20 +1490,21 @@
     }
     .dir-tile{
       position:relative;
-      display:flex;flex-direction:column;
-      align-items:flex-start;gap:6px;
-      padding:18px 16px 16px;
+      display:flex;flex-direction:row;align-items:center;
+      gap:12px;
+      padding:14px 16px;
       background:var(--card);
       border:1px solid var(--border);
       border-radius:var(--r-lg);
       cursor:pointer;text-align:left;
       box-shadow:var(--depth-2);
-      min-height:130px;
+      min-height:88px;
       overflow:hidden;
       transition:transform var(--motion-fast) var(--ease-pop),
                  border-color var(--motion-norm) var(--ease-quick),
                  box-shadow var(--motion-norm) var(--ease-quick);
     }
+    .dir-tile-text{display:flex;flex-direction:column;flex:1;min-width:0;}
     .dir-tile:active{
       transform:scale(0.97);
       border-color:var(--green-bd);
@@ -1508,7 +1512,7 @@
     }
     .dir-tile:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
     .dir-tile-ico{
-      width:42px;height:42px;border-radius:12px;
+      width:38px;height:38px;border-radius:11px;
       background:var(--green-lt);color:var(--green);
       display:flex;align-items:center;justify-content:center;
       flex-shrink:0;
@@ -1517,26 +1521,25 @@
     }
     .dir-tile:active .dir-tile-ico{transform:scale(1.05);background:var(--green);color:#fff;}
     .dir-tile-label{
-      font:800 16px/1.15 "Nunito",sans-serif;
+      font:800 15px/1.15 "Nunito",sans-serif;
       color:var(--ink);letter-spacing:-0.3px;
     }
     .dir-tile-sub{
-      font:500 12px/1.3 "Inter",sans-serif;
-      color:var(--ink3);
+      font:500 11px/1.3 "Inter",sans-serif;
+      color:var(--ink3);margin-top:1px;
     }
-    /* Directional chevron — sits in the corner pointing away from home. */
+    /* Directional chevron — Wave 22 inline in the row layout, no longer
+       absolute-positioned. Sits at the start (left tile) or end (right tile)
+       to point away from home. */
     .dir-tile-arrow{
-      position:absolute;top:14px;
-      width:20px;height:20px;border-radius:50%;
+      width:18px;height:18px;border-radius:50%;
       background:var(--surface);
       display:flex;align-items:center;justify-content:center;
-      color:var(--ink4);
+      color:var(--ink4);flex-shrink:0;
       animation:dir-pulse 2.4s ease-in-out infinite;
       transition:background var(--motion-norm) var(--ease-quick),
                  color var(--motion-norm) var(--ease-quick);
     }
-    .dir-left .dir-tile-arrow{left:14px;}
-    .dir-right .dir-tile-arrow{right:14px;}
     .dir-tile:active .dir-tile-arrow{background:var(--green);color:#fff;animation:none;}
     @keyframes dir-pulse{
       0%,100%{transform:translateX(0);}
@@ -1633,25 +1636,40 @@
       50%    {opacity:1;  transform:scale(1.3);box-shadow:0 0 0 3px rgba(42,107,34,0.18);}
     }
 
-    /* ── Trending — 2-col grid (Wave 14) ──
-       Replaced horizontal-scroll row that cut off the right edge with a
-       proper 2-column grid. All 6 tiles visible without scrolling, fills
-       the screen real estate that was previously dead air. */
+    /* ── Trending — horizontal scroll (Wave 22) ──
+       Reverted from 2-col grid (took too much vertical, clipped under
+       bottom nav on Vincent's phone). Horizontal scroll lets us keep the
+       directional tiles + search hero visible at all times. Visual hint
+       on the right edge: last tile fades to indicate more content. */
     .bento-trending{
-      display:grid;
-      grid-template-columns:1fr 1fr;
+      display:flex;
       gap:10px;
+      overflow-x:auto;
+      overflow-y:hidden;
+      padding:2px 4px 6px;
+      margin:0 -16px;       /* extend to viewport edges */
+      padding-left:16px;
+      padding-right:16px;
+      -webkit-overflow-scrolling:touch;
+      scrollbar-width:none;
+      scroll-snap-type:x proximity;
+      /* Subtle right-edge fade as scroll-affordance (more tiles available) */
+      mask-image:linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
+      -webkit-mask-image:linear-gradient(to right, #000 0, #000 calc(100% - 24px), transparent 100%);
     }
+    .bento-trending::-webkit-scrollbar{display:none;}
     .trend-tile{
+      flex:0 0 140px;
       display:flex;flex-direction:column;
       align-items:flex-start;gap:4px;
-      padding:14px 14px 13px;
+      padding:12px 12px 11px;
       background:var(--card);
       border:1px solid var(--border);
       border-radius:var(--r);
       cursor:pointer;text-align:left;
       box-shadow:var(--depth-1);
-      min-height:100px;
+      min-height:96px;
+      scroll-snap-align:start;
       transition:transform var(--motion-fast) var(--ease-pop),
                  border-color var(--motion-norm) var(--ease-quick);
     }
@@ -1690,6 +1708,18 @@
       color:var(--ink3);
       letter-spacing:0.3px;text-transform:uppercase;
     }
+
+    /* Wave 22 — Swipe nudge animation. On first home view per session,
+       the home content briefly drags -8px left and bounces back, signalling
+       "swipeable surface". Subliminal, ~500ms, doesn't replace the coach
+       pill but reinforces the gesture without words. */
+    @keyframes swipe-nudge{
+      0%   { transform: translateX(0); }
+      35%  { transform: translateX(-12px); }
+      65%  { transform: translateX(4px); }
+      100% { transform: translateX(0); }
+    }
+    .swipe-nudge{ animation: swipe-nudge 700ms cubic-bezier(0.34, 1.4, 0.5, 1) both; }
 
     /* First-visit hint pill — animated nudge that auto-dismisses. */
     .swipe-coach{
@@ -1828,22 +1858,26 @@
       <div class="bento-dirs" data-no-swipe>
         <button class="dir-tile dir-left" onclick="navigateSwipe('paste','right')">
           <div class="dir-tile-arrow" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
           </div>
           <div class="dir-tile-ico">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           </div>
-          <div class="dir-tile-label">Online checker</div>
-          <div class="dir-tile-sub">Paste any link</div>
+          <div class="dir-tile-text">
+            <div class="dir-tile-label">Online checker</div>
+            <div class="dir-tile-sub">Paste any link</div>
+          </div>
         </button>
         <button class="dir-tile dir-right" onclick="navigateSwipe('scan','left')">
           <div class="dir-tile-ico">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="7" width="20" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3"/><path d="M9 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="2" y="7" width="20" height="13" rx="2.5"/><circle cx="12" cy="13.5" r="3"/><path d="M9 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5V7"/></svg>
           </div>
-          <div class="dir-tile-label">Scan in-store</div>
-          <div class="dir-tile-sub">Barcode · instant</div>
+          <div class="dir-tile-text">
+            <div class="dir-tile-label">Scan in-store</div>
+            <div class="dir-tile-sub">Barcode · instant</div>
+          </div>
           <div class="dir-tile-arrow" aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
           </div>
         </button>
       </div>
@@ -2531,6 +2565,19 @@ function goTo(screen, opts){
     renderRecentSearches();
     // First-visit swipe coach
     setTimeout(showSwipeCoachIfFirstVisit, 350);
+    // Wave 22 — fire the swipe-nudge animation once per session so the
+    // user SEES the home is a swipeable surface even if they ignore the
+    // coach pill copy. Visual telegraph reinforces the gesture.
+    if(!window._savveySwipeNudgeFired){
+      window._savveySwipeNudgeFired = true;
+      setTimeout(() => {
+        const bento = document.querySelector('#screen-home .bento');
+        if(!bento) return;
+        bento.classList.remove('swipe-nudge');
+        void bento.offsetWidth;
+        bento.classList.add('swipe-nudge');
+      }, 600);
+    }
   } else {
     // Leaving home → kill any active coach pill
     dismissSwipeCoach();
@@ -2757,9 +2804,13 @@ function dismissSwipeCoach(){
 // Continued left reaches snap (AI photo) as secondary. Each direction is
 // also tappable as a big tile on home — user chooses gesture or tap.
 const SWIPE_ROTATION = ['paste', 'home', 'scan', 'snap'];
-const SWIPE_THRESHOLD_PX = 60;
-const SWIPE_MAX_TIME_MS  = 600;
-const SWIPE_HORIZ_RATIO  = 2.5; // |dx| / |dy| must exceed this to count as horizontal
+// Wave 22 — tuned after live in-store feedback. The previous gate was too
+// strict for thumb swipes that aren't perfectly horizontal. Lower threshold
+// + looser ratio + longer max-time = swipe lands on the screen Vincent
+// actually intended.
+const SWIPE_THRESHOLD_PX = 40;
+const SWIPE_MAX_TIME_MS  = 800;
+const SWIPE_HORIZ_RATIO  = 1.6; // |dx| / |dy| must exceed this to count as horizontal
 let _swipeStart = null;
 
 function _swipeStartAllowed(target){
