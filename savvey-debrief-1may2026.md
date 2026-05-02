@@ -189,6 +189,32 @@ Every result has a share card. Every share carries `savvey.vercel.app/?q=Sony+WH
 
 ---
 
+## 6.5 Future big-bet: Savvey Savings Vault (logged 2 May 2026)
+
+Reframes Savvey from "comparison tool" to "shopping bank" over time. Based on Vincent's instinct + Monzo's shopping/Trends pattern.
+
+**Concept:** when a user completes a purchase via the cheaper retailer link Savvey surfaced, give them the option to **bank the saving difference** (their reference price minus the cheaper retailer's price) into an on-app vault. Real money, not virtual points. Eventually withdrawable to bank, or spendable on future Savvey-recommended purchases.
+
+**Business-model pivot it enables:** from affiliate-only revenue (current) to a two-sided marketplace where retailers pay for placement *because* Savvey holds the user's savings balance and influences where they spend it. Take a cut of every transaction routed through. Comparable to Quidco/TopCashback but with the comparison engine doing the work upfront and the savings becoming sticky.
+
+**Why powerful:**
+- Retention via balance accumulation — like checking a bank balance
+- Reframes "savings spotted" (current Wave 28 hero) into "savings banked"
+- Gives leverage with retailers who want conversion
+- Long-term: virtual card / "checkout with your Savvey balance"
+
+**What it requires (why it's deferred):**
+- Affiliate-network postback infrastructure (per-retailer integration to confirm purchase completion)
+- E-money / payment licence to hold user balances at scale
+- User accounts (we currently have zero auth — counter to current positioning, but tractable)
+- Realistic trigger: Phase 6+, after 10k+ active users + Awin partnerships live
+
+**Connection to today:** the Wave 28 home centerpiece reads "SAVVEY SAVINGS FOUND · spotted across X checks". That copy is deliberately accurate to current product (we surface the gap, we don't yet bank it). When the vault feature lands, the copy evolves naturally — same number, real money, "banked in your vault".
+
+**Reference apps:** Monzo Shopping Assistant + Trends · Quidco/TopCashback · Klarna's loyalty wallet · Honey (PayPal).
+
+---
+
 ## 7. Back-burner (Phase 5+)
 
 Things deferred — capture them so we don't forget:

@@ -2105,11 +2105,11 @@
            this shows the user the value Savvey has delivered for them.
            Animated count-up on load. Hidden if zero (first-time user). -->
       <div class="savings-hero" id="savings-hero" hidden>
-        <div class="savings-eyebrow">YOU'VE SAVED WITH SAVVEY</div>
+        <div class="savings-eyebrow">SAVVEY SAVINGS FOUND</div>
         <div class="savings-amount">
           <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0</span>
         </div>
-        <div class="savings-context" id="savings-context">across your checks</div>
+        <div class="savings-context" id="savings-context">spotted across your checks</div>
       </div>
 
       <!-- First-time greeting — shown when no savings yet. -->
@@ -5275,8 +5275,8 @@ function renderSavingsHero(){
   requestAnimationFrame(tick);
   if(ctxEl){
     ctxEl.textContent = count === 1
-      ? 'across 1 check'
-      : `across ${count.toLocaleString('en-GB')} checks`;
+      ? 'spotted across 1 check'
+      : `spotted across ${count.toLocaleString('en-GB')} checks`;
   }
 }
 
