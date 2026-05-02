@@ -44,6 +44,24 @@ export const UK_RETAILERS = [
   { host: 'whsmith.co.uk',     name: 'WHSmith',        srcTerms: ['whsmith', 'wh smith'] },
   { host: 'worldofbooks.com',  name: 'World of Books', srcTerms: ['world of books', 'worldofbooks'] },
   { host: 'blackwells.co.uk',  name: 'Blackwell\'s',   srcTerms: ['blackwell'] },
+  // Beauty (added Wave 25)
+  { host: 'superdrug.com',         name: 'Superdrug',         srcTerms: ['superdrug'] },
+  { host: 'cultbeauty.co.uk',      name: 'Cult Beauty',       srcTerms: ['cult beauty', 'cultbeauty'] },
+  { host: 'lookfantastic.com',     name: 'Lookfantastic',     srcTerms: ['lookfantastic', 'look fantastic'] },
+  { host: 'spacenk.com',           name: 'Space NK',          srcTerms: ['space nk', 'spacenk'] },
+  { host: 'theperfumeshop.com',    name: 'The Perfume Shop',  srcTerms: ['perfume shop', 'theperfumeshop'] },
+  { host: 'beautybay.com',         name: 'Beauty Bay',        srcTerms: ['beauty bay', 'beautybay'] },
+  // Grocery — initial set (added Wave 25). Honest caveat: grocery prices
+  // vary regionally + heavily by loyalty (Clubcard / Nectar). We surface
+  // the public list price; loyalty discounts are explicitly skipped per the
+  // Haiku prompt (Wave 21). Future: a "show member price too" toggle.
+  { host: 'tesco.com',                  name: 'Tesco',         srcTerms: ['tesco'] },
+  { host: 'sainsburys.co.uk',           name: 'Sainsbury\'s',  srcTerms: ['sainsbury'] },
+  { host: 'asda.com',                   name: 'Asda',          srcTerms: ['asda'] },
+  { host: 'groceries.asda.com',         name: 'Asda',          srcTerms: ['asda'] },
+  { host: 'morrisons.com',              name: 'Morrisons',     srcTerms: ['morrisons'] },
+  { host: 'groceries.morrisons.com',    name: 'Morrisons',     srcTerms: ['morrisons'] },
+  { host: 'waitrose.com',               name: 'Waitrose',      srcTerms: ['waitrose'] },
 ];
 
 // ─────────────────────────────────────────────────────────────

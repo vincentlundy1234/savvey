@@ -246,6 +246,21 @@ const PRODUCT_URL_PATTERNS = {
   'whsmith.co.uk':     /\/products\/[a-z0-9-]+\/[a-z0-9-]+/i,    // WHSmith: /products/title/9780...
   'worldofbooks.com':  /\/en-gb\/products\/[a-z0-9-]+/i,         // World of Books: /en-gb/products/title-isbn
   'blackwells.co.uk':  /\/bookshop\/product\/[a-z0-9-]+/i,       // Blackwell's
+  // Beauty (Wave 25)
+  'superdrug.com':     /\/[a-z0-9-]+\/p\/\d+/i,                  // /skincare/serum/p/812345
+  'cultbeauty.co.uk':  /\/products\/[a-z0-9-]+/i,                // /products/charlotte-tilbury-...
+  'lookfantastic.com': /\/[a-z0-9-]+\/\d+\.html/i,               // /serum-name/12345678.html
+  'spacenk.com':       /\/en-gb\/[a-z0-9-]+\/[a-z0-9-]+/i,       // /en-gb/brand/product
+  'theperfumeshop.com':/\/[a-z0-9-]+\/[a-z0-9-]+\/p\/\d+/i,      // /brand/product/p/12345
+  'beautybay.com':     /\/[a-z0-9-]+\/[a-z0-9-]+\/[a-z0-9-]+\/\d+\.html/i, // brand/cat/slug/123.html
+  // Grocery (Wave 25)
+  'tesco.com':         /\/groceries\/en-gb\/products\/\d+/i,      // /groceries/en-GB/products/123456789
+  'sainsburys.co.uk':  /\/gol-ui\/product\/[a-z0-9-]+|\/groceries\/product\/details\/[a-z0-9-]+/i,
+  'asda.com':          /\/product\/[a-z0-9-]+\/\d+|\/groceries\/product\/[a-z0-9-]+\/\d+/i,
+  'groceries.asda.com':/\/product\/[a-z0-9-]+\/\d+|\/groceries\/product\/[a-z0-9-]+\/\d+/i,
+  'morrisons.com':     /\/products\/[a-z0-9-]+-\d+/i,
+  'groceries.morrisons.com': /\/products\/[a-z0-9-]+-\d+/i,
+  'waitrose.com':      /\/ecom\/products\/[a-z0-9-]+\/\d+/i,
   // ebay.co.uk / ebay.com — already handled separately by the /itm/ check
   'ebay.co.uk':        /\/itm\/\d+/i,
   'ebay.com':          /\/itm\/\d+/i,
