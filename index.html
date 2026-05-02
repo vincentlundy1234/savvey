@@ -524,14 +524,46 @@
     .cam-btn:focus-visible{outline:2px solid #fff;outline-offset:2px;}
     .cam-label{font-size:15px;font-weight:700;color:#fff;font-family:"Nunito",sans-serif;}
 
-    /* Viewfinder — Wave 23 M&S-inspired cleanup. Removed the corner
-       brackets and animated scanning beam line; both read as 2010s scanner
-       chrome. Now the camera is full-bleed and the lockon glow is the
-       only visual feedback when a barcode is detected. The user aims by
-       intuition (mid-frame) — same pattern M&S, Co-op, Sainsbury's all use. */
-    .vf{position:absolute;top:50%;left:50%;transform:translate(-50%,-56%);width:280px;height:180px;z-index:5;pointer-events:none;}
-    .vf-c{display:none;}        /* legacy corner brackets — hidden */
-    .vf-beam{display:none;}     /* legacy scanning beam — hidden */
+    /* Viewfinder — Wave 28e M&S-style cutout. Per Vincent's M&S reference
+       (29 Apr 2026): show a clear rectangular "lens" with the rest of the
+       camera dimmed to ~55% black, plus white corner brackets at each
+       edge. Two jobs:
+         1. Tells users WHERE to point the barcode (no guessing).
+         2. Visually differentiates Scan (cutout + brackets) from Snap
+            (whole-frame, no cutout — just a shutter at the bottom).
+       Implementation:
+         - .vf is the cutout RECTANGLE itself (transparent, pointer-events
+           off so it doesn't block taps).
+         - The dim-around effect is faked with a HUGE box-shadow spread on
+           the rectangle — paints rgba(0,0,0,0.55) in every direction
+           except inside the rectangle. No mask/clip-path needed = works
+           in every browser.
+         - Corner brackets are 4 absolutely-positioned divs with two
+           white borders each (top+left, top+right, etc).
+         - .vf-lock is the green "barcode found" glow, sits inside the
+           same rectangle and fades in on detection. */
+    .vf{
+      position:absolute;top:50%;left:50%;
+      transform:translate(-50%,-56%);
+      width:280px;height:180px;z-index:5;
+      pointer-events:none;
+      border-radius:14px;
+      /* The trick: massive box-shadow spread = dim everywhere except inside */
+      box-shadow:0 0 0 9999px rgba(0,0,0,0.55);
+    }
+    /* White corner brackets — 22px arms, 3px stroke. Positioned at each
+       corner with two visible borders, two transparent. */
+    .vf-c{
+      position:absolute;
+      width:22px;height:22px;
+      border:3px solid #fff;
+      pointer-events:none;
+    }
+    .vf-c.tl{top:-2px;left:-2px;border-right:none;border-bottom:none;border-top-left-radius:6px;}
+    .vf-c.tr{top:-2px;right:-2px;border-left:none;border-bottom:none;border-top-right-radius:6px;}
+    .vf-c.bl{bottom:-2px;left:-2px;border-right:none;border-top:none;border-bottom-left-radius:6px;}
+    .vf-c.br{bottom:-2px;right:-2px;border-left:none;border-top:none;border-bottom-right-radius:6px;}
+    .vf-beam{display:none;}     /* legacy scanning beam — stays hidden */
     .vf-lock{
       position:absolute;inset:0;
       border:3px solid var(--green3);
