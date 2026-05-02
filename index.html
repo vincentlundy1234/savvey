@@ -984,6 +984,19 @@
     .ret-diff{font-size:11px;color:var(--ink4);text-align:right;margin-top:2px;}
     .ret-diff.over{color:var(--red);}
 
+    /* Affiliate disclosure footer (Wave 20) — sits below the Track CTA on
+       results screens. Tiny + muted; not a CTA, just a regulatory note. */
+    .res-affiliate-note{
+      font:500 11px/1.5 "Inter",sans-serif;
+      color:var(--ink4);
+      text-align:center;
+      padding:14px 16px 4px;
+    }
+    .res-affiliate-note span{
+      color:var(--ink3);text-decoration:underline;text-underline-offset:2px;cursor:pointer;
+    }
+    .res-affiliate-note span:hover,.res-affiliate-note span:active{color:var(--green);}
+
     /* Amazon-CTA — conditional, shown when Amazon not inline */
     .amazon-cta{
       display:none;align-items:center;gap:12px;
@@ -2174,6 +2187,14 @@
         </div>
         <div class="track-arr">›</div>
       </div>
+
+      <!-- Affiliate disclosure footer (Wave 20) — comparison-utility-style.
+           Per CAP Code: a clear blanket disclosure is sufficient when we're
+           a comparison service, not editorial content with kickbacks.
+           Doesn't tag every Buy button; just tells users the relationship. -->
+      <div class="res-affiliate-note">
+        Some retailer links may earn Savvey a commission. <span onclick="goTo('privacy')">Why &amp; how</span>
+      </div>
     </div>
   </div>
 
@@ -2185,19 +2206,19 @@
       <div class="priv-date">Last updated: April 2026</div>
       <div class="priv-p">Savvey is a free price-checking app. We collect as little as possible.</div>
       <div class="priv-h2">What we collect</div>
-      <div class="priv-p"><strong>Email address</strong> — only if you optionally provide one when saving a price. Stored against the saved item only. Never sold, never marketed at.</div>
       <div class="priv-p"><strong>Search queries</strong> — sent to our AI providers (see below) to fetch prices. Not stored on our servers, not linked to you personally.</div>
       <div class="priv-p"><strong>Camera</strong> — used in two ways: <em>(a)</em> barcode scanning runs on-device only, no image leaves your phone; <em>(b)</em> the optional "Snap a photo" mode sends a single downscaled JPEG to Claude Haiku to identify the product, then discards it. No photo is stored on our servers.</div>
-      <div class="priv-p"><strong>Saved items</strong> — kept on your device only (browser localStorage). Clear them anytime via the Saved view.</div>
+      <div class="priv-p"><strong>Saved items</strong> — kept on your device only (browser localStorage). Clear them anytime via the Saved view. Never sent to our servers.</div>
       <div class="priv-h2">What we don't collect</div>
-      <div class="priv-p">No name, no payment details, no browsing history, no location. No ad trackers. No data sold to anyone. No accounts to make.</div>
+      <div class="priv-p">No name, no email, no payment details, no browsing history, no location. No ad trackers. No data sold to anyone. No accounts to make.</div>
+      <div class="priv-h2">Affiliate links and ads</div>
+      <div class="priv-p">Some retailer links — particularly Amazon — may carry an affiliate tag, meaning Savvey may earn a small commission if you buy via that link. This <strong>does not</strong> change the price you pay or which retailers we surface. We do not run display ads and do not promote any product, but we reserve the right to introduce clearly-labelled sponsored content in future. Affiliate income helps keep Savvey free.</div>
       <div class="priv-h2">Third-party services</div>
       <div class="priv-p"><strong>Perplexity Sonar</strong> — finds UK retailer product pages. See perplexity.ai/hub/legal/privacy-policy.</div>
       <div class="priv-p"><strong>Anthropic Claude (Haiku)</strong> — extracts prices from search results, generates the wit line, and identifies products from photos. See anthropic.com/legal/privacy.</div>
       <div class="priv-p"><strong>Serper</strong> — fallback search index when AI providers are unavailable. See serper.dev/privacy.</div>
-      <div class="priv-p"><strong>Supabase</strong> — stores any optional email you provide (EU data centres).</div>
-      <div class="priv-h2">Contact</div>
-      <div class="priv-p"><strong>privacy@savvey.app</strong></div>
+      <div class="priv-h2">Your rights (UK GDPR)</div>
+      <div class="priv-p">Because we don't store personal data on our servers, there's nothing to access, rectify, or erase under Articles 15-17. Your saved items live on your device — you control them entirely. If you have any concern, email <strong>privacy@savvey.app</strong> and we'll respond within one calendar month.</div>
     </div>
   </div>
 
@@ -2211,9 +2232,8 @@
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green);"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
     </div>
     <div class="modal-title" id="email-modal-title">Save this price</div>
-    <div class="modal-sub">Keep this on your device so you can pop back and re-check anytime. Optional email helps us spot you if a price drop alert system goes live later — no spam, no marketing.</div>
-    <input class="modal-in" id="modal-email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your@email.com (optional)"/>
-    <button class="modal-go" onclick="submitEmail()">Save</button>
+    <div class="modal-sub">Kept on your device — no account, no email, no signup. Pop back anytime to re-check the latest price.</div>
+    <button class="modal-go" onclick="submitEmail()">Save to my device</button>
     <button class="modal-skip" onclick="closeEmailModal()">Cancel</button>
   </div>
 </div>
@@ -2655,11 +2675,10 @@ function renderRecentSearches(){
   }
   wrap.hidden = false;
   list.innerHTML = recent.map(q => {
-    const safe = q.replace(/'/g,"\\'").replace(/</g,'&lt;');
-    return '<button class="recent-chip" onclick="trendSearch(\'' + safe + '\')">' +
+    return '<button class="recent-chip" onclick="trendSearch(\'' + escJsAttr(q) + '\')">' +
       '<span class="recent-chip-ico" aria-hidden="true">' +
         '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>' +
-      '</span>' + q + '</button>';
+      '</span>' + escHtml(q) + '</button>';
   }).join('');
 }
 
@@ -3990,7 +4009,13 @@ function renderResults(sc){
   document.getElementById('results-product').textContent=productText;
   const refineInput=document.getElementById('results-refine-input');
   if(refineInput)refineInput.value=productText;
-  document.getElementById('results-mode').textContent=modeLabel;
+  // Mode pill + price-pulled-at timestamp (Wave 20 — UK Consumer
+  // Protection Reg 6: prices may be cached, so users need a freshness cue).
+  const modeEl = document.getElementById('results-mode');
+  const now = new Date();
+  const hh = String(now.getHours()).padStart(2,'0');
+  const mm = String(now.getMinutes()).padStart(2,'0');
+  modeEl.textContent = modeLabel + '  ·  prices ' + hh + ':' + mm;
 
   // ── Retailer list ──
   const list=document.getElementById('ret-list');
@@ -4730,29 +4755,15 @@ function closeEmailModal(){
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
 }
-// Save the current result as a bookmark on the user's device. Email is
-// optional — if provided, we still log it to Supabase against a future
-// price-drop email service (none live yet — we don't promise it). The
-// real on-device save is via localStorage so users can come back and find
-// their saved items reliably without any backend dependency.
+// Save the current result as a localStorage bookmark on the user's device.
+// Wave 20: removed email collection entirely. Pure on-device save — no
+// network, no third party, no GDPR exposure beyond what the search itself
+// already involves. Function kept as `submitEmail` to avoid renaming all
+// call sites.
 async function submitEmail(){
-  const inp=document.getElementById('modal-email');
-  const email=inp?inp.value.trim():'';
-  const hasEmail = !!email;
-  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  // If they typed something but it's invalid, show error and bail
-  if(hasEmail && !validEmail){
-    inp.style.borderColor='var(--red)';
-    inp.classList.remove('shake');
-    void inp.offsetWidth;
-    inp.classList.add('shake');
-    haptic(20);
-    return;
-  }
   if(!liveScen){ closeEmailModal(); return; }
   const sc = liveScen;
 
-  // Persist on-device — this is the actual feature.
   saveBookmark({
     query: liveQuery || sc.query,
     bestPrice: sc.bestPrice || null,
@@ -4760,30 +4771,10 @@ async function submitEmail(){
     bestLink: sc.bestLink || null,
     spc: sc.spc || null,
     savedAt: Date.now(),
-    email: validEmail ? email : null,
   });
 
-  // Optional: log email to Supabase for any future opt-in alert service.
-  // No promise of email — users were told this is just a save.
-  if(validEmail){
-    try{
-      await fetch(`${SB_URL}/rest/v1/price_alerts`,{
-        method:'POST',
-        headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'},
-        body:JSON.stringify({
-          email,
-          product_name: liveQuery || sc.query,
-          product_query: liveQuery || sc.query,
-          best_price_at_alert: sc.bestPrice || 0,
-          best_retailer: sc.bestRetailer || '',
-          category: activeCat,
-        })
-      });
-    }catch(e){ /* non-blocking */ }
-  }
-
   haptic(15);
-  showToast(validEmail ? 'Saved · we\'ve got your email if a price-drop alert ever launches' : 'Saved · pop back anytime to re-check');
+  showToast('Saved · pop back anytime to re-check');
 
   // Update the Track CTA in place to show saved state
   const cta = document.getElementById('track-cta');
@@ -4792,11 +4783,35 @@ async function submitEmail(){
       '<div class="track-ico" style="background:var(--green);color:#fff;">' +
         '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
       '</div>' +
-      '<div class="track-body"><div class="track-title" style="color:var(--green);">Saved</div><div class="track-sub">Tap below to view your saved items</div></div>' +
+      '<div class="track-body"><div class="track-title" style="color:var(--green);">Saved</div><div class="track-sub">Tap to view your saved items</div></div>' +
       '<div class="track-arr">›</div>';
     cta.onclick = () => { haptic(10); showSavedItems(); };
   }
   closeEmailModal();
+}
+
+// ── Safe HTML / attribute escaping (Wave 20) ──
+//
+// Every place we innerHTML user-derived strings goes through here. Belt
+// and braces — most paths already pass through server validation, but a
+// rogue retailer name or query with HTML chars shouldn't break out of an
+// attribute or inject markup. Two helpers because attribute escaping
+// needs to handle quotes too.
+function escHtml(s){
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;');
+}
+function escJsAttr(s){
+  // For inline onclick="fn('...')" — escape backslashes and single quotes
+  return String(s == null ? '' : s)
+    .replace(/\\/g,'\\\\')
+    .replace(/'/g,"\\'")
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;');
 }
 
 // ── Local saved-items store (Wave 19) ──
@@ -4841,16 +4856,16 @@ function showSavedItems(){
     html += '<div style="text-align:center;padding:32px 0;color:var(--ink3);font:500 14px/1.4 \'Inter\';">Nothing saved yet — tap "Save for later" on any result.</div>';
   } else {
     items.forEach(it => {
-      const safe = (it.query||'').replace(/'/g,"\\'").replace(/</g,'&lt;');
-      const priceLabel = it.bestPrice ? '£' + it.bestPrice + (it.bestRetailer ? ' · ' + it.bestRetailer : '') : '';
+      const safeJs = escJsAttr(it.query || '');
+      const priceLabel = it.bestPrice ? '£' + escHtml(it.bestPrice) + (it.bestRetailer ? ' · ' + escHtml(it.bestRetailer) : '') : '';
       const ageDays = it.savedAt ? Math.floor((Date.now() - it.savedAt) / 86400000) : 0;
       const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? 'yesterday' : ageDays + ' days ago';
-      html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="trendSearch(\'' + safe + '\');closeSavedItems();">' +
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="trendSearch(\'' + safeJs + '\');closeSavedItems();">' +
         '<div style="flex:1;min-width:0;">' +
-          '<div style="font:700 14px/1.2 \'Nunito\';color:var(--ink);">' + (it.query || 'Saved') + '</div>' +
+          '<div style="font:700 14px/1.2 \'Nunito\';color:var(--ink);">' + escHtml(it.query || 'Saved') + '</div>' +
           (priceLabel ? '<div style="font:500 12px/1.3 \'Inter\';color:var(--ink3);margin-top:3px;">When saved: ' + priceLabel + ' · ' + ageLabel + '</div>' : '') +
         '</div>' +
-        '<button onclick="event.stopPropagation();removeSavedItem(\'' + safe + '\');showSavedItems();" aria-label="Remove" style="background:transparent;border:none;color:var(--ink4);font:700 18px/1 sans-serif;padding:8px;cursor:pointer;">×</button>' +
+        '<button onclick="event.stopPropagation();removeSavedItem(\'' + safeJs + '\');showSavedItems();" aria-label="Remove" style="background:transparent;border:none;color:var(--ink4);font:700 18px/1 sans-serif;padding:8px;cursor:pointer;">×</button>' +
       '</div>';
     });
   }
