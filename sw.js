@@ -17,7 +17,7 @@
 //  Bump FONT_VER only if font families or weights change.
 // ─────────────────────────────────────────────────────────────
 
-const STATIC_VER    = 'savvey-static-v70';
+const STATIC_VER    = 'savvey-static-v71';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
@@ -33,6 +33,16 @@ self.addEventListener('install', event => {
       .then(c => c.addAll(STATIC_ASSETS))
       .then(() => self.skipWaiting())
   );
+});
+
+// Wave 74 — accept SKIP_WAITING from the page so the in-app "Refresh"
+// toast can promote the new SW immediately rather than waiting for all
+// tabs to close. Pairs with the controllerchange handler in index.html
+// which reloads the page once the new SW takes control.
+self.addEventListener('message', event => {
+  if(event.data && event.data.type === 'SKIP_WAITING'){
+    self.skipWaiting();
+  }
 });
 
 // ── Activate: purge old caches ────────────────────────────────

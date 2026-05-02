@@ -436,9 +436,19 @@ Wave 59 inclusion rules — DO accept and mark as plausible:
 - Budget price points well below typical premium-brand prices (£15 kettles, £40 vacuums, £25 blenders) — these are real products at real prices, not errors. The user wants the FULL spectrum of UK retail.
 - DO NOT accept refurbished, renewed, "Amazon Renewed", "Open box", "Used", "Pre-owned", or "Reconditioned" listings UNLESS the user's search query explicitly contains the word "refurbished" or "used". Vincent's iPhone 17 test surfaced an "Amazon Renewed" listing at £681 as the best price — it was a refurbished iPhone 16, totally misleading. Mark these as plausible:false.
 
+Wave 70 — TIER / VARIANT MATCHING. The query specifies a tier; only accept listings that match that tier. Wrong-tier listings should be plausible:false.
+- "iPhone 17" alone means the BASE iPhone 17 — NOT iPhone 17 Pro, NOT Pro Max, NOT Plus. If the listing title is "iPhone 17 Pro 256GB" and the query was "iPhone 17", mark plausible:false. The Pro is a different product at a different price tier and contaminates the average.
+- "iPhone 17 Pro" means Pro — accept Pro listings, reject base and Pro Max.
+- "Galaxy S26" means base S26, not S26+ or Ultra. Same logic.
+- "MacBook Air" excludes "MacBook Pro" and vice versa.
+- "Dyson V15" excludes "Dyson V12", "V11", "V8" — older / different models.
+- For storage tiers: if the query specifies a storage capacity (e.g. "iPhone 17 256GB"), prefer that exact capacity. If the query has no storage spec, accept any capacity but prefer the base / lowest capacity.
+- For TVs: query "Samsung 65 QLED" — only accept 65" QLED Samsung; reject 55" / 75" / OLED variants.
+- The principle: when in doubt, prefer the exact tier match. A Pro listing at £999 inflating the "iPhone 17" average is a far worse outcome than dropping a few results.
+
 Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean}
 - price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell
-- plausible = true if this is genuinely the product the user searched for (or a same-category own-brand alternative) at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, or wildly off-market
+- plausible = true if this is genuinely the product the user searched for AT THE TIER THEY ASKED FOR (or a same-category own-brand alternative) at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, wrong tier (Pro when base was asked), wrong size, or wildly off-market
 
 Results:
 ${JSON.stringify(numbered, null, 2)}

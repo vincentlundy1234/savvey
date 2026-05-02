@@ -2627,10 +2627,14 @@
        cover anything. Applied via .has-botnav modifier on body. The nav
        itself sits at bottom:12+safe-area, ~58px tall, so we need at least
        80px clearance + safe-area + comfort buffer. 132px = comfortable. */
-    body.has-botnav .bento       {padding-bottom:calc(132px + env(safe-area-inset-bottom)) !important;}
-    body.has-botnav .res-scroll  {padding-bottom:calc(132px + env(safe-area-inset-bottom)) !important;}
-    body.has-botnav .paste-body  {padding-bottom:calc(132px + env(safe-area-inset-bottom)) !important;}
-    body.has-botnav .priv-body   {padding-bottom:calc(132px + env(safe-area-inset-bottom)) !important;}
+    /* Wave 73 — bumped from 132 → 148. Bottom-nav pill is 64px tall + 12px
+       float gap; previous 132 left ~52px clearance which the result-screen
+       "ALL PRICES" footer kept clipping behind. 148 gives clean breathing
+       room while still feeling like a single continuous surface. */
+    body.has-botnav .bento       {padding-bottom:calc(148px + env(safe-area-inset-bottom)) !important;}
+    body.has-botnav .res-scroll  {padding-bottom:calc(148px + env(safe-area-inset-bottom)) !important;}
+    body.has-botnav .paste-body  {padding-bottom:calc(148px + env(safe-area-inset-bottom)) !important;}
+    body.has-botnav .priv-body   {padding-bottom:calc(148px + env(safe-area-inset-bottom)) !important;}
     body.has-botnav .swipe-pager{display:none;} /* dot pager is redundant — bottom nav shows position */
 
     /* ── Quality-audit pass: focus-visible everywhere, tap targets ── */
@@ -4279,6 +4283,26 @@ window.addEventListener('load',()=>{
     try{
       navigator.serviceWorker.register('/sw.js').then(reg => {
         console.log('[sw] registered:', reg.scope);
+        // Wave 74 — update prompt. When a new SW lands while the page
+        // is open, the old one keeps controlling until cold reload, so
+        // users silently stay on stale builds for hours. We watch for
+        // a new worker installing, and once it's in 'installed' state
+        // (waiting), surface a non-intrusive toast offering refresh.
+        // Tap the toast → SW skipWaiting → page reloads on the new SW.
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if(!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+              // A new SW is waiting and we already have a controller —
+              // i.e. this is an update, not a first install.
+              showUpdateAvailableToast(newWorker);
+            }
+          });
+        });
+        // Periodic check — fires every 10 min the tab stays open so a
+        // long-lived session also picks up new builds.
+        setInterval(() => { try { reg.update(); } catch(e){} }, 10 * 60 * 1000);
       }).catch(err => {
         console.warn('[sw] registration failed:', err.message);
       });
@@ -4286,6 +4310,15 @@ window.addEventListener('load',()=>{
         if(e.data && e.data.type === 'OFFLINE'){
           showToast('Offline — showing the last cached check');
         }
+      });
+      // Wave 74 — when the new SW takes control, reload once so the
+      // page is running on the new bundle. Guarded so we only do this
+      // for an actual update (not the first registration).
+      let _swReloading = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if(_swReloading) return;
+        _swReloading = true;
+        window.location.reload();
       });
     }catch(e){ /* swallow */ }
   }
@@ -4489,6 +4522,18 @@ function goTo(screen, opts){
     renderRecentSearches();
     renderSavingsHero();   // Wave 28 — savings centerpiece animated count-up
     enhanceTrendingTilesWithImages();  // Wave 58 — swap badges for cached product images
+    // Wave 69 — hydrate trending-tile images for any tiles without
+    // cached product images. Pulls each tile's onclick query and asks
+    // /api/image for a thumbnail.
+    try {
+      const trendingQueries = Array.from(document.querySelectorAll('#screen-home .trend-tile'))
+        .map(el => {
+          const m = (el.getAttribute('onclick') || '').match(/trendSearch\(['"]([^'"]+)['"]\)/);
+          return m ? m[1] : null;
+        })
+        .filter(Boolean);
+      if(trendingQueries.length) hydrateMissingImages(trendingQueries);
+    } catch(e){}
     showFirstTimeHomeCoachIfNeeded();  // Wave 63 — point first-timers at Snap
     // First-visit swipe coach
     setTimeout(showSwipeCoachIfFirstVisit, 350);
@@ -4843,9 +4888,53 @@ function renderRecentSearches(){
     const initial = (String(q).trim()[0] || '?').toUpperCase();
     const visualHtml = img
       ? `<span class="recent-chip-avatar" aria-hidden="true" style="background-image:url(${escHtml(img).replace(/'/g,'%27')});"></span>`
-      : `<span class="recent-chip-avatar recent-chip-avatar-letter" aria-hidden="true">${escHtml(initial)}</span>`;
+      : `<span class="recent-chip-avatar recent-chip-avatar-letter" data-q="${escHtml(q)}" aria-hidden="true">${escHtml(initial)}</span>`;
     return `<button class="recent-chip" onclick="trendSearch('${safeQ}')">${visualHtml}<span class="recent-chip-text">${escHtml(q)}</span></button>`;
   }).join('');
+  // Wave 69 — lazily hydrate any letter-only avatars by fetching a
+  // product image via /api/image. The endpoint hits Serper Images which
+  // is more reliable as a one-shot lookup than the inline path during
+  // the original search. Hydrated images are cached in localStorage so
+  // subsequent renders read instantly.
+  hydrateMissingImages(recent);
+}
+
+// Wave 69 — Image hydration. Fires /api/image for any cached query that
+// has no image yet, caches the result, and live-swaps the avatar on the
+// home screen. Per-query in-flight dedupe keeps it from spamming.
+const _imgInflight = new Set();
+function hydrateMissingImages(queries){
+  if(!Array.isArray(queries)) return;
+  queries.forEach(q => {
+    const trimmed = String(q || '').trim();
+    if(!trimmed) return;
+    if(getProductImage(trimmed)) return;       // already cached
+    if(_imgInflight.has(trimmed)) return;       // already in flight
+    _imgInflight.add(trimmed);
+    fetch('/api/image?q=' + encodeURIComponent(trimmed))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if(d && d.image && d.image.url){
+          cacheProductImage(trimmed, d.image.url);
+          // Swap any letter-avatar instances of this query in place,
+          // including recent chips and trending tiles.
+          const safeUrl = String(d.image.url).replace(/"/g,'%22');
+          document.querySelectorAll('.recent-chip-avatar-letter').forEach(el => {
+            if(el.getAttribute('data-q') === trimmed){
+              el.classList.remove('recent-chip-avatar-letter');
+              el.style.backgroundImage = `url("${safeUrl}")`;
+              el.textContent = '';
+            }
+          });
+          // Also refresh trending tiles in case any are letter-only.
+          if(typeof enhanceTrendingTilesWithImages === 'function'){
+            try { enhanceTrendingTilesWithImages(); } catch(e){}
+          }
+        }
+      })
+      .catch(() => {})
+      .finally(() => { _imgInflight.delete(trimmed); });
+  });
 }
 
 // Wave 58 — Enhance trending tiles with cached product images.
@@ -5341,12 +5430,8 @@ function buildScenV3(items, uPrice, query){
             : `${deduped[0].retailer} has it for £${bestP}. You could keep £${saving}.`)
       : scoreBasis === 'average'
         ? (savingVsAvg<=2
-            ? (avgBasisCount >= 3
-                ? `Cheapest UK price found (typical UK price: £${avgP}).`
-                : `Cheapest UK price found (avg across ${deduped.length} retailers: £${avgP}).`)
-            : (avgBasisCount >= 3
-                ? `£${savingVsAvg} below the typical UK price (£${avgP}).`
-                : `£${savingVsAvg} below the UK average across ${deduped.length} retailers.`))
+            ? `Cheapest UK price found (typical UK price: £${avgP}).`
+            : `£${savingVsAvg} below the typical UK price (£${avgP}).`)
         : `${deduped[0].retailer} has it for £${bestP}.`;
   return{
     score,spc,vTitle,vSub,query,
@@ -5544,6 +5629,68 @@ function fetchPrices(query){
   return p;
 }
 
+// Wave 70 — Build a regex that matches WRONG-TIER variants given the
+// user's query. The principle: when a user asks for the BASE tier
+// (e.g. "iPhone 17") we don't want Pro / Pro Max / Plus listings
+// inflating the typical-price calc. When they explicitly ask for Pro
+// or Ultra, we respect that — no filter is applied for those tiers.
+//
+// Returns a RegExp or null. Null means "no tier guarding for this query"
+// (either the query is too generic, e.g. "headphones", or the user
+// already named the higher tier).
+function buildVariantBlockRegex(query){
+  const q = String(query || '').toLowerCase();
+  if(!q) return null;
+  const blockTerms = [];
+
+  // iPhone — block Pro / Pro Max / Plus when user said only "iPhone N"
+  if(/\biphone\s*\d+/i.test(q)){
+    if(!/\bpro\b/.test(q))      blockTerms.push('iphone\\s*\\d+\\s*pro\\b');
+    if(!/\bpro\s*max\b/.test(q))blockTerms.push('iphone\\s*\\d+\\s*pro\\s*max');
+    if(!/\bplus\b/.test(q))     blockTerms.push('iphone\\s*\\d+\\s*plus\\b');
+    if(!/\bmini\b/.test(q))     blockTerms.push('iphone\\s*\\d+\\s*mini\\b');
+  }
+
+  // Galaxy S — block Plus / Ultra / FE when user said only "Galaxy SN"
+  if(/\bgalaxy\s*s\s*\d+/i.test(q)){
+    if(!/\bultra\b/.test(q)) blockTerms.push('galaxy\\s*s\\s*\\d+\\s*ultra');
+    if(!/\bplus|\+/.test(q)) blockTerms.push('galaxy\\s*s\\s*\\d+\\s*\\+');
+    if(!/\bfe\b/.test(q))    blockTerms.push('galaxy\\s*s\\s*\\d+\\s*fe\\b');
+  }
+
+  // MacBook — Air vs Pro are different products
+  if(/\bmacbook\s*air\b/i.test(q)){
+    blockTerms.push('macbook\\s*pro');
+  } else if(/\bmacbook\s*pro\b/i.test(q)){
+    blockTerms.push('macbook\\s*air');
+  }
+
+  // iPad — block Pro / Air / Mini when user said only "iPad"
+  if(/\bipad\b/i.test(q) && !/\bipad\s*(pro|air|mini)\b/.test(q)){
+    blockTerms.push('ipad\\s*pro\\b');
+    blockTerms.push('ipad\\s*air\\b');
+    blockTerms.push('ipad\\s*mini\\b');
+  }
+
+  // AirPods — block Pro / Max when user said only "AirPods"
+  if(/\bairpods\b/i.test(q) && !/\bairpods\s*(pro|max)\b/.test(q)){
+    blockTerms.push('airpods\\s*pro\\b');
+    blockTerms.push('airpods\\s*max\\b');
+  }
+
+  // Watch — block Ultra when user said only "Apple Watch SerieN"
+  if(/\bapple\s*watch/i.test(q) && !/\bultra\b/.test(q)){
+    blockTerms.push('apple\\s*watch\\s*ultra');
+  }
+
+  if(!blockTerms.length) return null;
+  try {
+    return new RegExp('\\b(' + blockTerms.join('|') + ')\\b', 'i');
+  } catch (e) {
+    return null;
+  }
+}
+
 // Process a search response (from /api/ai-search OR /api/search) into a
 // scen object via buildScenV3. Handles the Serper shape (source name)
 // AND the AI search shape (real retailer URLs) — both work because we
@@ -5555,8 +5702,16 @@ function processSearchResponse(d1, query, snapshotUserPrice){
   // it's refurbished / used / Renewed unless the user explicitly searched
   // for those. Vincent saw Amazon Renewed iPhone 16 surface as best-price
   // for an "iPhone 17" search — credibility hit.
+  // Wave 70 — see buildVariantBlockRegex below for tier guarding.
   const userWantsUsed = /\b(refurbished|used|renewed|pre[-\s]?owned|reconditioned|second[-\s]?hand|open[-\s]?box)\b/i.test(query || '');
   const refurbRe = /\b(refurbished|renewed|amazon renewed|open box|pre[-\s]?owned|reconditioned|second[-\s]?hand|used [a-z])\b/i;
+  // Wave 70 — TIER / VARIANT GUARD. Defence-in-depth on top of the Haiku
+  // prompt. If the user searched for "iPhone 17" we drop "iPhone 17 Pro"
+  // and "iPhone 17 Pro Max" listings; if they asked for "MacBook Air" we
+  // drop "MacBook Pro" listings; etc. Without this Pro listings sneak
+  // through and pull the typical-price calc upward (Vincent's iPhone 17
+  // case showed £1085 avg vs the actual base ~£849).
+  const variantBlockRe = buildVariantBlockRegex(query);
   const mapped=raw.map(i=>{
     // matchRetailer accepts source name OR URL — both data sources covered
     const haystack=(i.source||'')+' '+(i.link||'');
@@ -5565,6 +5720,10 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     const titleStr = String(i.title || i.name || '');
     if(!userWantsUsed && refurbRe.test(titleStr)){
       console.log('[processSearchResponse] dropping refurbished listing:', titleStr.slice(0,80));
+      return null;
+    }
+    if(variantBlockRe && variantBlockRe.test(titleStr)){
+      console.log('[processSearchResponse] dropping wrong-tier variant:', titleStr.slice(0,80));
       return null;
     }
     const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
@@ -5810,30 +5969,40 @@ async function showResults(fetchPromise){
   renderResults(liveScen);
   goTo('results');
 
-  // Wave 56b — fire the AI typical-UK-price estimate for EVERY result.
-  // Wave 63 — render a skeleton placeholder immediately so the user sees
-  // "AI estimate loading…" instead of a delayed pop-in. Skeleton is
-  // replaced by the real strip when /api/ai-estimate returns.
-  injectAiEstimateSkeleton();
-  const _estGen = searchGeneration;
-  fetch('/api/ai-estimate', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({ product: liveScen.query || liveQuery || '' }),
-  }).then(r => r.ok ? r.json() : null).then(d => {
-    if(searchGeneration !== _estGen) return;
-    if(!d || !d.estimate || !d.estimate.family){
-      // Drop the skeleton — no estimate to show
+  // Wave 67 — AI estimate is now CONDITIONAL, not always-on.
+  // Reason: when we have a healthy retailer-derived typical price (3+
+  // retailers), showing a second AI-derived "typical UK price" creates
+  // contradictory dual averages on the same card (Vincent's iPhone 17
+  // screenshot — retailer avg £922, AI avg £1099, two different "below
+  // by" numbers). Rule: AI estimate only fires when retailer coverage
+  // is thin (<3 retailers OR coverage flagged 'limited'). When retailer
+  // data is good, the score block IS the typical-price story.
+  const retailerCoverageThin =
+    !liveScen ||
+    (liveScen.retailerCount || 0) < 3 ||
+    liveScen.coverage === 'limited' ||
+    liveScen.onlyEbay;
+  if(retailerCoverageThin){
+    injectAiEstimateSkeleton();
+    const _estGen = searchGeneration;
+    fetch('/api/ai-estimate', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ product: liveScen.query || liveQuery || '' }),
+    }).then(r => r.ok ? r.json() : null).then(d => {
+      if(searchGeneration !== _estGen) return;
+      if(!d || !d.estimate || !d.estimate.family){
+        const sk = document.querySelector('#hero-card .ai-estimate-skel');
+        if(sk) sk.remove();
+        return;
+      }
+      liveScen.aiEstimate = d.estimate;
+      renderAiEstimateInResults(d.estimate, liveScen);
+    }).catch(() => {
       const sk = document.querySelector('#hero-card .ai-estimate-skel');
       if(sk) sk.remove();
-      return;
-    }
-    liveScen.aiEstimate = d.estimate;
-    renderAiEstimateInResults(d.estimate, liveScen);
-  }).catch(() => {
-    const sk = document.querySelector('#hero-card .ai-estimate-skel');
-    if(sk) sk.remove();
-  });
+    });
+  }
 
   if(!hasSeenResult){
     hasSeenResult=true;
@@ -5888,11 +6057,11 @@ function renderAiEstimateInResults(est, sc){
   if(cheapest){
     const diff = Math.round(avg - cheapest);
     if(diff > 5){
-      positionLine = `<strong>£${diff} below</strong> the typical UK average.`;
+      positionLine = `<strong>£${diff} below</strong> the typical UK price.`;
     } else if(diff < -5){
-      positionLine = `<strong>£${Math.abs(diff)} above</strong> the typical UK average — keep looking.`;
+      positionLine = `<strong>£${Math.abs(diff)} above</strong> the typical UK price — keep looking.`;
     } else {
-      positionLine = `Right around the typical UK average.`;
+      positionLine = `Right around the typical UK price.`;
     }
   }
 
@@ -6784,26 +6953,32 @@ function renderResults(sc){
     // Wave 38 — when this came from a low-confidence Snap match, frame
     // the comparison as "similar UK products" so the user knows we're
     // working from a category match, not an exact-product hit.
+    // Wave 67 — truthfulness pass. Single source of truth on the result
+    // hero: the retailer-derived typical UK price. Wording moved from
+    // "UK average across N retailers" to "typical UK price" so it doesn't
+    // contradict the AI estimate strip below (which uses the same language).
+    // The retailer count is no longer surfaced in copy — users don't care
+    // whether 3 or 6 retailers were sampled, only that the typical price
+    // is X and the cheapest is Y.
     const avg = sc.avgPrice;
     const n   = sc.retailerCount || (sc.rets ? sc.rets.length : 0);
     const savedVsAvg = Math.max(0, sc.savingVsAvg || 0);
     const isSnapGeneric = sc.snapMatch && sc.snapMatch.isGenericMatch;
-    const avgBasis = isSnapGeneric ? 'similar UK products\' average' : 'UK average';
-    const avgBasisShort = isSnapGeneric ? 'similar UK products' : 'UK average';
+    const compBasis = isSnapGeneric ? 'similar UK products' : 'typical UK price';
     sc.witLine = sc.vTitle && n >= 2
-      ? sc.vTitle.replace(/\.$/, '') + (savedVsAvg > 0 ? ` Save £${savedVsAvg} vs ${avgBasis}.` : '')
+      ? sc.vTitle.replace(/\.$/, '') + (savedVsAvg > 0 ? ` Save £${savedVsAvg} vs ${compBasis}.` : '')
       : 'Found the lowest UK price right now.';
     witEl.textContent = sc.witLine;
     if(n >= 2 && savedVsAvg > 0){
       savNumEl.textContent = '£'+savedVsAvg;
       savNumEl.className = 'hero-num '+spc;
-      savLblEl.textContent = isSnapGeneric ? 'below similar products' : 'below the UK average';
-      where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+avgBasisShort+' across '+n+' retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>.';
+      savLblEl.textContent = isSnapGeneric ? 'below similar products' : 'below typical UK price';
+      where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+(isSnapGeneric ? 'similar UK products typically' : 'typical UK price')+' <strong>£'+avg+'</strong>.';
     } else if(n >= 2){
       savNumEl.textContent = '£'+sc.bestPrice;
       savNumEl.className = 'hero-num green';
-      savLblEl.textContent = isSnapGeneric ? 'matches similar products' : 'matches the UK average';
-      where.innerHTML = (isSnapGeneric ? 'Similar UK products' : 'Average') + ' across '+n+' UK retailer'+(n===1?'':'s')+': <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
+      savLblEl.textContent = isSnapGeneric ? 'matches similar products' : 'matches typical UK price';
+      where.innerHTML = (isSnapGeneric ? 'Similar UK products typically' : 'Typical UK price') + ' <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
     } else {
       // Single retailer
       savNumEl.textContent = '£'+sc.bestPrice;
@@ -8766,6 +8941,27 @@ function showToast(msg){
   const t=document.getElementById('toast');
   t.textContent=msg;t.classList.add('show');
   setTimeout(()=>t.classList.remove('show'),2800);
+}
+
+// Wave 74 — SW update toast. Sticky (no auto-dismiss) until tapped or
+// dismissed, with a clear CTA. Tap → skipWaiting → reload via the
+// controllerchange listener registered above.
+function showUpdateAvailableToast(newWorker){
+  const t = document.getElementById('toast');
+  if(!t) return;
+  // Avoid stacking duplicate toasts if updatefound fires twice.
+  if(t.dataset.kind === 'update') return;
+  t.dataset.kind = 'update';
+  t.innerHTML = '<span style="opacity:0.92">A new version of Savvey is ready</span> <button type="button" id="sw-refresh-btn" style="margin-left:10px;padding:6px 12px;border-radius:999px;border:none;background:#fff;color:var(--green);font:800 13px/1 \'Nunito\',sans-serif;cursor:pointer;">Refresh</button>';
+  t.classList.add('show');
+  const btn = document.getElementById('sw-refresh-btn');
+  if(btn){
+    btn.addEventListener('click', () => {
+      try { newWorker.postMessage({ type: 'SKIP_WAITING' }); } catch(e){}
+      // controllerchange handler will reload the page once the new
+      // SW takes control.
+    });
+  }
 }
 
 // ── Keyboard dismiss ──

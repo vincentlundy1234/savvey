@@ -15,6 +15,10 @@
     "api/ai-wit.js": {
       "memory": 256,
       "maxDuration": 8
+    },
+    "api/image.js": {
+      "memory": 256,
+      "maxDuration": 4
     }
   },
   "headers": [
