@@ -876,68 +876,43 @@
       opacity:0.92;
     }
     .srch-wordmark .y{color:var(--amber);}
-    /* Hero ring — the centrepiece. SVG circle with animated stroke. */
-    .srch-ring-wrap{
+    /* Wave 62 — Ring dropped per Vincent. Just the badge with a soft
+       outer glow + breathing animation. The marquee + counter carry the
+       "actively searching" energy below. */
+    .srch-badge-wrap{
       position:relative;
-      width:220px;height:220px;
+      width:140px;height:140px;
       margin-top:8px;
       display:flex;align-items:center;justify-content:center;
     }
-    .srch-ring-svg{
-      position:absolute;inset:0;
-      width:100%;height:100%;
-      transform:rotate(-90deg);
-    }
-    .srch-ring-track{
-      fill:none;
-      stroke:rgba(255,255,255,0.14);
-      stroke-width:6;
-    }
-    .srch-ring-progress{
-      fill:none;
-      stroke:var(--amber);
-      stroke-width:6;
-      stroke-linecap:round;
-      /* circumference of r=100 is 628.32 — set in JS but baseline for
-         CSS animation when JS hasn't set it. Animates from 0% to ~92%
-         over the full search duration; if results land first, it
-         finishes in JS. */
-      stroke-dasharray:628;
-      stroke-dashoffset:628;
-      animation:srch-ring-fill 3.6s cubic-bezier(0.22,0.61,0.36,1) forwards;
-      filter:drop-shadow(0 0 10px rgba(245,183,66,0.55));
-    }
-    @keyframes srch-ring-fill{
-      0%   { stroke-dashoffset:628; }
-      100% { stroke-dashoffset:48;  }
-    }
-    /* Decorative outer pulse */
-    .srch-ring-pulse{
-      position:absolute;inset:-8px;
-      border-radius:50%;
-      border:1.5px solid rgba(255,255,255,0.10);
-      animation:srch-ring-pulse 2.4s ease-in-out infinite;
-    }
-    @keyframes srch-ring-pulse{
-      0%,100% { transform:scale(1);   opacity:0.9; }
-      50%     { transform:scale(1.04);opacity:0.4; }
-    }
-    /* Inner badge — sits at the centre of the ring, smaller than before */
     .srch-savvey-badge{
       position:relative;z-index:1;
       width:124px;height:124px;
-      border-radius:30px;
+      border-radius:32px;
       background:linear-gradient(135deg, #3d9435 0%, #2a6b22 65%, #1a3d17 100%);
-      box-shadow:0 14px 38px rgba(0,0,0,0.42),
-                 inset 0 1px 0 rgba(255,255,255,0.22),
-                 0 0 0 1px rgba(255,255,255,0.10);
+      box-shadow:
+        0 24px 48px rgba(245,183,66,0.18),
+        0 14px 38px rgba(0,0,0,0.42),
+        inset 0 1px 0 rgba(255,255,255,0.22),
+        0 0 0 1px rgba(255,255,255,0.10);
       display:flex;align-items:center;justify-content:center;
       animation:srch-badge-breathe 2.8s ease-in-out infinite;
     }
     @keyframes srch-badge-breathe{
       0%,100% { transform:scale(1);   }
-      50%     { transform:scale(1.035);}
+      50%     { transform:scale(1.04);}
     }
+    /* Wave 62 — reduced-motion opt-outs across loading-screen animations */
+    @media (prefers-reduced-motion: reduce){
+      .srch-savvey-badge,
+      .srch-counter-dot,
+      .srch-marquee-track,
+      .srch-brand-tile.lit{
+        animation:none !important;
+      }
+    }
+    /* Legacy ring-related classes kept hidden for back-compat */
+    .srch-ring-wrap, .srch-ring-svg, .srch-ring-pulse, .srch-savvey-ring{display:none;}
     /* legacy inner ring elements no longer used */
     .srch-savvey-ring{display:none;}
     .srch-savvey-letter{
@@ -3529,13 +3504,9 @@
     <div class="srch-stack">
       <div class="srch-wordmark"><span>SAVVE</span><span class="y">Y</span></div>
 
-      <!-- Hero ring + badge centre -->
-      <div class="srch-ring-wrap" aria-hidden="true">
-        <svg class="srch-ring-svg" viewBox="0 0 220 220">
-          <circle class="srch-ring-track"    cx="110" cy="110" r="100"/>
-          <circle class="srch-ring-progress" cx="110" cy="110" r="100"/>
-        </svg>
-        <div class="srch-ring-pulse"></div>
+      <!-- Wave 62 — ring dropped per Vincent's call. Just the badge now,
+           with a soft outer glow + breathing animation. Cleaner focal point. -->
+      <div class="srch-badge-wrap" aria-hidden="true">
         <div class="srch-savvey-badge">
           <div class="srch-savvey-letter">S</div>
         </div>
@@ -4747,14 +4718,16 @@ function buildScenV3(items, uPrice, query){
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
 
   // Wave 29 — average-based Save Score for Discovery mode.
-  // When the user didn't enter a shelf price (Discovery: search/snap), the
-  // user-reference is the UK retailer AVERAGE — Save Score reflects how
-  // much cheaper the best retailer is than the typical UK price.
-  // When the user DID enter a price (Validation: scan/paste), Save Score
-  // reflects shelf vs cheapest.
-  // Single retailer: there's no comparison, so we never claim a 5/5 — fall
-  // back to a neutral score (3 = "Worth a look") so we don't mislead.
-  const avgP = Math.round(deduped.reduce((sum,p)=>sum+p.price,0)/deduped.length);
+  // Wave 62 — typical UK price now uses a TRIMMED MEAN: drop the highest
+  // outlier when we have 4+ retailers so a single £426 AO listing doesn't
+  // drag the "typical" price up and inflate "saving £237" claims when most
+  // retailers cluster much lower (Vincent's cordless vacuum case).
+  let _usedForAvg = deduped.slice();
+  if(deduped.length >= 4){
+    // Drop the single highest outlier
+    _usedForAvg = deduped.slice(0, deduped.length - 1);
+  }
+  const avgP = Math.round(_usedForAvg.reduce((sum,p)=>sum+p.price,0)/_usedForAvg.length);
   const savingVsAvg = Math.max(0, avgP - bestP);
   let score, spc, saving, scoreBasis;
   if(deduped.length < 2){

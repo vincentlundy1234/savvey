@@ -433,4 +433,197 @@ git commit -m "Wave 29-47: counter share + Discovery savings + Save Score + stic
 git push origin master
 ```
 
+---
+
+# Sixth pass (Waves 55-62, partial — SW v67)
+
+Vincent invoked the formal triage protocol then asked for the State of
+the App audit. After delivering audit + roadmap, he asked for at least
+one item from every block (A/B/C/D/E) before pausing to save. This
+section captures what shipped, what's in v67 ready to push, and what's
+still pending block-by-block.
+
+## What shipped in v66 (already pushed)
+
+### Wave 55 — input chrome reset + Apple in retailer pool
+- iOS Safari hard-border on focused inputs killed via
+  `-webkit-appearance:none` + excluded inputs from the catch-all
+  focus-visible rule.
+- Apple added to UK_RETAILERS, URL admission pattern in ai-search.js,
+  Apple search URL in retailerSearchUrl helper.
+
+### Wave 56 — `/api/ai-estimate` NEW endpoint
+- Claude Haiku 4.5, ~£0.001/call, returns typical UK price band:
+  `{family, typical_low, typical_high, typical_avg, confidence,
+  reasoning, closest_comparable, buy_retailers, future_release}`.
+- Wired into `renderNoResults` (empty state) AND `showResults`
+  (every successful result, async post-render).
+- Two render modes: dark premium panel for empty state, lighter
+  context strip for regular results.
+
+### Wave 57 — share overlay rebuilt as bottom-sheet
+- Handle bar, refined title, canvas preview, primary gradient share
+  button, 3-channel chip row with proper SVG icons (WhatsApp / X /
+  Copy), Save image + Cancel as bottom-bar text actions.
+- Single `buildShareSheetHtml(mode)` helper used by both
+  result-share AND savings-share paths.
+
+### Wave 58 — product image cache
+- Every successful search caches `_meta.heroImage` URL keyed by query
+  in localStorage with 7-day TTL.
+- Trending tiles + recent chips render real product imagery when
+  cached, falls back to current SVG silhouettes when not yet cached.
+- `enhanceTrendingTilesWithImages()` runs on home re-entry.
+
+### Wave 59 — budget-tier surfacing
+- BUDGET_KEYWORDS regex + BUDGET_HOSTS array in ai-search.js
+  (vacuum, hoover, kettle, toaster, microwave, blender, etc).
+- BUDGET_HOSTS includes Home Bargains, Aldi, Lidl, Wilko, Argos,
+  The Works, Poundland.
+- Haiku extraction prompt updated with explicit
+  "DO accept own-brand and budget-tier products" rules.
+
+### Wave 60 — verdict bar nowrap + paste-anchor-cheaper
+- Verdict title `white-space:nowrap; overflow:hidden;
+  text-overflow:ellipsis` so "Worth a look." can't wrap.
+- When user's pasted price is cheaper than every retailer found,
+  hero shows their price as the green-best with explicit
+  "you're already £X below the cheapest UK retailer we found" copy.
+
+### Wave 61 — Discovery score + userPrice snapshot + loading copy
+- New `calcDiscoveryScore(avgP, bestP)` replaces calcScore for
+  Discovery mode (Samsung TV "Walk away" red bug).
+- `fetchPrices` snapshots userPrice at kickoff, threads
+  `_userPriceSnapshot` into `processSearchResponse` to prevent
+  global-state-bleed across parallel/intervening searches.
+- Loading-screen counter changed from "Checking N/16 retailers"
+  (which never reached 16 before results landed) to
+  "Checking [retailer name]" cycling per pill.
+
+## v67 LOCAL CHANGES — NOT YET PUSHED
+
+Vincent paused mid-fix-block for session save. v67 contains:
+
+### Loading screen ring DROPPED
+Vincent's explicit call: "drop the ring". Markup `srch-ring-wrap` →
+`srch-badge-wrap` (just the badge inside a 140x140 frame). All SVG
+circle markup, stroke-dasharray animation, ring-pulse keyframes
+removed. Badge now has stronger amber outer-glow + breathing as the
+focal point. Marquee + counter carry the searching energy below.
+
+### Trimmed-mean avg in buildScenV3
+When ≥4 retailers found, drop the highest outlier before computing
+avgPrice. Vincent's vacuum case (Halfords £124, Very £159, AO £426)
+would now use avg of {Halfords, Very, mids} instead of having AO
+£426 pull the typical UK price up to £361. Direct fix for
+"saving £237" misleading headline.
+
+### calcDiscoveryScore curve revised
+Was returning 2 (red) for `savingPct >= -0.03` (best matches avg),
+now returns 4 (green-amber) for `savingPct >= 0` — Sony WH-1000XM5
+cluster case (£229/£230 = 0% saving) reads as "Pretty good —
+you're at the typical UK price" not "Walk away".
+
+### Reduced-motion opt-outs
+`@media (prefers-reduced-motion: reduce)` opts out:
+- srch-savvey-badge breathe
+- srch-counter-dot blink
+- srch-marquee-track scroll
+- srch-brand-tile.lit pulse
+
+### SW bumped 66 → 67
+
+## Push for v67
+
+```
+cd "C:\Users\vince\OneDrive\Desktop\files for live"
+git add .
+git commit -m "Wave 62: drop loading-screen ring + trimmed-mean avg + Discovery score curve + reduced-motion opt-outs (SW v67)"
+git push origin master
+```
+
+## Audit findings — live test of savvey.vercel.app
+
+Visual: 5/10. Functional: 4/10.
+
+**Critical functional finding:** "Sony WH-1000XM5" search → AI search
+returned 0 usable results, fell back to Serper which surfaced 2
+retailers (John Lewis £229 / Argos £230). Discovery score returned
+2/5 RED (now fixed in v67). **The bigger issue is AI-search
+coverage is thin for popular consumer products** — needs
+Perplexity prompt widening or fallback chain expansion. Foundational
+data layer issue.
+
+**Live test results:**
+- iPhone 17 → future-product detection fires correctly. AI estimate
+  panel rendered (HTML content-blocked from Chrome agent so visual
+  not verified).
+- Cordless vacuum → Halfords £124 surfaces (good). Avg pulled high
+  by AO £426 outlier (now fixed in v67 by trimmed-mean).
+- Service worker not registered on first visit. Lazy-registers.
+- Counter "0" flash on home re-entry (animation reset).
+- Share overlay bottom-sheet structure verified correct (handle bar,
+  title, canvas, primary share, 3 channels with SVG icons, save +
+  cancel bottom row).
+
+## Pending work, by audit block
+
+### Block A — Functional core
+- ✅ Discovery score curve (v67)
+- ✅ Trimmed-mean avg (v67)
+- ⏳ AI search Perplexity coverage triage (popular products empty)
+- ⏳ Manual price-entry on paste-fail
+
+### Block B — Result hero collapse
+- ⏳ Merge wit + saving + where into one 3-line summary block
+- ⏳ Move shelf-refine pill out of hero
+- ⏳ AI estimate strip optional/collapsed by default
+- ⏳ Single-retailer state gets AI estimate panel as the comparison
+
+### Block C — Visual coherence
+- ✅ Loading screen simplification (ring dropped, v67)
+- ⏳ Brand voice lockdown ("Save Score" everywhere, "Savvey" only
+  as wordmark — currently mixed)
+- ⏳ Skeleton loaders on AI estimate, trending images, retailer rows
+- ⏳ Bottom nav Snap-feature emphasis stronger
+
+### Block D — Polish + Robustness
+- ✅ Reduced-motion opt-outs (v67)
+- ⏳ Drag-to-dismiss bottom sheets
+- ⏳ Service worker eager registration on first visit
+- ⏳ Image lazy-loading
+- ⏳ Trending tile images refresh during search (currently 1-search lag)
+
+### Block E — Missing features
+- ⏳ Settings / preferences screen
+- ⏳ Welcome first-time vs returning coach
+- ⏳ Save-for-later batch re-check + notification
+- ⏳ Account / cross-device sync (Phase 6+)
+- ⏳ Privacy screen typography pass
+
+## Files in deploy folder at session pause
+
+```
+files for live\
++-- index.html      <- v67 in progress (ring removed, trimmed-mean, score curve)
++-- sw.js           <- v67
++-- vercel.json
++-- manifest.json
++-- CLAUDE.md
++-- savvey-debrief-1may2026.md
++-- savvey-session-notes-1may-final.md
++-- savvey-session-notes-1may-ux.md
++-- savvey-session-notes-1may-strategy.md
++-- savvey-session-notes-2may2026-morning.md
++-- savvey-session-notes-2may2026-afternoon.md   <- THIS FILE (now covers 6 passes)
++-- api\
+    +-- search.js
+    +-- scrape.js
+    +-- ai-search.js   v1.8 + Wave 59 budget keywords + Haiku prompt update
+    +-- ai-vision.js
+    +-- ai-wit.js
+    +-- ai-estimate.js (NEW Wave 56 — pushed in v66)
++-- _shared.js  (Apple added in Wave 55)
+```
+
 End of session notes.
