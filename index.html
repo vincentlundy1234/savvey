@@ -5788,6 +5788,44 @@ function buildVariantBlockRegex(query){
     blockTerms.push('apple\\s*watch\\s*ultra');
   }
 
+  // Wave 78 — Nintendo Switch / Switch 2 / Switch Lite / Switch OLED
+  // Live test surfaced Selfridges "Switch 2 Console" leaking into a
+  // "Nintendo Switch" query. Treat each variant as distinct.
+  if(/\bnintendo\s*switch\b/i.test(q) || /\bswitch\b/i.test(q) && !/network|kvm/.test(q)){
+    if(!/switch\s*2|switch\s*ii/i.test(q)){
+      blockTerms.push('switch\\s*2');
+      blockTerms.push('switch\\s*ii\\b');
+    }
+    if(!/oled/i.test(q)){
+      // Allow OLED naturally if user asked for plain Switch (it's a model
+      // they might want), but block when they didn't.
+      // Actually keep this lenient — many shoppers say "Switch" meaning
+      // either base or OLED. So we don't block OLED variants.
+    }
+    if(!/lite/i.test(q)){
+      blockTerms.push('switch\\s*lite');
+    }
+  }
+
+  // PlayStation — PS5 vs PS4 vs PS5 Pro vs Slim are all distinct.
+  if(/\bps\s*5\b|playstation\s*5/i.test(q) && !/pro\b/.test(q)){
+    blockTerms.push('ps\\s*5\\s*pro');
+    blockTerms.push('playstation\\s*5\\s*pro');
+  }
+  if(/\bps\s*4\b|playstation\s*4/i.test(q)){
+    // Block PS5 from PS4 query
+    blockTerms.push('ps\\s*5\\b');
+    blockTerms.push('playstation\\s*5');
+  }
+
+  // Xbox Series X vs Series S — different products.
+  if(/xbox\s+series\s*x\b/i.test(q) && !/\bseries\s*s\b/.test(q)){
+    blockTerms.push('xbox\\s+series\\s*s\\b');
+  }
+  if(/xbox\s+series\s*s\b/i.test(q) && !/\bseries\s*x\b/.test(q)){
+    blockTerms.push('xbox\\s+series\\s*x\\b');
+  }
+
   if(!blockTerms.length) return null;
   try {
     return new RegExp('\\b(' + blockTerms.join('|') + ')\\b', 'i');
@@ -5810,6 +5848,14 @@ function processSearchResponse(d1, query, snapshotUserPrice){
   // Wave 70 — see buildVariantBlockRegex below for tier guarding.
   const userWantsUsed = /\b(refurbished|used|renewed|pre[-\s]?owned|reconditioned|second[-\s]?hand|open[-\s]?box)\b/i.test(query || '');
   const refurbRe = /\b(refurbished|renewed|amazon renewed|open box|pre[-\s]?owned|reconditioned|second[-\s]?hand|used [a-z])\b/i;
+  // Wave 78 — bundle filter. Vincent's Nintendo Switch test surfaced
+  // McGrocer £84.34 for "Nintendo Switch Pokémon Sword and Shield Video
+  // Game Console Bundle" — a game bundle, not the bare console. The
+  // £84 price made it look like the cheapest Switch when it was actually
+  // a different product entirely. Drop listings whose title screams
+  // bundle / package / pack unless the user explicitly asked for one.
+  const userWantsBundle = /\bbundle|\bpack\b|\bpackage\b/i.test(query || '');
+  const bundleRe = /\b(bundle|combo pack|gift set|game console bundle|with\s+\d+\s+games)\b/i;
   // Wave 70 — TIER / VARIANT GUARD. Defence-in-depth on top of the Haiku
   // prompt. If the user searched for "iPhone 17" we drop "iPhone 17 Pro"
   // and "iPhone 17 Pro Max" listings; if they asked for "MacBook Air" we
@@ -5829,6 +5875,10 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     }
     if(variantBlockRe && variantBlockRe.test(titleStr)){
       console.log('[processSearchResponse] dropping wrong-tier variant:', titleStr.slice(0,80));
+      return null;
+    }
+    if(!userWantsBundle && bundleRe.test(titleStr)){
+      console.log('[processSearchResponse] dropping bundle/pack listing:', titleStr.slice(0,80));
       return null;
     }
     const price=parseFloat(String(i.price||'').replace(/[^0-9.]/g,''));
@@ -6204,7 +6254,7 @@ function renderAiEstimateInResults(est, sc){
   strip.innerHTML =
     '<div class="ai-estimate-strip-head">'
     + '<svg class="ai-estimate-spark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>'
-    + '<span class="ai-estimate-strip-label">Broader category benchmark</span>'
+    + '<span class="ai-estimate-strip-label">Savvey Says</span>'
     + '</div>'
     + `<div class="ai-estimate-strip-band">£${lo}–£${hi} <span class="ai-estimate-strip-avg">avg £${avg}</span></div>`
     + (positionLine ? `<div class="ai-estimate-strip-position">${positionLine}</div>` : '')
