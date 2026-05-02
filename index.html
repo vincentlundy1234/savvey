@@ -1723,7 +1723,7 @@
         </div>
       </div>
       <div class="w-headline">Know<br>before<br>you buy.</div>
-      <div class="w-sub">Scan a barcode, search by name, or paste a product link. We check 40+ UK retailers in seconds.</div>
+      <div class="w-sub">Scan a barcode, search by name, or paste a product link. We check the UK's biggest retailers in seconds.</div>
     </div>
     <div class="w-sheet">
       <button class="w-primary" onclick="goTo('scan');startScanner()">
@@ -1850,10 +1850,12 @@
       </div>
 
 
-      <!-- Trending bento — visual tiles with category emoji + product. -->
+      <!-- Trending bento — visual tiles with category emoji + product.
+           Wave 19 honesty: removed the "live" pulse dot since these are
+           hardcoded popular searches, not real-time trending data. Renamed
+           "Trending now" → "Popular searches" so users aren't misled. -->
       <div class="bento-trending-head">
-        <span class="bento-trending-label">Trending now</span>
-        <span class="bento-trending-pulse" aria-hidden="true"></span>
+        <span class="bento-trending-label">Popular searches</span>
       </div>
       <div class="bento-trending" data-no-swipe>
         <button class="trend-tile cat-audio" onclick="trendSearch('Apple AirPods Pro 2')">
@@ -2060,7 +2062,7 @@
     </div>
     <div class="srch-h">Checking prices</div>
     <div class="srch-p" id="searching-product">Sony WH-1000XM5</div>
-    <div class="srch-s">Scanning 40+ UK retailers…</div>
+    <div class="srch-s">Scanning UK retailers…</div>
     <div class="r-chips">
       <div class="r-chip" id="rc-0">Amazon UK</div>
       <div class="r-chip" id="rc-1">Currys</div>
@@ -2164,11 +2166,11 @@
 
       <div class="track" id="track-cta" onclick="showEmailModal()" role="button" tabindex="0">
         <div class="track-ico" aria-hidden="true">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </div>
         <div class="track-body">
-          <div class="track-title">Track this price</div>
-          <div class="track-sub">We'll email you the moment it drops</div>
+          <div class="track-title">Save for later</div>
+          <div class="track-sub">Pop back anytime to re-check the price</div>
         </div>
         <div class="track-arr">›</div>
       </div>
@@ -2181,17 +2183,19 @@
       <div class="priv-back" onclick="goHome()">‹ Back</div>
       <div class="priv-h1">Privacy Policy</div>
       <div class="priv-date">Last updated: April 2026</div>
-      <div class="priv-p">Savvey is a free price-checking app. We take your privacy seriously.</div>
+      <div class="priv-p">Savvey is a free price-checking app. We collect as little as possible.</div>
       <div class="priv-h2">What we collect</div>
-      <div class="priv-p"><strong>Email address</strong> — only if you set up a price alert. Never sold or shared.</div>
-      <div class="priv-p"><strong>Search queries</strong> — stored anonymously. Not linked to you personally.</div>
-      <div class="priv-p"><strong>Location</strong> — silently captured if permission granted. Never stored on our servers.</div>
-      <div class="priv-p"><strong>Camera</strong> — barcode scanning only, on-device. Images never uploaded.</div>
+      <div class="priv-p"><strong>Email address</strong> — only if you optionally provide one when saving a price. Stored against the saved item only. Never sold, never marketed at.</div>
+      <div class="priv-p"><strong>Search queries</strong> — sent to our AI providers (see below) to fetch prices. Not stored on our servers, not linked to you personally.</div>
+      <div class="priv-p"><strong>Camera</strong> — used in two ways: <em>(a)</em> barcode scanning runs on-device only, no image leaves your phone; <em>(b)</em> the optional "Snap a photo" mode sends a single downscaled JPEG to Claude Haiku to identify the product, then discards it. No photo is stored on our servers.</div>
+      <div class="priv-p"><strong>Saved items</strong> — kept on your device only (browser localStorage). Clear them anytime via the Saved view.</div>
       <div class="priv-h2">What we don't collect</div>
-      <div class="priv-p">No name, no payment details, no browsing history. No ad trackers. No data sold to anyone.</div>
+      <div class="priv-p">No name, no payment details, no browsing history, no location. No ad trackers. No data sold to anyone. No accounts to make.</div>
       <div class="priv-h2">Third-party services</div>
-      <div class="priv-p"><strong>Serper API</strong> — powers price search. See serper.dev/privacy.</div>
-      <div class="priv-p"><strong>Supabase</strong> — stores price alerts in EU data centres.</div>
+      <div class="priv-p"><strong>Perplexity Sonar</strong> — finds UK retailer product pages. See perplexity.ai/hub/legal/privacy-policy.</div>
+      <div class="priv-p"><strong>Anthropic Claude (Haiku)</strong> — extracts prices from search results, generates the wit line, and identifies products from photos. See anthropic.com/legal/privacy.</div>
+      <div class="priv-p"><strong>Serper</strong> — fallback search index when AI providers are unavailable. See serper.dev/privacy.</div>
+      <div class="priv-p"><strong>Supabase</strong> — stores any optional email you provide (EU data centres).</div>
       <div class="priv-h2">Contact</div>
       <div class="priv-p"><strong>privacy@savvey.app</strong></div>
     </div>
@@ -2203,12 +2207,14 @@
 <div class="modal-overlay" id="email-modal" role="dialog" aria-modal="true" aria-labelledby="email-modal-title" aria-hidden="true">
   <div class="modal-sheet">
     <div class="modal-handle" aria-hidden="true"></div>
-    <div class="modal-icon">🔔</div>
-    <div class="modal-title" id="email-modal-title">Track this price</div>
-    <div class="modal-sub">We'll email you the moment this gets cheaper anywhere in the UK.</div>
-    <input class="modal-in" id="modal-email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your@email.com"/>
-    <button class="modal-go" onclick="submitEmail()">Start tracking</button>
-    <button class="modal-skip" onclick="closeEmailModal()">Not now</button>
+    <div class="modal-icon" aria-hidden="true">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--green);"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+    </div>
+    <div class="modal-title" id="email-modal-title">Save this price</div>
+    <div class="modal-sub">Keep this on your device so you can pop back and re-check anytime. Optional email helps us spot you if a price drop alert system goes live later — no spam, no marketing.</div>
+    <input class="modal-in" id="modal-email" type="email" autocomplete="email" inputmode="email" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="your@email.com (optional)"/>
+    <button class="modal-go" onclick="submitEmail()">Save</button>
+    <button class="modal-skip" onclick="closeEmailModal()">Cancel</button>
   </div>
 </div>
 
@@ -4724,36 +4730,156 @@ function closeEmailModal(){
   modal.classList.remove('open');
   modal.setAttribute('aria-hidden', 'true');
 }
+// Save the current result as a bookmark on the user's device. Email is
+// optional — if provided, we still log it to Supabase against a future
+// price-drop email service (none live yet — we don't promise it). The
+// real on-device save is via localStorage so users can come back and find
+// their saved items reliably without any backend dependency.
 async function submitEmail(){
   const inp=document.getElementById('modal-email');
   const email=inp?inp.value.trim():'';
-  const valid=/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  if(!valid&&email.length>0){inp.style.borderColor='var(--r)';return;}
-  if(valid){
-    if(!liveScen){closeEmailModal&&closeEmailModal();return;}
-    const sc=liveScen;
-    const bestRet=sc.rets&&sc.rets.find(r=>r.best);
+  const hasEmail = !!email;
+  const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  // If they typed something but it's invalid, show error and bail
+  if(hasEmail && !validEmail){
+    inp.style.borderColor='var(--red)';
+    inp.classList.remove('shake');
+    void inp.offsetWidth;
+    inp.classList.add('shake');
+    haptic(20);
+    return;
+  }
+  if(!liveScen){ closeEmailModal(); return; }
+  const sc = liveScen;
+
+  // Persist on-device — this is the actual feature.
+  saveBookmark({
+    query: liveQuery || sc.query,
+    bestPrice: sc.bestPrice || null,
+    bestRetailer: sc.bestRetailer || null,
+    bestLink: sc.bestLink || null,
+    spc: sc.spc || null,
+    savedAt: Date.now(),
+    email: validEmail ? email : null,
+  });
+
+  // Optional: log email to Supabase for any future opt-in alert service.
+  // No promise of email — users were told this is just a save.
+  if(validEmail){
     try{
       await fetch(`${SB_URL}/rest/v1/price_alerts`,{
         method:'POST',
         headers:{'apikey':SB_KEY,'Authorization':`Bearer ${SB_KEY}`,'Content-Type':'application/json'},
         body:JSON.stringify({
-          email,product_name:liveQuery||sc.query,product_query:liveQuery||sc.query,
-          best_price_at_alert:sc.bestPrice||249,
-          best_retailer:sc.bestRetailer||'Amazon UK',
-          category:activeCat
+          email,
+          product_name: liveQuery || sc.query,
+          product_query: liveQuery || sc.query,
+          best_price_at_alert: sc.bestPrice || 0,
+          best_retailer: sc.bestRetailer || '',
+          category: activeCat,
         })
       });
-    }catch(e){}
-    showToast("We're watching it — we'll email you when it drops");
-    // Update track CTA
-    const cta=document.getElementById('track-cta');
-    if(cta){
-      cta.innerHTML=`<div class="track-ico">✅</div><div class="track-info"><div class="track-title" style="color:var(--g)">We're watching it</div><div class="track-sub" style="color:var(--g2)">We'll email when the price drops</div></div>`;
-      cta.style.background='var(--gl)';cta.style.borderColor='var(--gb)';cta.onclick=null;
-    }
+    }catch(e){ /* non-blocking */ }
+  }
+
+  haptic(15);
+  showToast(validEmail ? 'Saved · we\'ve got your email if a price-drop alert ever launches' : 'Saved · pop back anytime to re-check');
+
+  // Update the Track CTA in place to show saved state
+  const cta = document.getElementById('track-cta');
+  if(cta){
+    cta.innerHTML =
+      '<div class="track-ico" style="background:var(--green);color:#fff;">' +
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' +
+      '</div>' +
+      '<div class="track-body"><div class="track-title" style="color:var(--green);">Saved</div><div class="track-sub">Tap below to view your saved items</div></div>' +
+      '<div class="track-arr">›</div>';
+    cta.onclick = () => { haptic(10); showSavedItems(); };
   }
   closeEmailModal();
+}
+
+// ── Local saved-items store (Wave 19) ──
+//
+// Replaces the old "we'll email you" promise with a real on-device bookmark.
+// Caps at 50 saved items, deduped by query.
+const SAVED_KEY = 'savvey_saved_items';
+const SAVED_MAX = 50;
+function getSavedItems(){
+  try{
+    const raw = localStorage.getItem(SAVED_KEY);
+    if(!raw) return [];
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr : [];
+  }catch(e){ return []; }
+}
+function saveBookmark(item){
+  if(!item || !item.query) return;
+  try{
+    const existing = getSavedItems().filter(i => (i.query||'').toLowerCase() !== (item.query||'').toLowerCase());
+    existing.unshift(item);
+    const next = existing.slice(0, SAVED_MAX);
+    localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  }catch(e){}
+}
+function removeSavedItem(query){
+  try{
+    const next = getSavedItems().filter(i => (i.query||'').toLowerCase() !== String(query||'').toLowerCase());
+    localStorage.setItem(SAVED_KEY, JSON.stringify(next));
+  }catch(e){}
+}
+
+// Lightweight viewer — shows the saved items as a list. Tapping one re-runs
+// the search on that product. No standalone screen — uses the existing
+// share-overlay pattern as a bottom-sheet.
+function showSavedItems(){
+  const items = getSavedItems();
+  let html = '<div style="padding:24px 20px;background:var(--card);border-radius:24px 24px 0 0;max-height:80vh;overflow-y:auto;">';
+  html += '<div style="font:900 22px/1.1 \'Nunito\',sans-serif;color:var(--ink);margin-bottom:6px;">Saved items</div>';
+  html += '<div style="font:500 13px/1.4 \'Inter\',sans-serif;color:var(--ink3);margin-bottom:18px;">Tap any to re-check the latest price.</div>';
+  if(items.length === 0){
+    html += '<div style="text-align:center;padding:32px 0;color:var(--ink3);font:500 14px/1.4 \'Inter\';">Nothing saved yet — tap "Save for later" on any result.</div>';
+  } else {
+    items.forEach(it => {
+      const safe = (it.query||'').replace(/'/g,"\\'").replace(/</g,'&lt;');
+      const priceLabel = it.bestPrice ? '£' + it.bestPrice + (it.bestRetailer ? ' · ' + it.bestRetailer : '') : '';
+      const ageDays = it.savedAt ? Math.floor((Date.now() - it.savedAt) / 86400000) : 0;
+      const ageLabel = ageDays === 0 ? 'today' : ageDays === 1 ? 'yesterday' : ageDays + ' days ago';
+      html += '<div style="display:flex;align-items:center;gap:12px;padding:14px 0;border-bottom:1px solid var(--border);cursor:pointer;" onclick="trendSearch(\'' + safe + '\');closeSavedItems();">' +
+        '<div style="flex:1;min-width:0;">' +
+          '<div style="font:700 14px/1.2 \'Nunito\';color:var(--ink);">' + (it.query || 'Saved') + '</div>' +
+          (priceLabel ? '<div style="font:500 12px/1.3 \'Inter\';color:var(--ink3);margin-top:3px;">When saved: ' + priceLabel + ' · ' + ageLabel + '</div>' : '') +
+        '</div>' +
+        '<button onclick="event.stopPropagation();removeSavedItem(\'' + safe + '\');showSavedItems();" aria-label="Remove" style="background:transparent;border:none;color:var(--ink4);font:700 18px/1 sans-serif;padding:8px;cursor:pointer;">×</button>' +
+      '</div>';
+    });
+  }
+  html += '<button onclick="closeSavedItems()" style="width:100%;margin-top:18px;padding:14px;background:var(--surface);border:1px solid var(--border);border-radius:14px;font:700 14px/1 \'Nunito\';color:var(--ink2);cursor:pointer;">Close</button>';
+  html += '</div>';
+  // Inject into share-overlay (reused as bottom-sheet container)
+  const overlay = document.getElementById('share-overlay');
+  if(overlay){
+    overlay.innerHTML = html;
+    overlay.classList.add('open');
+    overlay.setAttribute('aria-hidden', 'false');
+  }
+}
+function closeSavedItems(){
+  const overlay = document.getElementById('share-overlay');
+  if(overlay){
+    overlay.classList.remove('open');
+    overlay.setAttribute('aria-hidden', 'true');
+    // Restore the share-card markup so future shares work
+    overlay.innerHTML = '<div class="share-wrap"><canvas id="share-canvas" width="640" height="820" aria-label="Savvey result share card"></canvas></div>' +
+      '<div class="share-actions">' +
+        '<button class="share-shr" onclick="shareCard()">Share →</button>' +
+        '<button class="share-channel sc-whatsapp" onclick="shareToWhatsApp()"><span class="sc-emoji">💬</span> WhatsApp</button>' +
+        '<button class="share-channel sc-twitter" onclick="shareToTwitter()"><span class="sc-emoji">𝕏</span> Twitter</button>' +
+        '<button class="share-channel sc-copy" onclick="copyShareText()"><span class="sc-emoji">🔗</span> Copy</button>' +
+        '<button class="share-save" onclick="saveCard()">📥 Save image</button>' +
+        '<button class="share-cancel" onclick="document.getElementById(\'share-overlay\').classList.remove(\'open\')">Cancel</button>' +
+      '</div>';
+  }
 }
 
 // ── Share card ──
@@ -4921,7 +5047,7 @@ function drawCard(sc){
   ctx.fillStyle='#f5f5f7';ctx.fillRect(0,H-72,W,72);
   ctx.fillStyle='#b0b5be';ctx.font='500 12px Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
-  ctx.fillText('Free · No account needed · 40+ UK retailers',W/2,H-36);
+  ctx.fillText('Free · No account needed · UK retailers',W/2,H-36);
 }
 
 // Picks a category emoji from the product name. Generic shopping bag if
