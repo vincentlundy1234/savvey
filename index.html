@@ -5397,11 +5397,23 @@ function scoreToSpc(s){return s>=4?'green':s===3?'amber':'red';}
 function buildScenV3(items, uPrice, query){
   if(!items||items.length===0)return null;
   const seen=new Set();
-  const deduped=items.filter(p=>{
+  let deduped=items.filter(p=>{
     if(seen.has(p.retailer))return false;
     seen.add(p.retailer);return true;
   }).sort((a,b)=>a.price-b.price);
   if(deduped.length===0)return null;
+  // Wave 76 — drop blatant outlier listings BEFORE we surface them to the
+  // user. Live test showed McGrocer £2174 alongside Very £769 / Box £799
+  // for an iPhone 17 search — McGrocer was a wrong/inflated SKU. Showing
+  // it as a row read as confusing rather than informative ("+£1405 more").
+  // Drop anything more than 2x the cheapest plausible price; we keep
+  // genuine premium retailers (typical UK retailers cluster within 1.6x
+  // and never beyond 2x without it being a wrong listing).
+  if(deduped.length >= 2){
+    const anchor = deduped[0].price;
+    const filtered = deduped.filter(p => p.price <= anchor * 2.0);
+    if(filtered.length >= 2) deduped = filtered;
+  }
   deduped[0].best=true;
   const bestP=deduped[0].price;
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
@@ -5411,15 +5423,29 @@ function buildScenV3(items, uPrice, query){
   // Wave 66 — switched again to "average of the 3 cheapest retailers".
   //   Reason: trimmed-mean still inflated when product variants leaked into
   //   results (e.g. "iPhone 17" returning Pro / Pro Max / 512GB listings,
-  //   pushing the avg to £1085 vs the actual base of ~£849). The 3 cheapest
-  //   retailers compete on the base SKU, so they naturally cluster around
-  //   the real UK price; premium variants almost never undercut, so they
-  //   self-exclude. Falls back to mean of all when fewer than 3 retailers.
+  //   pushing the avg to £1085 vs the actual base of ~£849).
+  // Wave 76 — added an OUTLIER GUARD on the cheapest-3 cluster. Live test
+  //   surfaced "McGrocer £2174" sitting in the cheapest 3 alongside Very
+  //   £769 and Box £799 for an iPhone 17 search — McGrocer was a wrong /
+  //   inflated SKU, but at 2.8x the cheapest it dragged the typical UK
+  //   price calc from ~£784 to £1247. Rule: any retailer whose price is
+  //   more than 1.6x the cheapest is dropped from the avg pool. 1.6x is
+  //   wide enough to keep legitimate retailer competition spread (RRP
+  //   premium, slow-mover overpricing) but tight enough to catch
+  //   wrong-product contamination.
   let _usedForAvg;
-  if(deduped.length >= 3){
-    _usedForAvg = deduped.slice(0, 3); // already sorted asc by price
+  if(deduped.length >= 1){
+    const anchor = deduped[0].price;
+    const inBand = deduped.filter(p => p.price <= anchor * 1.6);
+    if(inBand.length >= 3){
+      _usedForAvg = inBand.slice(0, 3);
+    } else if(inBand.length >= 1){
+      _usedForAvg = inBand.slice();
+    } else {
+      _usedForAvg = deduped.slice(0, 1); // pathological — keep cheapest only
+    }
   } else {
-    _usedForAvg = deduped.slice();
+    _usedForAvg = [];
   }
   // Wave 65 — round both avg and savingVsAvg as integers to avoid float
   // junk like "£403.549999999999 BELOW THE UK AVERAGE" (Vincent screenshot).
@@ -6149,22 +6175,25 @@ function renderAiEstimateInResults(est, sc){
 function detectFutureProduct(query){
   const q = String(query||'').toLowerCase().trim();
   if(!q) return null;
-  // iPhone — current series in widespread retailer indexes is 16. Anything
-  // 17+ is either unreleased or only just announced.
+  // Wave 76 — bumped current-generation thresholds to reflect May 2026.
+  // iPhone 17 (launched Sept 2025) is RELEASED — was being short-circuited
+  // to no-results since Wave 40, which is why iPhone 17 searches were
+  // landing on the empty-state hero even though retailers carry it.
+  // iPhone — current generation in May 2026 is 17. Anything 18+ is future.
   let m;
   if((m = q.match(/iphone\s*(\d{2,})/))){
     const n = parseInt(m[1],10);
-    if(n >= 17) return {label:'iPhone '+n, suggestion:'iPhone 16 Pro 256GB'};
+    if(n >= 18) return {label:'iPhone '+n, suggestion:'iPhone 17 Pro 256GB'};
   }
-  // Samsung Galaxy S — current is S25. S26+ is future.
+  // Samsung Galaxy S — current is S26 (launched Jan 2026). S27+ is future.
   if((m = q.match(/galaxy\s*s\s*(\d{2,})/))){
     const n = parseInt(m[1],10);
-    if(n >= 26) return {label:'Galaxy S'+n, suggestion:'Samsung Galaxy S25 Ultra'};
+    if(n >= 27) return {label:'Galaxy S'+n, suggestion:'Samsung Galaxy S26 Ultra'};
   }
-  // Pixel — current is 10. 11+ is future.
+  // Pixel — current is 11 (launched Oct 2025). 12+ is future.
   if((m = q.match(/pixel\s*(\d{2,})/))){
     const n = parseInt(m[1],10);
-    if(n >= 11) return {label:'Pixel '+n, suggestion:'Google Pixel 10 Pro'};
+    if(n >= 12) return {label:'Pixel '+n, suggestion:'Google Pixel 11 Pro'};
   }
   // PlayStation — PS5 current, PS6 unreleased.
   if(/\bps\s*6\b|playstation\s*6/.test(q)){
@@ -6174,15 +6203,15 @@ function detectFutureProduct(query){
   if(/xbox\s+series\s*z/.test(q)){
     return {label:'Xbox Series Z', suggestion:'Xbox Series X'};
   }
-  // MacBook M-chips — M4 current. M5+ is future.
+  // MacBook M-chips — M5 current (Oct 2025). M6+ is future.
   if((m = q.match(/macbook[^a-z]*m\s*(\d+)/))){
     const n = parseInt(m[1],10);
-    if(n >= 5) return {label:'MacBook M'+n, suggestion:'MacBook Air M4 13 inch'};
+    if(n >= 6) return {label:'MacBook M'+n, suggestion:'MacBook Air M5 13 inch'};
   }
-  // Apple Watch — Series 10 current. 11+ future.
+  // Apple Watch — Series 11 current (Sept 2025). 12+ future.
   if((m = q.match(/apple\s*watch\s*(?:series\s*)?(\d+)/))){
     const n = parseInt(m[1],10);
-    if(n >= 11) return {label:'Apple Watch Series '+n, suggestion:'Apple Watch Series 10'};
+    if(n >= 12) return {label:'Apple Watch Series '+n, suggestion:'Apple Watch Series 11'};
   }
   return null;
 }
