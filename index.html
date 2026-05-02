@@ -768,11 +768,16 @@
     }
 
     /* ─────────────────────────────────────────
-       SEARCHING — Wave 31 cleaner layout.
-       Tight centred composition: Savvey wordmark at top, big pulsing badge
-       + product name in the middle, retailer logo grid below. Replaces the
-       wallpaper-grid pattern that left awkward empty space and didn't read
-       as branded enough on Vincent's phone test (IMG_1658).
+       SEARCHING — Wave 42 V2 layout.
+       Vincent: "didn't like anything about [the loading screen]". Rebuilt
+       around three premium components:
+         1. A circular progress RING around the Savvey badge — animated
+            stroke-dasharray fill that completes over ~3s of search time.
+         2. An animated retailer counter ("Checking 12 / 16 retailers") —
+            visible feedback that work is happening.
+         3. A horizontal MARQUEE of brand-coloured retailer pills auto-
+            scrolling past at a steady speed — feels alive, modern, ticker-
+            like. Replaces the static 4×4 grid which read flat and dated.
     ───────────────────────────────────────── */
     #screen-searching{
       background:linear-gradient(160deg,#1a3d17 0%,#2a6b22 60%,#1d5019 100%);
@@ -783,24 +788,114 @@
     .srch-stack{
       flex:1;
       display:flex;flex-direction:column;align-items:center;
-      padding:calc(28px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom));
-      gap:18px;
+      padding:calc(36px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom));
+      gap:24px;
       width:100%;
       max-width:480px;margin:0 auto;
     }
-    /* Top wordmark row */
+    /* Top wordmark row — small, brand presence at the top */
     .srch-wordmark{
-      font:900 26px/1 "Nunito",sans-serif;
+      font:900 22px/1 "Nunito",sans-serif;
       color:#fff;letter-spacing:-0.6px;
       display:flex;align-items:center;gap:1px;
-      margin-top:4px;
+      opacity:0.92;
     }
     .srch-wordmark .y{color:var(--amber);}
-    /* Big pulsing centre */
-    .srch-centre{
-      display:flex;flex-direction:column;align-items:center;
-      gap:14px;
-      margin-top:22px;
+    /* Hero ring — the centrepiece. SVG circle with animated stroke. */
+    .srch-ring-wrap{
+      position:relative;
+      width:220px;height:220px;
+      margin-top:8px;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .srch-ring-svg{
+      position:absolute;inset:0;
+      width:100%;height:100%;
+      transform:rotate(-90deg);
+    }
+    .srch-ring-track{
+      fill:none;
+      stroke:rgba(255,255,255,0.14);
+      stroke-width:6;
+    }
+    .srch-ring-progress{
+      fill:none;
+      stroke:var(--amber);
+      stroke-width:6;
+      stroke-linecap:round;
+      /* circumference of r=100 is 628.32 — set in JS but baseline for
+         CSS animation when JS hasn't set it. Animates from 0% to ~92%
+         over the full search duration; if results land first, it
+         finishes in JS. */
+      stroke-dasharray:628;
+      stroke-dashoffset:628;
+      animation:srch-ring-fill 3.6s cubic-bezier(0.22,0.61,0.36,1) forwards;
+      filter:drop-shadow(0 0 10px rgba(245,183,66,0.55));
+    }
+    @keyframes srch-ring-fill{
+      0%   { stroke-dashoffset:628; }
+      100% { stroke-dashoffset:48;  }
+    }
+    /* Decorative outer pulse */
+    .srch-ring-pulse{
+      position:absolute;inset:-8px;
+      border-radius:50%;
+      border:1.5px solid rgba(255,255,255,0.10);
+      animation:srch-ring-pulse 2.4s ease-in-out infinite;
+    }
+    @keyframes srch-ring-pulse{
+      0%,100% { transform:scale(1);   opacity:0.9; }
+      50%     { transform:scale(1.04);opacity:0.4; }
+    }
+    /* Inner badge — sits at the centre of the ring, smaller than before */
+    .srch-savvey-badge{
+      position:relative;z-index:1;
+      width:124px;height:124px;
+      border-radius:30px;
+      background:linear-gradient(135deg, #3d9435 0%, #2a6b22 65%, #1a3d17 100%);
+      box-shadow:0 14px 38px rgba(0,0,0,0.42),
+                 inset 0 1px 0 rgba(255,255,255,0.22),
+                 0 0 0 1px rgba(255,255,255,0.10);
+      display:flex;align-items:center;justify-content:center;
+      animation:srch-badge-breathe 2.8s ease-in-out infinite;
+    }
+    @keyframes srch-badge-breathe{
+      0%,100% { transform:scale(1);   }
+      50%     { transform:scale(1.035);}
+    }
+    /* legacy inner ring elements no longer used */
+    .srch-savvey-ring{display:none;}
+    .srch-savvey-letter{
+      font:900 64px/1 "Nunito",sans-serif;
+      color:#fff;
+      letter-spacing:-3px;
+      text-shadow:0 2px 10px rgba(0,0,0,0.42);
+    }
+    /* Headline + counter cluster */
+    .srch-h{
+      font:900 22px/1.1 "Nunito",sans-serif;
+      color:#fff;letter-spacing:-0.4px;
+      margin-top:4px;
+    }
+    .srch-counter{
+      font:700 14px/1 "Nunito",sans-serif;
+      color:rgba(255,255,255,0.78);
+      letter-spacing:0.1px;
+      display:inline-flex;align-items:center;gap:6px;
+    }
+    .srch-counter strong{
+      color:#fff;font-weight:900;
+      min-width:30px;display:inline-block;text-align:right;
+    }
+    .srch-counter-dot{
+      display:inline-block;width:5px;height:5px;border-radius:50%;
+      background:var(--amber);
+      box-shadow:0 0 8px rgba(245,183,66,0.7);
+      animation:srch-dot-blink 1.1s ease-in-out infinite;
+    }
+    @keyframes srch-dot-blink{
+      0%,100%{opacity:1;transform:scale(1);}
+      50%   {opacity:0.4;transform:scale(0.8);}
     }
     .srch-product-line{
       display:flex;align-items:center;gap:8px;
@@ -818,38 +913,51 @@
       font:700 14px/1.2 "Nunito",sans-serif;
       color:#fff;letter-spacing:-0.2px;
       overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
-      max-width:280px;
+      max-width:260px;
     }
-    /* Retailer brand grid — tight 4-col grid below centre */
-    .srch-brand-grid{
-      display:grid;
-      grid-template-columns:repeat(4, 1fr);
-      gap:8px;
+    /* Marquee — horizontal scrolling brand chips, auto-loops. The visual
+       hook that makes the screen feel alive. Edges fade for a clean
+       boundary against the green background. */
+    .srch-marquee{
       width:100%;
-      max-width:380px;
-      margin-top:18px;
+      max-width:100%;
+      overflow:hidden;
+      mask-image:linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+      -webkit-mask-image:linear-gradient(to right, transparent 0, #000 12%, #000 88%, transparent 100%);
+      margin-top:6px;
     }
+    .srch-marquee-track{
+      display:flex;align-items:center;
+      gap:10px;
+      width:max-content;
+      animation:srch-marquee 28s linear infinite;
+      will-change:transform;
+    }
+    @keyframes srch-marquee{
+      from { transform:translateX(0); }
+      to   { transform:translateX(-50%); }
+    }
+    /* Each chip — defaults to muted, brand-coloured when "lit", filled
+       when "done". Same id scheme (rc-0..rc-15) as before so the cycling
+       animation in fetchPrices() works unchanged. */
     .srch-brand-tile{
-      aspect-ratio:1.2/1;
-      border-radius:14px;
-      background:rgba(255,255,255,0.08);
-      border:1.5px solid rgba(255,255,255,0.16);
-      display:flex;align-items:center;justify-content:center;
-      padding:6px 4px;
+      flex-shrink:0;
+      display:inline-flex;align-items:center;justify-content:center;
+      padding:9px 14px;
+      border-radius:100px;
+      background:rgba(255,255,255,0.10);
+      border:1.5px solid rgba(255,255,255,0.18);
       transition:background 0.4s, border-color 0.4s, transform 0.4s, box-shadow 0.4s;
       position:relative;overflow:hidden;
+      min-width:92px;
     }
     .srch-brand-logo{
-      font:900 11px/1 "Inter",-apple-system,sans-serif;
-      color:rgba(255,255,255,0.55);
+      font:900 12px/1 "Inter",-apple-system,sans-serif;
+      color:rgba(255,255,255,0.78);
       letter-spacing:-0.1px;
-      text-align:center;
       transition:color 0.4s;
-      max-width:100%;
-      overflow:hidden;text-overflow:ellipsis;
-      padding:0 4px;
+      white-space:nowrap;
     }
-    /* Brand-coloured "lit" + "done" states */
     .srch-brand-tile.lit{
       transform:scale(1.06);
       box-shadow:0 6px 18px rgba(0,0,0,0.22);
@@ -861,14 +969,14 @@
       50%   {filter:brightness(1.18);}
     }
     .srch-brand-tile.done{
-      background:rgba(255,255,255,0.18);
-      border-color:rgba(255,255,255,0.32);
+      background:rgba(255,255,255,0.20);
+      border-color:rgba(255,255,255,0.34);
     }
     .srch-brand-tile.done .srch-brand-logo{color:#fff;}
     .srch-brand-tile.done::after{
       content:"✓";
-      position:absolute;top:4px;right:6px;
-      font:800 10px/1 sans-serif;
+      margin-left:5px;
+      font:900 11px/1 sans-serif;
       color:rgba(255,255,255,0.75);
     }
     /* Brand colour palette — applied via data-brand */
@@ -889,6 +997,8 @@
     .srch-brand-tile[data-brand="wickes"].lit     { background:#005CA9; border-color:#005CA9; }
     .srch-brand-tile[data-brand="halfords"].lit   { background:#E51010; border-color:#E51010; }
     .srch-brand-tile[data-brand="ebay"].lit       { background:#E53238; border-color:#E53238; }
+    .srch-brand-tile[data-brand="homebargains"].lit{background:#0066B2; border-color:#0066B2; }
+    .srch-brand-tile[data-brand="lidl"].lit       { background:#0050AA; border-color:#0050AA; }
     /* Footer caption */
     .srch-footer{
       margin-top:auto;
@@ -896,6 +1006,10 @@
       font:500 12px/1.4 "Inter",sans-serif;
       color:rgba(255,255,255,0.55);
       letter-spacing:0.2px;
+    }
+    .srch-s{
+      font:500 12px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.55);
     }
     /* Big Savvey badge — pulsing centerpiece, the dominant focal point */
     .srch-savvey-badge{
@@ -1127,34 +1241,37 @@
     .hero-verdict-title.amber{color:var(--amber);}
     .hero-verdict-title.green{color:var(--green);}
 
-    /* Hero body */
-    .hero-body{padding:18px 20px 20px;}
+    /* Hero body — Wave 44 tightened spacing rhythm so density doesn't
+       feel cramped. Padding 20→18 horizontal, text margins reduced. */
+    .hero-body{padding:18px 18px 18px;}
     /* Wit quote — was illegible faint italic. Now: dark slate, proper
        quote styling with a subtle left rule to mark it as the AI voice. */
     .hero-wit{
-      font:500 14px/1.55 "Inter",sans-serif;
+      font:500 14px/1.5 "Inter",sans-serif;
       color:var(--ink2);
       font-style:italic;
-      padding:10px 0 12px 14px;
-      margin:0 0 16px;
+      padding:9px 0 9px 12px;
+      margin:0 0 14px;
       border-left:3px solid var(--green-bd);
       background:linear-gradient(90deg,var(--green-lt),transparent 40%);
       border-radius:0 8px 8px 0;
     }
     /* Number + label now stacked vertically — fixes the wrap on long labels
-       like "cheapest UK price" sitting awkwardly next to a £479.99 hero. */
-    .hero-amount{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:10px;}
-    .hero-num{font-family:"Nunito",sans-serif;font-weight:900;font-size:52px;line-height:1;letter-spacing:-2px;}
+       like "cheapest UK price" sitting awkwardly next to a £479.99 hero.
+       Wave 44: number trimmed 52→44 + label tightened so the pair feels
+       balanced not screaming. */
+    .hero-amount{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:8px;}
+    .hero-num{font-family:"Nunito",sans-serif;font-weight:900;font-size:44px;line-height:1;letter-spacing:-1.6px;}
     .hero-num.red{color:var(--red);}
     .hero-num.amber{color:var(--amber);}
     .hero-num.green{color:var(--green);}
     .hero-lbl{
-      font:600 13px/1 "Inter",sans-serif;
+      font:700 11px/1 "Inter",sans-serif;
       color:var(--ink3);
-      letter-spacing:0.4px;
+      letter-spacing:0.6px;
       text-transform:uppercase;
     }
-    .hero-where{font:500 14px/1.55 "Inter",sans-serif;color:var(--ink2);margin-bottom:18px;word-wrap:break-word;}
+    .hero-where{font:500 13.5px/1.5 "Inter",sans-serif;color:var(--ink2);margin-bottom:14px;word-wrap:break-word;}
     .hero-where strong{color:var(--ink);font-weight:700;}
     /* Vague-query hint — surfaces under .hero-where when query is a broad
        category like "tvs" / "phones". Soft amber to match heads-up tone. */
@@ -1316,14 +1433,16 @@
 
     /* Wave 38 — Snap generic-match banner. Soft amber tint, lives at the
        top of the hero card so users immediately see this is a category
-       comparison not an exact-product match. */
+       comparison not an exact-product match. Margin gives it breathing
+       room from the hero-card's rounded top corners (which clip at
+       border-radius:var(--r-lg) due to overflow:hidden on the parent). */
     .snap-generic-banner{
       display:flex;align-items:flex-start;gap:10px;
       padding:10px 12px;
       background:#fff8e6;
       border:1px solid #f0c674;
       border-radius:12px;
-      margin:0 0 14px;
+      margin:14px 14px 0;
       animation:snap-generic-in 320ms var(--ease-pop) both;
     }
     @keyframes snap-generic-in{
@@ -2432,17 +2551,20 @@
       <div class="w-sub">Scan a barcode, search by name, or paste a product link. We check the UK's biggest retailers in seconds.</div>
     </div>
     <div class="w-sheet">
-      <button class="w-primary" onclick="goTo('scan');startScanner()">
+      <!-- Wave 47 — welcome primary CTA promoted to Snap (AI vision).
+           Vincent: "snap ai feature almost better than the scan...scan
+           should maybe be more prominent [become] less". Snap leads,
+           barcode scan moves to the secondary slot. -->
+      <button class="w-primary" onclick="goTo('snap');startSnapper()">
         <div class="w-primary-icon">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round">
-            <rect x="2" y="7" width="20" height="13" rx="2.5"/>
-            <circle cx="12" cy="13.5" r="3"/>
-            <path d="M9 7V5.5a1.5 1.5 0 0 1 1.5-1.5h3A1.5 1.5 0 0 1 15 5.5V7"/>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/>
+            <circle cx="12" cy="13" r="3.5"/>
           </svg>
         </div>
         <div class="w-primary-body">
-          <div class="w-primary-title">In-store checker</div>
-          <div class="w-primary-sub">Scan the barcode · know before you buy</div>
+          <div class="w-primary-title">Snap any product</div>
+          <div class="w-primary-sub">AI identifies it · we check UK retailers</div>
         </div>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.45)" stroke-width="2.5" stroke-linecap="round"><polyline points="9 18 15 12 9 6"/></svg>
       </button>
@@ -2784,48 +2906,86 @@
   </div>
 
   <!-- ══════ SEARCHING ══════ -->
-  <!-- Wave 31 — cleaner loading layout. SAVVEY wordmark top, big pulsing
-       badge in middle, branded retailer tile grid below cycles through as
-       we sweep retailers. Each tile has the actual retailer wordmark text
-       in its corporate colour when "lit". The 16 ids (rc-0..rc-15) are
-       kept identical so the cycling animation in startSearchAnimation()
-       continues to work without modification. -->
+  <!-- Wave 42 — V2 loading layout. Three premium components:
+       1. Circular progress RING around the Savvey badge (animated stroke)
+       2. Animated retailer COUNTER ("Checking 12 / 16 retailers")
+       3. Horizontal MARQUEE of brand pills auto-scrolling across.
+       The same 16 ids (rc-0..rc-15) are reused inside the marquee,
+       duplicated for seamless loop. The cycling animation in
+       fetchPrices() targets rc-0..rc-15 so it lights up tiles as it
+       progresses. -->
   <div class="screen" id="screen-searching">
     <div class="srch-stack">
       <div class="srch-wordmark"><span>SAVVE</span><span class="y">Y</span></div>
 
-      <div class="srch-centre">
-        <div class="srch-savvey-badge" aria-hidden="true">
-          <div class="srch-savvey-ring"></div>
+      <!-- Hero ring + badge centre -->
+      <div class="srch-ring-wrap" aria-hidden="true">
+        <svg class="srch-ring-svg" viewBox="0 0 220 220">
+          <circle class="srch-ring-track"    cx="110" cy="110" r="100"/>
+          <circle class="srch-ring-progress" cx="110" cy="110" r="100"/>
+        </svg>
+        <div class="srch-ring-pulse"></div>
+        <div class="srch-savvey-badge">
           <div class="srch-savvey-letter">S</div>
         </div>
-        <div class="srch-h">Checking prices</div>
-        <div class="srch-product-line" aria-live="polite">
-          <svg class="srch-product-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          <div class="srch-product-name" id="searching-product">Loading…</div>
-        </div>
-        <div class="srch-s">Across the UK's biggest retailers</div>
       </div>
 
-      <div class="srch-brand-grid" aria-hidden="true">
-        <div class="srch-brand-tile" data-brand="amazon"     id="rc-0"><span class="srch-brand-logo">amazon</span></div>
-        <div class="srch-brand-tile" data-brand="argos"      id="rc-1"><span class="srch-brand-logo">Argos</span></div>
-        <div class="srch-brand-tile" data-brand="jl"         id="rc-2"><span class="srch-brand-logo">John Lewis</span></div>
-        <div class="srch-brand-tile" data-brand="currys"     id="rc-3"><span class="srch-brand-logo">Currys</span></div>
-        <div class="srch-brand-tile" data-brand="ao"         id="rc-4"><span class="srch-brand-logo">AO</span></div>
-        <div class="srch-brand-tile" data-brand="very"       id="rc-5"><span class="srch-brand-logo">Very</span></div>
-        <div class="srch-brand-tile" data-brand="richer"     id="rc-6"><span class="srch-brand-logo">Richer&nbsp;Sounds</span></div>
-        <div class="srch-brand-tile" data-brand="box"        id="rc-7"><span class="srch-brand-logo">Box</span></div>
-        <div class="srch-brand-tile" data-brand="boots"      id="rc-8"><span class="srch-brand-logo">Boots</span></div>
-        <div class="srch-brand-tile" data-brand="superdrug"  id="rc-9"><span class="srch-brand-logo">Superdrug</span></div>
-        <div class="srch-brand-tile" data-brand="tesco"      id="rc-10"><span class="srch-brand-logo">Tesco</span></div>
-        <div class="srch-brand-tile" data-brand="sainsburys" id="rc-11"><span class="srch-brand-logo">Sainsbury's</span></div>
-        <div class="srch-brand-tile" data-brand="bandq"      id="rc-12"><span class="srch-brand-logo">B&amp;Q</span></div>
-        <div class="srch-brand-tile" data-brand="wickes"     id="rc-13"><span class="srch-brand-logo">Wickes</span></div>
-        <div class="srch-brand-tile" data-brand="halfords"   id="rc-14"><span class="srch-brand-logo">Halfords</span></div>
-        <div class="srch-brand-tile" data-brand="ebay"       id="rc-15"><span class="srch-brand-logo">eBay</span></div>
+      <!-- Headline + animated counter -->
+      <div class="srch-h">Checking prices</div>
+      <div class="srch-counter" aria-live="polite">
+        <span class="srch-counter-dot"></span>
+        Checking <strong id="srch-counter-num">0</strong> / 16 UK retailers
+      </div>
+
+      <!-- Product pill -->
+      <div class="srch-product-line" aria-live="polite">
+        <svg class="srch-product-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <div class="srch-product-name" id="searching-product">Loading…</div>
+      </div>
+
+      <!-- Auto-scrolling marquee of brand pills. Duplicated content lets
+           the CSS animation loop seamlessly. Only the FIRST set of pills
+           carries the rc-N ids — the cycling animation lights those up;
+           the duplicate set is decorative for visual continuity. -->
+      <div class="srch-marquee" aria-hidden="true">
+        <div class="srch-marquee-track">
+          <!-- Set A — ids that the cycling animation targets -->
+          <div class="srch-brand-tile" data-brand="amazon"      id="rc-0"><span class="srch-brand-logo">amazon</span></div>
+          <div class="srch-brand-tile" data-brand="argos"       id="rc-1"><span class="srch-brand-logo">Argos</span></div>
+          <div class="srch-brand-tile" data-brand="jl"          id="rc-2"><span class="srch-brand-logo">John Lewis</span></div>
+          <div class="srch-brand-tile" data-brand="currys"      id="rc-3"><span class="srch-brand-logo">Currys</span></div>
+          <div class="srch-brand-tile" data-brand="ao"          id="rc-4"><span class="srch-brand-logo">AO</span></div>
+          <div class="srch-brand-tile" data-brand="very"        id="rc-5"><span class="srch-brand-logo">Very</span></div>
+          <div class="srch-brand-tile" data-brand="richer"      id="rc-6"><span class="srch-brand-logo">Richer Sounds</span></div>
+          <div class="srch-brand-tile" data-brand="box"         id="rc-7"><span class="srch-brand-logo">Box</span></div>
+          <div class="srch-brand-tile" data-brand="boots"       id="rc-8"><span class="srch-brand-logo">Boots</span></div>
+          <div class="srch-brand-tile" data-brand="superdrug"   id="rc-9"><span class="srch-brand-logo">Superdrug</span></div>
+          <div class="srch-brand-tile" data-brand="tesco"       id="rc-10"><span class="srch-brand-logo">Tesco</span></div>
+          <div class="srch-brand-tile" data-brand="sainsburys"  id="rc-11"><span class="srch-brand-logo">Sainsbury's</span></div>
+          <div class="srch-brand-tile" data-brand="bandq"       id="rc-12"><span class="srch-brand-logo">B&amp;Q</span></div>
+          <div class="srch-brand-tile" data-brand="wickes"      id="rc-13"><span class="srch-brand-logo">Wickes</span></div>
+          <div class="srch-brand-tile" data-brand="halfords"    id="rc-14"><span class="srch-brand-logo">Halfords</span></div>
+          <div class="srch-brand-tile" data-brand="ebay"        id="rc-15"><span class="srch-brand-logo">eBay</span></div>
+          <!-- Set B — duplicated for seamless marquee loop -->
+          <div class="srch-brand-tile" data-brand="amazon"><span class="srch-brand-logo">amazon</span></div>
+          <div class="srch-brand-tile" data-brand="argos"><span class="srch-brand-logo">Argos</span></div>
+          <div class="srch-brand-tile" data-brand="jl"><span class="srch-brand-logo">John Lewis</span></div>
+          <div class="srch-brand-tile" data-brand="currys"><span class="srch-brand-logo">Currys</span></div>
+          <div class="srch-brand-tile" data-brand="ao"><span class="srch-brand-logo">AO</span></div>
+          <div class="srch-brand-tile" data-brand="very"><span class="srch-brand-logo">Very</span></div>
+          <div class="srch-brand-tile" data-brand="richer"><span class="srch-brand-logo">Richer Sounds</span></div>
+          <div class="srch-brand-tile" data-brand="box"><span class="srch-brand-logo">Box</span></div>
+          <div class="srch-brand-tile" data-brand="boots"><span class="srch-brand-logo">Boots</span></div>
+          <div class="srch-brand-tile" data-brand="superdrug"><span class="srch-brand-logo">Superdrug</span></div>
+          <div class="srch-brand-tile" data-brand="tesco"><span class="srch-brand-logo">Tesco</span></div>
+          <div class="srch-brand-tile" data-brand="sainsburys"><span class="srch-brand-logo">Sainsbury's</span></div>
+          <div class="srch-brand-tile" data-brand="bandq"><span class="srch-brand-logo">B&amp;Q</span></div>
+          <div class="srch-brand-tile" data-brand="wickes"><span class="srch-brand-logo">Wickes</span></div>
+          <div class="srch-brand-tile" data-brand="halfords"><span class="srch-brand-logo">Halfords</span></div>
+          <div class="srch-brand-tile" data-brand="ebay"><span class="srch-brand-logo">eBay</span></div>
+        </div>
       </div>
 
       <div class="srch-footer">UK retailer prices · live check</div>
@@ -3259,9 +3419,12 @@ function globalReset(){
   const vBar=document.getElementById('hero-verdict-bar');
   if(vBar)vBar.className='hero-verdict';
   for(let i=1;i<=5;i++){const p=document.getElementById('vp-'+i);if(p){p.className='v-pip off';p.textContent=i;}}
-  // 5. Reset chip animations + branded pills (Wave 27 = 16 pills)
+  // 5. Reset chip animations + branded pills (Wave 27 = 16 pills) and
+  //    the loading-screen counter (Wave 42).
   chipTimers.forEach(clearTimeout);chipTimers=[];
   for(let i=0;i<16;i++){const c=document.getElementById('rc-'+i);if(c){c.classList.remove('lit');c.classList.remove('done');}}
+  const _counterEl=document.getElementById('srch-counter-num');
+  if(_counterEl) _counterEl.textContent='0';
   // 6. Wave 29: ALSO clear the refine-input + product-name + wit so a new
   //    search rendering can never inherit stale strings from a prior one.
   //    Vincent saw "iPhone 15 Pro 256GB" in the refine bar while the body
@@ -4022,6 +4185,17 @@ function fetchPrices(query){
 
   document.getElementById('searching-product').textContent=query;
   chipTimers.forEach(clearTimeout);chipTimers=[];
+  // Wave 42 — reset the counter at the start of every search.
+  const counterEl = document.getElementById('srch-counter-num');
+  if(counterEl) counterEl.textContent = '0';
+  // Force the progress ring to restart its CSS animation by toggling
+  // a reflow on the element — without this it'd run only on first mount.
+  const ringEl = document.querySelector('.srch-ring-progress');
+  if(ringEl){
+    ringEl.style.animation = 'none';
+    void ringEl.offsetWidth;
+    ringEl.style.animation = '';
+  }
   // Wave 27 — 16 retailer pills cycle through pending → lit → done.
   // Spread tighter (160ms apart) so all pills get their moment in the
   // typical 2-3s search latency. Random shuffle order so it doesn't feel
@@ -4031,6 +4205,7 @@ function fetchPrices(query){
     const j = Math.floor(Math.random() * (i + 1));
     [pillOrder[i], pillOrder[j]] = [pillOrder[j], pillOrder[i]];
   }
+  let doneCount = 0;
   pillOrder.forEach((rcIndex, position) => {
     const litAt  = 120 + position * 160;
     const doneAt = litAt + 800;
@@ -4043,6 +4218,10 @@ function fetchPrices(query){
       if(searchGeneration !== gen) return;
       const c = document.getElementById('rc-'+rcIndex);
       if(c){ c.classList.remove('lit'); c.classList.add('done'); }
+      // Wave 42 — increment the counter as each retailer completes.
+      doneCount++;
+      const cnt = document.getElementById('srch-counter-num');
+      if(cnt) cnt.textContent = String(Math.min(doneCount, 16));
     }, doneAt));
   });
 

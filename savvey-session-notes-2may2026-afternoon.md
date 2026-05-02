@@ -369,4 +369,68 @@ git commit -m "Wave 37-41: Snap-first + QR + similar-products framing + Home Bar
 git push origin master
 ```
 
+---
+
+# Fourth pass (Waves 42-47, SW v62)
+
+Vincent's instruction: "spend more time and care...work silently for a
+while". Loading screen rebuilt from scratch, hero tightened, Snap
+promoted on the welcome screen.
+
+## Wave 42 — Loading screen V2 (the big one)
+Killed the static brand tile grid. New layout:
+
+1. **Circular progress ring around the Savvey badge** — SVG with
+   animated stroke-dasharray fill that completes over ~3.6s. Amber
+   stroke + soft drop-shadow glow. The badge breathes inside the ring.
+   Ring re-fires its animation on every new search via reflow toggle.
+
+2. **Animated retailer counter** — "Checking [N] / 16 UK retailers"
+   below the ring. N ticks up live as each retailer's pill enters
+   `.done` state. Amber pulsing dot signals active.
+
+3. **Horizontal marquee of brand pills** — auto-scrolls 28s linear
+   infinite. Two duplicated pill sets for seamless loop. Mask-image
+   fades both edges. Each pill turns into the retailer's CORPORATE
+   COLOUR when `.lit` and into a tinted "done" state with ✓.
+
+## Wave 44 — hero density
+- `.hero-num` font 52→44, letter-spacing tightened
+- `.hero-lbl` size 13→11, weight bumped, uppercase letter-spacing
+  increased for label rhythm
+- `.hero-wit` padding/margin tightened
+- `.hero-where` size 14→13.5, margins tightened
+- Body padding 20→18
+
+Hero card reads tighter and more premium without losing any content.
+
+## Wave 47 — welcome Snap promotion
+First-impression CTA on welcome is now:
+- Title: "Snap any product"
+- Sub: "AI identifies it · we check UK retailers"
+- Routes to Snap mode
+
+Reflects Wave 37's Snap-first reorganisation in the first thing new
+users see.
+
+## SW now v62
+
+## Push for Waves 42-47
+
+```
+cd "C:\Users\vince\OneDrive\Desktop\files for live"
+git add .
+git commit -m "Wave 42-47: loading screen V2 (ring + counter + marquee) + hero density + Snap on welcome (SW v62)"
+git push origin master
+```
+
+## OR push the entire afternoon as one commit
+
+```
+cd "C:\Users\vince\OneDrive\Desktop\files for live"
+git add .
+git commit -m "Wave 29-47: counter share + Discovery savings + Save Score + sticky-state kill + scan-direct + empty-state shortcuts + brand rails + Snap-first + QR + similar-products framing + retailer pool expansion + future-product detection + Argos fix + loading screen V2 + hero density + welcome Snap CTA (SW v62)"
+git push origin master
+```
+
 End of session notes.
