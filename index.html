@@ -8,7 +8,56 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="manifest" href="/manifest.json"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+
+  <!-- Global crash-screen — first script in <head> so any subsequent script
+       error gets caught and rendered as a useful "reload" UI instead of a
+       blank white page. Vital for launch hardening. -->
+  <script>
+    (function(){
+      function showCrash(detail){
+        if(document.getElementById('savvey-crash-screen')) return;
+        var bg = document.createElement('div');
+        bg.id = 'savvey-crash-screen';
+        bg.style.cssText = 'position:fixed;inset:0;background:#fff;color:#0f1114;z-index:99999;display:flex;flex-direction:column;justify-content:center;align-items:center;padding:24px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;text-align:center;';
+        var emoji = document.createElement('div');
+        emoji.style.cssText = 'font-size:42px;margin-bottom:14px;';
+        emoji.textContent = '😬';
+        var h2 = document.createElement('h2');
+        h2.style.cssText = 'font-weight:800;font-size:22px;line-height:1.2;color:#0f1114;margin:0 0 8px;';
+        h2.textContent = 'Savvey hit a snag';
+        var p = document.createElement('p');
+        p.style.cssText = 'color:#767c88;font-size:14px;margin:0 0 24px;max-width:300px;line-height:1.5;';
+        p.textContent = 'An unexpected error stopped the app. Reload to start fresh.';
+        var btn = document.createElement('button');
+        btn.style.cssText = 'background:linear-gradient(132deg,#3d9435,#2a6b22);color:#fff;border:none;padding:16px 32px;border-radius:14px;font-weight:800;font-size:15px;cursor:pointer;box-shadow:0 8px 24px rgba(42,107,34,0.32);';
+        btn.textContent = 'Reload Savvey';
+        btn.onclick = function(){ window.location.reload(); };
+        bg.appendChild(emoji);
+        bg.appendChild(h2);
+        bg.appendChild(p);
+        bg.appendChild(btn);
+        if(document.body){
+          document.body.appendChild(bg);
+        } else {
+          document.addEventListener('DOMContentLoaded', function(){ document.body.appendChild(bg); });
+        }
+      }
+      window.addEventListener('error', function(e){
+        // Ignore errors from third-party scripts (CDN failures handled elsewhere)
+        if(e.filename && e.filename.indexOf(location.origin) === -1 && e.filename.indexOf('savvey') === -1) return;
+        console.error('[Savvey crash]', e.message, e.filename, e.lineno);
+        showCrash(e.message);
+      });
+      window.addEventListener('unhandledrejection', function(e){
+        console.error('[Savvey unhandled rejection]', e.reason);
+        // Don't show crash UI for unhandled rejections — usually network errors,
+        // not full app crashes. Logging only.
+      });
+    })();
+  </script>
   <!-- Barcode scanning: native BarcodeDetector first (Chrome/Android since
        2019, iOS Safari 17+). When unavailable, lazy-imports @zxing/browser
        on first scan. QuaggaJS removed 1 May 2026 — unmaintained since 2017,
@@ -2791,13 +2840,13 @@ function goHome(){
 }
 
 // ── Silent geo (no UI) ──
-function silentGeo(){
-  if(userLat||!navigator.geolocation)return;
-  navigator.geolocation.getCurrentPosition(
-    p=>{userLat=p.coords.latitude;userLng=p.coords.longitude;},
-    ()=>{},{timeout:8000,maximumAge:300000}
-  );
-}
+// silentGeo() removed Wave 17 (1 May 2026) — was triggering the iOS
+// geolocation permission prompt on every home visit but we don't actually
+// use the lat/lng data anywhere. Per "permission panic" launch hardening:
+// never request a permission until the user takes an action that requires
+// it. When/if a "find in stores near me" feature ships, ask for location
+// inside that user-initiated flow.
+function silentGeo(){ /* no-op — see comment above */ }
 
 // ── Trending data ──
 const TRENDING={
@@ -3254,6 +3303,19 @@ async function showResults(fetchPromise){
     return;
   }
 
+  // Premium-feel haptic — fires the moment results actually arrive (the
+  // "verdict landed" beat). Only on real results, not the no-results path.
+  // Double pulse for reds (warning energy), single firm pulse otherwise.
+  if(sc && sc.spc){
+    try{
+      if(navigator.vibrate){
+        if(sc.spc === 'red')        navigator.vibrate([15, 30, 15]);
+        else if(sc.spc === 'amber') navigator.vibrate(15);
+        else                        navigator.vibrate(20);
+      }
+    }catch(e){}
+  }
+
   // Note: userPrice is already passed into buildScenV3 inside fetchPrices,
   // so the score/verdict already reflect it. No rebuild needed.
 
@@ -3632,6 +3694,7 @@ function viewOnAmazon(){
 // same URL preference logic as buyNow so users land on the retailer site
 // instead of a Google search page.
 function openRetailerRow(retailerName, link){
+  haptic(10); // confirms the row tap registered
   const isGoogleAgg=/^https?:\/\/(?:www\.)?google\./i.test(link||'');
   if(link&&!isGoogleAgg){window.open(link,'_blank');return;}
   const search=retailerSearchUrl(retailerName,liveQuery||'');
@@ -3640,6 +3703,7 @@ function openRetailerRow(retailerName, link){
 }
 
 function buyNow(){
+  haptic(15); // bigger commitment = slightly stronger pulse
   hasBoughtItem=true;
   if(!liveScen)return; // no real scen → nothing to open
   const url=bestBuyUrl(liveScen);
@@ -3945,11 +4009,13 @@ const DEMO_SCEN={
 
 // ── Trending search ──
 function trendSearch(product){
+  haptic(12); // tile-tap confirm — also fires for recent chips and vague-hint try chips
   globalReset();
   liveQuery=product;
   const si=document.getElementById('search-input');if(si)si.value=product;
   inputMethod='search';
   userPrice=null;bestPriceOnly=true;
+  pushRecentSearch(product); // also persist trending taps
   // Trending taps go straight to searching → results. No price entry.
   goTo('searching');
   showResults(fetchPrices(product));
@@ -4256,6 +4322,8 @@ function handleScannedCode(code){
   scanDebounce = setTimeout(()=>{
     scannedBarcode = code;
     scannerActive = false; // halt further detection
+    // Success haptic — double pulse celebrates the lockon (premium feel)
+    try{ if(navigator.vibrate) navigator.vibrate([20,40,20]); }catch(e){}
     onBarcodeDetected(code);
   }, 300);
 }
@@ -4623,9 +4691,11 @@ async function handlePaste(){
 
 // ── Email modal ──
 function showEmailModal(){
+  haptic(10); // confirms the track-CTA tap
   document.getElementById('email-modal').classList.add('open');
 }
 function closeEmailModal(){
+  haptic(8);
   document.getElementById('email-modal').classList.remove('open');
 }
 async function submitEmail(){
@@ -4662,6 +4732,7 @@ async function submitEmail(){
 
 // ── Share card ──
 function openShareCard(){
+  haptic(12); // confirms share-button tap before the card animates in
   if(!liveScen)return; // empty state — nothing to share
   const sc=liveScen;
   drawCard(sc);

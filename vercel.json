@@ -3,20 +3,52 @@
     "api/search.js": {
       "memory": 256,
       "maxDuration": 15
+    },
+    "api/ai-search.js": {
+      "memory": 256,
+      "maxDuration": 15
+    },
+    "api/ai-vision.js": {
+      "memory": 256,
+      "maxDuration": 15
+    },
+    "api/ai-wit.js": {
+      "memory": 256,
+      "maxDuration": 8
     }
   },
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
-        {
-          "key": "Access-Control-Allow-Origin",
-          "value": "https://savvey.app"
-        },
-        {
-          "key": "Vary",
-          "value": "Origin"
-        }
+        { "key": "Access-Control-Allow-Origin", "value": "https://savvey.app" },
+        { "key": "Vary",                        "value": "Origin" },
+        { "key": "X-Content-Type-Options",      "value": "nosniff" },
+        { "key": "Strict-Transport-Security",   "value": "max-age=31536000; includeSubDomains" }
+      ]
+    },
+    {
+      "source": "/sw.js",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
+      ]
+    },
+    {
+      "source": "/manifest.json",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/(index.html)?",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(self), microphone=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
     }
   ]
