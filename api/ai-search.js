@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.9';
+const VERSION = 'ai-search.js v1.10';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -725,11 +725,12 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     shopping: results.map(r => ({
-      source:   r.source,
-      price:    `£${r.price.toFixed(2)}`,
-      link:     tagAmazonUrl(r.link),  // Amazon URLs get ?tag=savvey-21 appended
-      title:    r.title,
-      delivery: r.delivery,
+      source:      r.source,
+      price:       `£${r.price.toFixed(2)}`,
+      link:        tagAmazonUrl(r.link),  // Amazon URLs get ?tag=savvey-21 appended
+      title:       r.title,
+      delivery:    r.delivery,
+      query_match: r.query_match || 'exact',  // Wave 79 — surface Haiku's match grade so frontend can use it
     })),
     organic: [],
     _meta: {
