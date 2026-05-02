@@ -5327,8 +5327,16 @@ function cleanQuery(raw){
 // substrings (lowercase) that Google Shopping populates for each retailer.
 // We have to match by source name because Serper's shopping API surfaces
 // every item with a Google aggregator URL — see search.js v6.8 change log.
+// Wave 77 — frontend UK_RETAILERS now includes EVERY retailer the backend
+// can return. Live test surfaced the bug: backend was returning Lakeland
+// £39.99 / Dunelm £68 / Wickes £73 / B&Q £269 for "cordless vacuum
+// cleaner" but the frontend's matchRetailer had no entry for those
+// hosts, so they were silently dropped. The frontend list must stay in
+// sync with api/_shared.js UK_RETAILERS.
 const UK_RETAILERS={
+  // Electronics + general
   'amazon.co.uk':    {name:'Amazon UK',     aff:'?tag=savvey-21', srcTerms:['amazon']},
+  'apple.com':       {name:'Apple',         aff:'', srcTerms:['apple.com','apple uk','apple store']},
   'currys.co.uk':    {name:'Currys',        aff:'', srcTerms:['currys']},
   'johnlewis.com':   {name:'John Lewis',    aff:'', srcTerms:['john lewis']},
   'argos.co.uk':     {name:'Argos',         aff:'', srcTerms:['argos']},
@@ -5338,12 +5346,45 @@ const UK_RETAILERS={
   'box.co.uk':       {name:'Box.co.uk',     aff:'', srcTerms:['box.co.uk','box.com']},
   'ebay.co.uk':      {name:'eBay UK',       aff:'', srcTerms:['ebay']},
   'halfords.com':    {name:'Halfords',      aff:'', srcTerms:['halfords']},
-  'screwfix.com':    {name:'Screwfix',      aff:'', srcTerms:['screwfix']},
   'boots.com':       {name:'Boots',         aff:'', srcTerms:['boots']},
   'costco.co.uk':    {name:'Costco UK',     aff:'', srcTerms:['costco']},
   'selfridges.com':  {name:'Selfridges',    aff:'', srcTerms:['selfridges']},
   'mcgrocer.com':    {name:'McGrocer',      aff:'', srcTerms:['mcgrocer']},
   'harveynichols.com':{name:'Harvey Nichols',aff:'', srcTerms:['harvey nichols']},
+  // DIY + home + kitchen (Wave 77 — Vincent flagged)
+  'diy.com':         {name:'B&Q',           aff:'', srcTerms:['b&q','diy.com','b and q']},
+  'wickes.co.uk':    {name:'Wickes',        aff:'', srcTerms:['wickes']},
+  'screwfix.com':    {name:'Screwfix',      aff:'', srcTerms:['screwfix']},
+  'toolstation.com': {name:'Toolstation',   aff:'', srcTerms:['toolstation']},
+  'homebase.co.uk':  {name:'Homebase',      aff:'', srcTerms:['homebase']},
+  'lakeland.co.uk':  {name:'Lakeland',      aff:'', srcTerms:['lakeland']},
+  'dunelm.com':      {name:'Dunelm',        aff:'', srcTerms:['dunelm']},
+  // Beauty
+  'superdrug.com':         {name:'Superdrug',         aff:'', srcTerms:['superdrug']},
+  'cultbeauty.co.uk':      {name:'Cult Beauty',       aff:'', srcTerms:['cult beauty','cultbeauty']},
+  'lookfantastic.com':     {name:'Lookfantastic',     aff:'', srcTerms:['lookfantastic','look fantastic']},
+  'spacenk.com':           {name:'Space NK',          aff:'', srcTerms:['space nk','spacenk']},
+  'theperfumeshop.com':    {name:'The Perfume Shop',  aff:'', srcTerms:['perfume shop']},
+  'beautybay.com':         {name:'Beauty Bay',        aff:'', srcTerms:['beauty bay','beautybay']},
+  // Books / media
+  'waterstones.com':       {name:'Waterstones',       aff:'', srcTerms:['waterstones']},
+  'whsmith.co.uk':         {name:'WHSmith',           aff:'', srcTerms:['whsmith','wh smith']},
+  // Grocery
+  'tesco.com':             {name:'Tesco',             aff:'', srcTerms:['tesco']},
+  'sainsburys.co.uk':      {name:'Sainsbury\'s',      aff:'', srcTerms:['sainsbury']},
+  'asda.com':              {name:'Asda',              aff:'', srcTerms:['asda']},
+  'morrisons.com':         {name:'Morrisons',         aff:'', srcTerms:['morrisons']},
+  'waitrose.com':          {name:'Waitrose',          aff:'', srcTerms:['waitrose']},
+  'marksandspencer.com':   {name:'M&S',               aff:'', srcTerms:['marks & spencer','m&s','marksandspencer']},
+  'next.com':              {name:'Next',              aff:'', srcTerms:['next.com','next ']},
+  'fortnumandmason.com':   {name:'Fortnum & Mason',   aff:'', srcTerms:['fortnum']},
+  // Discount / variety
+  'homebargains.co.uk':    {name:'Home Bargains',     aff:'', srcTerms:['home bargains','homebargains']},
+  'lidl.co.uk':            {name:'Lidl',              aff:'', srcTerms:['lidl']},
+  'aldi.co.uk':            {name:'Aldi',              aff:'', srcTerms:['aldi']},
+  'theworks.co.uk':        {name:'The Works',         aff:'', srcTerms:['the works','theworks']},
+  'wilko.com':             {name:'Wilko',             aff:'', srcTerms:['wilko']},
+  'poundland.co.uk':       {name:'Poundland',         aff:'', srcTerms:['poundland']},
 };
 
 // matchRetailer accepts either a URL or a source name (or both — pass them
@@ -5402,23 +5443,18 @@ function scoreToSpc(s){return s>=4?'green':s===3?'amber':'red';}
 function buildScenV3(items, uPrice, query){
   if(!items||items.length===0)return null;
   const seen=new Set();
-  let deduped=items.filter(p=>{
+  const deduped=items.filter(p=>{
     if(seen.has(p.retailer))return false;
     seen.add(p.retailer);return true;
   }).sort((a,b)=>a.price-b.price);
   if(deduped.length===0)return null;
-  // Wave 76 — drop blatant outlier listings BEFORE we surface them to the
-  // user. Live test showed McGrocer £2174 alongside Very £769 / Box £799
-  // for an iPhone 17 search — McGrocer was a wrong/inflated SKU. Showing
-  // it as a row read as confusing rather than informative ("+£1405 more").
-  // Drop anything more than 2x the cheapest plausible price; we keep
-  // genuine premium retailers (typical UK retailers cluster within 1.6x
-  // and never beyond 2x without it being a wrong listing).
-  if(deduped.length >= 2){
-    const anchor = deduped[0].price;
-    const filtered = deduped.filter(p => p.price <= anchor * 2.0);
-    if(filtered.length >= 2) deduped = filtered;
-  }
+  // Wave 77 — outlier handling rebalanced. Vincent's call: "the very
+  // lowest would be considered outliers but be good to have a fuller
+  // picture." So we KEEP all deduped retailers visible in the All Prices
+  // list and only treat outliers specially for the typical-price avg
+  // calc (see _usedForAvg block below). This gives the user the full
+  // spectrum (Lakeland £40 budget → McGrocer £617 premium) while the
+  // typical UK price stays anchored on the in-band cluster.
   deduped[0].best=true;
   const bestP=deduped[0].price;
   deduped.forEach(p=>{p.bad=p.price>bestP*1.05;});
@@ -5510,9 +5546,13 @@ function buildScenV3(items, uPrice, query){
     savingVsAvg,       // always populated; 0 if we have <2 retailers
     avgPrice:avgP,
     retailerCount:deduped.length,
-    // Top 3 retailers, cheapest as standout. Dropped from 4 to 3 so the
-    // result screen doesn't pad with marginal listings.
-    rets:deduped.slice(0,3).map(p=>({
+    // Wave 77 — display top 5 retailers (was 3) so the user gets a fuller
+    // picture across the price spectrum. Vincent's ask: keep the very-low
+    // budget tier and the premium tier both visible even when one is an
+    // outlier on the price calc — the result screen reads as "here's the
+    // full UK retail spread for this product" rather than "here are the
+    // 3 cheapest." Typical-price avg still anchored on the tight cluster.
+    rets:deduped.slice(0,5).map(p=>({
       n:p.retailer,
       p:'£'+p.price.toFixed(0),
       link:p.link||'',
