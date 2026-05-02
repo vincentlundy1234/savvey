@@ -6135,21 +6135,31 @@ function renderAiEstimateInResults(est, sc){
   let positionLine = '';
   if(cheapest){
     const diff = Math.round(avg - cheapest);
+    // Wave 76 — broader-category framing distinct from the retailer-derived
+    // "typical UK price" used in the hero subline. When the AI strip fires
+    // alongside a retailer-derived avg (e.g. "cordless vacuum cleaner"
+    // returning £124 from 2 budget retailers but the AI knows the category
+    // typically runs £299-£699), having both labelled "typical UK price"
+    // confused the read. The AI band is the BROADER market benchmark; the
+    // retailer-derived number is what we actually found for sale.
     if(diff > 5){
-      positionLine = `<strong>£${diff} below</strong> the typical UK price.`;
+      positionLine = `<strong>£${diff} below</strong> the broader category benchmark.`;
     } else if(diff < -5){
-      positionLine = `<strong>£${Math.abs(diff)} above</strong> the typical UK price — keep looking.`;
+      positionLine = `<strong>£${Math.abs(diff)} above</strong> the broader category benchmark — keep looking.`;
     } else {
-      positionLine = `Right around the typical UK price.`;
+      positionLine = `Right around the broader category benchmark.`;
     }
   }
 
   const strip = document.createElement('div');
   strip.className = 'ai-estimate-strip';
+  // Wave 76 — label distinct from the retailer-derived "typical UK price"
+  // shown in the hero subline so the two numbers don't compete for the
+  // same authority on screen.
   strip.innerHTML =
     '<div class="ai-estimate-strip-head">'
     + '<svg class="ai-estimate-spark" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>'
-    + '<span class="ai-estimate-strip-label">Typical UK price</span>'
+    + '<span class="ai-estimate-strip-label">Broader category benchmark</span>'
     + '</div>'
     + `<div class="ai-estimate-strip-band">£${lo}–£${hi} <span class="ai-estimate-strip-avg">avg £${avg}</span></div>`
     + (positionLine ? `<div class="ai-estimate-strip-position">${positionLine}</div>` : '')
