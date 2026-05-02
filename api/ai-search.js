@@ -1,4 +1,19 @@
-// api/ai-search.js — Savvey AI Search v1.5
+// api/ai-search.js — Savvey AI Search v1.6
+//
+// v1.6 (2 May 2026, post-launch user feedback):
+//   - Per-retailer URL admission. Some Perplexity hits returned retailer
+//     homepages or category pages instead of product pages — clicking the
+//     "Buy" button landed users on currys.co.uk instead of the actual TV.
+//     Now: PRODUCT_URL_PATTERNS regex per retailer (Currys, Argos, JL, AO,
+//     Very, Richer Sounds, Box, Halfords, Screwfix, Boots, Selfridges,
+//     Costco, Harvey Nichols). Hits without a recognisable product-page
+//     URL pattern are dropped before they reach Haiku.
+//   - Member/loyalty price filter in Haiku prompt. AO showed an "AO Member"
+//     price + a higher standard price; we were picking the member price as
+//     the "current" price, making AO falsely cheapest. Updated prompt
+//     explicitly tells Haiku to skip subscription/membership-gated prices
+//     and only return the public list price (or the lower of two
+//     unconditional prices).
 //
 // v1.5 (1 May 2026, post-v1.4 verification):
 //   - Amazon-locked query now includes `inurl:dp` to force ASIN product
@@ -54,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.5';
+const VERSION = 'ai-search.js v1.6';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -196,9 +211,63 @@ function isAdmissibleAmazonUrl(url) {
   return /\/(?:[^\/]+\/)?(?:dp|gp\/product)\/[A-Z0-9]{10}/i.test(parsed.pathname);
 }
 
+// ── Per-retailer product-URL patterns (v1.6) ──
+//
+// Vincent reported clicking a non-Amazon retailer link and landing on the
+// company homepage instead of the actual product page. Cause: Perplexity
+// sometimes returns the retailer's category or homepage URL, especially on
+// vague queries. Without per-retailer URL admission, we'd send users
+// straight to currys.co.uk/tv (a category) instead of the actual TV.
+//
+// Each pattern is the minimum path structure that signals "real product
+// page" for that retailer — verified against live URL conventions. Hits
+// from these retailers that don't match the pattern are dropped.
+const PRODUCT_URL_PATTERNS = {
+  'currys.co.uk':      /\/products\/[a-z0-9-]+-\d{6,}/i,    // /products/sony-...-10245678
+  'argos.co.uk':       /\/product\/\d{6,}/i,                // /product/8447423
+  'johnlewis.com':     /\/p\d{6,}/i,                        // /sony.../p7060324
+  'ao.com':            /\/product\/[a-z0-9-]+\/\w+\.aspx/i, // /product/lg-c4-tv/lgc4-65inch.aspx (variants)
+  'very.co.uk':        /\/[a-z0-9-]+\.prd/i,                // /sony-headphones.prd
+  'richersounds.com':  /\/product\/[a-z0-9-]+/i,            // /product/sony-wh-1000xm5
+  'box.co.uk':         /\/details\/[a-z0-9-]+\/\d+/i,       // /details/sony-headphones/123456
+  'halfords.com':      /\/[a-z0-9-]+-\d{6,}\.html/i,        // /...-456789.html
+  'screwfix.com':      /\/p\/[a-z0-9-]+\/\d+/i,             // /p/product-name/12345
+  'boots.com':         /\/[a-z0-9-]+-\d{6,}/i,              // /xxx-100123
+  'costco.co.uk':      /\.product\.\d+\.html/i,             // .product.123456.html
+  'selfridges.com':    /\/cat\/[^/]+\/[^/]+\/\d+\/?$/i,
+  'mcgrocer.com':      /\/products\/[a-z0-9-]+/i,
+  'harveynichols.com': /\/product\/[a-z0-9-]+/i,
+  // ebay.co.uk / ebay.com — already handled separately by the /itm/ check
+  'ebay.co.uk':        /\/itm\/\d+/i,
+  'ebay.com':          /\/itm\/\d+/i,
+};
+
+// Returns true if the URL is plausibly a product page for the given
+// retailer. If we don't have a pattern for the retailer (rare new addition)
+// we fall back to a generic "has-a-path-with-digits" rule which catches
+// most product URLs but lets some category pages through.
+function isProductLikeUrl(url, retailer) {
+  if (!url || !retailer) return false;
+  let parsed;
+  try { parsed = new URL(url); } catch { return false; }
+  const path = parsed.pathname;
+  // Reject obvious homepage / search / category-only landings
+  if (!path || path === '/' || path.length < 4) return false;
+  if (/^\/(search|browse|category|categories|c\/|cat\/)\b/i.test(path)) {
+    // Selfridges legitimately uses /cat/ but its products end in /\d+/?$
+    // — handled by its specific pattern. Other /cat/ paths are categories.
+    if (retailer.host !== 'selfridges.com') return false;
+  }
+  const pattern = PRODUCT_URL_PATTERNS[retailer.host];
+  if (pattern) return pattern.test(url);
+  // Fallback: must have a numeric segment OR a product-id-looking segment
+  return /\/\d{4,}|[a-z0-9-]{8,}\.(html|aspx|prd)$|\/product\/|\/p\d+/i.test(path);
+}
+
 function gatherRetailerHits(data, query) {
   const results = rawResultsOf(data);
   const hits = [];
+  let droppedNonProduct = 0;
   for (const r of results) {
     const url     = r.url || r.link || '';
     const title   = r.title || r.name || query;
@@ -206,8 +275,16 @@ function gatherRetailerHits(data, query) {
     const retailer = matchRetailerByHost(url);
     if (!retailer) continue;
     // Tighten Amazon admission — see isAdmissibleAmazonUrl().
-    if (retailer.host === 'amazon.co.uk' && !isAdmissibleAmazonUrl(url)) continue;
+    if (retailer.host === 'amazon.co.uk') {
+      if (!isAdmissibleAmazonUrl(url)) { droppedNonProduct++; continue; }
+    } else {
+      // Other retailers — require URL to look like a product page (v1.6)
+      if (!isProductLikeUrl(url, retailer)) { droppedNonProduct++; continue; }
+    }
     hits.push({ url, title, snippet, retailer });
+  }
+  if (droppedNonProduct > 0) {
+    console.log(`[${VERSION}] dropped ${droppedNonProduct} non-product URLs at admission`);
   }
   return hits;
 }
@@ -222,16 +299,19 @@ async function extractPricesViaHaiku(hits, query, anthropicKey) {
   }));
   const userPrompt = `You are a price extraction tool for a UK price-comparison app. The user is searching for: "${query}"
 
-Below are search results from UK retailers. For each one, identify the actual CURRENT selling price of the product matching the user's query. Skip:
-- Monthly finance prices (£X/month, £X per month)
-- Bundle prices (with warranty / with extras)
-- Accessory or kit prices (cases, cables, replacement parts)
+Below are search results from UK retailers. For each one, identify the actual CURRENT PUBLIC selling price — the price ANY shopper would see and pay without conditions. Skip / never pick:
+- Monthly finance prices (£X/month, £X per month, "from £X/mo")
+- Bundle prices (with warranty, with cables, with installation)
+- Accessory or kit prices (cases, replacement parts, screen protectors)
 - Strike-through "was £X" prices — pick the current price, not the old one
 - Prices for unrelated/wrong-model products in the snippet
+- Membership-, club-, loyalty-, or subscription-gated prices: skip "AO Member", "Currys PerksPlus", "John Lewis My JL", "Boots Advantage", "Tesco Clubcard", "Nectar price", "Member price", "Trade price", "Student price", "Blue Light", "NHS price", "with subscription", "with Prime" — these are NOT the public price. If a snippet shows BOTH a member price and a higher standard price, return the standard / non-member price.
+- Trade-in or part-exchange contingent prices ("£X with trade-in", "after trade-in")
+- Pre-order deposits ("£100 pre-order, £X balance")
 
 Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean}
-- price = the actual current £ price as a plain number (e.g. 229.99), null if you can't tell
-- plausible = true if this is genuinely the product the user searched for at a reasonable retail price; false if accessory, mis-listing, or wildly off-market
+- price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell
+- plausible = true if this is genuinely the product the user searched for at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, or wildly off-market
 
 Results:
 ${JSON.stringify(numbered, null, 2)}
