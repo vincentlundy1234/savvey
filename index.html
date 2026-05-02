@@ -92,45 +92,69 @@
       line-gap-override: 0%;
     }
     :root{
+      /* ── Brand greens — refined for 2026 with deeper shadows + lighter tints */
       --green:    #2a6b22;
       --green2:   #3d9435;
       --green3:   #56b84d;
+      --green-deep:#1a3d17;     /* used for premium gradient stops */
       --green-lt: #edfae9;
+      --green-mid:#d4f0cf;      /* mid-tint for subtle hover/active */
       --green-bd: #c2e8bb;
+      /* ── Accent amber — Y in wordmark + share pill highlights */
       --amber:    #d4820a;
+      --amber-2:  #f5b742;       /* lighter accent for highlights */
       --amber-lt: #fff8ec;
       --amber-bd: #fce0a8;
+      /* ── Verdict reds */
       --red:      #e03535;
       --red-lt:   #fff1f1;
       --red-bd:   #fac8c8;
+      /* ── Ink scale — refined contrast steps for 2026 readability */
       --ink:      #0f1114;
       --ink2:     #3d4148;
-      --ink3:     #767c88;
-      --ink4:     #b0b5be;
-      --surface:  #f5f5f7;   /* Apple-grey — every bg */
+      --ink3:     #6b717c;       /* slightly darker than 767c88 — better contrast */
+      --ink4:     #a8aeb8;       /* slightly darker than b0b5be */
+      /* ── Surface palette — soft warm-cool layered tints */
+      --surface:  #f7f7f9;       /* slightly warmer than the old f5f5f7 */
+      --surface-2:#f0f1f4;       /* secondary surface for nested cards */
       --card:     #ffffff;
-      --border:   #e2e4e9;
-      --r:        16px;      /* card radius */
+      --card-glass:rgba(255,255,255,0.72);  /* glassmorphic surface */
+      --border:   #e6e8ed;       /* slightly softer than e2e4e9 */
+      --border-strong:#d4d7dd;   /* used for emphasis borders */
+      /* ── Radii — added an XL for hero cards */
+      --r-xs:     8px;
       --r-sm:     12px;
+      --r:        16px;
       --r-lg:     22px;
-      /* 8pt spacing scale */
-      --sp-4:4px;--sp-8:8px;--sp-12:12px;--sp-16:16px;
-      --sp-20:20px;--sp-24:24px;--sp-32:32px;--sp-40:40px;
+      --r-xl:     28px;          /* hero cards, premium surfaces */
+      --r-pill:   999px;
+      /* ── 8pt spacing scale — extended */
+      --sp-2:2px;--sp-4:4px;--sp-8:8px;--sp-12:12px;--sp-16:16px;
+      --sp-20:20px;--sp-24:24px;--sp-32:32px;--sp-40:40px;--sp-48:48px;--sp-56:56px;
 
-      /* ── motion: physics-based easings (added 1 May 2026) ── */
+      /* ── motion: physics-based easings (added 1 May 2026, refined Wave 52) */
       --ease-pop:    cubic-bezier(0.34, 1.56, 0.64, 1);     /* +14% overshoot — buttons */
       --ease-quick:  cubic-bezier(0.16, 1, 0.30, 1);        /* sharp quick — Apple-style */
       --ease-glide:  cubic-bezier(0.25, 0.46, 0.45, 0.94);  /* gentle glide — ambient */
+      --ease-emph:   cubic-bezier(0.2, 0, 0, 1);            /* emphasised — Material 3 */
       --motion-fast: 120ms;
       --motion-norm: 220ms;
       --motion-slow: 340ms;
+      --motion-xslow:520ms;
 
-      /* ── depth: consistent elevation across the system ── */
+      /* ── depth: refined elevation tokens. 2026 trend = softer, smaller
+         shadows with subtle ambient + key separation (Material 3 style). */
       --depth-0: none;
-      --depth-1: 0 1px 2px rgba(15,17,20,0.04), 0 1px 4px rgba(15,17,20,0.06);
-      --depth-2: 0 6px 18px rgba(15,17,20,0.06), 0 2px 6px rgba(15,17,20,0.04);
-      --depth-3: 0 14px 40px rgba(15,17,20,0.10), 0 4px 12px rgba(15,17,20,0.06);
-      --depth-glow-green: 0 10px 32px rgba(42,107,34,0.32);
+      --depth-1: 0 1px 2px rgba(15,17,20,0.04), 0 1px 3px rgba(15,17,20,0.05);
+      --depth-2: 0 4px 14px rgba(15,17,20,0.06), 0 2px 5px rgba(15,17,20,0.04);
+      --depth-3: 0 12px 36px rgba(15,17,20,0.10), 0 4px 10px rgba(15,17,20,0.06);
+      --depth-4: 0 24px 60px rgba(15,17,20,0.14), 0 8px 18px rgba(15,17,20,0.08);
+      --depth-glow-green: 0 12px 36px rgba(42,107,34,0.28),
+                          0 2px 8px rgba(42,107,34,0.12);
+      --depth-glow-amber: 0 12px 36px rgba(245,183,66,0.26),
+                          0 2px 8px rgba(245,183,66,0.16);
+      --depth-inset:    inset 0 1px 0 rgba(255,255,255,0.6),
+                        inset 0 -1px 0 rgba(15,17,20,0.04);
     }
     @media (prefers-reduced-motion: reduce){
       :root{ --motion-fast:0ms; --motion-norm:0ms; --motion-slow:0ms; }
@@ -243,11 +267,23 @@
     .card{background:var(--card);border-radius:var(--r-lg);overflow:hidden;}
 
     /* ─────────────────────────────────────────
-       WELCOME
+       WELCOME — Wave 51 mesh gradient + soft amber halo for premium
+       first impression. Top half = brand sky, bottom sheet = action.
     ───────────────────────────────────────── */
     #screen-welcome{
-      background:linear-gradient(160deg,#1a3d17 0%,#2a6b22 60%,#1d5019 100%);
+      background:
+        radial-gradient(circle at 12% 18%, rgba(245,183,66,0.22) 0, rgba(245,183,66,0) 45%),
+        radial-gradient(circle at 88% 82%, rgba(86,184,77,0.30) 0, rgba(86,184,77,0)  50%),
+        linear-gradient(160deg, #1a3d17 0%, #2a6b22 55%, #1d5019 100%);
       justify-content:flex-end;
+      position:relative;
+      overflow:hidden;
+    }
+    #screen-welcome::before{
+      content:"";
+      position:absolute;inset:0;
+      background:radial-gradient(circle at 50% 0%, rgba(255,255,255,0.10) 0, rgba(255,255,255,0) 50%);
+      pointer-events:none;
     }
 
     /* Top — logo centred in green space (notch-safe) */
@@ -458,20 +494,59 @@
     /* Snap-mode camera overlay — capture button + identification state */
     #screen-snap{background:#000;overflow:hidden;}
     #snap-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;}
-    /* Wave 28d: shutter lifted from 40px to 110px from bottom so it clears the
-       floating bottom nav (~58px tall, sits at bottom:12+safe). Snap-hint
-       lifted in lockstep to keep ~62px spacing above the shutter. */
+    /* Wave 50 — premium shutter button. Concentric rings + soft glow.
+       Inner white disc remains the "tap target". The outer ring uses a
+       gradient that subtly shifts on tap. */
     .snap-capture-btn{
       position:absolute;left:50%;bottom:calc(110px + env(safe-area-inset-bottom));
       transform:translateX(-50%);
-      width:78px;height:78px;border-radius:50%;
-      background:#fff;border:6px solid rgba(255,255,255,0.4);
+      width:82px;height:82px;border-radius:50%;
+      background:#fff;
+      border:5px solid rgba(255,255,255,0.42);
       cursor:pointer;
-      box-shadow:0 4px 24px rgba(0,0,0,0.5);
-      transition:transform 0.1s;
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.18),
+        0 8px 28px rgba(0,0,0,0.55),
+        inset 0 -2px 6px rgba(0,0,0,0.06);
+      transition:transform 120ms cubic-bezier(0.34,1.56,0.64,1),
+                 background 200ms ease;
     }
-    .snap-capture-btn:active{transform:translateX(-50%) scale(0.92);}
+    .snap-capture-btn::before{
+      content:"";
+      position:absolute;inset:-12px;
+      border-radius:50%;
+      border:1.5px solid rgba(255,255,255,0.18);
+      animation:snap-ring-pulse 2.6s ease-in-out infinite;
+      pointer-events:none;
+    }
+    @keyframes snap-ring-pulse{
+      0%,100%{transform:scale(1);opacity:0.8;}
+      50%   {transform:scale(1.08);opacity:0.3;}
+    }
+    .snap-capture-btn:active{
+      transform:translateX(-50%) scale(0.92);
+      background:#f5f7f4;
+    }
     .snap-capture-btn:disabled{opacity:0.4;cursor:not-allowed;}
+    /* AI badge pill — top-right of snap screen, signals the intelligence */
+    .snap-ai-badge{
+      position:absolute;
+      top:calc(14px + env(safe-area-inset-top));
+      right:18px;
+      z-index:11;
+      display:inline-flex;align-items:center;gap:5px;
+      padding:6px 11px;
+      background:rgba(20,20,22,0.55);
+      border:1px solid rgba(255,255,255,0.18);
+      border-radius:100px;
+      font:800 10px/1 "Inter",sans-serif;
+      color:#fff;letter-spacing:0.6px;text-transform:uppercase;
+      backdrop-filter:blur(10px) saturate(180%);
+      -webkit-backdrop-filter:blur(10px) saturate(180%);
+      box-shadow:0 4px 12px rgba(0,0,0,0.32);
+      pointer-events:none;
+    }
+    .snap-ai-badge svg{width:11px;height:11px;color:var(--amber-2);}
     .snap-hint{
       position:absolute;left:50%;bottom:calc(210px + env(safe-area-inset-bottom));
       transform:translateX(-50%);
@@ -1182,22 +1257,39 @@
     .res-scroll{overflow-y:auto;flex:1;padding:16px 16px 32px;display:flex;flex-direction:column;gap:8px;}
 
     /* ── Hero card — verdict first, number second ── */
-    .hero{background:var(--card);border-radius:var(--r-lg);overflow:hidden;}
-    /* Wave 24 — hero product image strip */
+    .hero{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r-xl);
+      overflow:hidden;
+      box-shadow:var(--depth-2);
+    }
+    /* Wave 24 — hero product image strip; Wave 54 — refined with soft
+       gradient surface + radial vignette so it integrates with the card
+       instead of looking like a stock-photo strip. */
     .hero-image-wrap{
-      width:100%;height:160px;
-      background:#f5f3ee;
+      width:100%;height:170px;
+      background:
+        radial-gradient(circle at 50% 60%, rgba(15,17,20,0.04) 0, rgba(15,17,20,0) 70%),
+        linear-gradient(180deg, #fafaf7 0%, #f0eee8 100%);
       display:flex;align-items:center;justify-content:center;
       overflow:hidden;
       position:relative;
+    }
+    .hero-image-wrap::after{
+      content:"";
+      position:absolute;inset:0;
+      background:linear-gradient(180deg, transparent 70%, rgba(15,17,20,0.04) 100%);
+      pointer-events:none;
     }
     .hero-image-wrap[hidden]{display:none;}
     .hero-image{
       width:100%;height:100%;
       object-fit:contain;
       object-position:center;
-      padding:14px;
+      padding:18px;
       display:block;
+      filter:drop-shadow(0 6px 14px rgba(15,17,20,0.10));
       animation:hero-img-in 480ms var(--ease-pop) both;
     }
     @keyframes hero-img-in{
@@ -1206,16 +1298,37 @@
     }
 
     /* Verdict banner — coloured top strip */
+    /* Wave 49 — verdict bar refined. Soft directional gradient + a thin
+       coloured rule below replaces the flat pastel + border-bottom. Reads
+       more dimensional, less like a 2018 dashboard alert. */
     .hero-verdict{
       padding:16px 20px 14px;
-      display:flex;align-items:center;gap:12px;
+      display:flex;align-items:center;gap:14px;
+      position:relative;
     }
-    .hero-verdict.red{background:var(--red-lt);border-bottom:1.5px solid var(--red-bd);}
-    .hero-verdict.amber{background:var(--amber-lt);border-bottom:1.5px solid var(--amber-bd);}
-    .hero-verdict.green{background:var(--green-lt);border-bottom:1.5px solid var(--green-bd);}
+    .hero-verdict::after{
+      content:"";
+      position:absolute;left:20px;right:20px;bottom:0;
+      height:1px;
+      opacity:0.6;
+    }
+    .hero-verdict.red{
+      background:linear-gradient(180deg, #fff5f5 0%, #fff1f1 100%);
+    }
+    .hero-verdict.red::after{background:var(--red-bd);}
+    .hero-verdict.amber{
+      background:linear-gradient(180deg, #fffaf0 0%, #fff6e6 100%);
+    }
+    .hero-verdict.amber::after{background:var(--amber-bd);}
+    .hero-verdict.green{
+      background:linear-gradient(180deg, #f3fbef 0%, #ebf7e6 100%);
+    }
+    .hero-verdict.green::after{background:var(--green-bd);}
     .hero-verdict-pips{display:flex;gap:6px;align-items:center;}
+    /* Wave 49 — pip refinement. Slightly larger, premium inset highlight
+       on lit state, softer dim background. Animation easing kept. */
     .v-pip{
-      width:28px;height:28px;border-radius:50%;
+      width:30px;height:30px;border-radius:50%;
       display:flex;align-items:center;justify-content:center;
       font:900 12px/1 "Nunito",sans-serif;
       transition:background var(--motion-norm) var(--ease-quick),
@@ -1224,13 +1337,13 @@
                  opacity var(--motion-norm) var(--ease-quick),
                  box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .v-pip.lit-red  {background:var(--red);  color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(224,53,53,0.35);}
-    .v-pip.lit-amber{background:var(--amber);color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(212,130,10,0.35);}
-    .v-pip.lit-green{background:var(--green);color:#fff;transform:scale(1.18);box-shadow:0 4px 12px rgba(42,107,34,0.35);}
-    .v-pip.dim-red  {background:var(--red-bd);  color:var(--red);  opacity:0.6;}
-    .v-pip.dim-amber{background:var(--amber-bd);color:var(--amber);opacity:0.6;}
-    .v-pip.dim-green{background:var(--green-bd);color:var(--green);opacity:0.6;}
-    .v-pip.off{background:rgba(0,0,0,0.06);color:var(--ink4);}
+    .v-pip.lit-red  {background:linear-gradient(180deg,#ec4f4f,#cd2727);color:#fff;transform:scale(1.18);box-shadow:0 4px 14px rgba(224,53,53,0.40), inset 0 1px 0 rgba(255,255,255,0.22);}
+    .v-pip.lit-amber{background:linear-gradient(180deg,#e69e2c,#c47105);color:#fff;transform:scale(1.18);box-shadow:0 4px 14px rgba(212,130,10,0.40), inset 0 1px 0 rgba(255,255,255,0.22);}
+    .v-pip.lit-green{background:linear-gradient(180deg,#3d9435,#216a1b);color:#fff;transform:scale(1.18);box-shadow:0 4px 14px rgba(42,107,34,0.40), inset 0 1px 0 rgba(255,255,255,0.22);}
+    .v-pip.dim-red  {background:#fbe2e2;color:var(--red);  opacity:0.7;}
+    .v-pip.dim-amber{background:#fae9c5;color:var(--amber);opacity:0.7;}
+    .v-pip.dim-green{background:#dff0d8;color:var(--green);opacity:0.7;}
+    .v-pip.off{background:rgba(15,17,20,0.05);color:var(--ink4);}
     .hero-verdict-text{flex:1;}
     .hero-verdict-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:2px;}
     .hero-verdict-label.red{color:var(--red);}
@@ -1273,17 +1386,27 @@
     }
     .hero-where{font:500 13.5px/1.5 "Inter",sans-serif;color:var(--ink2);margin-bottom:14px;word-wrap:break-word;}
     .hero-where strong{color:var(--ink);font-weight:700;}
-    /* Vague-query hint — surfaces under .hero-where when query is a broad
-       category like "tvs" / "phones". Soft amber to match heads-up tone. */
+    /* Wave 53 — Vague-query hint refined. Subtle gradient + tighter
+       typography rhythm. Try-pill uses amber pill style consistent with
+       new design language. */
     .vague-hint{
       margin-top:12px;padding:12px 14px;
-      background:var(--amber-lt);border:1px solid var(--amber-bd);
-      border-radius:12px;
+      background:linear-gradient(180deg, #fffbf0 0%, #fff5dd 100%);
+      border:1px solid var(--amber-bd);
+      border-radius:14px;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.6);
     }
     .vague-hint-title{
-      font:800 12px/1 "Nunito",sans-serif;
-      color:var(--amber);text-transform:uppercase;letter-spacing:0.6px;
-      margin-bottom:4px;
+      font:800 11px/1 "Inter",sans-serif;
+      color:var(--amber);text-transform:uppercase;letter-spacing:1px;
+      margin-bottom:5px;
+      display:flex;align-items:center;gap:5px;
+    }
+    .vague-hint-title::before{
+      content:"";display:inline-block;
+      width:5px;height:5px;border-radius:50%;
+      background:var(--amber);
+      box-shadow:0 0 6px rgba(245,183,66,0.6);
     }
     .vague-hint-body{
       font:500 13px/1.5 "Inter",sans-serif;color:var(--ink2);
@@ -1291,14 +1414,20 @@
     .vague-hint-try{
       background:#fff;border:1px solid var(--amber-bd);
       color:var(--amber);
-      font:700 12px/1 "Inter",sans-serif;
-      padding:5px 10px;border-radius:99px;
+      font:800 12px/1 "Inter",sans-serif;
+      padding:6px 11px;border-radius:99px;
       margin-left:4px;cursor:pointer;
       min-height:auto;
+      box-shadow:0 2px 6px rgba(212,130,10,0.10);
       transition:transform var(--motion-fast) var(--ease-quick),
-                 background var(--motion-norm) var(--ease-quick);
+                 background var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .vague-hint-try:active{background:var(--amber);color:#fff;transform:scale(0.95);}
+    .vague-hint-try:active{
+      background:var(--amber);color:#fff;
+      transform:scale(0.95);
+      box-shadow:0 4px 12px rgba(212,130,10,0.30);
+    }
     .hero-actions{display:flex;flex-direction:column;gap:10px;margin-top:4px;}
 
     /* Wave 33 — optional shelf-price refinement UI on the results screen.
@@ -1770,8 +1899,38 @@
     .priv-p{font-size:14px;color:var(--ink2);line-height:1.75;margin-bottom:10px;}
 
     /* Toast */
-    .toast{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:11px 22px;border-radius:100px;font-size:13px;font-weight:600;z-index:999;opacity:0;transition:opacity 0.25s;white-space:nowrap;pointer-events:none;}
-    .toast.show{opacity:1;}
+    /* Wave 54 — toast refined: glassmorphic dark with subtle border + amber
+       accent dot. Replaces the flat black pill. */
+    .toast{
+      position:absolute;
+      bottom:calc(28px + env(safe-area-inset-bottom));
+      left:50%;transform:translateX(-50%) translateY(8px);
+      display:inline-flex;align-items:center;gap:10px;
+      background:rgba(15,17,20,0.78);
+      color:#fff;
+      padding:12px 18px 12px 14px;
+      border-radius:100px;
+      border:1px solid rgba(255,255,255,0.10);
+      font:600 13px/1 "Inter",sans-serif;
+      letter-spacing:-0.1px;
+      z-index:999;
+      opacity:0;
+      backdrop-filter:blur(14px) saturate(180%);
+      -webkit-backdrop-filter:blur(14px) saturate(180%);
+      box-shadow:0 12px 32px rgba(15,17,20,0.32),
+                 inset 0 1px 0 rgba(255,255,255,0.08);
+      transition:opacity 240ms var(--ease-quick),
+                 transform 240ms var(--ease-pop);
+      white-space:nowrap;
+      pointer-events:none;
+    }
+    .toast::before{
+      content:"";display:inline-block;
+      width:6px;height:6px;border-radius:50%;
+      background:var(--amber-2);
+      box-shadow:0 0 8px rgba(245,183,66,0.7);
+    }
+    .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
     /* ═══════════════════════════════════════════════════════════
        2026 DESIGN SYSTEM — added 1 May 2026
@@ -1915,6 +2074,8 @@
        (light bento, dark camera, green welcome). Active tab shows
        a green-tint pill highlight that morphs across positions.
        ═══════════════════════════════════════════════════════════ */
+    /* Wave 54 — bottom nav refined: stronger frosted-glass look with a
+       subtle gradient highlight border + softer ambient shadow. */
     .botnav{
       position:absolute;left:50%;
       bottom:calc(12px + env(safe-area-inset-bottom));
@@ -1923,13 +2084,16 @@
       align-items:center;
       gap:2px;
       padding:6px;
-      background:rgba(255,255,255,0.72);
-      backdrop-filter:blur(24px) saturate(180%);
-      -webkit-backdrop-filter:blur(24px) saturate(180%);
-      border:1px solid rgba(255,255,255,0.6);
+      background:rgba(255,255,255,0.78);
+      backdrop-filter:blur(28px) saturate(190%);
+      -webkit-backdrop-filter:blur(28px) saturate(190%);
+      border:1px solid rgba(255,255,255,0.65);
       border-radius:var(--r-pill,999px);
-      box-shadow:0 8px 32px rgba(15,17,20,0.16),
-                 0 1px 0 rgba(255,255,255,0.7) inset;
+      box-shadow:
+        0 8px 28px rgba(15,17,20,0.14),
+        0 2px 8px rgba(15,17,20,0.06),
+        inset 0 1px 0 rgba(255,255,255,0.7),
+        inset 0 -1px 0 rgba(15,17,20,0.04);
       z-index:60;
       animation:botnav-in var(--motion-norm) var(--ease-pop) both;
     }
@@ -1998,97 +2162,107 @@
       display:flex;flex-direction:column;
       flex:1;min-height:0;
       padding:14px 16px calc(56px + env(safe-area-inset-bottom));
-      gap:14px;
+      gap:12px;  /* Wave 48: tighter rhythm now that Snap CTA + chips fit between hero + search */
     }
 
-    /* ── Savings centerpiece (Wave 29) — Revolut-balance pattern ──
-       Big number dominant, the motivational hero of the home page.
-       Always visible, ticks up with every check. Tap-to-share opens the
-       share card so users can broadcast their savings (Wave 30 — key
-       marketing hook). All sized with width:100% + box-sizing:border-box
-       + min-width:0 so it can NEVER overflow viewport horizontally. */
+    /* ── Savings hero (Wave 48 — premium 2026 redesign) ──
+       Mesh-gradient surface (multiple layered radials, not a flat green),
+       inline icon-only share button anchored top-right, refined typography
+       hierarchy. Sized defensively so it can't overflow viewport. */
     .savings-hero{
       width:100%;
       max-width:100%;
       box-sizing:border-box;
       min-width:0;
-      text-align:center;
-      padding:20px 18px 18px;
-      background:linear-gradient(160deg, #2a6b22 0%, #1d5019 100%);
-      border-radius:var(--r-lg);
+      text-align:left;
+      padding:20px 22px 18px;
+      background:#1d5019;  /* fallback under the mesh layer */
+      border-radius:var(--r-xl);
       box-shadow:var(--depth-glow-green);
       color:#fff;
       position:relative;
       overflow:hidden;
       cursor:pointer;
-      transition:transform var(--motion-fast) var(--ease-pop);
+      isolation:isolate;
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .savings-hero:active{transform:scale(0.985);}
+    .savings-hero:active{
+      transform:scale(0.985);
+      box-shadow:0 6px 18px rgba(42,107,34,0.22);
+    }
     .savings-hero:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
     .savings-hero[hidden]{display:none;}
-    /* Subtle decorative ring */
-    .savings-hero::before{
-      content:"";
-      position:absolute;
-      top:-30%;right:-15%;
-      width:200px;height:200px;
-      border-radius:50%;
-      background:radial-gradient(circle, rgba(245,183,66,0.18) 0%, transparent 65%);
-      pointer-events:none;
+    /* Multi-layer mesh gradient background — gives depth + motion-suggesting
+       glow without requiring an animated effect. The amber radial in the
+       top-right + green radial bottom-left create a soft "two-tone" feel
+       that reads premium, not flat. */
+    .savings-mesh{
+      position:absolute;inset:0;
+      background:
+        radial-gradient(circle at 100% 0%,    rgba(245,183,66,0.32) 0,  rgba(245,183,66,0) 60%),
+        radial-gradient(circle at 0% 100%,    rgba(86,184,77,0.28)  0,  rgba(86,184,77,0)  60%),
+        radial-gradient(circle at 50% 50%,    rgba(255,255,255,0.06) 0, rgba(255,255,255,0) 70%),
+        linear-gradient(160deg, #2a6b22 0%, #1d5019 60%, #1a3d17 100%);
+      z-index:-1;
     }
+    /* Inline icon-only share button — top-right corner of the hero card.
+       Cleaner than a "Tap to share" text pill and more obviously tappable. */
+    .savings-share-icon{
+      position:absolute;top:14px;right:14px;
+      width:34px;height:34px;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(255,255,255,0.12);
+      border:1px solid rgba(255,255,255,0.22);
+      border-radius:50%;
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      color:#fff;
+      pointer-events:none;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop);
+    }
+    .savings-share-icon svg{width:14px;height:14px;}
+    .savings-hero:active .savings-share-icon{background:rgba(255,255,255,0.22);transform:scale(1.06);}
     .savings-eyebrow{
       font:800 10px/1 "Inter",sans-serif;
-      color:rgba(255,255,255,0.7);
-      letter-spacing:1.4px;
-      margin-bottom:8px;
-      position:relative;z-index:1;
+      color:rgba(255,255,255,0.78);
+      letter-spacing:1.5px;
+      margin-bottom:10px;
     }
     .savings-amount{
-      display:flex;align-items:baseline;justify-content:center;
+      display:flex;align-items:baseline;
       gap:0;
       font-family:"Nunito",sans-serif;
       color:#fff;
       letter-spacing:-1.8px;
       line-height:1;
-      margin-bottom:8px;
-      position:relative;z-index:1;
+      margin-bottom:6px;
       max-width:100%;
       overflow:hidden;
       white-space:nowrap;
     }
     .savings-currency{
       font-weight:700;
-      font-size:28px;
+      font-size:26px;
       color:rgba(255,255,255,0.88);
       align-self:flex-start;
       margin-top:6px;
-      margin-right:1px;
+      margin-right:2px;
     }
     .savings-num{
       font-weight:900;
-      font-size:48px;
-      letter-spacing:-2px;
+      font-size:52px;
+      letter-spacing:-2.4px;
+      background:linear-gradient(180deg, #ffffff 0%, #f5e6c4 100%);
+      -webkit-background-clip:text;background-clip:text;
+      -webkit-text-fill-color:transparent;
     }
     .savings-context{
-      font:500 12px/1.4 "Inter",sans-serif;
+      font:500 12.5px/1.4 "Inter",sans-serif;
       color:rgba(255,255,255,0.78);
-      position:relative;z-index:1;
-      margin-bottom:10px;
     }
-    /* Share affordance pill — sits under the context line, signals tap-to-share */
-    .savings-share-pill{
-      display:inline-flex;align-items:center;gap:6px;
-      padding:6px 12px;
-      background:rgba(255,255,255,0.18);
-      border:1px solid rgba(255,255,255,0.25);
-      border-radius:var(--r-pill,999px);
-      font:700 11px/1 "Inter",sans-serif;
-      color:#fff;
-      letter-spacing:0.4px;
-      position:relative;z-index:1;
-      pointer-events:none;
-    }
-    .savings-share-pill svg{width:13px;height:13px;}
+    /* Legacy share pill — hidden in Wave 48 redesign (icon replaces it) */
+    .savings-share-pill{display:none;}
     /* Button-tag savings hero — reset default browser button chrome */
     button.savings-hero{
       font-family:inherit;
@@ -2097,6 +2271,108 @@
       appearance:none;
       cursor:pointer;
     }
+
+    /* ── Snap primary CTA (Wave 48) ──
+       The "do this next" anchor of the home page. Full-width gradient
+       card, icon left, copy centre, chevron right. AI tag inline with
+       the title. Premium glow + subtle inner highlight. */
+    .snap-primary-card{
+      width:100%;
+      box-sizing:border-box;
+      display:flex;align-items:center;gap:14px;
+      padding:16px 18px 16px 16px;
+      background:#0f3f0a;
+      border:none;
+      border-radius:var(--r-xl);
+      box-shadow:var(--depth-glow-green), inset 0 1px 0 rgba(255,255,255,0.16);
+      color:#fff;
+      cursor:pointer;
+      position:relative;overflow:hidden;
+      isolation:isolate;
+      text-align:left;
+      font-family:inherit;
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 box-shadow var(--motion-norm) var(--ease-quick);
+    }
+    .snap-primary-card:active{
+      transform:scale(0.985);
+      box-shadow:0 6px 18px rgba(42,107,34,0.22), inset 0 1px 0 rgba(255,255,255,0.16);
+    }
+    .snap-primary-card:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
+    .snap-primary-mesh{
+      position:absolute;inset:0;
+      background:
+        radial-gradient(circle at 0% 50%,  rgba(86,184,77,0.55) 0,  rgba(86,184,77,0)  55%),
+        radial-gradient(circle at 100% 0%, rgba(245,183,66,0.20) 0,  rgba(245,183,66,0) 60%),
+        linear-gradient(135deg, #2a6b22 0%, #1d5019 100%);
+      z-index:-1;
+    }
+    .snap-primary-icon{
+      width:48px;height:48px;
+      flex-shrink:0;
+      display:flex;align-items:center;justify-content:center;
+      background:rgba(255,255,255,0.18);
+      border:1px solid rgba(255,255,255,0.28);
+      border-radius:14px;
+      color:#fff;
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,0.18);
+    }
+    .snap-primary-body{flex:1;min-width:0;}
+    .snap-primary-title{
+      font:900 17px/1.15 "Nunito",sans-serif;
+      color:#fff;
+      letter-spacing:-0.4px;
+      margin-bottom:3px;
+      display:flex;align-items:center;gap:8px;
+      flex-wrap:wrap;
+    }
+    .snap-primary-tag{
+      display:inline-flex;align-items:center;gap:3px;
+      font:900 9px/1 "Inter",sans-serif;
+      color:#1a3d17;background:var(--amber-2);
+      padding:3px 6px;border-radius:5px;
+      letter-spacing:0.6px;
+    }
+    .snap-primary-tag svg{width:10px;height:10px;}
+    .snap-primary-sub{
+      font:500 12.5px/1.35 "Inter",sans-serif;
+      color:rgba(255,255,255,0.76);
+    }
+    .snap-primary-arrow{
+      flex-shrink:0;color:rgba(255,255,255,0.7);
+    }
+
+    /* ── Quick chips row (Wave 48) ──
+       Three secondary inputs sit below the Snap primary. Compact pill style
+       so they read as "or these other ways" without competing for visual
+       priority with the Snap CTA above. */
+    .quick-chips{
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:8px;
+    }
+    .quick-chip{
+      display:flex;align-items:center;justify-content:center;gap:6px;
+      padding:11px 10px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:var(--r);
+      font:700 13px/1 "Nunito",sans-serif;
+      color:var(--ink);letter-spacing:-0.1px;
+      cursor:pointer;
+      box-shadow:var(--depth-1);
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 border-color var(--motion-norm) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
+    }
+    .quick-chip:active{
+      transform:scale(0.96);
+      border-color:var(--green-bd);
+      background:var(--green-lt);
+    }
+    .quick-chip:focus-visible{outline:2px solid var(--green-bd);outline-offset:2px;}
+    .quick-chip svg{flex-shrink:0;color:var(--green);}
     /* First-time greeting — replaces the savings hero before any savings */
     .savings-welcome{
       padding:8px 4px 10px;
@@ -2183,16 +2459,24 @@
       color:#88d97c;
     }
 
-    /* ── Search hero card ── */
+    /* ── Search input card (Wave 48 — refined) ──
+       Subordinate to the Snap primary card now. Soft surface tint, no
+       hard border, focus-within bumps elevation + green ring. */
     .bento-search-card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:var(--r-lg);
-      padding:14px 14px 12px;
-      box-shadow:var(--depth-1);
-      transition:border-color var(--motion-norm) var(--ease-quick);
+      background:var(--surface-2);
+      border:1px solid transparent;
+      border-radius:var(--r);
+      padding:6px;
+      box-shadow:none;
+      transition:border-color var(--motion-norm) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .bento-search-card:focus-within{border-color:var(--green-bd);}
+    .bento-search-card:focus-within{
+      background:var(--card);
+      border-color:var(--green-bd);
+      box-shadow:0 0 0 3px rgba(86,184,77,0.12), var(--depth-1);
+    }
     .bento-eyebrow{
       font:600 11px/1 "Inter",sans-serif;
       color:var(--ink3);
@@ -2202,12 +2486,12 @@
     }
     .bento-search{
       display:flex;align-items:center;gap:10px;
-      height:52px;padding:0 6px 0 14px;
-      background:var(--surface);
-      border-radius:14px;
+      height:50px;padding:0 6px 0 14px;
+      background:transparent;
+      border-radius:12px;
       transition:background var(--motion-norm) var(--ease-quick);
     }
-    .bento-search:focus-within{background:#fff;box-shadow:0 0 0 2px var(--green-bd) inset;}
+    .bento-search:focus-within{background:transparent;box-shadow:none;}
     .bento-search-ico{flex-shrink:0;color:var(--ink3);transition:color var(--motion-norm) var(--ease-quick);}
     .bento-search:focus-within .bento-search-ico{color:var(--green);}
     .bento-search input{
@@ -2237,17 +2521,24 @@
     .bento-clear[hidden]{display:none;}
     .bento-clear.show{opacity:0.6;transform:scale(1);}
     .bento-clear.show:hover,.bento-clear.show:active{opacity:1;background:var(--ink2);}
+    /* Wave 53 — refined search submit. Subtle inner highlight + softer
+       glow vs the Wave 6 hard saturation. */
     .bento-go{
       flex-shrink:0;
-      width:40px;height:40px;border-radius:11px;
-      background:linear-gradient(132deg,#3d9435 0%,#2a6b22 100%);
+      width:38px;height:38px;border-radius:11px;
+      background:linear-gradient(135deg,#3d9435 0%,#216a1b 100%);
       color:#fff;border:none;cursor:pointer;
-      box-shadow:0 4px 14px rgba(42,107,34,0.32);
+      box-shadow:0 4px 14px rgba(42,107,34,0.30),
+                 inset 0 1px 0 rgba(255,255,255,0.20);
       display:flex;align-items:center;justify-content:center;
       transition:transform var(--motion-fast) var(--ease-pop),
                  box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .bento-go:active{transform:scale(0.9);box-shadow:0 2px 8px rgba(42,107,34,0.28);}
+    .bento-go:active{
+      transform:scale(0.9);
+      box-shadow:0 2px 8px rgba(42,107,34,0.28),
+                 inset 0 1px 0 rgba(255,255,255,0.20);
+    }
 
     /* ── Two directional tiles — Wave 22 thinner row layout ──
        Was: 130px tall stacked-column tiles (icon top, label below).
@@ -2365,22 +2656,31 @@
       transition:color var(--motion-fast) var(--ease-quick);
     }
     .bento-recent-clear:hover,.bento-recent-clear:active{color:var(--ink2);}
+    /* Wave 53 — Recent chips refined. Tighter padding, slightly bolder
+       weight, subtle inset highlight. The clock icon is replaced by a
+       smaller arrow-rewind to read more "history" than "time". */
     .bento-recent-list{display:flex;flex-wrap:wrap;gap:6px;}
     .recent-chip{
-      display:inline-flex;align-items:center;gap:6px;
-      padding:8px 14px;
+      display:inline-flex;align-items:center;gap:7px;
+      padding:9px 14px 9px 11px;
       background:var(--card);
       border:1px solid var(--border);
       border-radius:99px;
-      font:600 13px/1 "Inter",sans-serif;
-      color:var(--ink);
+      font:700 13px/1 "Nunito",sans-serif;
+      color:var(--ink);letter-spacing:-0.1px;
       cursor:pointer;min-height:auto;
-      box-shadow:var(--depth-1);
+      box-shadow:var(--depth-1), inset 0 1px 0 rgba(255,255,255,0.6);
       transition:transform var(--motion-fast) var(--ease-quick),
                  background var(--motion-norm) var(--ease-quick),
-                 border-color var(--motion-norm) var(--ease-quick);
+                 border-color var(--motion-norm) var(--ease-quick),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .recent-chip:active{background:var(--green-lt);border-color:var(--green-bd);transform:scale(0.95);}
+    .recent-chip:active{
+      background:var(--green-lt);
+      border-color:var(--green-bd);
+      transform:scale(0.95);
+      box-shadow:var(--depth-2);
+    }
     .recent-chip-ico{
       width:14px;height:14px;color:var(--ink4);flex-shrink:0;
       display:flex;align-items:center;justify-content:center;
@@ -2618,61 +2918,75 @@
          app, that's the savings they've already made. -->
     <div class="bento">
 
-      <!-- ── Savings centerpiece (Wave 29) ──
-           Always visible Revolut-balance pattern. Tap-to-share pulls up the
-           dedicated savings share card (Wave 30 marketing hook). Sized
-           defensively (width:100%, box-sizing) so it can never overflow. -->
+      <!-- ── Savings hero (Wave 48 — premium 2026 redesign) ──
+           Mesh-gradient surface with inline icon-only share button (top-
+           right). Eyebrow + amount + context stacked left, share button
+           absolute-positioned right. Honour reduced-motion. -->
       <button class="savings-hero" id="savings-hero" type="button"
               onclick="shareSavingsCounter()"
               aria-label="Share your Savvey savings">
+        <div class="savings-mesh" aria-hidden="true"></div>
+        <span class="savings-share-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+          </svg>
+        </span>
         <div class="savings-eyebrow">SAVVEY SAVINGS FOUND</div>
         <div class="savings-amount">
           <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0.00</span>
         </div>
         <div class="savings-context" id="savings-context">your savings tick up here as you check prices</div>
-        <span class="savings-share-pill" id="savings-share-pill" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          Tap to share
-        </span>
       </button>
 
-      <!-- Legacy welcome card — kept hidden for back-compat with anything that
-           might query it. Wave 28d superseded this with always-on hero. -->
+      <!-- Legacy welcome card — hidden, kept for back-compat. -->
       <div class="savings-welcome" id="savings-welcome" hidden>
         <div class="savings-welcome-eyebrow">SHOP SMART</div>
         <div class="savings-welcome-headline">Find a fair price<br>for any product.</div>
         <div class="savings-welcome-sub">Scan, snap, paste a link, or search — we'll check the UK's biggest retailers in seconds.</div>
       </div>
 
-      <!-- Wave 37 — Snap leads the action row. Marked as 'feature' tile
-           so it visually anchors the row with a green-accent background +
-           AI sparkle badge. Order: Snap (AI), Search, Scan, Paste. -->
-      <div class="bento-actions" data-no-swipe>
-        <button class="action-tile action-tile-feature" onclick="navigateSwipe('snap','left')">
-          <div class="action-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+      <!-- Wave 48 — Snap as full-width primary CTA. Big premium card with
+           gradient background + camera icon + "AI" tag. The clear "do this
+           next" action that anchors the home page. -->
+      <button class="snap-primary-card" onclick="navigateSwipe('snap','left')" data-no-swipe>
+        <div class="snap-primary-mesh" aria-hidden="true"></div>
+        <div class="snap-primary-icon" aria-hidden="true">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 19V8a2 2 0 0 0-2-2h-3.5l-1.5-2h-4l-1.5 2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        </div>
+        <div class="snap-primary-body">
+          <div class="snap-primary-title">Snap any product
+            <span class="snap-primary-tag" aria-hidden="true">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>
+              AI
+            </span>
           </div>
-          <div class="action-tile-label">Snap<span class="action-tile-tag">AI</span></div>
+          <div class="snap-primary-sub">AI identifies it · we check UK retailers in seconds</div>
+        </div>
+        <svg class="snap-primary-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>
+      </button>
+
+      <!-- Wave 48 — secondary quick-action chips. Smaller than the Snap
+           primary card. Search opens the input below, Scan/Paste navigate. -->
+      <div class="quick-chips" data-no-swipe>
+        <button class="quick-chip" onclick="document.getElementById('search-input').focus()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Search
         </button>
-        <button class="action-tile" onclick="document.getElementById('search-input').focus()">
-          <div class="action-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </div>
-          <div class="action-tile-label">Search</div>
+        <button class="quick-chip" onclick="navigateSwipe('scan','left')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/></svg>
+          Scan
         </button>
-        <button class="action-tile" onclick="navigateSwipe('scan','left')">
-          <div class="action-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="14" y1="8" x2="14" y2="16"/></svg>
-          </div>
-          <div class="action-tile-label">Scan</div>
-        </button>
-        <button class="action-tile" onclick="navigateSwipe('paste','right')">
-          <div class="action-tile-ico">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-          </div>
-          <div class="action-tile-label">Paste</div>
+        <button class="quick-chip" onclick="navigateSwipe('paste','right')">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          Paste
         </button>
       </div>
+
+      <!-- Hidden — old bento-actions row kept hidden for back-compat with any
+           refs but no longer rendered. Wave 48 promoted Snap to primary
+           CTA + 3 secondary chips. -->
+      <div class="bento-actions" data-no-swipe hidden></div>
 
       <!-- Search input — moved below the action row. Still the most
            common action; just no longer the visual hero. -->
@@ -2825,6 +3139,11 @@
   <div class="screen" id="screen-snap">
     <div class="cam-shell">
       <video id="snap-video" autoplay playsinline muted></video>
+      <!-- Wave 50 — AI badge top-right signals "this is the AI-powered mode" -->
+      <span class="snap-ai-badge" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l2.4 6.4L21 11l-6.6 2.6L12 20l-2.4-6.4L3 11l6.6-2.6z"/></svg>
+        Powered by AI
+      </span>
       <div class="cam-noperm" id="snap-no-perm">
         <div style="font-size:48px;margin-bottom:8px" id="snap-no-perm-icon">📸</div>
         <h2 id="snap-no-perm-title">Camera access needed</h2>
