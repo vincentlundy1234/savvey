@@ -873,17 +873,21 @@
             scrolling past at a steady speed — feels alive, modern, ticker-
             like. Replaces the static 4×4 grid which read flat and dated.
     ───────────────────────────────────────── */
+    /* Wave 64 — searching screen layout simplified. Was using flex-grow on
+       the stack + margin-top:auto on the footer which produced inconsistent
+       spacing (Vincent saw whitespace at top + content at bottom). Now uses
+       justify-content:flex-start at the screen level with content stacked
+       naturally from the top. */
     #screen-searching{
       background:linear-gradient(160deg,#1a3d17 0%,#2a6b22 60%,#1d5019 100%);
-      align-items:stretch;justify-content:flex-start;
+      align-items:center;justify-content:flex-start;
       padding:0;text-align:center;
       position:relative;overflow:hidden;
     }
     .srch-stack{
-      flex:1;
       display:flex;flex-direction:column;align-items:center;
-      padding:calc(36px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom));
-      gap:24px;
+      padding:calc(28px + env(safe-area-inset-top)) 22px calc(20px + env(safe-area-inset-bottom));
+      gap:18px;
       width:100%;
       max-width:480px;margin:0 auto;
     }
@@ -1068,10 +1072,13 @@
     .srch-brand-tile[data-brand="ebay"].lit       { background:#E53238; border-color:#E53238; }
     .srch-brand-tile[data-brand="homebargains"].lit{background:#0066B2; border-color:#0066B2; }
     .srch-brand-tile[data-brand="lidl"].lit       { background:#0050AA; border-color:#0050AA; }
-    /* Footer caption */
+    /* Wave 64 — footer no longer uses margin-top:auto. The auto-margin
+       was pushing the footer to the bottom of the flex container which
+       in some viewports stranded the rest of the content at the top with
+       a huge gap (Vincent's "load screen broken" screenshot). Now footer
+       sits naturally after the marquee with a consistent gap. */
     .srch-footer{
-      margin-top:auto;
-      padding-bottom:8px;
+      padding:8px 0 0;
       font:500 12px/1.4 "Inter",sans-serif;
       color:rgba(255,255,255,0.55);
       letter-spacing:0.2px;
@@ -1258,21 +1265,37 @@
     .res-scroll{overflow-y:auto;flex:1;padding:16px 16px 32px;display:flex;flex-direction:column;gap:8px;}
 
     /* ── Hero card — verdict first, number second ── */
+    /* Wave 64 — overflow:hidden was clipping wit text when it wrapped to 2-3
+       lines (Vincent screenshot: "That's £340 and a weekend in Edinburgh"
+       second line cut off). Round the corners with a clipping mask for the
+       image strip instead, and let the body grow naturally. */
     .hero{
       background:var(--card);
       border:1px solid var(--border);
       border-radius:var(--r-xl);
-      overflow:hidden;
       box-shadow:var(--depth-2);
+      overflow:visible;
+    }
+    /* Image strip (when present) needs to clip to the hero's top corners */
+    .hero > .hero-image-wrap{
+      border-top-left-radius:var(--r-xl);
+      border-top-right-radius:var(--r-xl);
+    }
+    /* Verdict bar needs to clip to hero corners only when it's the FIRST
+       child (no image above it) */
+    .hero > .hero-verdict:first-child{
+      border-top-left-radius:var(--r-xl);
+      border-top-right-radius:var(--r-xl);
     }
     /* Wave 24 — hero product image strip; Wave 54 — refined with soft
-       gradient surface + radial vignette so it integrates with the card
-       instead of looking like a stock-photo strip. */
+       gradient surface + radial vignette; Wave 64 — bumped height (170 →
+       210) and centred contain so cropping reads cleanly. Vincent's
+       Sony WH-1000XM5 was showing top half of headphones only. */
     .hero-image-wrap{
-      width:100%;height:170px;
+      width:100%;height:210px;
       background:
-        radial-gradient(circle at 50% 60%, rgba(15,17,20,0.04) 0, rgba(15,17,20,0) 70%),
-        linear-gradient(180deg, #fafaf7 0%, #f0eee8 100%);
+        radial-gradient(circle at 50% 55%, rgba(255,255,255,0.6) 0, rgba(255,255,255,0) 60%),
+        linear-gradient(180deg, #fafaf7 0%, #ece9e0 100%);
       display:flex;align-items:center;justify-content:center;
       overflow:hidden;
       position:relative;
@@ -1280,17 +1303,18 @@
     .hero-image-wrap::after{
       content:"";
       position:absolute;inset:0;
-      background:linear-gradient(180deg, transparent 70%, rgba(15,17,20,0.04) 100%);
+      background:linear-gradient(180deg, transparent 75%, rgba(15,17,20,0.05) 100%);
       pointer-events:none;
     }
     .hero-image-wrap[hidden]{display:none;}
     .hero-image{
-      width:100%;height:100%;
+      max-width:88%;
+      max-height:88%;
+      width:auto;height:auto;
       object-fit:contain;
       object-position:center;
-      padding:18px;
       display:block;
-      filter:drop-shadow(0 6px 14px rgba(15,17,20,0.10));
+      filter:drop-shadow(0 8px 18px rgba(15,17,20,0.14));
       animation:hero-img-in 480ms var(--ease-pop) both;
     }
     @keyframes hero-img-in{
@@ -2165,11 +2189,12 @@
     }
     @keyframes share-fade{from{opacity:0;}to{opacity:1;}}
     .share-overlay.open{display:flex;}
-    /* Sheet container — full width, slides up from bottom, capped height. */
+    /* Wave 64 — sheet container scrolls inside its own bounds. Was capping
+       max-height too tight which clipped the canvas + actions overflow. */
     .share-sheet{
       width:100%;
       max-width:480px;
-      max-height:90dvh;
+      max-height:96dvh;
       background:#0f1114;
       color:#fff;
       border-radius:24px 24px 0 0;
@@ -2177,6 +2202,7 @@
       padding:8px 18px calc(20px + env(safe-area-inset-bottom));
       display:flex;flex-direction:column;
       overflow-y:auto;
+      -webkit-overflow-scrolling:touch;
       animation:share-sheet-in 360ms var(--ease-pop) both;
     }
     @keyframes share-sheet-in{
@@ -2196,15 +2222,13 @@
       text-align:center;
       margin-bottom:14px;
     }
-    /* Canvas preview area. The 640×820 canvas is rendered with width:100%
-       so it scales down responsively. Capped at 320px viewport height to
-       keep the action area always visible without scrolling. */
+    /* Wave 64 — canvas wrapper scales naturally, no max-height clip.
+       Sheet itself scrolls if total content exceeds viewport. */
     .share-wrap{
       width:100%;
       border-radius:18px;overflow:hidden;
       box-shadow:0 16px 40px rgba(0,0,0,0.42),
                  0 0 0 1px rgba(255,255,255,0.06);
-      max-height:54dvh;
       display:flex;align-items:center;justify-content:center;
       background:#1d5019;
       flex-shrink:0;
@@ -3449,7 +3473,7 @@
             <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
           </svg>
         </span>
-        <div class="savings-eyebrow">SAVE SCORE TOTAL</div>
+        <div class="savings-eyebrow">SAVVEY SAVINGS SPOTTED:</div>
         <div class="savings-amount">
           <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0.00</span>
         </div>

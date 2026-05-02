@@ -425,7 +425,7 @@ Below are search results from UK retailers. For each one, identify the actual CU
 - Monthly finance prices (£X/month, £X per month, "from £X/mo")
 - Bundle prices (with warranty, with cables, with installation)
 - Accessory or kit prices (cases, replacement parts, screen protectors)
-- Strike-through "was £X" prices — pick the current price, not the old one
+- Strike-through "was £X" prices — pick the current price, not the old one. CRITICAL: if a snippet shows BOTH "was £799" and "now £769" (or "-4% £769" / "£769" with a higher £799 nearby), the live deal price is the LOWER one. ALWAYS pick the lower current price when there's a clear was/now pair. Vincent's iPhone 17 test showed Amazon at £799 when the actual deal was £769 — that's exactly what to avoid.
 - Prices for unrelated/wrong-model products in the snippet
 - Membership-, club-, loyalty-, or subscription-gated prices: skip "AO Member", "Currys PerksPlus", "John Lewis My JL", "Boots Advantage", "Tesco Clubcard", "Nectar price", "Member price", "Trade price", "Student price", "Blue Light", "NHS price", "with subscription", "with Prime" — these are NOT the public price. If a snippet shows BOTH a member price and a higher standard price, return the standard / non-member price.
 - Trade-in or part-exchange contingent prices ("£X with trade-in", "after trade-in")
