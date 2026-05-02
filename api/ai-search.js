@@ -148,16 +148,25 @@ async function callPerplexity(augmentedQuery, apiKey, maxResults = 10) {
 const GROCERY_KEYWORDS = /\b(heinz|cadbury|nestle|kelloggs|weetabix|warburtons|hovis|pepsi|coca[\s-]?cola|coke|pringles|walkers|mcvities|hobnobs|baked beans|cornflakes|cereal|biscuits?|crisps|chocolate|pasta|rice|bread|milk|butter|cheese|yog[hou]+rt|bacon|sausage|mince|chicken|coffee|tea bags|flour|sugar|olive oil|tomato|tinned|frozen|beer|wine|cider|vodka|whisky|gin|rum)\b/i;
 const BEAUTY_KEYWORDS = /\b(lipstick|mascara|foundation|concealer|blusher|bronzer|eyeshadow|eyeliner|nail polish|nail varnish|perfume|fragrance|cologne|aftershave|shampoo|conditioner|hair (?:dye|colour|spray)|cleanser|moisturi[sz]er|serum|toner|sunscreen|spf\s*\d|exfoliat|face mask|body wash|deodorant|razor|shaver|charlotte tilbury|chanel|dior|ysl|estee lauder|clinique|mac\b|maybelline|loreal|l'oreal|nivea|olay|nyx|fenty|elf cosmetics|drunk elephant|the ordinary|cerave|la roche|paula's choice)\b/i;
 const DIY_KEYWORDS = /\b(drill|saw|hammer|screwdriver|wrench|spanner|paint|brush|roller|sandpaper|nail|screw|bolt|lawnmower|lawn mower|strimmer|hedge trimmer|leaf blower|hose|wheelbarrow|spade|fork|secateurs|cement|grout|silicone|polyfilla|filler|wallpaper|tile|laminate|decking|flymo|bosch (?:drill|saw)|dewalt|makita|stanley|black\s*\+?\s*decker)\b/i;
+// Wave 59 — household / "budget-tier eligible" keywords. Any of these plus
+// generic adjectives ("cheap", "budget", "cordless") will trigger an extra
+// Perplexity call locked to the discount + own-brand retailers (B&M, Aldi,
+// Wilko, Home Bargains, Argos own-brand). Vincent reported a £199-cheapest
+// result for "cordless vacuum cleaner" when these retailers stock them
+// from £40-£100. The category-locked call surfaces those hits.
+const BUDGET_KEYWORDS = /\b(vacuum|hoover|cordless vacuum|stick vacuum|kettle|toaster|microwave|iron(?:ing board)?|fan heater|fan|hair ?dryer|mixer|blender|food processor|slow cooker|air fryer|sandwich (?:maker|toaster)|coffee maker|tea pot|teapot|kitchen scales?|chopping board|knife set|saucepan|frying pan|dustbin|laundry basket|drying rack|clothes airer|mop|bucket|cleaning|duster|towels?|bedding|duvet|pillow|mattress|cushion|throw|rug|curtain|blind|cheap|budget|basic|own[\s-]?brand|value)\b/i;
 
 const GROCERY_HOSTS = ['tesco.com', 'sainsburys.co.uk', 'asda.com', 'groceries.asda.com', 'morrisons.com', 'groceries.morrisons.com', 'waitrose.com'];
 const BEAUTY_HOSTS  = ['superdrug.com', 'cultbeauty.co.uk', 'lookfantastic.com', 'spacenk.com', 'theperfumeshop.com', 'beautybay.com', 'boots.com'];
 const DIY_HOSTS     = ['diy.com', 'wickes.co.uk', 'toolstation.com', 'screwfix.com'];
+const BUDGET_HOSTS  = ['homebargains.co.uk', 'lidl.co.uk', 'aldi.co.uk', 'wilko.com', 'theworks.co.uk', 'poundland.co.uk', 'argos.co.uk', 'wilko.com'];
 
 function detectCategoryLock(query) {
   const q = String(query || '');
   if (GROCERY_KEYWORDS.test(q)) return { name: 'grocery', hosts: GROCERY_HOSTS };
   if (BEAUTY_KEYWORDS.test(q))  return { name: 'beauty',  hosts: BEAUTY_HOSTS };
   if (DIY_KEYWORDS.test(q))     return { name: 'diy',     hosts: DIY_HOSTS };
+  if (BUDGET_KEYWORDS.test(q))  return { name: 'budget',  hosts: BUDGET_HOSTS };
   return null;
 }
 
@@ -404,9 +413,14 @@ Below are search results from UK retailers. For each one, identify the actual CU
 - Trade-in or part-exchange contingent prices ("£X with trade-in", "after trade-in")
 - Pre-order deposits ("£100 pre-order, £X balance")
 
+Wave 59 inclusion rules — DO accept and mark as plausible:
+- Own-brand and store-brand products from Argos, Tesco, Sainsbury's, Asda, Wilko, B&M, Home Bargains, Lidl, Aldi (e.g. "Argos Pro 2-in-1 Cordless Vacuum", "Tesco Smart Kettle"). For category queries like "cordless vacuum cleaner", "kettle", "iron", "blender" the user CARES about budget-tier own-brand options — do not discriminate against them.
+- Budget price points well below typical premium-brand prices (£15 kettles, £40 vacuums, £25 blenders) — these are real products at real prices, not errors. The user wants the FULL spectrum of UK retail.
+- Refurbished / outlet products IF the snippet clearly states "Refurbished" or "Open box" AND the price is sensible — but DO note this in plausible reasoning.
+
 Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean}
 - price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell
-- plausible = true if this is genuinely the product the user searched for at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, or wildly off-market
+- plausible = true if this is genuinely the product the user searched for (or a same-category own-brand alternative) at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, or wildly off-market
 
 Results:
 ${JSON.stringify(numbered, null, 2)}

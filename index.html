@@ -1976,81 +1976,171 @@
     /* ─────────────────────────────────────────
        SHARE CARD
     ───────────────────────────────────────── */
+    /* ─────────────────────────────────────────
+       Share overlay (Wave 57 — bottom-sheet redesign).
+       Replaces the centred-modal stack-of-emoji-buttons layout. Now:
+         • Backdrop: dimmed, blurred.
+         • Sheet: slides up from bottom, rounded top corners, native iOS feel.
+         • Handle bar at top (drag-affordance, not draggable).
+         • Canvas preview at top of sheet (constrained max-height).
+         • Primary share button (gradient) as the visual anchor.
+         • Channel chips in a horizontal row (compact, SVG icons not emoji).
+         • Text-only secondary actions (Copy, Save image) below.
+         • Cancel as a subtle close link.
+    ───────────────────────────────────────── */
     .share-overlay{
       position:absolute;inset:0;
-      background:rgba(0,0,0,0.92);
-      backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
-      z-index:200;display:none;flex-direction:column;
-      align-items:center;justify-content:center;padding:24px;
-      padding-top:calc(24px + env(safe-area-inset-top));
-      padding-bottom:calc(24px + env(safe-area-inset-bottom));
+      background:rgba(15,17,20,0.62);
+      backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+      z-index:200;
+      display:none;
+      align-items:flex-end;justify-content:center;
+      padding:0;
       animation:share-fade var(--motion-norm) var(--ease-quick) both;
     }
     @keyframes share-fade{from{opacity:0;}to{opacity:1;}}
     .share-overlay.open{display:flex;}
+    /* Sheet container — full width, slides up from bottom, capped height. */
+    .share-sheet{
+      width:100%;
+      max-width:480px;
+      max-height:90dvh;
+      background:#0f1114;
+      color:#fff;
+      border-radius:24px 24px 0 0;
+      box-shadow:0 -24px 60px rgba(0,0,0,0.5);
+      padding:8px 18px calc(20px + env(safe-area-inset-bottom));
+      display:flex;flex-direction:column;
+      overflow-y:auto;
+      animation:share-sheet-in 360ms var(--ease-pop) both;
+    }
+    @keyframes share-sheet-in{
+      from{transform:translateY(24px);opacity:0;}
+      to  {transform:translateY(0);opacity:1;}
+    }
+    .share-handle{
+      width:42px;height:4px;border-radius:2px;
+      background:rgba(255,255,255,0.22);
+      margin:0 auto 10px;
+      flex-shrink:0;
+    }
+    .share-title{
+      font:900 17px/1.1 "Nunito",sans-serif;
+      color:#fff;
+      letter-spacing:-0.3px;
+      text-align:center;
+      margin-bottom:14px;
+    }
+    /* Canvas preview area. The 640×820 canvas is rendered with width:100%
+       so it scales down responsively. Capped at 320px viewport height to
+       keep the action area always visible without scrolling. */
     .share-wrap{
-      width:100%;max-width:320px;
-      border-radius:20px;overflow:hidden;
-      box-shadow:0 24px 60px rgba(0,0,0,0.5),0 0 0 1px rgba(255,255,255,0.06);
-      animation:share-card-in 380ms var(--ease-pop) both;
+      width:100%;
+      border-radius:18px;overflow:hidden;
+      box-shadow:0 16px 40px rgba(0,0,0,0.42),
+                 0 0 0 1px rgba(255,255,255,0.06);
+      max-height:54dvh;
+      display:flex;align-items:center;justify-content:center;
+      background:#1d5019;
+      flex-shrink:0;
     }
-    @keyframes share-card-in{
-      from{opacity:0;transform:scale(0.92) translateY(8px);}
-      to  {opacity:1;transform:scale(1)    translateY(0);}
-    }
+    #share-canvas{width:100%;height:auto;display:block;}
+    /* Action area — primary button + channel chips + text actions. */
     .share-actions{
-      display:grid;
-      grid-template-columns:1fr 1fr 1fr;
-      gap:8px;
-      padding:14px;
-      width:100%;max-width:320px;
+      display:flex;flex-direction:column;
+      gap:10px;
+      padding:14px 0 0;
     }
+    /* Primary share button — gradient, glow, full width. */
     .share-shr{
-      grid-column:1 / -1;
-      background:linear-gradient(132deg,#3d9435 0%,#2a6b22 100%);
+      width:100%;
+      padding:15px 18px;
+      background:linear-gradient(135deg,#3d9435 0%,#216a1b 100%);
       color:#fff;border:none;
-      padding:16px;border-radius:14px;
-      font:800 16px/1 "Nunito",sans-serif;
+      border-radius:14px;
+      font:800 15px/1 "Nunito",sans-serif;
+      letter-spacing:-0.2px;
       cursor:pointer;
-      box-shadow:var(--depth-glow-green);
-      min-height:54px;
-      transition:transform var(--motion-fast) var(--ease-pop);
+      display:flex;align-items:center;justify-content:center;gap:8px;
+      box-shadow:0 10px 28px rgba(42,107,34,0.32),
+                 inset 0 1px 0 rgba(255,255,255,0.20);
+      min-height:auto;
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 box-shadow var(--motion-norm) var(--ease-quick);
     }
-    .share-shr:active{transform:scale(0.97);}
+    .share-shr:active{
+      transform:scale(0.98);
+      box-shadow:0 4px 12px rgba(42,107,34,0.28),
+                 inset 0 1px 0 rgba(255,255,255,0.20);
+    }
+    .share-shr svg{width:16px;height:16px;flex-shrink:0;}
+    /* Channel chip row — horizontal grid, three branded chips. */
+    .share-channels{
+      display:grid;
+      grid-template-columns:repeat(3, 1fr);
+      gap:8px;
+    }
     .share-channel{
       display:flex;align-items:center;justify-content:center;gap:6px;
-      background:rgba(255,255,255,0.08);
+      padding:11px 6px;
+      background:rgba(255,255,255,0.06);
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:12px;
       color:#fff;
-      border:1px solid rgba(255,255,255,0.12);
-      padding:12px 8px;border-radius:12px;
-      font:700 12px/1 "Nunito",sans-serif;
+      font:700 12px/1 "Inter",sans-serif;
+      letter-spacing:-0.1px;
       cursor:pointer;
-      backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+      min-height:auto;
       transition:transform var(--motion-fast) var(--ease-quick),
-                 background var(--motion-norm) var(--ease-quick);
+                 background var(--motion-norm) var(--ease-quick),
+                 border-color var(--motion-norm) var(--ease-quick);
     }
-    .share-channel .sc-emoji{font-size:14px;}
-    .share-channel:active{transform:scale(0.95);background:rgba(255,255,255,0.16);}
-    .sc-whatsapp{background:rgba(37,211,102,0.16);border-color:rgba(37,211,102,0.4);}
-    .sc-whatsapp:active{background:rgba(37,211,102,0.3);}
-    .sc-twitter{background:rgba(255,255,255,0.06);}
-    .share-save,.share-cancel{
-      grid-column:span 3;
-      background:transparent;border:none;
-      padding:10px;
-      font:600 13px/1 "Inter",sans-serif;
+    .share-channel svg{width:14px;height:14px;flex-shrink:0;}
+    .share-channel:active{
+      transform:scale(0.96);
+      background:rgba(255,255,255,0.12);
+      border-color:rgba(255,255,255,0.18);
+    }
+    /* Brand tints for the 3 channels */
+    .sc-whatsapp{
+      background:rgba(37,211,102,0.14);
+      border-color:rgba(37,211,102,0.30);
+    }
+    .sc-whatsapp:active{background:rgba(37,211,102,0.24);}
+    .sc-whatsapp svg{color:#25d366;}
+    .sc-twitter svg{color:#fff;}
+    .sc-copy svg{color:rgba(255,255,255,0.78);}
+    /* Hide legacy emoji slot — replaced with inline SVG icons */
+    .share-channel .sc-emoji{display:none;}
+    /* Save / Cancel — compact text buttons */
+    .share-foot{
+      display:flex;align-items:center;justify-content:space-between;
+      padding-top:6px;
+      border-top:1px solid rgba(255,255,255,0.08);
+      margin-top:6px;
+    }
+    .share-save{
+      display:inline-flex;align-items:center;gap:6px;
+      background:none;border:none;
+      padding:10px 4px;
+      font:700 13px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.80);
       cursor:pointer;
+      min-height:auto;
       transition:color var(--motion-fast) var(--ease-quick);
     }
-    .share-save{color:rgba(255,255,255,0.85);}
     .share-save:active,.share-save:hover{color:#fff;}
-    .share-cancel{color:rgba(255,255,255,0.5);}
-    .share-cancel:active,.share-cancel:hover{color:rgba(255,255,255,0.85);}
-    #share-canvas{width:100%;display:block;}
-    .share-actions{width:100%;max-width:320px;margin-top:14px;display:flex;flex-direction:column;gap:8px;}
-    .share-save{padding:15px;border:none;border-radius:14px;background:#fff;color:var(--green);font-size:15px;font-weight:800;font-family:"Nunito",sans-serif;cursor:pointer;}
-    .share-shr{padding:15px;border:1.5px solid rgba(255,255,255,0.18);border-radius:14px;background:rgba(255,255,255,0.08);color:#fff;font-size:15px;font-weight:700;cursor:pointer;}
-    .share-cancel{background:none;border:none;color:rgba(255,255,255,0.35);font-size:13px;cursor:pointer;padding:8px;}
+    .share-save svg{width:14px;height:14px;flex-shrink:0;}
+    .share-cancel{
+      background:none;border:none;
+      padding:10px 4px;
+      font:700 13px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.46);
+      cursor:pointer;
+      min-height:auto;
+      transition:color var(--motion-fast) var(--ease-quick);
+    }
+    .share-cancel:active,.share-cancel:hover{color:rgba(255,255,255,0.80);}
 
     /* ─────────────────────────────────────────
        PRIVACY
@@ -3451,11 +3541,11 @@
         </div>
       </div>
 
-      <!-- Headline + animated counter -->
-      <div class="srch-h">Checking prices</div>
+      <!-- Headline + animated activity indicator -->
+      <div class="srch-h">Checking UK retailers</div>
       <div class="srch-counter" aria-live="polite">
         <span class="srch-counter-dot"></span>
-        Checking <strong id="srch-counter-num">0</strong> / 16 UK retailers
+        <span id="srch-counter-num">Sweeping prices…</span>
       </div>
 
       <!-- Product pill -->
@@ -3699,23 +3789,40 @@
 </div>
 
 <!-- SHARE CARD -->
-<div class="share-overlay" id="share-overlay" role="dialog" aria-modal="true" aria-label="Share this price card" aria-hidden="true">
-  <div class="share-wrap">
-    <canvas id="share-canvas" width="640" height="820" aria-label="Savvey result share card"></canvas>
-  </div>
-  <div class="share-actions">
-    <button class="share-shr" onclick="shareCard()">Share →</button>
-    <button class="share-channel sc-whatsapp" onclick="shareToWhatsApp()">
-      <span class="sc-emoji">💬</span> WhatsApp
-    </button>
-    <button class="share-channel sc-twitter" onclick="shareToTwitter()">
-      <span class="sc-emoji">𝕏</span> Twitter
-    </button>
-    <button class="share-channel sc-copy" onclick="copyShareText()">
-      <span class="sc-emoji">🔗</span> Copy
-    </button>
-    <button class="share-save" onclick="saveCard()">📥 Save image</button>
-    <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')">Cancel</button>
+<div class="share-overlay" id="share-overlay" role="dialog" aria-modal="true" aria-label="Share" aria-hidden="true">
+  <div class="share-sheet" role="document">
+    <div class="share-handle" aria-hidden="true"></div>
+    <div class="share-title" id="share-title">Share your Save Score</div>
+    <div class="share-wrap">
+      <canvas id="share-canvas" width="640" height="820" aria-label="Savvey share card"></canvas>
+    </div>
+    <div class="share-actions">
+      <button class="share-shr" onclick="shareCard()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+        Share
+      </button>
+      <div class="share-channels">
+        <button class="share-channel sc-whatsapp" onclick="shareToWhatsApp()" aria-label="Share to WhatsApp">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.4 6.5A8 8 0 0 0 4.1 16.4L3 21l4.7-1.1a8 8 0 0 0 11.7-7.4 8 8 0 0 0-2-5.9zm-5.4 12.3a6.6 6.6 0 0 1-3.4-.9l-.2-.1-2.5.6.6-2.4-.2-.3a6.6 6.6 0 0 1 5.7-9.9 6.6 6.6 0 0 1 6.6 6.6 6.6 6.6 0 0 1-6.6 6.5zm3.6-4.9c-.2-.1-1.2-.6-1.4-.6-.2-.1-.3-.1-.5.1l-.6.7c-.1.2-.2.2-.4.1a5.4 5.4 0 0 1-2.7-2.4c-.2-.4.2-.4.6-1.1l.1-.4-.1-.3c0-.1-.5-1.2-.7-1.6-.2-.4-.4-.4-.5-.4h-.4c-.2 0-.4.1-.5.3a2.4 2.4 0 0 0-.7 1.7c0 1 .7 1.9.8 2 .1.2 1.4 2.2 3.5 3.1 1.3.5 1.8.6 2.4.5.4-.1 1.2-.5 1.4-1 .2-.5.2-.9.1-1l-.4-.7z"/></svg>
+          WhatsApp
+        </button>
+        <button class="share-channel sc-twitter" onclick="shareToTwitter()" aria-label="Share to X / Twitter">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2H21l-6.55 7.485L22 22h-6.05l-4.74-6.198L5.8 22H3l7.013-8.012L2 2h6.21l4.286 5.668L18.244 2zm-1.06 18h1.572L7.86 4H6.18l11 16z"/></svg>
+          X
+        </button>
+        <button class="share-channel sc-copy" onclick="copyShareText()" aria-label="Copy share text">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          Copy
+        </button>
+      </div>
+      <div class="share-foot">
+        <button class="share-save" onclick="saveCard()" aria-label="Save share image to device">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          Save image
+        </button>
+        <button class="share-cancel" onclick="document.getElementById('share-overlay').classList.remove('open')">Cancel</button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -3941,11 +4048,11 @@ function globalReset(){
   if(vBar)vBar.className='hero-verdict';
   for(let i=1;i<=5;i++){const p=document.getElementById('vp-'+i);if(p){p.className='v-pip off';p.textContent=i;}}
   // 5. Reset chip animations + branded pills (Wave 27 = 16 pills) and
-  //    the loading-screen counter (Wave 42).
+  //    the loading-screen counter (Wave 42, copy updated Wave 61).
   chipTimers.forEach(clearTimeout);chipTimers=[];
   for(let i=0;i<16;i++){const c=document.getElementById('rc-'+i);if(c){c.classList.remove('lit');c.classList.remove('done');}}
   const _counterEl=document.getElementById('srch-counter-num');
-  if(_counterEl) _counterEl.textContent='0';
+  if(_counterEl) _counterEl.textContent='Sweeping prices…';
   // 6. Wave 29: ALSO clear the refine-input + product-name + wit so a new
   //    search rendering can never inherit stale strings from a prior one.
   //    Vincent saw "iPhone 15 Pro 256GB" in the refine bar while the body
@@ -4595,15 +4702,31 @@ function extractPrice(str){
 }
 
 // ── Score calculation ──
+//
+// VALIDATION mode (user has a shelf/anchor price): how much over the
+// cheapest UK retailer is the user paying?
 function calcScore(userP,bestP){
-  // Returns 1-5. Same gap maths, simpler signal.
-  if(!userP||!bestP||bestP<=0)return 5; // no price entered = assume best
+  if(!userP||!bestP||bestP<=0)return 5;
   const gap=(userP-bestP)/bestP;
   if(gap<=0.02)return 5; // at or below best price
   if(gap<=0.08)return 4; // within 8% — pretty good
   if(gap<=0.20)return 3; // 8-20% more — worth shopping around
   if(gap<=0.40)return 2; // 20-40% more — don't
   return 1;              // >40% over — walk away
+}
+// Wave 61 — DISCOVERY mode score: how much cheaper is the best UK
+// retailer vs the average across all UK retailers we found? This is the
+// "is the user about to score a good deal?" signal. Wave 60 was using
+// calcScore(avg, best) which inverted the interpretation and flagged
+// every Discovery result as "Walk away" red — Vincent's Samsung TV bug.
+function calcDiscoveryScore(avgP, bestP){
+  if(!avgP || !bestP || avgP <= 0) return 5;
+  const savingPct = (avgP - bestP) / avgP; // positive = best is below avg
+  if(savingPct >= 0.20) return 5; // best is 20%+ below avg — great deal
+  if(savingPct >= 0.10) return 4; // best 10-20% below avg — pretty good
+  if(savingPct >= 0.03) return 3; // best 3-10% below — worth a look
+  if(savingPct >= -0.03) return 2; // best matches avg — fine but no win
+  return 1; // best is somehow above avg — anomaly
 }
 function scoreToSpc(s){return s>=4?'green':s===3?'amber':'red';}
 
@@ -4645,8 +4768,11 @@ function buildScenV3(items, uPrice, query){
     saving = Math.max(0, Math.round(uPrice - bestP));
     scoreBasis = 'shelf';
   } else {
-    // Discovery mode — score against UK retailer average
-    score = calcScore(avgP, bestP);
+    // Wave 61 — Discovery mode now uses dedicated calcDiscoveryScore
+    // (best vs average, where smaller best = better deal). Earlier code
+    // was using calcScore which is for Validation and inverted the
+    // interpretation, scoring every Discovery search as "Walk away" red.
+    score = calcDiscoveryScore(avgP, bestP);
     spc = scoreToSpc(score);
     saving = savingVsAvg;
     scoreBasis = 'average';
@@ -4746,15 +4872,23 @@ async function doLiveSearch(forced){
 // ── fetchPrices — returns a Promise; cancelled via AbortController on globalReset ──
 function fetchPrices(query){
   const gen=searchGeneration; // capture — used in guard below
+  // Wave 61 — SNAPSHOT userPrice + bestPriceOnly at the time fetchPrices is
+  // called. Without this, processSearchResponse runs after the network
+  // round-trip and reads whatever the global was at that moment, which
+  // can be a stale value from a parallel/intervening Validation flow.
+  // Vincent saw a £282 phantom saving on a Discovery Samsung TV result
+  // because a stale userPrice leaked into the second search's render.
+  const _userPriceSnapshot   = (typeof userPrice === 'number' && userPrice > 0) ? userPrice : null;
+  const _bestPriceOnlySnapshot = !!bestPriceOnly;
 
   activeController=new AbortController();
   const sig=activeController.signal;
 
   document.getElementById('searching-product').textContent=query;
   chipTimers.forEach(clearTimeout);chipTimers=[];
-  // Wave 42 — reset the counter at the start of every search.
+  // Wave 61 — reset the counter copy at the start of every search.
   const counterEl = document.getElementById('srch-counter-num');
-  if(counterEl) counterEl.textContent = '0';
+  if(counterEl) counterEl.textContent = 'Sweeping prices…';
   // Force the progress ring to restart its CSS animation by toggling
   // a reflow on the element — without this it'd run only on first mount.
   const ringEl = document.querySelector('.srch-ring-progress');
@@ -4772,23 +4906,30 @@ function fetchPrices(query){
     const j = Math.floor(Math.random() * (i + 1));
     [pillOrder[i], pillOrder[j]] = [pillOrder[j], pillOrder[i]];
   }
-  let doneCount = 0;
+  // Wave 61 — tighter cycling so most pills get their moment in even when
+  // results land in 1-2s. Was 160ms apart × 16 = 2.56s; now 90ms × 16 =
+  // 1.44s so the animation feels alive end-to-end. Counter copy now
+  // surfaces the retailer NAME being checked rather than a fake N/16
+  // count that never reached 16 before results landed (Vincent's "loading
+  // screen broken" bug).
   pillOrder.forEach((rcIndex, position) => {
-    const litAt  = 120 + position * 160;
-    const doneAt = litAt + 800;
+    const litAt  = 100 + position * 90;
+    const doneAt = litAt + 480;
     chipTimers.push(setTimeout(() => {
       if(searchGeneration !== gen) return;
       const c = document.getElementById('rc-'+rcIndex);
-      if(c) c.classList.add('lit');
+      if(c){
+        c.classList.add('lit');
+        // Update the counter to show what's being checked right now
+        const cnt = document.getElementById('srch-counter-num');
+        const logo = c.querySelector('.srch-brand-logo');
+        if(cnt && logo) cnt.textContent = 'Checking ' + logo.textContent;
+      }
     }, litAt));
     chipTimers.push(setTimeout(() => {
       if(searchGeneration !== gen) return;
       const c = document.getElementById('rc-'+rcIndex);
       if(c){ c.classList.remove('lit'); c.classList.add('done'); }
-      // Wave 42 — increment the counter as each retailer completes.
-      doneCount++;
-      const cnt = document.getElementById('srch-counter-num');
-      if(cnt) cnt.textContent = String(Math.min(doneCount, 16));
     }, doneAt));
   });
 
@@ -4834,7 +4975,10 @@ function fetchPrices(query){
       d1=r2.ok?await r2.json():{};
     }
     if(searchGeneration!==gen)return null;
-    return processSearchResponse(d1,query);
+    // Pass the snapshotted userPrice so processSearchResponse uses the
+    // value that was current when this fetch was kicked off, not whatever
+    // global it sees after the await round-trip.
+    return processSearchResponse(d1, query, _userPriceSnapshot);
   }).catch(e=>{
     clearTimeout(timeout);
     if(e.name==='AbortError'){console.log('[fetchPrices] aborted');return null;}
@@ -4850,7 +4994,7 @@ function fetchPrices(query){
 // scen object via buildScenV3. Handles the Serper shape (source name)
 // AND the AI search shape (real retailer URLs) — both work because we
 // match against the source field which both endpoints populate.
-function processSearchResponse(d1, query){
+function processSearchResponse(d1, query, snapshotUserPrice){
   if(!d1)return null;
   const raw=(d1.shopping||[]);
   const mapped=raw.map(i=>{
@@ -4866,8 +5010,12 @@ function processSearchResponse(d1, query){
       sub:i.delivery||'Check retailer'
     };
   }).filter(i=>i&&i.price>1&&i.price<5000);
-  console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length+' source='+(d1._meta&&d1._meta.source||'serper'));
-  const sc=buildScenV3(mapped,userPrice,query);
+  console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length+' source='+(d1._meta&&d1._meta.source||'serper')+' uPrice='+(snapshotUserPrice||'null'));
+  // Wave 61 — prefer the snapshot. If absent, fall back to the global
+  // (legacy callers that don't pass it). The snapshot is the value that
+  // was true when fetchPrices was kicked off; the global may have moved on.
+  const upForBuild = (typeof snapshotUserPrice === 'number' && snapshotUserPrice > 0) ? snapshotUserPrice : userPrice;
+  const sc=buildScenV3(mapped,upForBuild,query);
   if(sc&&d1._meta){
     sc.coverage=d1._meta.coverage||'good';
     sc.onlyEbay=!!d1._meta.onlyEbay;
@@ -7325,17 +7473,57 @@ function closeSavedItems(){
   if(overlay){
     overlay.classList.remove('open');
     overlay.setAttribute('aria-hidden', 'true');
-    // Restore the share-card markup so future shares work
-    overlay.innerHTML = '<div class="share-wrap"><canvas id="share-canvas" width="640" height="820" aria-label="Savvey result share card"></canvas></div>' +
-      '<div class="share-actions">' +
-        '<button class="share-shr" onclick="shareCard()">Share →</button>' +
-        '<button class="share-channel sc-whatsapp" onclick="shareToWhatsApp()"><span class="sc-emoji">💬</span> WhatsApp</button>' +
-        '<button class="share-channel sc-twitter" onclick="shareToTwitter()"><span class="sc-emoji">𝕏</span> Twitter</button>' +
-        '<button class="share-channel sc-copy" onclick="copyShareText()"><span class="sc-emoji">🔗</span> Copy</button>' +
-        '<button class="share-save" onclick="saveCard()">📥 Save image</button>' +
-        '<button class="share-cancel" onclick="document.getElementById(\'share-overlay\').classList.remove(\'open\')">Cancel</button>' +
-      '</div>';
+    // Restore the share-sheet markup so future shares work (Wave 57 layout)
+    overlay.innerHTML = buildShareSheetHtml('result');
   }
+}
+
+// Wave 57 — single source of truth for the share-sheet markup. Used by
+// both the result-share (openShareCard) and savings-share
+// (shareSavingsCounter) flows. Mode toggles button labels + handlers.
+function buildShareSheetHtml(mode){
+  const isSavings = mode === 'savings';
+  const title = isSavings ? 'Share your Savvey savings' : 'Share your Save Score';
+  const onShare   = isSavings ? 'shareSavingsCard()'        : 'shareCard()';
+  const onWA      = isSavings ? 'shareSavingsToWhatsApp()'  : 'shareToWhatsApp()';
+  const onTw      = isSavings ? 'shareSavingsToTwitter()'   : 'shareToTwitter()';
+  const onCopy    = isSavings ? 'copySavingsShareText()'    : 'copyShareText()';
+  const onSave    = isSavings ? 'saveSavingsCard()'         : 'saveCard()';
+  return ''
+    + '<div class="share-sheet" role="document">'
+    +   '<div class="share-handle" aria-hidden="true"></div>'
+    +   `<div class="share-title">${title}</div>`
+    +   '<div class="share-wrap">'
+    +     `<canvas id="share-canvas" width="640" height="820" aria-label="Savvey share card"></canvas>`
+    +   '</div>'
+    +   '<div class="share-actions">'
+    +     `<button class="share-shr" onclick="${onShare}">`
+    +       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>'
+    +       'Share'
+    +     '</button>'
+    +     '<div class="share-channels">'
+    +       `<button class="share-channel sc-whatsapp" onclick="${onWA}" aria-label="Share to WhatsApp">`
+    +         '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.4 6.5A8 8 0 0 0 4.1 16.4L3 21l4.7-1.1a8 8 0 0 0 11.7-7.4 8 8 0 0 0-2-5.9zm-5.4 12.3a6.6 6.6 0 0 1-3.4-.9l-.2-.1-2.5.6.6-2.4-.2-.3a6.6 6.6 0 0 1 5.7-9.9 6.6 6.6 0 0 1 6.6 6.6 6.6 6.6 0 0 1-6.6 6.5zm3.6-4.9c-.2-.1-1.2-.6-1.4-.6-.2-.1-.3-.1-.5.1l-.6.7c-.1.2-.2.2-.4.1a5.4 5.4 0 0 1-2.7-2.4c-.2-.4.2-.4.6-1.1l.1-.4-.1-.3c0-.1-.5-1.2-.7-1.6-.2-.4-.4-.4-.5-.4h-.4c-.2 0-.4.1-.5.3a2.4 2.4 0 0 0-.7 1.7c0 1 .7 1.9.8 2 .1.2 1.4 2.2 3.5 3.1 1.3.5 1.8.6 2.4.5.4-.1 1.2-.5 1.4-1 .2-.5.2-.9.1-1l-.4-.7z"/></svg>'
+    +         'WhatsApp'
+    +       '</button>'
+    +       `<button class="share-channel sc-twitter" onclick="${onTw}" aria-label="Share to X / Twitter">`
+    +         '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M18.244 2H21l-6.55 7.485L22 22h-6.05l-4.74-6.198L5.8 22H3l7.013-8.012L2 2h6.21l4.286 5.668L18.244 2z"/></svg>'
+    +         'X'
+    +       '</button>'
+    +       `<button class="share-channel sc-copy" onclick="${onCopy}" aria-label="Copy share text">`
+    +         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+    +         'Copy'
+    +       '</button>'
+    +     '</div>'
+    +     '<div class="share-foot">'
+    +       `<button class="share-save" onclick="${onSave}" aria-label="Save share image to device">`
+    +         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>'
+    +         'Save image'
+    +       '</button>'
+    +       '<button class="share-cancel" onclick="document.getElementById(\'share-overlay\').classList.remove(\'open\')">Cancel</button>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>';
 }
 
 // ── Share card ──
@@ -7546,19 +7734,12 @@ function shareSavingsCounter(){
   haptic(12);
   const total = getTotalSavings();
   const count = getSavingsCount();
-  // Open the share overlay with a savings-mode canvas
   const overlay = document.getElementById('share-overlay');
   if(!overlay) return;
-  // Reset overlay markup to share-card layout if it was repurposed by saved-items
-  overlay.innerHTML = '<div class="share-wrap"><canvas id="share-canvas" width="640" height="820" aria-label="Savvey savings share card"></canvas></div>' +
-    '<div class="share-actions">' +
-      '<button class="share-shr" onclick="shareSavingsCard()">Share my savings →</button>' +
-      '<button class="share-channel sc-whatsapp" onclick="shareSavingsToWhatsApp()"><span class="sc-emoji">💬</span> WhatsApp</button>' +
-      '<button class="share-channel sc-twitter" onclick="shareSavingsToTwitter()"><span class="sc-emoji">𝕏</span> Twitter</button>' +
-      '<button class="share-channel sc-copy" onclick="copySavingsShareText()"><span class="sc-emoji">🔗</span> Copy</button>' +
-      '<button class="share-save" onclick="saveSavingsCard()">📥 Save image</button>' +
-      '<button class="share-cancel" onclick="document.getElementById(\'share-overlay\').classList.remove(\'open\')">Cancel</button>' +
-    '</div>';
+  // Wave 57 — bottom-sheet markup via the shared builder. Mode='savings'
+  // wires the canvas/share/save channels to the savings-card variants
+  // instead of the result-card variants.
+  overlay.innerHTML = buildShareSheetHtml('savings');
   drawSavingsCard(total, count);
   overlay.setAttribute('aria-hidden','false');
   overlay.classList.add('open');
