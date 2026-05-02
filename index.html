@@ -573,6 +573,25 @@
     @keyframes snap-spin{to{transform:rotate(360deg)}}
     .snap-busy-msg{color:#fff;font-size:15px;font-weight:600;}
     .snap-busy-sub{color:rgba(255,255,255,0.65);font-size:13px;margin-top:-10px;}
+    /* Wave 63 — snap busy skeleton (replaces lone spinner) */
+    .snap-busy-skel{
+      width:240px;
+      background:rgba(255,255,255,0.08);
+      border:1px solid rgba(255,255,255,0.12);
+      border-radius:18px;
+      padding:14px;
+      display:flex;flex-direction:column;gap:10px;
+    }
+    .snap-busy-skel .skel{
+      background:linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.14) 50%, rgba(255,255,255,0.06) 100%);
+      background-size:200% 100%;
+    }
+    .snap-busy-skel-img{
+      height:100px;border-radius:12px;
+    }
+    .snap-busy-skel-bar{
+      height:10px;border-radius:5px;
+    }
 
     /* ─────────────────────────────────────────
        SCANNER
@@ -1220,14 +1239,21 @@
       width:100%;
     }
     .res-refine input::placeholder{color:var(--ink4,#767676);font-weight:500;}
+    /* Wave 63 — refine-input submit affordance is now a clearly-styled
+       green pill so users know they can re-search by tapping. Was a
+       muted-grey magnifying-glass icon that looked decorative. */
     .res-refine-go{
-      background:transparent;border:none;cursor:pointer;
-      color:var(--ink4,#767676);
-      width:24px;height:24px;
+      background:var(--green);border:none;cursor:pointer;
+      color:#fff;
+      width:30px;height:30px;border-radius:8px;
       display:flex;align-items:center;justify-content:center;
       flex-shrink:0;
+      box-shadow:0 2px 6px rgba(42,107,34,0.20);
+      transition:transform var(--motion-fast) var(--ease-pop),
+                 background var(--motion-norm) var(--ease-quick);
     }
-    .res-refine-go:hover,.res-refine-go:focus{color:#2a6b22;}
+    .res-refine-go:active{transform:scale(0.92);background:#216a1b;}
+    .res-refine-go:focus-visible{outline:2px solid var(--green-bd);outline-offset:2px;}
 
     .res-scroll{overflow-y:auto;flex:1;padding:16px 16px 32px;display:flex;flex-direction:column;gap:8px;}
 
@@ -1700,6 +1726,170 @@
       font-style:italic;
     }
 
+    /* Wave 63 — Skeleton loader. Reusable shimmer block used by AI
+       estimate strip, retailer rows during fetch, image placeholders. */
+    .skel{
+      position:relative;overflow:hidden;
+      background:linear-gradient(90deg, rgba(15,17,20,0.04) 0%, rgba(15,17,20,0.07) 50%, rgba(15,17,20,0.04) 100%);
+      background-size:200% 100%;
+      border-radius:8px;
+      animation:skel-shimmer 1400ms linear infinite;
+    }
+    @keyframes skel-shimmer{
+      from{background-position:200% 0;}
+      to  {background-position:-200% 0;}
+    }
+    @media (prefers-reduced-motion: reduce){
+      .skel{animation:none;background:rgba(15,17,20,0.05);}
+    }
+    .ai-estimate-skel{
+      margin:0 0 14px;
+      padding:14px;
+      background:rgba(15,17,20,0.03);
+      border:1px solid var(--border);
+      border-radius:13px;
+      display:flex;flex-direction:column;gap:8px;
+    }
+    .ai-estimate-skel-line{height:10px;border-radius:6px;}
+    .ai-estimate-skel-line.w60{width:60%;}
+    .ai-estimate-skel-line.w40{width:40%;}
+    .ai-estimate-skel-line.w80{width:80%;}
+
+    /* Wave 63 — subtle home mesh accent. Welcome got the full mesh
+       gradient (Wave 51); home now gets a subtle echo via two small
+       radial accents in the corners so first-time users don't lose the
+       brand-feeling when they swipe from welcome to home. */
+    #screen-home{
+      background:
+        radial-gradient(circle at 100% 0%, rgba(245,183,66,0.05) 0, rgba(245,183,66,0) 35%),
+        radial-gradient(circle at 0% 100%, rgba(86,184,77,0.06) 0, rgba(86,184,77,0)  40%),
+        var(--surface);
+    }
+
+    /* Wave 63 — result-followups zone. Holds the shelf-refine pill
+       (moved out of hero) + future advisories. Sits below the retailer
+       list, before the affiliate disclosure. */
+    .result-followups{
+      margin-top:18px;
+    }
+    .result-followups:empty{display:none;}
+    /* Reset the inner shelf-refine spacing so it doesn't double up */
+    .result-followups .shelf-refine{margin:0;}
+
+    /* Wave 63 — settings cog button on home brand bar (replaces the
+       decorative S badge). Routes to the settings screen. */
+    .h-settings{
+      width:40px;height:40px;border-radius:12px;
+      display:flex;align-items:center;justify-content:center;
+      background:var(--surface-2);
+      border:1px solid var(--border);
+      color:var(--ink2);
+      cursor:pointer;
+      transition:background var(--motion-norm) var(--ease-quick),
+                 transform var(--motion-fast) var(--ease-pop),
+                 color var(--motion-norm) var(--ease-quick);
+    }
+    .h-settings:active{transform:scale(0.94);background:var(--green-lt);color:var(--green);border-color:var(--green-bd);}
+    .h-settings:focus-visible{outline:2px solid var(--green);outline-offset:2px;}
+
+    /* Wave 63 — settings screen rows */
+    .settings-group{
+      margin-top:18px;
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      overflow:hidden;
+      box-shadow:var(--depth-1);
+    }
+    .settings-group-label{
+      font:800 10px/1 "Inter",sans-serif;
+      color:var(--ink3);
+      text-transform:uppercase;letter-spacing:1px;
+      padding:14px 16px 8px;
+    }
+    .settings-row{
+      display:flex;align-items:center;gap:12px;
+      padding:14px 16px;
+      background:transparent;border:none;
+      width:100%;text-align:left;
+      cursor:pointer;
+      border-top:1px solid var(--border);
+      min-height:auto;
+      transition:background var(--motion-norm) var(--ease-quick);
+      font-family:inherit;
+      color:inherit;
+    }
+    .settings-row:first-of-type,.settings-group-label + .settings-row{border-top:none;}
+    .settings-row:active{background:var(--surface-2);}
+    .settings-row-body{flex:1;min-width:0;}
+    .settings-row-title{
+      font:700 14px/1.2 "Nunito",sans-serif;
+      color:var(--ink);letter-spacing:-0.1px;
+      margin-bottom:2px;
+    }
+    .settings-row-sub{
+      font:500 12px/1.3 "Inter",sans-serif;
+      color:var(--ink3);
+    }
+    .settings-row-arrow{
+      flex-shrink:0;
+      font:600 20px/1 "Inter",sans-serif;
+      color:var(--ink4);
+    }
+    .settings-row-danger .settings-row-title{color:var(--red);}
+    .settings-row-static{cursor:default;}
+    .settings-row-static:active{background:transparent;}
+
+    /* Wave 63 — first-time home coach. Soft amber pill above Snap CTA
+       with a small downward arrow nub. One-time, dismissible. */
+    .home-coach{
+      position:relative;
+      padding:11px 32px 11px 14px;
+      background:linear-gradient(180deg, #fffbf0 0%, #fff5dd 100%);
+      border:1px solid var(--amber-bd);
+      border-radius:14px;
+      box-shadow:0 4px 14px rgba(212,130,10,0.10),
+                 inset 0 1px 0 rgba(255,255,255,0.6);
+      animation:home-coach-in 360ms var(--ease-pop) both;
+    }
+    @keyframes home-coach-in{
+      from{opacity:0;transform:translateY(-6px);}
+      to  {opacity:1;transform:translateY(0);}
+    }
+    .home-coach-arrow{
+      position:absolute;left:36px;bottom:-7px;
+      width:14px;height:14px;
+      background:#fff5dd;
+      border-right:1px solid var(--amber-bd);
+      border-bottom:1px solid var(--amber-bd);
+      transform:rotate(45deg);
+    }
+    .home-coach-text{
+      font:500 13px/1.4 "Inter",sans-serif;
+      color:#7a5a00;
+    }
+    .home-coach-text strong{color:#5a4400;font-weight:800;}
+    .home-coach-dismiss{
+      position:absolute;top:6px;right:6px;
+      width:26px;height:26px;border-radius:50%;
+      background:transparent;border:none;
+      font:700 16px/1 "Nunito",sans-serif;
+      color:#7a5a00;
+      cursor:pointer;min-height:auto;
+      display:flex;align-items:center;justify-content:center;
+    }
+    .home-coach-dismiss:active{background:rgba(122,90,0,0.10);}
+    .home-coach-fade{
+      animation:home-coach-out 240ms ease-out forwards;
+    }
+    @keyframes home-coach-out{
+      to{opacity:0;transform:translateY(-6px);}
+    }
+    @media (prefers-reduced-motion: reduce){
+      .home-coach{animation:none;}
+      .home-coach-fade{animation:none;opacity:0;}
+    }
+
     /* Wave 38 — Snap generic-match banner. Soft amber tint, lives at the
        top of the hero card so users immediately see this is a category
        comparison not an exact-product match. Margin gives it breathing
@@ -2108,25 +2298,62 @@
     .share-save svg{width:14px;height:14px;flex-shrink:0;}
     .share-cancel{
       background:none;border:none;
-      padding:10px 4px;
-      font:700 13px/1 "Inter",sans-serif;
-      color:rgba(255,255,255,0.46);
+      /* Wave 63 — touch target bumped (was 13px text in 10px padding —
+         borderline). Now 14px text + 14px padding clears 44px easily. */
+      padding:14px 14px;
+      font:700 14px/1 "Inter",sans-serif;
+      color:rgba(255,255,255,0.55);
       cursor:pointer;
-      min-height:auto;
+      min-height:44px;
       transition:color var(--motion-fast) var(--ease-quick);
     }
-    .share-cancel:active,.share-cancel:hover{color:rgba(255,255,255,0.80);}
+    .share-cancel:active,.share-cancel:hover{color:#fff;}
 
     /* ─────────────────────────────────────────
        PRIVACY
     ───────────────────────────────────────── */
     #screen-privacy{background:var(--card);}
-    .priv-body{flex:1;padding:20px 22px 48px;overflow-y:auto;}
-    .priv-back{font-size:14px;font-weight:700;color:var(--green);cursor:pointer;margin-bottom:24px;display:flex;align-items:center;gap:4px;}
-    .priv-h1{font-family:"Nunito",sans-serif;font-weight:900;font-size:28px;color:var(--ink);margin-bottom:4px;letter-spacing:-0.5px;}
-    .priv-date{font-size:12px;color:var(--ink4);margin-bottom:22px;}
-    .priv-h2{font-size:15px;font-weight:700;color:var(--ink);margin:20px 0 6px;}
-    .priv-p{font-size:14px;color:var(--ink2);line-height:1.75;margin-bottom:10px;}
+    /* Wave 63 — Privacy screen typography pass. Tighter rhythm, refined
+       weight hierarchy (h1 black 32px, h2 amber-eyebrow 11px tracking,
+       body 15px ink2 line-height 1.65). */
+    .priv-body{flex:1;padding:24px 22px 48px;overflow-y:auto;}
+    .priv-back{
+      font:800 13px/1 "Inter",sans-serif;
+      color:var(--green);cursor:pointer;
+      margin-bottom:26px;
+      display:inline-flex;align-items:center;gap:6px;
+      padding:8px 12px 8px 8px;
+      background:var(--green-lt);
+      border:1px solid var(--green-bd);
+      border-radius:99px;
+      letter-spacing:-0.1px;
+    }
+    .priv-back:active{background:var(--green-mid);}
+    .priv-h1{
+      font:900 30px/1.05 "Nunito",sans-serif;
+      color:var(--ink);
+      letter-spacing:-1px;
+      margin-bottom:6px;
+    }
+    /* Wave 63 — older priv-date rule kept hidden via override below */
+    .priv-h2{
+      font:800 11px/1 "Inter",sans-serif;
+      color:var(--amber);
+      text-transform:uppercase;letter-spacing:1.4px;
+      margin:24px 0 8px;
+    }
+    .priv-p{
+      font:500 14.5px/1.65 "Inter",sans-serif;
+      color:var(--ink2);
+      margin-bottom:12px;
+    }
+    .priv-p strong{color:var(--ink);font-weight:700;}
+    .priv-date{
+      font:600 11px/1 "Inter",sans-serif;
+      color:var(--ink4);
+      letter-spacing:0.4px;text-transform:uppercase;
+      margin-bottom:24px;
+    }
 
     /* Toast */
     /* Wave 54 — toast refined: glassmorphic dark with subtle border + amber
@@ -2695,13 +2922,27 @@
       vertical-align:middle;
       transform:translateY(-1px);
     }
-    /* Bottom-nav feature variant — same Snap-leads treatment, more subtle */
+    /* Wave 63 — Snap-feature stronger emphasis on bottom nav. Was a
+       barely-visible green-ink swap; now a dedicated green-tinted pill
+       with a soft ring so it visually anchors as the primary input. */
+    .botnav-tab-feature{
+      background:linear-gradient(135deg, rgba(86,184,77,0.18) 0%, rgba(42,107,34,0.22) 100%);
+      box-shadow:inset 0 0 0 1px rgba(42,107,34,0.18);
+    }
     .botnav-tab-feature .botnav-ico{
       color:var(--green);
+      transform:scale(1.05);
     }
-    .botnav.dark .botnav-tab-feature .botnav-ico{
-      color:#88d97c;
+    .botnav-tab-feature .botnav-lbl{color:var(--green);}
+    .botnav-tab-feature.active{
+      background:linear-gradient(135deg, rgba(86,184,77,0.30) 0%, rgba(42,107,34,0.32) 100%);
     }
+    .botnav.dark .botnav-tab-feature{
+      background:rgba(86,184,77,0.20);
+      box-shadow:inset 0 0 0 1px rgba(86,184,77,0.30);
+    }
+    .botnav.dark .botnav-tab-feature .botnav-ico{ color:#88d97c; }
+    .botnav.dark .botnav-tab-feature .botnav-lbl{ color:#88d97c; }
 
     /* ── Search input card (Wave 48 — refined) ──
        Subordinate to the Snap primary card now. Soft surface tint, no
@@ -2925,19 +3166,24 @@
       transform:scale(0.95);
       box-shadow:var(--depth-2);
     }
-    .recent-chip-ico{
-      width:14px;height:14px;color:var(--ink4);flex-shrink:0;
-      display:flex;align-items:center;justify-content:center;
-    }
-    /* Wave 58 — recent-chip image variant. When we have a cached product
-       image for this query, render a circular thumbnail instead of the
-       clock icon. Bigger visual, instantly recognisable. */
-    .recent-chip-img{
-      width:22px;height:22px;flex-shrink:0;
+    /* Wave 63 — single recent-chip avatar style. Image when cached,
+       otherwise a brand-tinted circle with the first letter (iOS Contacts
+       pattern). Commits to one visual treatment instead of clock OR image. */
+    .recent-chip-avatar{
+      width:24px;height:24px;flex-shrink:0;
       border-radius:50%;
-      background:#fff center/cover no-repeat;
-      box-shadow:0 0 0 1px rgba(15,17,20,0.08);
+      background:var(--green-lt) center/cover no-repeat;
+      box-shadow:inset 0 0 0 1px rgba(15,17,20,0.08);
     }
+    .recent-chip-avatar-letter{
+      display:inline-flex;align-items:center;justify-content:center;
+      font:900 11px/1 "Nunito",sans-serif;
+      color:var(--green);
+      letter-spacing:-0.3px;
+    }
+    .recent-chip-text{display:inline-block;}
+    /* Legacy classes kept hidden for back-compat */
+    .recent-chip-ico,.recent-chip-img{display:none;}
 
     /* ── Trending header with pulsing live dot ── */
     .bento-trending-head{
@@ -3173,7 +3419,11 @@
         <div class="h-wm">SAVVE<span class="wm-y">Y</span></div>
         <div class="h-tag">shop smart.</div>
       </div>
-      <div class="s-badge s-badge-sm"><span class="s-letter">S</span></div>
+      <!-- Wave 63 — settings cog button replaces the decorative S badge.
+           Routes to the new settings screen for clear-data + version info. -->
+      <button class="h-settings" onclick="goTo('settings')" aria-label="Settings">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
     </div>
 
     <!-- Wave 28: Revolut-style centerpiece home.
@@ -3191,7 +3441,7 @@
            absolute-positioned right. Honour reduced-motion. -->
       <button class="savings-hero" id="savings-hero" type="button"
               onclick="shareSavingsCounter()"
-              aria-label="Share your Savvey savings">
+              aria-label="Share your Save Score totals">
         <div class="savings-mesh" aria-hidden="true"></div>
         <span class="savings-share-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
@@ -3199,7 +3449,7 @@
             <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
           </svg>
         </span>
-        <div class="savings-eyebrow">SAVVEY SAVINGS FOUND</div>
+        <div class="savings-eyebrow">SAVE SCORE TOTAL</div>
         <div class="savings-amount">
           <span class="savings-currency">£</span><span class="savings-num" id="savings-num">0.00</span>
         </div>
@@ -3429,7 +3679,13 @@
       <div class="snap-hint">Frame the product, then tap the shutter</div>
       <button class="snap-capture-btn" id="snap-capture-btn" onclick="captureSnap()" aria-label="Capture photo"></button>
       <div class="snap-busy" id="snap-busy">
-        <div class="snap-spinner"></div>
+        <!-- Wave 63 — skeleton replaces bare spinner. Shows a preview-shape
+             card so the user sees "results card is coming" not "loading…". -->
+        <div class="snap-busy-skel" aria-hidden="true">
+          <div class="snap-busy-skel-img skel"></div>
+          <div class="snap-busy-skel-bar skel" style="width:62%;"></div>
+          <div class="snap-busy-skel-bar skel" style="width:42%;"></div>
+        </div>
         <div class="snap-busy-msg" id="snap-busy-msg">Identifying product…</div>
         <div class="snap-busy-sub" id="snap-busy-sub">Asking the AI</div>
       </div>
@@ -3635,35 +3891,6 @@
           </div>
           <div class="hero-where" id="hero-where"><strong>Amazon UK</strong> has it for <strong>£249</strong> right now.</div>
 
-          <!-- Wave 33: Optional shelf-price refinement.
-               Default scan/search flow goes straight to results in
-               Discovery mode (Save Score vs UK average). If the user
-               wants a sharper Validation score against an actual shelf
-               price, they tap this pill and an inline price input
-               appears. Submitting it re-runs the search in Validation
-               mode with the entered price. -->
-          <div class="shelf-refine" id="shelf-refine">
-            <button class="shelf-refine-pill" id="shelf-refine-pill" type="button"
-                    onclick="openShelfRefine()" hidden>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              <span>Got the shelf price? Add it for a sharper Save Score</span>
-            </button>
-            <form class="shelf-refine-form" id="shelf-refine-form" hidden
-                  onsubmit="event.preventDefault();submitShelfRefine();">
-              <div class="shelf-refine-label">In-store shelf price</div>
-              <div class="shelf-refine-row">
-                <div class="shelf-refine-sym">£</div>
-                <input class="shelf-refine-input" id="shelf-refine-input"
-                       type="number" min="0" step="0.01" inputmode="decimal"
-                       placeholder="0.00"
-                       aria-label="Shelf price"
-                       autocomplete="off"/>
-                <button type="submit" class="shelf-refine-go">Re-score →</button>
-              </div>
-              <button type="button" class="shelf-refine-cancel" onclick="closeShelfRefine()">Cancel</button>
-            </form>
-          </div>
-
           <div class="hero-actions">
             <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it on Amazon UK →</button>
             <button class="hero-share" onclick="openShareCard()" aria-label="Share this price">
@@ -3680,6 +3907,34 @@
 
       <div class="res-section-lbl">All prices found</div>
       <div id="ret-list"></div>
+
+      <!-- Wave 63 — shelf-refine moved OUT of the hero card into the
+           result-followups zone so the hero stays tight (wit + amount +
+           where + actions). User still gets the same affordance, just no
+           longer crammed into a 600px hero stack. -->
+      <div class="result-followups" id="result-followups">
+        <div class="shelf-refine" id="shelf-refine">
+          <button class="shelf-refine-pill" id="shelf-refine-pill" type="button"
+                  onclick="openShelfRefine()" hidden>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+            <span>Got the shelf price? Add it for a sharper Save Score</span>
+          </button>
+          <form class="shelf-refine-form" id="shelf-refine-form" hidden
+                onsubmit="event.preventDefault();submitShelfRefine();">
+            <div class="shelf-refine-label">In-store shelf price</div>
+            <div class="shelf-refine-row">
+              <div class="shelf-refine-sym">£</div>
+              <input class="shelf-refine-input" id="shelf-refine-input"
+                     type="number" min="0" step="0.01" inputmode="decimal"
+                     placeholder="0.00"
+                     aria-label="Shelf price"
+                     autocomplete="off"/>
+              <button type="submit" class="shelf-refine-go">Re-score →</button>
+            </div>
+            <button type="button" class="shelf-refine-cancel" onclick="closeShelfRefine()">Cancel</button>
+          </form>
+        </div>
+      </div>
 
       <!-- Conditional Amazon CTA (1 May 2026, post-v1.5). Shown ONLY when
            the result list above doesn't contain an Amazon row — verified
@@ -3720,6 +3975,70 @@
   </div>
 
   <!-- ══════ PRIVACY ══════ -->
+  <!-- ══════ SETTINGS (Wave 63) ══════ -->
+  <div class="screen" id="screen-settings">
+    <div class="priv-body">
+      <div class="priv-back" onclick="goHome()">‹ Back</div>
+      <div class="priv-h1">Settings</div>
+
+      <div class="settings-group">
+        <div class="settings-group-label">Your data</div>
+        <button class="settings-row" onclick="settingsClearRecents()">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Clear recent searches</div>
+            <div class="settings-row-sub" id="settings-recents-count">—</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" onclick="settingsClearImages()">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Clear cached product images</div>
+            <div class="settings-row-sub" id="settings-images-count">—</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row" onclick="settingsClearSaved()">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Clear saved items</div>
+            <div class="settings-row-sub" id="settings-saved-count">—</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row settings-row-danger" onclick="settingsResetSaveScore()">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Reset Save Score total</div>
+            <div class="settings-row-sub" id="settings-savescore-display">—</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </button>
+        <button class="settings-row settings-row-danger" onclick="settingsClearEverything()">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Clear everything &amp; restart</div>
+            <div class="settings-row-sub">Wipes all on-device data and reloads</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </button>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-label">About</div>
+        <a class="settings-row" onclick="goTo('privacy')">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Privacy</div>
+            <div class="settings-row-sub">What we collect, what we don't</div>
+          </div>
+          <span class="settings-row-arrow" aria-hidden="true">›</span>
+        </a>
+        <div class="settings-row settings-row-static">
+          <div class="settings-row-body">
+            <div class="settings-row-title">Version</div>
+            <div class="settings-row-sub" id="settings-version-display">v68</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="screen" id="screen-privacy">
     <div class="priv-body">
       <div class="priv-back" onclick="goHome()">‹ Back</div>
@@ -3922,6 +4241,24 @@ window.addEventListener('appinstalled',()=>{
 // On iOS the beforeinstallprompt event never fires — surface the banner
 // after a short delay so the welcome screen has rendered first.
 window.addEventListener('load',()=>{
+  // Wave 63 — eager service worker registration. Was missing entirely
+  // (live audit confirmed `navigator.serviceWorker.controller` was null
+  // on first visit). SW caches the shell + provides offline + the
+  // 'OFFLINE' postMessage hook the SW already implements.
+  if('serviceWorker' in navigator){
+    try{
+      navigator.serviceWorker.register('/sw.js').then(reg => {
+        console.log('[sw] registered:', reg.scope);
+      }).catch(err => {
+        console.warn('[sw] registration failed:', err.message);
+      });
+      navigator.serviceWorker.addEventListener('message', e => {
+        if(e.data && e.data.type === 'OFFLINE'){
+          showToast('Offline — showing the last cached check');
+        }
+      });
+    }catch(e){ /* swallow */ }
+  }
   if(isIOS()&&!isStandalonePWA())setTimeout(showInstallBanner,1200);
 
   // ── Returning-user auto-skip welcome (Wave 9) ──
@@ -3940,6 +4277,12 @@ window.addEventListener('load',()=>{
 
   // ── Modal dismissal handlers (Wave 16) ──
   setupModalDismiss();
+
+  // ── Wave 63 — drag-to-dismiss for the share bottom sheet ──
+  // iOS users expect drag down on the handle to close the sheet. Tracks
+  // pointerdown on .share-handle, follows pointermove with translateY,
+  // closes if drag exceeds 60px OR fast-flick. Otherwise springs back.
+  setupShareSheetDrag();
 
   // ── Render recent searches if any (Wave 16) ──
   renderRecentSearches();
@@ -4083,6 +4426,12 @@ function goTo(screen, opts){
   currentScreen=screen;
   updateSwipePager();
   updateBotnav();
+  // Wave 63 — settings screen entry: refresh row stats so user sees
+  // current data sizes when they open it.
+  if(screen === 'settings'){
+    refreshSettingsScreen();
+  }
+
   // Wave 29 — reset all scanner UI state when entering scan, regardless of
   // how the user got there. Vincent's testing: after a successful scan +
   // results, returning to scan still showed the prior product card hovered
@@ -4110,6 +4459,7 @@ function goTo(screen, opts){
     renderRecentSearches();
     renderSavingsHero();   // Wave 28 — savings centerpiece animated count-up
     enhanceTrendingTilesWithImages();  // Wave 58 — swap badges for cached product images
+    showFirstTimeHomeCoachIfNeeded();  // Wave 63 — point first-timers at Snap
     // First-visit swipe coach
     setTimeout(showSwipeCoachIfFirstVisit, 350);
     // Wave 22 — fire the swipe-nudge animation once per session so the
@@ -4191,6 +4541,190 @@ function haptic(ms){
 //   • Tap outside the modal sheet → close
 //   • Esc key → close
 // Wired here for #email-modal (.modal-overlay) and #share-overlay.
+// ── Wave 63 — first-time home coach ──
+//
+// When a brand-new user lands on home (no saved checks, no counter
+// activity), show a one-time amber-tinted pill pointing them at the
+// Snap CTA. Dismisses on tap or auto-fades after 8s. Persists a
+// localStorage flag so it never shows again.
+const HOME_COACH_KEY = 'savvey_home_coach_seen';
+function showFirstTimeHomeCoachIfNeeded(){
+  try{
+    if(localStorage.getItem(HOME_COACH_KEY) === '1') return;
+  }catch(e){ return; }
+  const total = getTotalSavings();
+  const count = getSavingsCount();
+  if(total >= 0.5 || count >= 1) return; // not first-time
+  const snapCard = document.querySelector('.snap-primary-card');
+  if(!snapCard) return;
+  // Don't double-render
+  if(document.querySelector('.home-coach')) return;
+  const coach = document.createElement('div');
+  coach.className = 'home-coach';
+  coach.setAttribute('role', 'note');
+  coach.innerHTML =
+    '<div class="home-coach-arrow" aria-hidden="true"></div>'
+    + '<div class="home-coach-text">'
+    +   '<strong>Start here.</strong> Tap <strong>Snap</strong> to AI-identify any UK product and see how it compares.'
+    + '</div>'
+    + '<button class="home-coach-dismiss" aria-label="Dismiss" onclick="dismissHomeCoach(event)">×</button>';
+  snapCard.parentNode.insertBefore(coach, snapCard);
+  // Auto-fade after 8s if user hasn't tapped
+  setTimeout(() => {
+    const c = document.querySelector('.home-coach');
+    if(c) c.classList.add('home-coach-fade');
+  }, 8000);
+  setTimeout(() => {
+    const c = document.querySelector('.home-coach');
+    if(c) c.remove();
+  }, 9200);
+}
+function dismissHomeCoach(e){
+  if(e) e.stopPropagation();
+  try{ localStorage.setItem(HOME_COACH_KEY, '1'); }catch(err){}
+  const c = document.querySelector('.home-coach');
+  if(c){
+    c.classList.add('home-coach-fade');
+    setTimeout(() => c.remove(), 240);
+  }
+  haptic(8);
+}
+
+// ── Wave 63 — Settings screen handlers ──
+const SETTINGS_VERSION_LABEL = 'v68';
+function refreshSettingsScreen(){
+  // Recents count
+  let recents = 0;
+  try{ recents = (JSON.parse(localStorage.getItem(RECENT_KEY) || '[]') || []).length; }catch(e){}
+  const rEl = document.getElementById('settings-recents-count');
+  if(rEl) rEl.textContent = recents
+    ? `${recents} ${recents === 1 ? 'search' : 'searches'} stored`
+    : 'Nothing stored yet';
+  // Image cache count
+  let images = 0;
+  try{ images = Object.keys(getProductImageMap()).length; }catch(e){}
+  const iEl = document.getElementById('settings-images-count');
+  if(iEl) iEl.textContent = images
+    ? `${images} product ${images === 1 ? 'image' : 'images'} cached`
+    : 'Nothing cached yet';
+  // Saved items count
+  let saved = 0;
+  try{ saved = (JSON.parse(localStorage.getItem(SAVED_KEY) || '[]') || []).length; }catch(e){}
+  const sEl = document.getElementById('settings-saved-count');
+  if(sEl) sEl.textContent = saved
+    ? `${saved} ${saved === 1 ? 'item' : 'items'} bookmarked`
+    : 'Nothing saved yet';
+  // Save Score total
+  const total = getTotalSavings();
+  const count = getSavingsCount();
+  const ssEl = document.getElementById('settings-savescore-display');
+  if(ssEl) ssEl.textContent = total >= 0.5
+    ? `Currently £${(total < 100 ? total.toFixed(2) : Math.round(total).toLocaleString('en-GB'))} across ${count} ${count === 1 ? 'check' : 'checks'}`
+    : 'Currently £0';
+  // Version
+  const vEl = document.getElementById('settings-version-display');
+  if(vEl) vEl.textContent = SETTINGS_VERSION_LABEL;
+}
+function _confirmAndAct(message, action){
+  if(typeof window.confirm === 'function' && !window.confirm(message)) return;
+  action();
+  haptic(15);
+  refreshSettingsScreen();
+  showToast('Done');
+}
+function settingsClearRecents(){
+  _confirmAndAct('Clear all recent searches?', () => {
+    try{ localStorage.removeItem(RECENT_KEY); }catch(e){}
+  });
+}
+function settingsClearImages(){
+  _confirmAndAct('Clear cached product images?', () => {
+    try{ localStorage.removeItem(PRODUCT_IMAGE_KEY); }catch(e){}
+  });
+}
+function settingsClearSaved(){
+  _confirmAndAct('Clear all saved items?', () => {
+    try{ localStorage.removeItem(SAVED_KEY); }catch(e){}
+  });
+}
+function settingsResetSaveScore(){
+  _confirmAndAct('Reset your Save Score total to £0? This cannot be undone.', () => {
+    try{
+      localStorage.removeItem(SAVINGS_KEY);
+      localStorage.removeItem(SAVINGS_COUNT_KEY);
+      sessionStorage.removeItem(SAVINGS_RECORDED_KEY);
+    }catch(e){}
+  });
+}
+function settingsClearEverything(){
+  if(typeof window.confirm === 'function' && !window.confirm('Wipe all on-device data and reload? Counter, recents, saved items, image cache — everything goes.')) return;
+  try{
+    // Preserve dismissed-install flag so we don't re-banner on reload
+    const installDismiss = localStorage.getItem('savvey_install_dismissed');
+    localStorage.clear();
+    sessionStorage.clear();
+    if(installDismiss) localStorage.setItem('savvey_install_dismissed', installDismiss);
+  }catch(e){}
+  haptic(20);
+  setTimeout(() => location.reload(), 300);
+}
+
+// Wave 63 — drag-to-dismiss for the share bottom sheet (and any
+// dynamically-rebuilt sheet — uses delegation on the overlay).
+function setupShareSheetDrag(){
+  const overlay = document.getElementById('share-overlay');
+  if(!overlay) return;
+  let dragging = null; // {sheet, startY, startTime}
+  const onDown = (e) => {
+    const handle = e.target.closest('.share-handle');
+    if(!handle) return;
+    const sheet = handle.closest('.share-sheet');
+    if(!sheet) return;
+    const point = (e.touches && e.touches[0]) || e;
+    dragging = { sheet, startY: point.clientY, startTime: Date.now() };
+    sheet.style.transition = 'none';
+    e.preventDefault();
+  };
+  const onMove = (e) => {
+    if(!dragging) return;
+    const point = (e.touches && e.touches[0]) || e;
+    const dy = Math.max(0, point.clientY - dragging.startY);
+    dragging.sheet.style.transform = `translateY(${dy}px)`;
+    if(dy > 12) e.preventDefault();
+  };
+  const onUp = (e) => {
+    if(!dragging) return;
+    const point = (e.changedTouches && e.changedTouches[0]) || e;
+    const dy = Math.max(0, point.clientY - dragging.startY);
+    const dt = Date.now() - dragging.startTime;
+    const velocity = dy / Math.max(1, dt); // px per ms
+    const sheet = dragging.sheet;
+    sheet.style.transition = 'transform 220ms cubic-bezier(0.22,0.61,0.36,1)';
+    if(dy > 80 || velocity > 0.6){
+      // Dismiss
+      sheet.style.transform = `translateY(${sheet.offsetHeight}px)`;
+      setTimeout(() => {
+        overlay.classList.remove('open');
+        overlay.setAttribute('aria-hidden', 'true');
+        sheet.style.transform = '';
+        sheet.style.transition = '';
+      }, 220);
+      haptic(8);
+    } else {
+      // Spring back
+      sheet.style.transform = '';
+      setTimeout(() => { sheet.style.transition = ''; }, 240);
+    }
+    dragging = null;
+  };
+  overlay.addEventListener('touchstart', onDown, { passive: false });
+  overlay.addEventListener('touchmove',  onMove, { passive: false });
+  overlay.addEventListener('touchend',   onUp,   { passive: true  });
+  overlay.addEventListener('mousedown',  onDown);
+  document.addEventListener('mousemove', onMove);
+  document.addEventListener('mouseup',   onUp);
+}
+
 function setupModalDismiss(){
   function closeModal(modalEl){
     if(!modalEl) return;
@@ -4268,17 +4802,19 @@ function renderRecentSearches(){
     return;
   }
   wrap.hidden = false;
-  // Wave 58 — render a real product thumbnail when we have one cached
-  // from a previous search. Falls back to the clock icon otherwise.
+  // Wave 63 — recent chips now ALWAYS show a circular avatar visual.
+  // Cached product image when available (Wave 58 cache), otherwise a
+  // brand-tinted circle with the first letter — same shape as iOS
+  // Contacts avatars. Commits to ONE visual treatment per the audit
+  // instead of mixing image + clock-icon variants on the same row.
   list.innerHTML = recent.map(q => {
     const img = getProductImage(q);
     const safeQ = escJsAttr(q);
+    const initial = (String(q).trim()[0] || '?').toUpperCase();
     const visualHtml = img
-      ? `<span class="recent-chip-img" aria-hidden="true" style="background-image:url(${escHtml(img).replace(/'/g,'%27')});"></span>`
-      : '<span class="recent-chip-ico" aria-hidden="true">'
-        + '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>'
-        + '</span>';
-    return `<button class="recent-chip" onclick="trendSearch('${safeQ}')">${visualHtml}${escHtml(q)}</button>`;
+      ? `<span class="recent-chip-avatar" aria-hidden="true" style="background-image:url(${escHtml(img).replace(/'/g,'%27')});"></span>`
+      : `<span class="recent-chip-avatar recent-chip-avatar-letter" aria-hidden="true">${escHtml(initial)}</span>`;
+    return `<button class="recent-chip" onclick="trendSearch('${safeQ}')">${visualHtml}<span class="recent-chip-text">${escHtml(q)}</span></button>`;
   }).join('');
 }
 
@@ -5072,26 +5608,32 @@ function fetchScrape(url){
       inputMethod='paste';
       return fetchPrices(d.product);
     }
-    // Scrape failed — extract product name from URL slug as fallback
+    // Scrape failed — extract product name from URL slug as fallback.
+    // Wave 63 — flag the failure so renderResults can prompt the user
+    // for a manual price ("we couldn't read your link's price — type it
+    // in for a sharper Save Score"). Silent fallback was losing the
+    // user's anchor without warning them.
     const guess=urlToProductGuess(url);
     if(guess){
       console.log('[fetchScrape] scrape failed ('+(d.error||'unknown')+'); falling back to keyword search for "'+guess+'"');
       liveQuery=guess;
-      userPrice=null;          // no anchor price, switch to Discovery mode
+      userPrice=null;
       bestPriceOnly=true;
       inputMethod='paste';
+      window._scrapeFailedUrl = url;
+      window._scrapeFallbackQuery = guess;
       return fetchPrices(guess);
     }
-    // No useful slug — give up cleanly
     return null;
   }).catch(e=>{
     clearTimeout(timeout);
     if(e.name==='AbortError')return null;
     console.error('[fetchScrape] error',e);
-    // Even on network error, try the URL-slug fallback
     const guess=urlToProductGuess(url);
     if(guess){
       liveQuery=guess;userPrice=null;bestPriceOnly=true;inputMethod='paste';
+      window._scrapeFailedUrl = url;
+      window._scrapeFallbackQuery = guess;
       return fetchPrices(guess);
     }
     return null;
@@ -5215,11 +5757,11 @@ async function showResults(fetchPromise){
   renderResults(liveScen);
   goTo('results');
 
-  // Wave 56b — fire the AI typical-UK-price estimate for EVERY result so
-  // users always see the "average info" Vincent asked for, regardless of
-  // whether retailer search returned hits or empty. Lands async; injected
-  // into the hero body when ready. Generation-guarded so a stale render
-  // can't overwrite a newer one.
+  // Wave 56b — fire the AI typical-UK-price estimate for EVERY result.
+  // Wave 63 — render a skeleton placeholder immediately so the user sees
+  // "AI estimate loading…" instead of a delayed pop-in. Skeleton is
+  // replaced by the real strip when /api/ai-estimate returns.
+  injectAiEstimateSkeleton();
   const _estGen = searchGeneration;
   fetch('/api/ai-estimate', {
     method:'POST',
@@ -5227,11 +5769,18 @@ async function showResults(fetchPromise){
     body:JSON.stringify({ product: liveScen.query || liveQuery || '' }),
   }).then(r => r.ok ? r.json() : null).then(d => {
     if(searchGeneration !== _estGen) return;
-    if(!d || !d.estimate || !d.estimate.family) return;
-    // Attach to scen so share-card and re-renders pick it up
+    if(!d || !d.estimate || !d.estimate.family){
+      // Drop the skeleton — no estimate to show
+      const sk = document.querySelector('#hero-card .ai-estimate-skel');
+      if(sk) sk.remove();
+      return;
+    }
     liveScen.aiEstimate = d.estimate;
     renderAiEstimateInResults(d.estimate, liveScen);
-  }).catch(() => {/* AI failed silently */});
+  }).catch(() => {
+    const sk = document.querySelector('#hero-card .ai-estimate-skel');
+    if(sk) sk.remove();
+  });
 
   if(!hasSeenResult){
     hasSeenResult=true;
@@ -5241,6 +5790,27 @@ async function showResults(fetchPromise){
   }
 }
 
+// Wave 63 — inject the AI estimate skeleton into the hero body so the
+// user sees a loading placeholder while the AI call is in flight, not a
+// blank gap that suddenly fills.
+function injectAiEstimateSkeleton(){
+  const heroBody = document.querySelector('#hero-card .hero-body');
+  if(!heroBody) return;
+  // Don't double-inject
+  const existing = heroBody.querySelector('.ai-estimate-skel, .ai-estimate-strip');
+  if(existing) existing.remove();
+  const skel = document.createElement('div');
+  skel.className = 'ai-estimate-skel';
+  skel.setAttribute('aria-hidden', 'true');
+  skel.innerHTML =
+    '<div class="skel ai-estimate-skel-line w40"></div>'
+    + '<div class="skel ai-estimate-skel-line w80"></div>'
+    + '<div class="skel ai-estimate-skel-line w60"></div>';
+  const actions = heroBody.querySelector('.hero-actions');
+  if(actions) heroBody.insertBefore(skel, actions);
+  else heroBody.appendChild(skel);
+}
+
 // Wave 56b — Render the AI typical-UK-price estimate INSIDE the result
 // hero (between the verdict body and the retailer list section). Compares
 // our actual cheapest find against the AI's typical band so the user
@@ -5248,8 +5818,8 @@ async function showResults(fetchPromise){
 function renderAiEstimateInResults(est, sc){
   const heroBody = document.querySelector('#hero-card .hero-body');
   if(!heroBody) return;
-  // Don't double-render
-  const existing = heroBody.querySelector('.ai-estimate-strip');
+  // Wave 63 — clear any skeleton or prior strip
+  const existing = heroBody.querySelector('.ai-estimate-strip, .ai-estimate-skel');
   if(existing) existing.remove();
 
   const lo  = est.typical_low;
@@ -6045,12 +6615,35 @@ function renderResults(sc){
   // on a Discovery-mode result with multiple retailers. Hide if they
   // already supplied a shelf price (Validation) or if there's nothing to
   // compare against.
+  // Wave 63 — when a paste scrape failed and we fell back to keyword
+  // search, AUTO-OPEN the refine form with paste-flavoured copy so the
+  // user knows we lost their anchor and can give us the price manually.
   const refinePill = document.getElementById('shelf-refine-pill');
   const refineForm = document.getElementById('shelf-refine-form');
+  const refinePillSpan = refinePill && refinePill.querySelector('span');
   if(refinePill && refineForm){
-    const showRefine = !hasUserPrice && sc.retailerCount >= 2;
-    refinePill.hidden = !showRefine;
-    refineForm.hidden = true;
+    const scrapeFailed = !!window._scrapeFailedUrl && inputMethod === 'paste';
+    if(scrapeFailed && !hasUserPrice){
+      // Auto-open the form with paste-failure copy
+      refinePill.hidden = true;
+      refineForm.hidden = false;
+      const formLabel = refineForm.querySelector('.shelf-refine-label');
+      if(formLabel) formLabel.textContent = 'We couldn\'t read your paste — what does the page show?';
+      // Don't keep flag forever — clear after one use
+      window._scrapeFailedUrl = null;
+      window._scrapeFallbackQuery = null;
+    } else {
+      const showRefine = !hasUserPrice && sc.retailerCount >= 2;
+      refinePill.hidden = !showRefine;
+      if(refinePillSpan){
+        refinePillSpan.textContent = inputMethod === 'paste'
+          ? 'Tell us the page price for a sharper Save Score'
+          : 'Got the shelf price? Add it for a sharper Save Score';
+      }
+      refineForm.hidden = true;
+      const formLabel = refineForm.querySelector('.shelf-refine-label');
+      if(formLabel) formLabel.textContent = 'In-store shelf price';
+    }
   }
 
   // ── Verdict banner ──
@@ -6266,18 +6859,23 @@ function renderResults(sc){
 
   // ── Retailer list ──
   // Wave 36 — each row gets a data-brand attribute so the CSS can paint
-  // a brand-coloured left rail (instant retailer recognition without
-  // needing actual logo SVGs which would be a trademark/asset problem).
+  // a brand-coloured left rail (instant retailer recognition).
+  // Wave 63 — sub-line is now meaningful instead of generic "Check
+  // retailer" placeholder. For volatile retailers (Argos, AO, Currys
+  // etc) we say "Search at [host]" because we route via retailerSearchUrl
+  // anyway. For others we say "View at [host]". When real delivery
+  // text exists from the source, it wins.
   const list=document.getElementById('ret-list');
   list.innerHTML=(sc.rets||[]).map(r=>{
     const brandKey = retailerBrandKey(r.n||'');
     const safeN = (r.n||'').replace(/'/g,"\\'");
     const safeLink = (r.link||'').replace(/'/g,"\\'");
+    const meaningfulSub = retailerSubLine(r);
     return `
     <div class="ret-row${r.best?' best':''}" data-brand="${brandKey}" onclick="openRetailerRow('${safeN}','${safeLink}')">
       <div class="ret-name-wrap">
         <div class="ret-name">${r.n}</div>
-        <div class="ret-sub">${r.sub||''}</div>
+        <div class="ret-sub">${meaningfulSub}</div>
         ${r.best?'<div class="ret-best-badge">✓ Best price</div>':''}
       </div>
       <div style="text-align:right">
@@ -6939,6 +7537,51 @@ function toggleTorch(){
     const tb=document.getElementById('torch-btn');if(tb)tb.classList.toggle('on',torchOn);
   }catch(e){}
 }
+// Wave 63 — meaningful retailer-row sub line. Replaces "Check retailer"
+// placeholder. If the search result carried real delivery / availability
+// text (rare with Perplexity, more common with Serper Shopping), use
+// that. Otherwise compose a useful "Search at retailer.com" or "View at
+// retailer.com" based on whether the link routes via search or direct.
+function retailerSubLine(r){
+  if(!r) return '';
+  // Real source-provided delivery info wins
+  const src = (r.sub || '').trim();
+  if(src && src.toLowerCase() !== 'check retailer') return escHtml(src);
+  // Volatile retailers route via retailerSearchUrl on click — say so
+  if(r.n && PREFER_SEARCH_URL && PREFER_SEARCH_URL.test(r.n)){
+    const host = retailerHostFromName(r.n);
+    return host ? `Search at ${host}` : 'Search retailer';
+  }
+  const host = retailerHostFromName(r.n);
+  return host ? `View at ${host}` : 'Tap to view';
+}
+function retailerHostFromName(name){
+  const s = String(name||'').toLowerCase();
+  if(/amazon/.test(s))            return 'amazon.co.uk';
+  if(/argos/.test(s))             return 'argos.co.uk';
+  if(/john\s*lewis/.test(s))      return 'johnlewis.com';
+  if(/currys/.test(s))            return 'currys.co.uk';
+  if(/^\s*ao(\s|\.|$)/.test(s) || /\bao\.com\b/.test(s)) return 'ao.com';
+  if(/very/.test(s))              return 'very.co.uk';
+  if(/richer/.test(s))            return 'richersounds.com';
+  if(/\bbox\b/.test(s))           return 'box.co.uk';
+  if(/boots/.test(s))             return 'boots.com';
+  if(/superdrug/.test(s))         return 'superdrug.com';
+  if(/tesco/.test(s))             return 'tesco.com';
+  if(/sainsbury/.test(s))         return 'sainsburys.co.uk';
+  if(/b\s*&\s*q|bandq|b and q/.test(s)) return 'diy.com';
+  if(/wickes/.test(s))            return 'wickes.co.uk';
+  if(/halfords/.test(s))          return 'halfords.com';
+  if(/ebay/.test(s))              return 'ebay.co.uk';
+  if(/selfridges/.test(s))        return 'selfridges.com';
+  if(/harvey\s*nichols/.test(s))  return 'harveynichols.com';
+  if(/apple/.test(s))             return 'apple.com/uk';
+  if(/home\s*bargains/.test(s))   return 'homebargains.co.uk';
+  if(/lidl/.test(s))              return 'lidl.co.uk';
+  if(/aldi/.test(s))              return 'aldi.co.uk';
+  return null;
+}
+
 // Wave 36 — map a retailer display name to its brand-key used by the CSS
 // data-brand selector so we can paint each row's coloured left rail.
 function retailerBrandKey(name){
@@ -7356,24 +7999,36 @@ function renderSavingsHero(){
   // No animation needed at zero — we're already showing 0.00.
   if(showZero) return;
 
-  // 2) Run the count-up animation as a polish layer. Reset to 0,
-  //    animate up to the target. Belt-and-braces: a setTimeout ensures the
-  //    final value is restored even if rAF never fires.
+  // Wave 63 — counter "0" flash fix. If the displayed value already matches
+  // the target (user navigated home → results → home with no change), skip
+  // the animation entirely. Avoids the brief jolt where the number resets
+  // to 0 and ticks back up to the same value the user just saw. Also
+  // honour prefers-reduced-motion.
+  const prevText = numEl.textContent || '';
+  if(prevText === targetText){
+    return;
+  }
   if(typeof requestAnimationFrame !== 'function') return;
-  numEl.textContent = '0';
+  if(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    return;
+  }
+  // Animate from PREVIOUS value to new target, not from 0. So if user
+  // earned £5 since last view, counter ticks 421 → 426, not 0 → 426.
+  const prevValue = parseFloat(String(prevText).replace(/[^0-9.]/g, '')) || 0;
+  const startVal = prevValue;
+  const delta = total - prevValue;
   const duration = 900;
   let started = null;
   const tick = (now) => {
     if(started === null) started = now;
     const t = Math.min(1, (now - started) / duration);
     const eased = 1 - Math.pow(1 - t, 3); // easeOutCubic
-    const cur = total * eased;
+    const cur = startVal + (delta * eased);
     numEl.textContent = fmt(cur);
     if(t < 1) requestAnimationFrame(tick);
     else numEl.textContent = targetText;
   };
   requestAnimationFrame(tick);
-  // Safety net — if rAF didn't tick within 1.5s for any reason, force final
   setTimeout(() => {
     if(numEl.textContent !== targetText) numEl.textContent = targetText;
   }, 1500);
@@ -7459,7 +8114,7 @@ function closeSavedItems(){
 // (shareSavingsCounter) flows. Mode toggles button labels + handlers.
 function buildShareSheetHtml(mode){
   const isSavings = mode === 'savings';
-  const title = isSavings ? 'Share your Savvey savings' : 'Share your Save Score';
+  const title = isSavings ? 'Share your Save Score totals' : 'Share your Save Score';
   const onShare   = isSavings ? 'shareSavingsCard()'        : 'shareCard()';
   const onWA      = isSavings ? 'shareSavingsToWhatsApp()'  : 'shareToWhatsApp()';
   const onTw      = isSavings ? 'shareSavingsToTwitter()'   : 'shareToTwitter()';
@@ -7506,10 +8161,20 @@ function buildShareSheetHtml(mode){
 function openShareCard(){
   haptic(12); // confirms share-button tap before the card animates in
   if(!liveScen)return; // empty state — nothing to share
-  document.getElementById('share-overlay').setAttribute('aria-hidden', 'false');
+  // Wave 63 — restore the share-sheet markup (in case savings-mode was
+  // showing previously) before drawing.
+  const overlay = document.getElementById('share-overlay');
+  if(overlay && !overlay.querySelector('.share-sheet')){
+    overlay.innerHTML = buildShareSheetHtml('result');
+  }
+  if(overlay) overlay.setAttribute('aria-hidden', 'false');
   const sc=liveScen;
-  drawCard(sc);
-  document.getElementById('share-overlay').classList.add('open');
+  // Wave 63 — wait for Nunito/Inter to be ready so canvas uses them
+  // instead of falling back to Arial. Promise resolves immediately if
+  // fonts already loaded.
+  const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+  fontsReady.then(() => drawCard(sc));
+  if(overlay) overlay.classList.add('open');
 }
 function drawCard(sc){
   const canvas=document.getElementById('share-canvas');
@@ -7539,12 +8204,12 @@ function drawCard(sc){
 
   // S badge
   ctx.fillStyle='rgba(255,255,255,0.18)';rr(ctx,32,20,56,56,13);ctx.fill();
-  ctx.fillStyle='#fff';ctx.font='900 36px Arial,sans-serif';
+  ctx.fillStyle='#fff';ctx.font='900 36px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('S',60,48);
 
   // SAVVEY wordmark — final Y in amber for brand pop
-  ctx.font='900 28px Arial,sans-serif';
+  ctx.font='900 28px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillStyle='#fff';
   ctx.fillText('SAVVE',108,40);
@@ -7553,11 +8218,11 @@ function drawCard(sc){
   ctx.fillText('Y', 108 + savveWidth, 40);
 
   // shop smart. — brighter on dark green for legibility
-  ctx.fillStyle='rgba(255,255,255,0.85)';ctx.font='600 14px Arial,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.85)';ctx.font='600 14px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText('shop smart.',109,63);
 
   // savvey.app top right
-  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='600 13px Arial,sans-serif';
+  ctx.fillStyle='rgba(255,255,255,0.6)';ctx.font='600 13px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='right';ctx.textBaseline='middle';
   ctx.fillText('savvey.app',W-32,48);
 
@@ -7566,23 +8231,23 @@ function drawCard(sc){
   ctx.fillStyle=verdictBd;ctx.fillRect(0,191,W,1.5);
 
   // Emoji on the left of the band
-  ctx.font='700 38px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",Arial,sans-serif';
+  ctx.font='700 38px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='left';ctx.textBaseline='middle';
   ctx.fillText(verdictEmoji, 32, 144);
 
   // Verdict label + title (centred, after emoji space)
   ctx.fillStyle=verdictCol;
-  ctx.font='700 11px Arial,sans-serif';
+  ctx.font='700 11px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('SAVE SCORE',W/2,124);
-  ctx.font='900 28px Arial,sans-serif';
+  ctx.font='900 28px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText(sc.vTitle||'Result',W/2,160);
 
   // Score chip on the right of the band ("4 / 5")
   if(sc.score){
     const chipX=W-100, chipY=144, chipW=64, chipH=32;
     ctx.fillStyle=verdictCol;rr(ctx, chipX-chipW/2, chipY-chipH/2, chipW, chipH, 16);ctx.fill();
-    ctx.fillStyle='#fff';ctx.font='900 16px Arial,sans-serif';
+    ctx.fillStyle='#fff';ctx.font='900 16px "Nunito","Inter",Arial,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText(sc.score+' / 5', chipX, chipY+1);
   }
@@ -7595,17 +8260,17 @@ function drawCard(sc){
     ctx.beginPath();ctx.arc(px,pipY,pipR,0,Math.PI*2);
     if(i===sc.score){
       ctx.fillStyle=verdictCol;ctx.fill();
-      ctx.fillStyle='#fff';ctx.font='900 20px Arial,sans-serif';
+      ctx.fillStyle='#fff';ctx.font='900 20px "Nunito","Inter",Arial,sans-serif';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(i,px,pipY);
     }else if(i<sc.score){
       ctx.fillStyle=verdictBd;ctx.fill();
-      ctx.fillStyle=verdictCol;ctx.font='700 17px Arial,sans-serif';
+      ctx.fillStyle=verdictCol;ctx.font='700 17px "Nunito","Inter",Arial,sans-serif';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(i,px,pipY);
     }else{
       ctx.fillStyle='#f0f1f3';ctx.fill();
-      ctx.fillStyle='#c8cad0';ctx.font='500 16px Arial,sans-serif';
+      ctx.fillStyle='#c8cad0';ctx.font='500 16px "Nunito","Inter",Arial,sans-serif';
       ctx.textAlign='center';ctx.textBaseline='middle';
       ctx.fillText(i,px,pipY);
     }
@@ -7615,26 +8280,26 @@ function drawCard(sc){
   const productEmoji = guessProductEmoji(sc.query || liveQuery || '');
   const qRaw=(sc.query||liveQuery||'Product');
   const q=qRaw.length>30?qRaw.slice(0,28)+'…':qRaw;
-  ctx.fillStyle='#b0b5be';ctx.font='700 11px Arial,sans-serif';
+  ctx.fillStyle='#b0b5be';ctx.font='700 11px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('YOU SEARCHED FOR',W/2,302);
   ctx.fillStyle='#0f1114';
-  ctx.font='800 24px Arial,sans-serif';
+  ctx.font='800 24px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText(productEmoji + '  ' + q, W/2, 332);
 
   // ── Big saving / price number ──
   if(sc.spc==='green'){
-    ctx.fillStyle=brand;ctx.font='900 96px Arial,sans-serif';
+    ctx.fillStyle=brand;ctx.font='900 96px "Nunito","Inter",Arial,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('£'+sc.bestPrice,W/2,432);
-    ctx.fillStyle='#3d4148';ctx.font='700 18px Arial,sans-serif';
+    ctx.fillStyle='#3d4148';ctx.font='700 18px "Nunito","Inter",Arial,sans-serif';
     ctx.fillText('✓  Best price in the UK · ' + (sc.bestRetailer||'right here'),W/2,492);
   }else{
-    ctx.fillStyle=verdictCol;ctx.font='900 108px Arial,sans-serif';
+    ctx.fillStyle=verdictCol;ctx.font='900 108px "Nunito","Inter",Arial,sans-serif';
     ctx.textAlign='center';ctx.textBaseline='middle';
     ctx.fillText('£'+(sc.saving||0),W/2,432);
-    ctx.fillStyle='#3d4148';ctx.font='700 18px Arial,sans-serif';
+    ctx.fillStyle='#3d4148';ctx.font='700 18px "Nunito","Inter",Arial,sans-serif';
     ctx.fillText('💸  cheaper at ' + sc.bestRetailer + ' · £' + sc.bestPrice,W/2,492);
   }
 
@@ -7655,7 +8320,7 @@ function drawCard(sc){
 
   // ── CTA strip ──
   ctx.fillStyle=brand;rr(ctx,40,648,W-80,72,18);ctx.fill();
-  ctx.fillStyle='#fff';ctx.font='900 20px Arial,sans-serif';
+  ctx.fillStyle='#fff';ctx.font='900 20px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   if(sc.spc==='green'){
     ctx.fillText('🎯  Best UK price · savvey.app',W/2,684);
@@ -7665,7 +8330,7 @@ function drawCard(sc){
 
   // ── Bottom footer ──
   ctx.fillStyle='#f5f5f7';ctx.fillRect(0,H-72,W,72);
-  ctx.fillStyle='#b0b5be';ctx.font='500 12px Arial,sans-serif';
+  ctx.fillStyle='#b0b5be';ctx.font='500 12px "Nunito","Inter",Arial,sans-serif';
   ctx.textAlign='center';ctx.textBaseline='middle';
   ctx.fillText('Free · No account needed · UK retailers',W/2,H-36);
 }
@@ -7716,7 +8381,9 @@ function shareSavingsCounter(){
   // wires the canvas/share/save channels to the savings-card variants
   // instead of the result-card variants.
   overlay.innerHTML = buildShareSheetHtml('savings');
-  drawSavingsCard(total, count);
+  // Wave 63 — fonts.ready guard so canvas uses Nunito/Inter
+  const fontsReady = (document.fonts && document.fonts.ready) || Promise.resolve();
+  fontsReady.then(() => drawSavingsCard(total, count));
   overlay.setAttribute('aria-hidden','false');
   overlay.classList.add('open');
 }
@@ -7742,7 +8409,7 @@ function drawSavingsCard(total, count){
   // Brand wordmark
   ctx.textAlign='left'; ctx.textBaseline='alphabetic';
   ctx.fillStyle='#ffffff';
-  ctx.font='900 36px Arial,sans-serif';
+  ctx.font='900 36px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText('SAVVE', 50, 90);
   // Amber Y
   const sw = ctx.measureText('SAVVE').width;
@@ -7750,41 +8417,41 @@ function drawSavingsCard(total, count){
   ctx.fillText('Y', 50+sw, 90);
   // Tagline
   ctx.fillStyle='rgba(255,255,255,0.78)';
-  ctx.font='500 17px Arial,sans-serif';
+  ctx.font='500 17px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText('shop smart.', 50, 116);
 
   // Eyebrow label centred
   ctx.textAlign='center';
   ctx.fillStyle='rgba(255,255,255,0.65)';
-  ctx.font='800 14px Arial,sans-serif';
-  ctx.fillText('SAVVEY SAVINGS FOUND', W/2, 230);
+  ctx.font='800 14px "Nunito","Inter",Arial,sans-serif';
+  ctx.fillText('SAVE SCORE TOTAL', W/2, 230);
 
   // Big amount — £ + total
   const totalText = fmtSavingsTotal(total < 0.5 ? 0 : total);
   ctx.fillStyle='#ffffff';
   // Currency
   ctx.textAlign='right';
-  ctx.font='800 64px Arial,sans-serif';
+  ctx.font='800 64px "Nunito","Inter",Arial,sans-serif';
   // Compute combined width to centre as a unit
-  ctx.font='900 130px Arial,sans-serif';
+  ctx.font='900 130px "Nunito","Inter",Arial,sans-serif';
   const numWidth = ctx.measureText(totalText).width;
-  ctx.font='800 64px Arial,sans-serif';
+  ctx.font='800 64px "Nunito","Inter",Arial,sans-serif';
   const curWidth = ctx.measureText('£').width;
   const totalWidth = curWidth + 4 + numWidth;
   const startX = (W - totalWidth)/2;
   // Draw £
   ctx.textAlign='left';
-  ctx.font='800 64px Arial,sans-serif';
+  ctx.font='800 64px "Nunito","Inter",Arial,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.92)';
   ctx.fillText('£', startX, 350);
   // Draw number
-  ctx.font='900 130px Arial,sans-serif';
+  ctx.font='900 130px "Nunito","Inter",Arial,sans-serif';
   ctx.fillStyle='#ffffff';
   ctx.fillText(totalText, startX + curWidth + 4, 360);
 
   // Sub-line — count of checks
   ctx.textAlign='center';
-  ctx.font='600 18px Arial,sans-serif';
+  ctx.font='600 18px "Nunito","Inter",Arial,sans-serif';
   ctx.fillStyle='rgba(255,255,255,0.78)';
   const subLine = count === 0
     ? 'spotted across your first checks'
@@ -7810,10 +8477,10 @@ function drawSavingsCard(total, count){
   roundRect(ctx, 50, panelTop, W-100, panelH, 18);
   ctx.fill();
   ctx.fillStyle='#ffffff';
-  ctx.font='800 18px Arial,sans-serif';
+  ctx.font='800 18px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText('Try it free — savvey.app', W/2, panelTop+38);
   ctx.fillStyle='rgba(255,255,255,0.7)';
-  ctx.font='500 14px Arial,sans-serif';
+  ctx.font='500 14px "Nunito","Inter",Arial,sans-serif';
   ctx.fillText('Scan, snap or paste · UK retailer prices in seconds', W/2, panelTop+66);
 }
 function wrapTextLines(ctx, text, maxWidth){
@@ -7849,7 +8516,7 @@ function savingsShareText(){
   if(total < 0.5){
     return `Just started using Savvey to check UK retailer prices before I buy. Try it: ${url}`;
   }
-  return `Savvey has spotted ${totalLabel} of savings across ${count} ${count===1?'check':'checks'} for me. Try it free: ${url}`;
+  return `My Save Score on Savvey is ${totalLabel} across ${count} ${count===1?'check':'checks'}. Try it free: ${url}`;
 }
 async function shareSavingsCard(){
   const canvas = document.getElementById('share-canvas');
@@ -7859,11 +8526,11 @@ async function shareSavingsCard(){
     const text = savingsShareText();
     try{
       if(navigator.canShare && navigator.canShare({files:[file]})){
-        await navigator.share({files:[file], title:'My Savvey savings', text});
+        await navigator.share({files:[file], title:'My Save Score totals', text});
         return;
       }
       if(navigator.share){
-        await navigator.share({title:'My Savvey savings', text});
+        await navigator.share({title:'My Save Score totals', text});
         return;
       }
     }catch(e){/* cancelled / unsupported */}

@@ -196,14 +196,25 @@ async function fetchPerplexitySearch(query, apiKey) {
     categoryQuery = `${query} buy UK (${catSites})`;
   }
 
+  // Wave 63 — LOOSE coverage call. Live test (Sony WH-1000XM5) showed the
+  // 30+ host OR clause in the broad query can return zero hits when
+  // Perplexity's index doesn't have those exact site:operators matched
+  // for the product. The loose call is "${query} buy UK price" with no
+  // site: filters at all — Perplexity finds whatever it finds, our
+  // matchRetailer step in processSearchResponse rejects anything that
+  // doesn't match a known UK retailer host. Strict admission stays;
+  // the source corpus widens. Costs +1 Perplexity per query (~£0.005).
+  const looseQuery = `${query} buy UK price comparison`;
+
   const calls = [
     callPerplexity(broadQuery,  apiKey, 10),
     callPerplexity(amazonQuery, apiKey, 10),
+    callPerplexity(looseQuery,  apiKey, 10),
   ];
   if (categoryQuery) calls.push(callPerplexity(categoryQuery, apiKey, 10));
 
   const settled = await Promise.allSettled(calls);
-  const [broadSettled, amazonSettled, categorySettled] = settled;
+  const [broadSettled, amazonSettled, looseSettled, categorySettled] = settled;
 
   // Surface fatal errors only when ALL calls failed.
   if (settled.every(s => s.status === 'rejected')) {
@@ -212,11 +223,13 @@ async function fetchPerplexitySearch(query, apiKey) {
 
   const broadData    = broadSettled?.status    === 'fulfilled' ? broadSettled.value    : null;
   const amazonData   = amazonSettled?.status   === 'fulfilled' ? amazonSettled.value   : null;
+  const looseData    = looseSettled?.status    === 'fulfilled' ? looseSettled.value    : null;
   const categoryData = categorySettled?.status === 'fulfilled' ? categorySettled.value : null;
 
   // Diagnostic logging
   const broadCount    = rawResultsOf(broadData).length;
   const amazonCount   = rawResultsOf(amazonData).length;
+  const looseCount    = rawResultsOf(looseData).length;
   const categoryCount = rawResultsOf(categoryData).length;
   if (broadSettled?.status === 'rejected') {
     console.warn(`[${VERSION}] broad Perplexity failed:`, broadSettled.reason?.message);
@@ -224,13 +237,16 @@ async function fetchPerplexitySearch(query, apiKey) {
   if (amazonSettled?.status === 'rejected') {
     console.warn(`[${VERSION}] amazon Perplexity failed:`, amazonSettled.reason?.message);
   }
+  if (looseSettled?.status === 'rejected') {
+    console.warn(`[${VERSION}] loose Perplexity failed:`, looseSettled.reason?.message);
+  }
   if (categorySettled?.status === 'rejected') {
     console.warn(`[${VERSION}] ${categoryLock.name} Perplexity failed:`, categorySettled.reason?.message);
   }
   if (categoryLock) {
-    console.log(`[${VERSION}] perplexity tri: broad=${broadCount} amazon=${amazonCount} ${categoryLock.name}=${categoryCount}`);
+    console.log(`[${VERSION}] perplexity quad: broad=${broadCount} amazon=${amazonCount} loose=${looseCount} ${categoryLock.name}=${categoryCount}`);
   } else {
-    console.log(`[${VERSION}] perplexity dual: broad=${broadCount} amazon=${amazonCount}`);
+    console.log(`[${VERSION}] perplexity tri: broad=${broadCount} amazon=${amazonCount} loose=${looseCount}`);
   }
 
   // Merge + dedup by URL.
@@ -239,6 +255,7 @@ async function fetchPerplexitySearch(query, apiKey) {
   const sources = [
     ...rawResultsOf(broadData),
     ...rawResultsOf(amazonData),
+    ...rawResultsOf(looseData),
     ...rawResultsOf(categoryData),
   ];
   for (const r of sources) {
@@ -252,6 +269,7 @@ async function fetchPerplexitySearch(query, apiKey) {
     results: combined,
     _amazonCallSucceeded: amazonSettled?.status === 'fulfilled',
     _amazonHitCount: amazonCount,
+    _looseHitCount: looseCount,
     _categoryLock: categoryLock?.name || null,
     _categoryHitCount: categoryCount,
   };
