@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.8';
+const VERSION = 'ai-search.js v1.9';
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -446,9 +446,17 @@ Wave 70 — TIER / VARIANT MATCHING. The query specifies a tier; only accept lis
 - For TVs: query "Samsung 65 QLED" — only accept 65" QLED Samsung; reject 55" / 75" / OLED variants.
 - The principle: when in doubt, prefer the exact tier match. A Pro listing at £999 inflating the "iPhone 17" average is a far worse outcome than dropping a few results.
 
-Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean}
+Wave 78 — PRODUCT MATCH GRADING. For every listing, also grade how well its TITLE actually matches the user's search query semantically. This is the broad-fix that catches unknown patterns the explicit rules above miss (off-brand clones, wrong-generation models, accessory listings, mis-categorised products, fake/clone listings on marketplaces, etc).
+- exact: title is unambiguously the same product the user asked for. Same brand, same model line, same tier. Pricing is comparable. Examples: query "Sony WH-1000XM5" → title "Sony WH-1000XM5 Wireless Headphones" = exact.
+- similar: title is in the SAME category and roughly the same tier but not an identical product match. Same use case, comparable pricing band. Examples: query "cordless vacuum cleaner" → title "Beldray Cordless Stick Vacuum" = similar (category match, generic model). Query "iPhone 17" → title "iPhone 17 256GB" = exact (same product, just storage spec).
+- different: title is clearly a different product, accessory, replacement part, fake/clone listing, wrong generation, wrong tier, or unrelated. Examples: query "Nintendo Switch" → title "Nintendo Switch 2 Console" = different. Query "AirPods Pro 2" → title "Apple AirPods Pro 2 Wireless Earbuds, Bluetooth Headphones, Bluetooth Earphones" at £70 from an unknown seller = different (clone listing). Query "Dyson V15" → title "Dyson V8 Replacement Battery" = different (accessory). Query "iPhone 17" → title "iPhone 17 Case Clear Cover" = different (case).
+
+Be ASSERTIVE on "different". A wrong product surfacing as the cheapest option is far worse than dropping a borderline-similar listing. When in doubt between similar and different, choose different.
+
+Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean, "query_match": "exact" | "similar" | "different"}
 - price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell
 - plausible = true if this is genuinely the product the user searched for AT THE TIER THEY ASKED FOR (or a same-category own-brand alternative) at a reasonable retail price AND the price is unconditional (no membership, finance, bundle); false if accessory, mis-listing, member-only, finance-only, wrong tier (Pro when base was asked), wrong size, or wildly off-market
+- query_match = "exact" | "similar" | "different" — see grading rules above
 
 Results:
 ${JSON.stringify(numbered, null, 2)}
@@ -488,9 +496,27 @@ function combineHitsWithPrices(hits, priceData) {
     const h    = hits[i];
     const meta = priceData.find(p => p.index === i);
     if (!meta || !meta.plausible || meta.price === null || meta.price === undefined) continue;
+    // Wave 78 — broad-fix product match grading. If Haiku graded the
+    // listing as "different" (wrong product / clone / accessory / wrong
+    // tier we missed via regex), drop it. This is the catch-all that
+    // handles unknown patterns the explicit rules don't cover. "exact"
+    // and "similar" both pass through; the frontend can use the grade
+    // for additional UX decisions (e.g. show Amazon-fallback CTA when
+    // results are mostly "similar" rather than "exact").
+    if (meta.query_match === 'different') {
+      console.log(`[${VERSION}] dropping query_match=different: "${(h.title||'').slice(0,80)}"`);
+      continue;
+    }
     const p = admitPrice(meta.price);
     if (p === null) continue;
-    items.push({ source: h.retailer.name, price: p, link: h.url, title: h.title.slice(0, 200), delivery: '' });
+    items.push({
+      source:      h.retailer.name,
+      price:       p,
+      link:        h.url,
+      title:       h.title.slice(0, 200),
+      delivery:    '',
+      query_match: meta.query_match || 'exact', // default to exact when Haiku didn't grade
+    });
   }
   return items;
 }

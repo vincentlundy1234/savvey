@@ -2973,24 +2973,27 @@
       vertical-align:middle;
       transform:translateY(-1px);
     }
-    /* Wave 63 — Snap-feature stronger emphasis on bottom nav. Was a
-       barely-visible green-ink swap; now a dedicated green-tinted pill
-       with a soft ring so it visually anchors as the primary input. */
+    /* Wave 63 — Snap-feature stronger emphasis on bottom nav.
+       Wave 80 — Vincent flagged: Snap's permanent green pill clashed
+       with the Home tab's active green pill, so two tabs read as
+       "highlighted" simultaneously when only one was actually active.
+       Fix: drop the permanent pill background. Keep the green icon
+       + green label as the visual differentiator (Snap is the primary
+       input via colour, not via a pseudo-active background). When Snap
+       IS the active screen, it gets the standard active treatment like
+       any other tab. */
     .botnav-tab-feature{
-      background:linear-gradient(135deg, rgba(86,184,77,0.18) 0%, rgba(42,107,34,0.22) 100%);
-      box-shadow:inset 0 0 0 1px rgba(42,107,34,0.18);
+      background:transparent;
+      box-shadow:none;
     }
     .botnav-tab-feature .botnav-ico{
       color:var(--green);
       transform:scale(1.05);
     }
     .botnav-tab-feature .botnav-lbl{color:var(--green);}
-    .botnav-tab-feature.active{
-      background:linear-gradient(135deg, rgba(86,184,77,0.30) 0%, rgba(42,107,34,0.32) 100%);
-    }
     .botnav.dark .botnav-tab-feature{
-      background:rgba(86,184,77,0.20);
-      box-shadow:inset 0 0 0 1px rgba(86,184,77,0.30);
+      background:transparent;
+      box-shadow:none;
     }
     .botnav.dark .botnav-tab-feature .botnav-ico{ color:#88d97c; }
     .botnav.dark .botnav-tab-feature .botnav-lbl{ color:#88d97c; }
@@ -5559,7 +5562,8 @@ function buildScenV3(items, uPrice, query){
       best:p.best,
       bad:p.bad,
       sub:p.sub||'Check retailer',
-      diff:p.best?'':'+£'+(p.price-bestP).toFixed(0)+' more'
+      diff:p.best?'':'+£'+(p.price-bestP).toFixed(0)+' more',
+      query_match: p.query_match || null
     })),
     shareMsg:spc==='red'
       ?`Scanned ${query}. ${deduped[1]?.retailer||'The shop'} wanted £${uPrice||'more'}. ${deduped[0].retailer} has it for £${bestP}. Savvey — savvey.app`
@@ -5886,7 +5890,10 @@ function processSearchResponse(d1, query, snapshotUserPrice){
       retailer:ret.name,
       price,
       link:i.link||'',
-      sub:i.delivery||'Check retailer'
+      sub:i.delivery||'Check retailer',
+      // Wave 78 — pass-through Haiku query_match grade so the rets array
+      // and Amazon-fallback CTA can decide UX based on confidence.
+      query_match: i.query_match || null
     };
   }).filter(i=>i&&i.price>1&&i.price<5000);
   console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length+' source='+(d1._meta&&d1._meta.source||'serper')+' uPrice='+(snapshotUserPrice||'null'));
@@ -6767,6 +6774,11 @@ function retailerSearchUrl(retailerName, query){
   if(r.includes('b&q')||r.includes('diy.com')||r.includes('b and q')) return `https://www.diy.com/search?term=${q}`;
   if(r.includes('wickes'))       return `https://www.wickes.co.uk/search?text=${q}`;
   if(r.includes('toolstation'))  return `https://www.toolstation.com/search?q=${q}`;
+  // Wave 80 — Vincent's flagged retailers — search URLs so taps land on
+  // the retailer's own search, not a Google fallback.
+  if(r.includes('homebase'))     return `https://www.homebase.co.uk/search?q=${q}`;
+  if(r.includes('lakeland'))     return `https://www.lakeland.co.uk/search?q=${q}`;
+  if(r.includes('dunelm'))       return `https://www.dunelm.com/search?searchTerm=${q}`;
   // Books / media
   if(r.includes('waterstones'))  return `https://www.waterstones.com/books/search/term/${q}`;
   if(r.includes('whsmith')||r.includes('wh smith')) return `https://www.whsmith.co.uk/search?w=${q}`;
@@ -7318,7 +7330,25 @@ function renderResults(sc){
   const amazonCta = document.getElementById('amazon-cta-card');
   if(amazonCta){
     const hasAmazonInline = (sc.rets||[]).some(r => /amazon/i.test(r.n||''));
-    amazonCta.style.display = hasAmazonInline ? 'none' : 'flex';
+    // Wave 80 — also hide when the user came from a pasted Amazon URL.
+    // No point sending them back to Amazon when they just came from
+    // there. window._scrapeFailedUrl / window._scrapeFallbackQuery are
+    // set on paste-scrape; we also check inputMethod for explicit paste.
+    const cameFromAmazon = (function(){
+      try {
+        const lastUrl = window._scrapeFailedUrl || (sc && sc.sourceUrl) || '';
+        return /amazon\.co\.uk|amazon\.com/i.test(lastUrl);
+      } catch(e){ return false; }
+    })();
+    amazonCta.style.display = (hasAmazonInline || cameFromAmazon) ? 'none' : 'flex';
+    // Wave 79 — Amazon CTA copy. Uniform neutral default per Vincent's
+    // call: "You can check Amazon here." Treats Amazon as a universally
+    // helpful add-on rather than ever-anxious. The truly-failed case is
+    // already handled by renderNoResults (separate empty-state hero).
+    if(!hasAmazonInline && !cameFromAmazon){
+      const sub = amazonCta.querySelector('.amazon-cta-sub');
+      if(sub) sub.textContent = 'You can check Amazon here.';
+    }
   }
 }
 
