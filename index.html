@@ -2000,10 +2000,45 @@
       box-shadow:var(--depth-glow-green);
       min-height:54px;
       transition:transform var(--motion-fast) var(--ease-pop),
-                 box-shadow var(--motion-norm) var(--ease-quick);
+                 box-shadow var(--motion-norm) var(--ease-quick),
+                 background var(--motion-norm) var(--ease-quick);
     }
     .hero-buy:active{transform:scale(0.97);box-shadow:var(--depth-2);}
     .hero-buy:focus-visible{outline:3px solid var(--green-bd);outline-offset:3px;}
+    /* Wave 106b — verdict-aware Buy CTA. The previous always-green CTA
+       on a "Walk away" red verdict was incoherent. Now the colour matches
+       the verdict band so the user gets one consistent signal. Amber for
+       "worth a look", red-toned for "walk away" (still readable + tappable
+       — neutralised but not aggressively negative). Green stays for
+       pretty-good / best-price. Label stays "Get it" because users still
+       have the option; we just stop nudging them when we shouldn't. */
+    .hero-buy.amber{
+      background:linear-gradient(132deg,#e8a93b 0%,#c98e22 100%);
+      box-shadow:0 6px 18px rgba(201,142,34,.32);
+    }
+    .hero-buy.red{
+      background:linear-gradient(132deg,#9a3a3a 0%,#6f2828 100%);
+      box-shadow:0 6px 18px rgba(111,40,40,.34);
+    }
+    .hero-buy.amber:focus-visible{outline:3px solid #c98e22;}
+    .hero-buy.red:focus-visible{outline:3px solid #9a3a3a;}
+    /* Wave 110b — verification badge. Tiny, subtle, sits between price
+       and Buy CTA. Three visual variants: verified (green tick), kept
+       (amber dot), unknown (grey dash). The user gets one-glance
+       transparency about how confident we are in the live price. */
+    .hero-verify-badge{
+      display:inline-flex;align-items:center;gap:6px;
+      margin:6px 0 10px;padding:4px 10px;
+      font:600 11px/1.2 "Inter",sans-serif;letter-spacing:.02em;
+      border-radius:999px;background:#f3f6f1;color:#2a6b22;
+      width:fit-content;
+    }
+    .hero-verify-badge::before{
+      content:'';display:inline-block;width:6px;height:6px;border-radius:50%;background:currentColor;
+    }
+    .hero-verify-badge.verified{background:#e6f1e1;color:#2a6b22;}
+    .hero-verify-badge.kept{background:#fef3d8;color:#85580f;}
+    .hero-verify-badge.unknown{background:#eef0f2;color:#5d6470;}
     .hero-share{
       width:100%;padding:15px;border-radius:var(--r);
       background:var(--green-lt);border:1.5px solid var(--green-bd);
@@ -2545,6 +2580,14 @@
       to  {opacity:1;transform:scale(1);   filter:blur(0);}
     }
     .verdict-land{animation:verdict-land 340ms var(--ease-pop) both;}
+    /* Wave 109c — reduced-motion fallback. The verdict-land keyframe and
+       pip stagger trigger every render. Users with prefers-reduced-motion
+       get an instant, opacity-only fade instead of a scale+blur+stagger. */
+    @media (prefers-reduced-motion: reduce){
+      .verdict-land{animation:none;}
+      .v-pip{transition:none !important;}
+      .hero-buy{transition:opacity var(--motion-fast) linear !important;}
+    }
 
     /* ── Retailer row stagger ── */
     @keyframes row-in{
@@ -3730,7 +3773,10 @@
         <p id="snap-no-perm-msg">Allow camera access to snap a photo for identification.</p>
         <p id="snap-no-perm-detail" style="margin-top:8px;font-size:12px;color:rgba(255,255,255,0.55);font-family:monospace;display:none;"></p>
         <button class="cam-alt" style="margin-top:16px;font-size:14px;" onclick="startSnapper()">Try again</button>
-        <button class="cam-alt" style="margin-top:8px;" onclick="stopSnapper();goHome()">Search instead</button>
+        <!-- Wave 110d — "Type instead" recovery is the primary fallback;
+             previously buried as a smaller "Search instead". Now visually
+             aligned + clearer label. -->
+        <button class="cam-alt" style="margin-top:8px;" onclick="stopSnapper();goHome()">Type product name instead</button>
       </div>
       <div class="cam-bar">
         <button class="cam-btn" onclick="stopSnapper();goHome()" aria-label="Close snapper and go home">
@@ -3962,7 +4008,11 @@
         <!-- Wave 24: hero product image, populated from /api/ai-search _meta.heroImage.
              Hidden by default; shown when the search returns an image URL. -->
         <div class="hero-image-wrap" id="hero-image-wrap" hidden>
-          <img class="hero-image" id="hero-image" alt="" loading="eager" decoding="async"/>
+          <!-- Wave 109e — lazy-loaded by default. The hero image arrives
+               via _meta.heroImage after the API roundtrip; loading="lazy"
+               lets the browser deprioritise it relative to the verdict
+               card. decoding="async" keeps the main thread free. -->
+          <img class="hero-image" id="hero-image" alt="" loading="lazy" decoding="async"/>
         </div>
         <!-- Verdict banner — colour-coded, pips inside -->
         <div class="hero-verdict red" id="hero-verdict-bar">
@@ -3988,6 +4038,11 @@
             </div>
           </div>
           <div class="hero-where" id="hero-where"><strong>Amazon UK</strong> has it for <strong>£249</strong> right now.</div>
+          <!-- Wave 110b — verification reason badge. Hidden by default;
+               renderResults sets text + visibility based on sc.verifyReason
+               so the user knows whether the price was confirmed live, kept
+               from snippet, overridden, or not verifiable. -->
+          <div class="hero-verify-badge" id="hero-verify-badge" hidden></div>
 
           <div class="hero-actions">
             <button class="hero-buy" id="btn-buy-now" onclick="buyNow()">Get it on Amazon UK →</button>
@@ -5984,6 +6039,12 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     // and clarify that the prices are for different products in that
     // category, not the same product across retailers.
     sc.categoryProducts = Array.isArray(d1._meta.categoryProducts) ? d1._meta.categoryProducts : null;
+    // Wave 110b — Wave 93/99c verification telemetry. Surface to renderResults
+    // so the user sees a small badge under the cheapest price explaining
+    // what happened (verified, overridden, snippet-kept, etc.) instead of
+    // the silent presence/absence of a tick.
+    const cv = d1._meta.cheapestVerification || null;
+    if(cv){ sc.verifyReason = cv.reason; sc.verifyOverridden = !!cv.overridden; sc.verifyVerified = !!cv.verified; }
     // Wave 102b — when fan-out returned different products, the
     // "saving vs UK average" framing breaks down (the average is across
     // 3 different products). Mark scoreBasis 'category-spread' and
@@ -6451,15 +6512,25 @@ function renderNoResults(query, upstreamError){
   const heroImgWrap=document.getElementById('hero-image-wrap');
   if(heroImgWrap)heroImgWrap.hidden=true;
 
-  // Verdict banner — neutral / amber, no pips lit
+  // Wave 106c — Empty state stops looking like a faded graded result.
+  // Hide the pip row entirely (showing "0/5 lit" pips reads as a 0/5 score
+  // by users) and replace the "Save Score" label with a neutral state name
+  // so users understand this isn't a verdict — it's a "couldn't get one".
   const bar=document.getElementById('hero-verdict-bar');
   if(bar){bar.classList.remove('red','green');bar.classList.add('amber');}
+  const pipsWrap = document.querySelector('.hero-verdict-pips');
+  if(pipsWrap) pipsWrap.style.display = 'none';   // Wave 106c — hide pips entirely
   for(let i=1;i<=5;i++){
     const p=document.getElementById('vp-'+i);
     if(p){p.classList.remove('lit','active');}
   }
   const lbl=document.getElementById('hero-verdict-label');
-  if(lbl){lbl.classList.remove('red','green');lbl.classList.add('amber');lbl.textContent='Save Score';}
+  if(lbl){
+    lbl.classList.remove('red','green');
+    lbl.classList.add('amber');
+    // Wave 106c — neutral state name, distinct from "Save Score" verdict
+    lbl.textContent = hadUpstream ? 'No price' : (future ? 'Not yet' : 'No match');
+  }
   const ttl=document.getElementById('hero-verdict-title');
   if(ttl){ttl.classList.remove('red','green');ttl.classList.add('amber');ttl.textContent='Let\'s check directly.';}
 
@@ -7211,7 +7282,12 @@ function renderResults(sc){
   const hasUserPrice = !!sc.uPrice;
   const spc = sc.spc; // honour the score from buildScenV3 in all modes
   const overpayingRetailer=sc.rets&&sc.rets.filter(r=>!r.best)[0]?.n||'this retailer';
-  const showPips = sc.retailerCount >= 2; // hide pips when no real comparison
+  // Wave 106a — hide pips/score visualisation when there's no real comparison
+  // to make. Three cases: single retailer, category-spread (Wave 100 fan-out
+  // surfaced 3 different products so a single score is meaningless), or
+  // Wave 102b explicitly flagged the result as range-not-score. The user
+  // sees product details + retailer rows but no fake "Save Score: amber 3/5".
+  const showPips = sc.retailerCount >= 2 && sc.scoreBasis !== 'category-spread';
 
   // Wave 33 — show the optional shelf-price refine pill when the user is
   // on a Discovery-mode result with multiple retailers. Hide if they
@@ -7287,10 +7363,16 @@ function renderResults(sc){
       setTimeout(()=>lightPip(1),200);
     })();
   } else {
-    // Single retailer — no real comparison. Headline cheapest, mute pips.
+    // Wave 106a — pip-less states: single retailer OR category-spread.
+    // Each gets distinct copy so the user knows what they're seeing.
     if(pipsWrap)pipsWrap.style.display='none';
-    vLabel.textContent='Only one retailer found';
-    vTitle.textContent='£'+sc.bestPrice+' at '+sc.bestRetailer;
+    if(sc.scoreBasis === 'category-spread'){
+      vLabel.textContent = 'Top picks';
+      vTitle.textContent = sc.vTitle || ('Range across ' + (sc.query || 'this category') + '.');
+    } else {
+      vLabel.textContent = 'Only one retailer found';
+      vTitle.textContent = '£' + sc.bestPrice + ' at ' + sc.bestRetailer;
+    }
   }
 
   // ── Hero body ──
@@ -7474,13 +7556,45 @@ function renderResults(sc){
     if(witEl)witEl.textContent=d.wit;
   }).catch(()=>{/* AI failed, hardcoded stays */});
 
-  // ── Buy button — always green, always fires ──
+  // ── Wave 110b — Verification badge ──
+  // Surface the cheapestVerification telemetry so the user can see whether
+  // the price was confirmed live, kept from snippet, or unverifiable.
+  // Mapping is intentionally human — telemetry reasons aren't user copy.
+  (function renderVerifyBadge(){
+    const badge = document.getElementById('hero-verify-badge');
+    if(!badge) return;
+    const reason = sc.verifyReason;
+    const overridden = !!sc.verifyOverridden;
+    const verified = !!sc.verifyVerified;
+    let copy = null, tone = null;
+    if(overridden){ copy = 'Live price confirmed (we updated to match the page)'; tone = 'verified'; }
+    else if(verified){ copy = 'Verified ✓ live price'; tone = 'verified'; }
+    else if(reason === 'drift_haiku_snippet'){ copy = 'Snippet kept · cross-checked by AI'; tone = 'verified'; }
+    else if(reason === 'drift_haiku_unknown'){ copy = 'Snippet kept · couldn\'t cross-check live'; tone = 'kept'; }
+    else if(reason === 'drift_too_large'){ copy = 'Snippet kept · live page extraction looked off'; tone = 'kept'; }
+    else if(reason && reason.startsWith('upstream_')){ copy = 'Snippet kept · couldn\'t reach the page'; tone = 'kept'; }
+    else if(reason && reason.startsWith('exception_')){ copy = 'Snippet kept · page took too long to load'; tone = 'kept'; }
+    else if(reason === 'no_extractor_or_no_match' || reason === 'pp_no_price_in_response'){ copy = 'Snippet kept · couldn\'t find a price on the page'; tone = 'kept'; }
+    else if(reason === 'out_of_stock'){ copy = 'Note · this product looks out of stock'; tone = 'kept'; }
+    if(copy){ badge.textContent = copy; badge.className = 'hero-verify-badge ' + tone; badge.hidden = false; }
+    else { badge.hidden = true; }
+  })();
+
+  // ── Buy button — Wave 106b verdict-aware colour ──
+  // Previously always green regardless of verdict. On a "Walk away" red
+  // result this read as "we just told you walk away but here's a green Go
+  // button." Now the button colour matches the verdict band: green on
+  // green, amber on amber, red-tone on walk-away. Still always tappable —
+  // we don't take the option away, we stop nudging when we shouldn't.
   const buyBtn=document.getElementById('btn-buy-now');
-  buyBtn.className='hero-buy';
+  buyBtn.className='hero-buy ' + (spc || '');
   buyBtn.onclick=buyNow;
   if(spc==='green'){
     buyBtn.textContent='Buy from '+sc.bestRetailer+' — best price confirmed ✓';
-  }else{
+  } else if(spc==='red'){
+    // Phrase shifts subtly — still gives the link, doesn't push as hard
+    buyBtn.textContent='See it on '+sc.bestRetailer+' →';
+  } else {
     buyBtn.textContent='Get it on '+sc.bestRetailer+' →';
   }
 
@@ -8022,21 +8136,30 @@ async function startSnapper(){
     console.log('[Snapper] camera stream acquired');
   }catch(err){
     console.error('[Snapper] getUserMedia failed:', err.name, err.message);
+    // Wave 110d — sharper permission UX. Detect platform to give the
+    // right Settings path; always foreground the "type instead" recovery
+    // so the user has a clear path forward rather than dead-ending.
     if(err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError'){
-      showSnapError('Camera permission denied',
-        'Tap the camera icon in your address bar (or Settings → Safari → Camera) to allow access, then Try again.',
+      const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+      const ios = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const path = isStandalone && ios
+        ? 'iOS Settings → Privacy & Security → Camera → Savvey'
+        : ios ? 'Settings → Safari → Camera, or tap the "AA" icon in the address bar'
+        : 'tap the camera icon in your address bar';
+      showSnapError('Camera access blocked',
+        'To snap a product, allow camera access in '+path+'. Or tap "Type instead" to search by name.',
         err.name);
     } else if(err.name === 'NotFoundError' || err.name === 'DevicesNotFoundError'){
-      showSnapError('No camera found',
-        'This device doesn\'t expose a usable rear camera. Search by name instead.',
+      showSnapError('No rear camera found',
+        'This device doesn\'t expose a usable rear camera. Tap "Type instead" to search by name.',
         err.name);
     } else if(err.name === 'NotReadableError' || err.name === 'TrackStartError'){
-      showSnapError('Camera in use',
-        'Another app is using the camera. Close it and tap Try again.',
+      showSnapError('Camera in use elsewhere',
+        'Another app is using the camera (FaceTime, Zoom, etc.). Close it and tap Try again, or "Type instead" to search by name.',
         err.name);
     } else {
-      showSnapError('Camera error',
-        'We couldn\'t start the camera. Tap Try again, or search by name.',
+      showSnapError('Camera couldn\'t start',
+        'Something went wrong starting the camera. Tap Try again or "Type instead" to search by name.',
         err.name || err.message || 'unknown');
     }
     return;

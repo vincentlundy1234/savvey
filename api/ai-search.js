@@ -1,4 +1,10 @@
-// api/ai-search.js — Savvey AI Search v1.24
+// api/ai-search.js — Savvey AI Search v1.25
+//
+// v1.25 (3 May 2026 PM — Wave 109e fan-out hero image):
+//   - When Wave 100 category fan-out fires (categoryProducts set),
+//     fetchHeroImage now uses categoryProducts[0] (first specific product)
+//     instead of the original generic query. "cordless vacuum cleaner"
+//     now gets a Dyson V15 product photo, not a stock category image.
 //
 // v1.24 (3 May 2026 PM — Wave 105 Tier A+C cost wins):
 //   ~50% reduction in cost per search:
@@ -223,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.24';
+const VERSION = 'ai-search.js v1.25';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1438,9 +1444,14 @@ export default async function handler(req, res) {
   // if Serper returns nothing or fails.
   const beforeVerify = items.length;
   const SERPER_KEY_FOR_IMG = process.env.SERPER_API_KEY || process.env.SERPER_KEY || null;
+  // Wave 109e — when Wave 100 fan-out fired, the original query was generic
+  // ("cordless vacuum cleaner"). Serper Images for that returns stock
+  // category photos. Use the first specific product instead so the hero
+  // image is an actual product photo.
+  const heroImageQuery = (categoryProducts && categoryProducts[0]) ? categoryProducts[0] : q;
   const [verifiedItems, heroImage] = await Promise.all([
     verify ? verifyUrls(items) : Promise.resolve(items),
-    fetchHeroImage(q, SERPER_KEY_FOR_IMG),
+    fetchHeroImage(heroImageQuery, SERPER_KEY_FOR_IMG),
   ]);
   items = verifiedItems;
   const verifiedDropped = beforeVerify - items.length;
