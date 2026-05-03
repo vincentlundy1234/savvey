@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.44';
+const VERSION = 'ai-search.js v1.45';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1786,7 +1786,7 @@ const RETAILER_STOPWORDS = new Set([
   'in','out','of','stock','available','unavailable','delivery','shipping','collect',
 ]);
 
-function validateReasoningGrounding(text, items) {
+function validateReasoningGrounding(text, items, query) {
   if (!text || !items || items.length === 0) return { ok: false, reason: 'no-text-or-items' };
   // Reject any non-GBP currency mention — catches Rado/Nike USD-leak class
   if (/\$|\bUSD\b|\bdollar|\beuro|€|\bEUR\b/i.test(text)) {
@@ -1808,6 +1808,14 @@ function validateReasoningGrounding(text, items) {
   // (excluding generic stop-words and product-name fragments) must
   // substring-match at least one retailer's `source` field. Catches the
   // kettle-Dualit class where Haiku invented a brand not in the data.
+  // A3-fix — also build a set of "query tokens" so product names in the
+  // query (Sage Bambino, Sennheiser HD 660S, Wahoo Kickr Core) are
+  // treated as product references, not retailer candidates. Without this
+  // we false-rejected Sage Bambino because "Bambino" wasn't in the
+  // hardcoded stop-word list.
+  const queryTokens = new Set(
+    String(query || '').toLowerCase().split(/[\s\-]+/).filter(t => t.length >= 3)
+  );
   const retailerCandidates = extractRetailerCandidates(text);
   const allowedRetailerNames = items
     .map(i => String(i.source || '').toLowerCase())
@@ -1815,9 +1823,9 @@ function validateReasoningGrounding(text, items) {
   for (const cand of retailerCandidates) {
     const candLc = cand.toLowerCase().trim();
     if (!candLc) continue;
-    // Skip if entire candidate is a stop-word or contains only stop-words
     const tokens = candLc.split(/\s+/);
-    if (tokens.every(t => RETAILER_STOPWORDS.has(t))) continue;
+    // Skip if entire candidate is stop-words OR query tokens (product name)
+    if (tokens.every(t => RETAILER_STOPWORDS.has(t) || queryTokens.has(t))) continue;
     // Skip if very short single tokens — too noisy
     if (tokens.length === 1 && tokens[0].length < 4) continue;
     // Pass if candidate substring-matches ANY allowed retailer name OR
@@ -1913,7 +1921,7 @@ Bad (rejected) examples:
     // retailers, or leaks non-GBP currency. Better to show no line than
     // a wrong one.
     // Wave 210c — relaxed to ±£3 / ±2% tolerance after v1.41 was over-rejecting.
-    const validation = validateReasoningGrounding(text, top);
+    const validation = validateReasoningGrounding(text, top, query);
     if (!validation.ok) {
       console.log(`[${VERSION}] reasoning rejected (${validation.reason}): "${text.slice(0, 100)}"`);
       // Stash on a globally-accessible spot for debug envelope
