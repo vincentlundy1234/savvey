@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.2.0';
+const VERSION = 'ai-search.js v2.2.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -733,6 +733,39 @@ const SONAR_PRODUCT_SCHEMA = {
   required: ['products'],
 };
 
+
+// Savvey v2 R2 — server-side brand-alias map for the post-merge brand gate.
+// Mirrors the client-side battery scorer aliases. Conservative: when in doubt
+// the item is KEPT (false-drops are worse than false-keeps at this layer).
+const BRAND_ALIASES_SERVER = {
+  apple: ['apple','iphone','macbook','ipad','airpods','imac'],
+  samsung: ['samsung','galaxy'],
+  sennheiser: ['sennheiser','hd 660','hd660'],
+  bosch: ['bosch'],
+  sage: ['sage','breville'],
+  wahoo: ['wahoo','kickr'],
+  dyson: ['dyson'],
+  'le creuset': ['le creuset','le-creuset','lecreuset'],
+  lego: ['lego'],
+  rado: ['rado'],
+  brompton: ['brompton'],
+  ninja: ['ninja'],
+  tower: ['tower'],
+  tefal: ['tefal','t-fal'],
+  shark: ['shark'],
+  beldray: ['beldray'],
+  einhell: ['einhell'],
+  ryobi: ['ryobi'],
+  karcher: ['karcher','k\u00e4rcher'],
+};
+function titleMatchesBrand(title, brand) {
+  if (!brand) return true;
+  if (!title || typeof title !== 'string') return true; // missing title — don't filter
+  const t = title.toLowerCase();
+  const key = brand.toLowerCase();
+  const aliases = BRAND_ALIASES_SERVER[key] || [key];
+  return aliases.some(a => t.includes(a));
+}
 
 // Savvey v2 R2 — convert parsed query intent into a hard-constraints block
 // for the Sonar Pro prompt. Each qualifier becomes an explicit REJECT rule
@@ -2469,6 +2502,20 @@ export default async function handler(req, res) {
       }
     } catch (e) {
       console.warn(`[${VERSION}] top-up call failed: ${e.message}`);
+    }
+  }
+
+  // Savvey v2 R2 — post-merge brand gate. The Search-API quad doesn't go
+  // through Sonar Pro's hard constraints, so wrong-brand URLs (e.g. Einhell
+  // for a Bosch query) can leak in via gatherRetailerHits. Filter merged
+  // items by parser brand to stop the £72-Einhell-as-cheapest-Bosch class.
+  const parsedForGate = await parsedQueryPromise.catch(() => null);
+  if (parsedForGate && parsedForGate.brand && items.length > 0) {
+    const beforeBrandGate = items.length;
+    items = items.filter((it) => titleMatchesBrand(it.title, parsedForGate.brand));
+    const droppedByBrandGate = beforeBrandGate - items.length;
+    if (droppedByBrandGate > 0) {
+      console.log(`[${VERSION}] R2 brand gate dropped ${droppedByBrandGate} wrong-brand items (kept brand="${parsedForGate.brand}", remaining=${items.length})`);
     }
   }
 
