@@ -69,7 +69,62 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.10';
+const VERSION = 'ai-search.js v1.11';
+
+// Wave 93 — landing-page price verification (mirrors search.js v6.25).
+// For the cheapest result only, fetch the actual product page and parse
+// the live price. If snippet differs from live by >2%, override snippet
+// with live so the user sees the price they'll actually find when they
+// tap through. 3s timeout, graceful failure.
+const VERIFY_TIMEOUT_MS = 3000;
+const VERIFY_MAX_DRIFT_PCT = 0.02;
+const VERIFY_BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-GB,en;q=0.9',
+};
+function extractLivePriceFromHtml(url, html){
+  const u = String(url || '').toLowerCase();
+  const m = (re) => { const x = html.match(re); return x ? x[1] : null; };
+  let raw = null;
+  if(u.includes('amazon.co.uk')){
+    raw = m(/<span class="a-price-whole">(\d[\d,]*)<\/span>/) || m(/<span class="a-offscreen">£([\d,.]+)<\/span>/) || m(/\\"priceAmount\\":(\d+\.?\d*)/);
+  } else if(u.includes('currys.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/);
+  } else if(u.includes('argos.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/);
+  } else if(u.includes('johnlewis.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/£([\d,]+\.\d{2})/);
+  } else if(u.includes('ao.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/itemprop="price"[^>]*content="([\d.]+)"/);
+  } else if(u.includes('very.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/<span[^>]*class="[^"]*price[^"]*"[^>]*>£([\d,.]+)/);
+  } else if(u.includes('halfords.com') || u.includes('selfridges.com') || u.includes('boots.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/);
+  } else if(u.includes('apple.com')){
+    raw = m(/"currentPrice"[^"]*":[^"]*"([\d.]+)"/) || m(/£([\d,]+\.\d{2})/);
+  }
+  if(!raw) return null;
+  const n = parseFloat(String(raw).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+async function verifyLivePrice(item){
+  if(!item || !item.link) return { verified: false, reason: 'no_link' };
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), VERIFY_TIMEOUT_MS);
+  try {
+    const r = await fetch(item.link, { headers: VERIFY_BROWSER_HEADERS, redirect: 'follow', signal: ac.signal });
+    if(!r.ok) return { verified: false, reason: 'upstream_' + r.status };
+    const html = await r.text();
+    const live = extractLivePriceFromHtml(item.link, html);
+    if(live === null) return { verified: false, reason: 'no_extractor_or_no_match' };
+    const snippet = item.price;
+    const drift = snippet > 0 ? Math.abs(live - snippet) / snippet : 0;
+    return { verified: true, live, snippet, drift };
+  } catch (e){
+    return { verified: false, reason: 'exception_' + (e.name || 'unknown') };
+  } finally { clearTimeout(timer); }
+}
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
 const PERPLEXITY_TIMEOUT_MS = 8000;
@@ -701,10 +756,31 @@ export default async function handler(req, res) {
   items = verifiedItems;
   const verifiedDropped = beforeVerify - items.length;
 
-  const results = dedup(items);
-  const cov     = computeCoverage(results);
+  const dedupedResults = dedup(items);
+  const cov     = computeCoverage(dedupedResults);
 
-  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'}`);
+  // Wave 93 — verify cheapest live price (mirrors search.js v6.25).
+  // Sort ascending so [0] is cheapest.
+  dedupedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+  let priceVerification = { verified: false, reason: 'skipped' };
+  if(dedupedResults.length > 0 && dedupedResults[0].link){
+    priceVerification = await verifyLivePrice(dedupedResults[0]);
+    if(priceVerification.verified && priceVerification.drift > VERIFY_MAX_DRIFT_PCT){
+      console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} snippet £${priceVerification.snippet} → live £${priceVerification.live} (drift ${(priceVerification.drift*100).toFixed(1)}%) — overriding`);
+      dedupedResults[0].price = priceVerification.live;
+      dedupedResults[0].priceVerified = true;
+      dedupedResults[0].priceWasOverridden = true;
+      dedupedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if(priceVerification.verified){
+      console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} snippet £${priceVerification.snippet} matches live (drift ${(priceVerification.drift*100).toFixed(1)}%)`);
+      dedupedResults[0].priceVerified = true;
+    } else {
+      console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} ${priceVerification.reason}`);
+    }
+  }
+  const results = dedupedResults;
+
+  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'} live_verified=${priceVerification.verified}`);
 
   const debugEnvelope = debug ? {
     counts: {
@@ -725,12 +801,14 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     shopping: results.map(r => ({
-      source:      r.source,
-      price:       `£${r.price.toFixed(2)}`,
-      link:        tagAmazonUrl(r.link),  // Amazon URLs get ?tag=savvey-21 appended
-      title:       r.title,
-      delivery:    r.delivery,
-      query_match: r.query_match || 'exact',  // Wave 79 — surface Haiku's match grade so frontend can use it
+      source:           r.source,
+      price:            `£${r.price.toFixed(2)}`,
+      link:             tagAmazonUrl(r.link),  // Amazon URLs get ?tag=savvey-21 appended
+      title:            r.title,
+      delivery:         r.delivery,
+      query_match:      r.query_match || 'exact',  // Wave 79
+      price_verified:   !!r.priceVerified,         // Wave 93
+      price_was_overridden: !!r.priceWasOverridden, // Wave 93
     })),
     organic: [],
     _meta: {
@@ -745,6 +823,15 @@ export default async function handler(req, res) {
       verifiedDropped,
       amazonTagged:      Boolean(AMAZON_TAG),
       heroImage:         heroImage,  // { url, thumbnail, source } or null
+      // Wave 93 — live price verification telemetry
+      cheapestVerification: {
+        verified:   !!priceVerification.verified,
+        reason:     priceVerification.reason || null,
+        snippetPrice: priceVerification.snippet || null,
+        livePrice:  priceVerification.live || null,
+        driftPct:   priceVerification.drift != null ? Math.round(priceVerification.drift * 1000) / 10 : null,
+        overridden: !!(results[0] && results[0].priceWasOverridden),
+      },
     },
     _debug: debugEnvelope,
   });

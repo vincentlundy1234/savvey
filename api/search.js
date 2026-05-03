@@ -63,7 +63,90 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.24';
+const VERSION = 'search.js v6.25';
+
+// Wave 93 — Landing-page price verification. The trust-erosion case:
+// snippet says £349, user clicks through, page shows £379. Cause is
+// Google indexing latency (Serper returns a cached snippet that can be
+// hours/days behind retailer's live price). Vincent's KitchenAid case:
+// shown £349, actual £379 — £30 over, user leaves frustrated.
+//
+// Fix: for the BEST-PRICE result only (highest leverage), fetch the
+// actual product page and parse the live price. If live differs from
+// snippet by >2%, override snippet with live. Surface verification
+// status in _meta so frontend can flag if needed. Hard 3s timeout so
+// verification doesn't add meaningful latency to the search.
+const VERIFY_TIMEOUT_MS = 3000;
+const VERIFY_MAX_DRIFT_PCT = 0.02;     // >2% drift → use live price
+const VERIFY_BROWSER_HEADERS = {
+  'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-GB,en;q=0.9',
+  'Accept-Encoding': 'gzip, deflate, br',
+  'Sec-Ch-Ua': '"Chromium";v="124", "Google Chrome";v="124", "Not-A.Brand";v="99"',
+  'Sec-Ch-Ua-Mobile': '?0',
+  'Sec-Ch-Ua-Platform': '"Windows"',
+};
+
+// Inline price extractors — covers the retailers most likely to be
+// "best price". Mirrors the /api/scrape extractor patterns.
+function extractLivePriceFromHtml(url, html){
+  const u = String(url || '').toLowerCase();
+  const m = (re) => { const x = html.match(re); return x ? x[1] : null; };
+  let raw = null;
+  if(u.includes('amazon.co.uk')){
+    raw = m(/<span class="a-price-whole">(\d[\d,]*)<\/span>/) || m(/<span class="a-offscreen">£([\d,.]+)<\/span>/) || m(/\\"priceAmount\\":(\d+\.?\d*)/);
+  } else if(u.includes('currys.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/) || m(/class="[^"]*pricingLockup[^"]*"[^>]*>[\s\S]*?£([\d,.]+)/);
+  } else if(u.includes('argos.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/"offers":\s*\{[\s\S]*?"price":\s*"?([\d.]+)"?/);
+  } else if(u.includes('johnlewis.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-pricing-current-price="([\d.]+)"/) || m(/£([\d,]+\.\d{2})/);
+  } else if(u.includes('ao.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/) || m(/itemprop="price"[^>]*content="([\d.]+)"/);
+  } else if(u.includes('very.co.uk')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/) || m(/<span[^>]*class="[^"]*price[^"]*"[^>]*>£([\d,.]+)/);
+  } else if(u.includes('halfords.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/);
+  } else if(u.includes('selfridges.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/);
+  } else if(u.includes('boots.com')){
+    raw = m(/"price":\s*"?([\d.]+)"?/) || m(/data-price="([\d.]+)"/);
+  } else if(u.includes('apple.com')){
+    raw = m(/"currentPrice"[^"]*":[^"]*"([\d.]+)"/) || m(/£([\d,]+\.\d{2})/);
+  }
+  if(!raw) return null;
+  const n = parseFloat(String(raw).replace(/[^\d.]/g, ''));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
+async function verifyCheapestLivePrice(item){
+  if(!item || !item.link) return { verified: false, reason: 'no_link' };
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), VERIFY_TIMEOUT_MS);
+  try {
+    const r = await fetch(item.link, {
+      headers: VERIFY_BROWSER_HEADERS,
+      redirect: 'follow',
+      signal: ac.signal,
+    });
+    if(!r.ok){
+      return { verified: false, reason: 'upstream_' + r.status };
+    }
+    const html = await r.text();
+    const live = extractLivePriceFromHtml(item.link, html);
+    if(live === null){
+      return { verified: false, reason: 'no_extractor_or_no_match' };
+    }
+    const snippet = item.price;
+    const drift = snippet > 0 ? Math.abs(live - snippet) / snippet : 0;
+    return { verified: true, live, snippet, drift };
+  } catch (e){
+    return { verified: false, reason: 'exception_' + (e.name || 'unknown') };
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 // Wave 86 — CRITICAL FIX. Category / listing / search-results pages were
 // being admitted as if they were specific product pages. Vincent's case:
@@ -1235,11 +1318,35 @@ export default async function handler(req, res) {
   const haikuGraded  = await gradeResultsViaHaiku(ebayDemoted, q, ANTHROPIC_KEY);
   // Wave 83 — price-anomaly floor on post-Haiku items.
   const beforeAnomalyFloor = haikuGraded.length;
-  const results = priceAnomalyFloorPostHaiku(haikuGraded);
-  const droppedByAnomalyFloor = beforeAnomalyFloor - results.length;
+  const sortedResults = priceAnomalyFloorPostHaiku(haikuGraded);
+  const droppedByAnomalyFloor = beforeAnomalyFloor - sortedResults.length;
+  // Sort ascending by price so [0] is the cheapest — that's the one we verify.
+  sortedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+  // Wave 93 — verify cheapest's live price. If snippet differs from
+  // landing-page price by >2%, override snippet with live so the user
+  // sees the price they'll actually find. Best-price slot is the
+  // highest-leverage one to verify (it's the one users tap). 3s budget.
+  let verification = { verified: false, reason: 'skipped' };
+  if(sortedResults.length > 0 && sortedResults[0].link){
+    verification = await verifyCheapestLivePrice(sortedResults[0]);
+    if(verification.verified && verification.drift > VERIFY_MAX_DRIFT_PCT){
+      console.log(`[${VERSION}] price-verify: ${sortedResults[0].source} snippet £${verification.snippet} → live £${verification.live} (drift ${(verification.drift*100).toFixed(1)}%) — overriding`);
+      sortedResults[0].price = verification.live;
+      sortedResults[0].priceVerified = true;
+      sortedResults[0].priceWasOverridden = true;
+      // Re-sort in case the live price moves it down the order.
+      sortedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+    } else if(verification.verified){
+      console.log(`[${VERSION}] price-verify: ${sortedResults[0].source} snippet £${verification.snippet} matches live £${verification.live} (drift ${(verification.drift*100).toFixed(1)}%)`);
+      sortedResults[0].priceVerified = true;
+    } else {
+      console.log(`[${VERSION}] price-verify: ${sortedResults[0].source} ${verification.reason} — keeping snippet £${sortedResults[0].price}`);
+    }
+  }
+  const results = sortedResults;
   const priced       = trusted; // backwards-compat alias for debug envelope
 
-  console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
+  console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'} | verified=${verification.verified}`);
 
   // Wave 90 — debug envelope now exposes per-stage drop counts including
   // the Wave 83 price-anomaly floor (which was failing silently). Trigger
@@ -1270,13 +1377,15 @@ export default async function handler(req, res) {
   } : undefined;
 
   return res.status(200).json({
-    shopping: results.map(r => ({
-      source:      r.source,
-      price:       `£${r.price.toFixed(2)}`,
-      link:        hardenEbayUrl(r.link),
-      title:       r.title,
-      delivery:    r.delivery,
-      query_match: r.query_match || 'similar',  // Wave 82 — surface Haiku grade for frontend UX decisions
+    shopping: results.map((r, i) => ({
+      source:           r.source,
+      price:            `£${r.price.toFixed(2)}`,
+      link:             hardenEbayUrl(r.link),
+      title:            r.title,
+      delivery:         r.delivery,
+      query_match:      r.query_match || 'similar',  // Wave 82 — Haiku grade
+      price_verified:   !!r.priceVerified,            // Wave 93 — live verification ran and matched (or overrode)
+      price_was_overridden: !!r.priceWasOverridden,   // Wave 93 — true if snippet was wrong and we replaced with live
     })),
     organic: [],
     _meta: {
@@ -1285,6 +1394,15 @@ export default async function handler(req, res) {
       priceCeilingHard: PRICE_CEILING_HARD,
       priceMultiplier: PRICE_MULTIPLIER,
       cheapest: results[0]?.price ?? null,
+      // Wave 93 — verification telemetry on the cheapest result
+      cheapestVerification: {
+        verified: !!verification.verified,
+        reason: verification.reason || null,
+        snippetPrice: verification.snippet || null,
+        livePrice: verification.live || null,
+        driftPct: verification.drift != null ? Math.round(verification.drift * 1000) / 10 : null,
+        overridden: !!(results[0] && results[0].priceWasOverridden),
+      },
       // Coverage flags for the frontend — let the UI tell users when the
       // result set is thin so they don't mistake "1 eBay listing" for
       // "the genuine UK best price".
