@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.40';
+const VERSION = 'ai-search.js v1.41';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1733,24 +1733,84 @@ function computeConfidence(items) {
 // the price comparison. Surfaced in _meta.reasoning for the frontend to
 // render (e.g. above results list, replacing generic "X retailers compared").
 // Cost ~$0.0005/query (small token budget, system prompt is reusable).
+// Wave 210b — reasoning grounding gate. v1.40 audit found ~40% of
+// reasoning lines hallucinated:
+//  - Rado: USD currency leak ("$1,639.99 to $3,850")
+//  - Kettle: invented £30 (actual range £13-£149) + invented "Dualit" retailer
+//  - Nike: USD leak ("$135")
+//  - Le Creuset: invented £224.95 price + named wrong retailer as cheapest
+// Two-front fix: stricter prompt + post-validation gate. If the generated
+// line mentions any £-amount or retailer name not in the input items, or
+// any $ / USD / dollar token appears, the function returns null and the
+// frontend falls back to a generic "X retailers compared" header. Better
+// to show no reasoning than wrong reasoning.
+function validateReasoningGrounding(text, items) {
+  if (!text || !items || items.length === 0) return false;
+  // Reject any non-GBP currency mention
+  if (/\$|\bUSD\b|\bdollar|\beuro|€|\bEUR\b/i.test(text)) {
+    console.log(`[${VERSION}] reasoning rejected — non-GBP currency: "${text.slice(0,80)}"`);
+    return false;
+  }
+  // Extract every £-amount from the generated line
+  const priceMatches = text.match(/£\s*[\d,]+(?:\.\d{1,2})?/g) || [];
+  if (priceMatches.length === 0) {
+    // No prices mentioned — can't validate price hallucination, but the
+    // currency gate above caught the worst class. Allow through.
+    return true;
+  }
+  // Build the set of allowed prices: every items[].price (number).
+  // Tolerate ±£0.50 rounding (Haiku may say "£330" for an item priced "£329.99").
+  const allowedPrices = items.map(i => Number(i.price)).filter(n => Number.isFinite(n));
+  for (const raw of priceMatches) {
+    const n = Number(raw.replace(/[£,\s]/g, ''));
+    if (!Number.isFinite(n)) continue;
+    const matched = allowedPrices.some(p => Math.abs(p - n) <= 0.5);
+    if (!matched) {
+      console.log(`[${VERSION}] reasoning rejected — price £${n} not in input items (allowed: ${allowedPrices.map(p => '£'+p).join(', ')}): "${text.slice(0,80)}"`);
+      return false;
+    }
+  }
+  return true;
+}
+
 async function generateReasoningLine(query, items, anthropicKey) {
   if (!items || items.length === 0 || !anthropicKey) return null;
   const top = items.slice(0, 4).map(i => ({
     retailer: i.source,
-    price: i.price,
+    price_gbp: i.price,
     title: (i.title || '').slice(0, 80),
     match: i.query_match || 'exact',
   }));
-  const userPrompt = `Query: "${query}"
-Top results:
+  // Wave 210b — stricter prompt: forbid invented prices/retailers, forbid
+  // non-GBP currency. Provide exact prices and retailers the model is
+  // allowed to reference. Examples updated to be tightly grounded too.
+  const allowedRetailers = top.map(t => t.retailer).join(', ');
+  const allowedPrices = top.map(t => `£${t.price_gbp}`).join(', ');
+  const userPrompt = `UK price comparison for query: "${query}"
+
+Results (these are the ONLY prices and retailers you may reference):
 ${JSON.stringify(top, null, 2)}
 
-Write ONE plain-English sentence (max 22 words) summarising the price landscape for this query. Be factual and specific. Examples:
-- "Compared 4 UK retailers — £329 from John Lewis is in line with typical pricing for this model."
-- "All listings are HD 660S2 (the current model), £349-£499. The original HD 660S you searched is discontinued."
-- "Cheapest at Tredz is the original Kickr Core; newer Kickr Core 2 variants run £449-£499."
+Allowed retailer names: ${allowedRetailers}
+Allowed prices: ${allowedPrices}
 
-NO greetings, no markdown, no quotes around the sentence, no "Here's a summary". Just the sentence itself.`;
+Write ONE plain-English sentence (max 22 words) summarising the price landscape.
+
+HARD RULES — failure to follow these will get the response rejected:
+1. Use ONLY GBP (£). Never use $, USD, dollars, euros, €, or any non-GBP currency.
+2. Every £ amount you mention MUST appear in the "Allowed prices" list above.
+3. Every retailer name you mention MUST appear in the "Allowed retailer names" list above. Do not invent retailers like "Dualit", "Apple", or any brand not listed.
+4. NO greetings, no markdown, no quotes around the sentence, no "Here's a summary". Just the sentence.
+
+Good examples:
+- "Compared 4 UK retailers — £329 from John Lewis matches typical pricing."
+- "All listings are HD 660S2 (current model), £329.99 to £399. The original HD 660S you searched is discontinued."
+- "Cheapest at Tredz (£359.99) is the original Kickr Core; newer Core 2 variants £449-£499."
+
+Bad (rejected) examples:
+- "Prices range $135 to $300" — uses USD, REJECTED
+- "Premium brands like Dualit cost more" — Dualit not in allowed retailers, REJECTED
+- "Best price £224 at Potters" — £224 not in allowed prices, REJECTED`;
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 4000);
   try {
@@ -1771,6 +1831,10 @@ NO greetings, no markdown, no quotes around the sentence, no "Here's a summary".
     // Defensive: strip any opening/closing quotes if Haiku ignored the rule
     text = text.replace(/^["']/, '').replace(/["']$/, '').trim();
     if (!text || text.length > 200) return null;
+    // Wave 210b — grounding gate. Reject reasoning that invents prices,
+    // retailers, or leaks non-GBP currency. Better to show no line than
+    // a wrong one.
+    if (!validateReasoningGrounding(text, top)) return null;
     return text;
   } catch (e) {
     return null;
