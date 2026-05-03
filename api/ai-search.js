@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.29';
+const VERSION = 'ai-search.js v1.30';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -615,7 +615,7 @@ function detectCategoryLock(query) {
 // ~$0.005 per query.
 const NON_TECH_LOCK_NAMES = new Set(['kitchen','fashion','books','watch','toy','grocery','beauty','garden','pet','bike']);
 
-async function fetchPerplexitySearch(query, apiKey) {
+async function fetchPerplexitySearch(query, apiKey, anthropicKey) {
   const broadHosts = UK_RETAILERS
     .filter(r => r.host !== 'amazon.co.uk')
     .map(r => `site:${r.host}`)
@@ -626,7 +626,20 @@ async function fetchPerplexitySearch(query, apiKey) {
   const amazonQuery = `${query} buy UK price site:amazon.co.uk inurl:dp`;
 
   // Wave 26 — category-locked call (only when category detected)
-  const categoryLock = detectCategoryLock(query);
+  // Wave 200 — fallback chain: regex first (instant + free), then AI
+  // routing (Haiku) for long-tail queries that don't match any of the
+  // 13 keyword regexes. Examples that previously fell through to broad
+  // UK_RETAILERS only: Wahoo Kickr, Sage Bambino, Sennheiser HD 660S,
+  // Rado Captain Cook. Now Haiku picks 5-7 specialist hosts in real
+  // time so the category-locked Perplexity call still fires.
+  let categoryLock = detectCategoryLock(query);
+  if (!categoryLock && anthropicKey) {
+    const aiLock = await aiCategoryLock(query, anthropicKey);
+    if (aiLock) {
+      categoryLock = aiLock;
+      console.log(`[${VERSION}] aiCategoryLock matched: "${query}" → ${aiLock.name} (${aiLock.hosts.length} hosts) [${aiLock.kind}]`);
+    }
+  }
   let categoryQuery = null;
   if (categoryLock) {
     const catSites = categoryLock.hosts.map(h => `site:${h}`).join(' OR ');
@@ -635,7 +648,10 @@ async function fetchPerplexitySearch(query, apiKey) {
 
   // Wave 105 (Tier A4) — skip Amazon for non-tech categories where Amazon
   // rarely beats the specialist. Saves $0.005 per kettle/dress/Lego query.
-  const skipAmazon = !!(categoryLock && NON_TECH_LOCK_NAMES.has(categoryLock.name));
+  // Wave 200 — strip "ai-" prefix so AI-routed locks honour the same skip
+  // rules as regex-routed ones (e.g. ai-watch behaves like watch).
+  const bareLockName = categoryLock ? categoryLock.name.replace(/^ai-/, '') : null;
+  const skipAmazon = !!(bareLockName && NON_TECH_LOCK_NAMES.has(bareLockName));
 
   // Wave 105 (Tier A3) — STAGE 1: fire broad + amazon (if not skipped) +
   // category-lock in parallel. If their combined raw output is healthy
@@ -1235,6 +1251,74 @@ function tagAmazonUrl(url) {
 //   { kind: 'specific' }                — proceed normally
 //   { kind: 'category', products: [...] } — fan out
 //   { kind: 'specific' }                — on any failure (safe default)
+// ─────────────────────────────────────────────────────────────
+// Wave 200 — AI category-router (Iteration 1)
+//
+// Replaces hardcoded keyword regexes for the LONG TAIL. The 13 existing
+// *_KEYWORDS regexes (KITCHEN/SPORTS/FASHION/...) catch the well-known
+// categories instantly and free. But "Rado Captain Cook" doesn't match
+// WATCH_KEYWORDS (we don't list every brand); "Sage the Bambino" doesn't
+// match KITCHEN; "Wahoo Kickr" doesn't match BIKE. For those, we ask
+// Haiku to pick the best 5-7 UK retailer hosts in real time.
+//
+// Fallback chain (in fetchPerplexitySearch):
+//   1. detectCategoryLock(query) — instant regex match if covered
+//   2. aiCategoryLock(query) — Haiku routing for long-tail
+//   3. null — broad UK_RETAILERS list (default behaviour)
+//
+// Cost: ~$0.0002 per regex-miss query. Only fires when regex doesn't.
+// Risk: low — graceful fallback to (3) on any AI failure.
+async function aiCategoryLock(query, anthropicKey){
+  if (!anthropicKey || !query) return null;
+  const prompt = `UK shopping query: "${query}"
+
+Pick the 5-7 BEST UK retailer hosts to search this query at. Specialists beat generalists when relevant. Reply STRICT JSON only, no markdown:
+{"category":"watch|toy|audio|appliance|bike|pet|garden|grocery|beauty|kitchen|sports|fashion|books|diy|budget|electronics|jewellery|outdoor|baby|other","hosts":["host1.co.uk",...],"kind":"specific|category|vague","priceLow":number,"priceHigh":number}
+
+Examples:
+- "Rolex Submariner" → category:watch, hosts:["watchesofswitzerland.co.uk","goldsmiths.co.uk","mappinandwebb.co.uk","ernestjones.co.uk","beaverbrooks.co.uk","harrods.com","selfridges.com"]
+- "Nike Air Max 90" → category:sports, hosts:["jdsports.co.uk","sportsdirect.com","decathlon.co.uk","sportsshoes.com","mandmdirect.com","amazon.co.uk"]
+- "Wahoo Kickr Core" → category:bike, hosts:["wiggle.co.uk","tredz.co.uk","sigmasports.com","cyclestore.co.uk","evanscycles.com","amazon.co.uk"]
+- "Sage Bambino" → category:kitchen, hosts:["lakeland.co.uk","johnlewis.com","argos.co.uk","amazon.co.uk","currys.co.uk","very.co.uk"]
+- "Sennheiser HD 660S" → category:audio, hosts:["richersounds.com","sevenoakssoundandvision.co.uk","peterstyles.co.uk","amazon.co.uk","johnlewis.com"]
+
+priceLow / priceHigh = realistic GBP retail range for THIS specific query (not category average). For "Rolex Submariner" priceLow:8000 priceHigh:14000.`;
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 4500);
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 350, messages: [{ role: 'user', content: prompt }] }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const text = (j?.content?.[0]?.text || '').trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (!parsed || !Array.isArray(parsed.hosts) || parsed.hosts.length === 0) return null;
+    // Normalise hosts (strip trailing slashes, https://, paths)
+    const cleanHosts = parsed.hosts
+      .map(h => String(h || '').toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '').trim())
+      .filter(h => h && h.includes('.'))
+      .slice(0, 8);
+    if (cleanHosts.length === 0) return null;
+    return {
+      name: 'ai-' + (parsed.category || 'other'),
+      hosts: cleanHosts,
+      kind: parsed.kind || 'specific',
+      priceLow: Number.isFinite(parsed.priceLow) ? parsed.priceLow : null,
+      priceHigh: Number.isFinite(parsed.priceHigh) ? parsed.priceHigh : null,
+      source: 'ai',
+    };
+  } catch (e) {
+    console.warn(`[${VERSION}] aiCategoryLock failed: ${e.message}`);
+    return null;
+  }
+}
+
 async function classifyQueryViaHaiku(query, anthropicKey){
   if (!anthropicKey || !query) return { kind: 'specific' };
   const prompt = `Classify this UK shopping query.
@@ -1336,7 +1420,7 @@ export default async function handler(req, res) {
   // Perplexity search via circuit breaker
   let raw;
   try {
-    raw = await withCircuit('perplexity', () => fetchPerplexitySearch(q, PERPLEXITY_KEY));
+    raw = await withCircuit('perplexity', () => fetchPerplexitySearch(q, PERPLEXITY_KEY, ANTHROPIC_KEY));
   } catch (e) {
     console.error(`[${VERSION}] Perplexity failed:`, e.message, e.body || '');
     return res.status(502).json({ error: 'perplexity_error', message: e.message, status: e.status });
@@ -1393,7 +1477,7 @@ export default async function handler(req, res) {
         categoryProducts = cls.products;
         console.log(`[${VERSION}] category fan-out: ${q} → ${categoryProducts.join(' | ')} (existing hits=${hits.length})`);
         const fanResults = await Promise.allSettled(
-          categoryProducts.map(p => fetchPerplexitySearch(p, PERPLEXITY_KEY))
+          categoryProducts.map(p => fetchPerplexitySearch(p, PERPLEXITY_KEY, ANTHROPIC_KEY))
         );
         const fanHits = [];
         const seen = new Set();
