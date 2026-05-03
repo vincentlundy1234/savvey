@@ -6106,7 +6106,20 @@ function processSearchResponse(d1, query, snapshotUserPrice){
   const mapped=raw.map(i=>{
     // matchRetailer accepts source name OR URL — both data sources covered
     const haystack=(i.source||'')+' '+(i.link||'');
-    const ret=matchRetailer(haystack);
+    let ret=matchRetailer(haystack);
+    // Wave 230b — Sonar Pro surfaces long-tail UK specialists (Coffee Bean
+    // Shop, Kitchen Draw Store, Audio Venue, HBH Woolacotts, etc) that
+    // aren't in UK_RETAILERS. Backend already validated them (Sonar Pro
+    // confirmed in_stock + price during search). Synthesize a retailer
+    // record from the API's source name + link host so we don't lose
+    // them at the frontend admission step.
+    if(!ret && i.source && i.link){
+      let host = '';
+      try { host = new URL(i.link).hostname.replace(/^www\./,'').toLowerCase(); } catch(e){}
+      if(host){
+        ret = { name: i.source, domain: host, srcTerms: [] };
+      }
+    }
     if(!ret)return null;
     const titleStr = String(i.title || i.name || '');
     if(!userWantsUsed && refurbRe.test(titleStr)){
