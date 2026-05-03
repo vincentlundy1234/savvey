@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.32';
+const VERSION = 'ai-search.js v1.33';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -879,6 +879,18 @@ const PRODUCT_URL_PATTERNS = {
   'smythstoys.com':             /\/uk\/en-gb\/[a-z0-9-]+\/p\/\d+|\/uk\/en-gb\/[a-z0-9-]+/i,
   'thetoyshop.com':             /\/[a-z0-9-]+\/[0-9]+\b/i,
   'hamleys.com':                /\/[a-z0-9-]+\.html|\/products\/[a-z0-9-]+/i,
+  // Wave 200d — cycling specialists. Tredz uses bare .htm with trailing
+  // numeric ID; Sigma Sports uses /products/<slug>; Evans uses /products/.
+  // Wave 200b synthetic-retailer admission relies on these for hosts not
+  // in UK_RETAILERS, but we still want explicit patterns for the registered
+  // ones (Tredz, Evans, Leisure Lakes, Rutland) for stricter admission.
+  'tredz.co.uk':                /\/[a-z0-9.\-]+_\d{5,}(?:\.html?|$)/i,
+  'sigmasports.com':            /\/products?\/[a-z0-9-]+/i,
+  'evanscycles.com':            /\/products?\/[a-z0-9-]+/i,
+  'leisurelakesbikes.com':      /\/products?\/[a-z0-9-]+|\/[a-z0-9-]+-p\d+/i,
+  'rutlandcycling.com':         /\/products?\/[a-z0-9-]+|\/p\d+\/[a-z0-9-]+/i,
+  'cyclestore.co.uk':           /\/products?\/[a-z0-9-]+|\/[a-z0-9-]+-p\d+/i,
+  'wiggle.com':                 /\/p\/[a-z0-9-]+|\/products?\/[a-z0-9-]+/i,
 };
 
 // Returns true if the URL is plausibly a product page for the given
@@ -899,8 +911,13 @@ function isProductLikeUrl(url, retailer) {
   }
   const pattern = PRODUCT_URL_PATTERNS[retailer.host];
   if (pattern) return pattern.test(url);
-  // Fallback: must have a numeric segment OR a product-id-looking segment
-  return /\/\d{4,}|[a-z0-9-]{8,}\.(html|aspx|prd)$|\/product\/|\/p\d+/i.test(path);
+  // Fallback: must have a numeric segment OR a product-id-looking segment.
+  // Wave 200d — accept .htm (Tredz uses bare .htm), accept trailing
+  // _NNNN ID suffix (Tredz: /Wahoo-KICKR-CORE-Smart-Trainer_245937.htm),
+  // and /products/ in addition to /product/. This also helps any AI-routed
+  // synthetic retailer (no PRODUCT_URL_PATTERNS entry) admit real product
+  // URLs without us having to register every long-tail specialist.
+  return /\/\d{4,}|[a-z0-9-]{8,}\.(html?|aspx|prd)(?:[/?]|$)|\/products?\/|\/p\d+|_\d{5,}(?:\.html?|[/?]|$)/i.test(path);
 }
 
 // Wave 200b — when a query is routed via aiCategoryLock, the AI may
