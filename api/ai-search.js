@@ -1,4 +1,25 @@
-// api/ai-search.js — Savvey AI Search v1.16
+// api/ai-search.js — Savvey AI Search v1.17
+//
+// v1.17 (3 May 2026 PM — per-category retailer curation):
+//   - Wave 99 adds KITCHEN, SPORTS, FASHION, BOOKS category locks alongside
+//     the existing GROCERY/BEAUTY/DIY/BUDGET. Vincent's standing concern:
+//     "kettle hits Currys before Lakeland". Kitchen lock now takes
+//     precedence over BUDGET so kettle/toaster/casserole queries fire an
+//     additional Perplexity call locked to specialist hosts (Lakeland,
+//     Robert Dyas, Dunelm, JL, Wayfair, Habitat, IKEA, Argos, Amara).
+//     Same architectural pattern as Wave 26 grocery — an EXTRA call, not
+//     a replacement, so generalist coverage is preserved.
+//   - Sports lock: trainers/running shoes/gym kit → JD Sports, Sports
+//     Direct, Decathlon, Wiggle, SportsShoes, M&M Direct, Pro:Direct.
+//   - Fashion lock: dress/jeans/jacket/shoes → ASOS, Next, M&S, JL,
+//     Selfridges, End., Zalando, Very, Matches.
+//   - Books/stationery/games/toys → Waterstones, WHSmith, Blackwell's,
+//     Foyles, Amazon, Argos, The Works, Wordery.
+//   - BUDGET keywords slimmed: kettle/toaster/casserole/saucepan moved
+//     to KITCHEN; vacuum/microwave/iron/fan/cleaning stay in BUDGET.
+//   - Cost: zero overhead when no category matches. ~$0.005 extra
+//     Perplexity per query when a category does match. Exact same shape
+//     as the existing grocery/beauty extras.
 //
 // v1.16 (3 May 2026 — battery-test learnings):
 //   - Wave 98 zero-hit fallback. Generic-category queries ("cordless
@@ -82,7 +103,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.16';
+const VERSION = 'ai-search.js v1.17';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -227,17 +248,39 @@ const DIY_KEYWORDS = /\b(drill|saw|hammer|screwdriver|wrench|spanner|paint|brush
 // Wilko, Home Bargains, Argos own-brand). Vincent reported a £199-cheapest
 // result for "cordless vacuum cleaner" when these retailers stock them
 // from £40-£100. The category-locked call surfaces those hits.
-const BUDGET_KEYWORDS = /\b(vacuum|hoover|cordless vacuum|stick vacuum|kettle|toaster|microwave|iron(?:ing board)?|fan heater|fan|hair ?dryer|mixer|blender|food processor|slow cooker|air fryer|sandwich (?:maker|toaster)|coffee maker|tea pot|teapot|kitchen scales?|chopping board|knife set|saucepan|frying pan|dustbin|laundry basket|drying rack|clothes airer|mop|bucket|cleaning|duster|towels?|bedding|duvet|pillow|mattress|cushion|throw|rug|curtain|blind|cheap|budget|basic|own[\s-]?brand|value)\b/i;
+const BUDGET_KEYWORDS = /\b(vacuum|hoover|cordless vacuum|stick vacuum|microwave|iron(?:ing board)?|fan heater|fan|hair ?dryer|dustbin|laundry basket|drying rack|clothes airer|mop|bucket|cleaning|duster|cheap|budget|basic|own[\s-]?brand|value)\b/i;
 
-const GROCERY_HOSTS = ['tesco.com', 'sainsburys.co.uk', 'asda.com', 'groceries.asda.com', 'morrisons.com', 'groceries.morrisons.com', 'waitrose.com'];
-const BEAUTY_HOSTS  = ['superdrug.com', 'cultbeauty.co.uk', 'lookfantastic.com', 'spacenk.com', 'theperfumeshop.com', 'beautybay.com', 'boots.com'];
-const DIY_HOSTS     = ['diy.com', 'wickes.co.uk', 'toolstation.com', 'screwfix.com'];
-const BUDGET_HOSTS  = ['homebargains.co.uk', 'lidl.co.uk', 'aldi.co.uk', 'wilko.com', 'theworks.co.uk', 'poundland.co.uk', 'argos.co.uk', 'wilko.com'];
+// Wave 99 — kitchen/cookware specialist lock. Vincent's kettle case (3 May
+// 2026) surfaced JL/Argos before Lakeland/Robert Dyas/Dunelm. Those three
+// plus IKEA/Wayfair/Habitat consistently undercut the generalists on
+// kitchenware and small homeware. Kitchen lock now takes precedence over
+// BUDGET so kettle/toaster/casserole hit the specialists first.
+const KITCHEN_KEYWORDS = /\b(kettle|toaster|casserole(?:\s+dish)?|saucepan|frying pan|fry pan|stockpot|wok|skillet|baking (?:tray|dish|tin)|roasting tin|cake tin|loaf tin|knife (?:set|block)|chopping board|kitchen scales?|measuring jug|colander|sieve|grater|mixing bowl|tea pot|teapot|coffee (?:maker|press|grinder|machine)|cafetiere|french press|moka pot|espresso (?:machine)?|stand mixer|hand mixer|blender|food processor|slow cooker|pressure cooker|rice cooker|breadmaker|sandwich (?:maker|toaster)|waffle maker|toastie|popcorn maker|air fryer|deep fryer|spiraliser|mandoline|le creuset|denby|emma bridgewater|joseph joseph|sage\s+(?:barista|appliance)|kitchenaid|smeg|magimix|cuisinart|delonghi|lavazza|nespresso|tassimo|dualit|breville|russell hobbs|morphy richards|ninja foodi|ninja kitchen|tower\s+(?:vortx|kitchen)|towel rail|tea towel|oven glove|apron|placemat|coaster|tablecloth|napkin)\b/i;
+const KITCHEN_HOSTS    = ['lakeland.co.uk', 'robertdyas.co.uk', 'dunelm.com', 'johnlewis.com', 'wayfair.co.uk', 'habitat.co.uk', 'ikea.com', 'argos.co.uk', 'amara.com'];
+
+// Wave 99 — sports / fitness lock. Trainers, sportswear, gym kit,
+// running shoes — JD Sports, Sports Direct, Decathlon, Wiggle, SportsShoes
+// are where the deals are. Currys/JL surface here today and that's wrong.
+const SPORTS_KEYWORDS  = /\b(trainers?|running shoes?|football boots?|cleats?|gym (?:kit|shorts|wear|leggings)|tracksuit|joggers|hoodie|sports bra|leggings|yoga (?:mat|pants|block)|dumbbells?|kettlebell|barbell|weight (?:plates?|set|bench)|treadmill|exercise bike|spin bike|rowing machine|protein (?:powder|shake|bar)|football|basketball|tennis (?:racket|ball)|cricket bat|hockey stick|swimsuit|swim trunks|goggles|cycling (?:helmet|jersey|shorts|jacket)|bike (?:helmet|lights|lock|pump)|nike|adidas|puma|under armour|reebok|asics|new balance|brooks|on running|hoka|salomon|garmin (?:fenix|forerunner|venu|epix|edge)|polar (?:vantage|grit|pacer)|fitbit|whoop|wahoo)\b/i;
+const SPORTS_HOSTS     = ['jdsports.co.uk', 'sportsdirect.com', 'decathlon.co.uk', 'wiggle.co.uk', 'sportsshoes.com', 'mandmdirect.com', 'pro-direct.com', 'wiggle.com', 'argos.co.uk', 'amazon.co.uk'];
+
+// Wave 99 — fashion / apparel lock. Dress, shirt, jeans, jacket, etc.
+// ASOS, Next, M&S, JL, Selfridges, Zalando, End. Currys is wrong here.
+const FASHION_KEYWORDS = /\b(dress|skirt|blouse|jumper|cardigan|sweater|t[\s-]?shirt|tee|polo shirt|shirt|jeans|chinos|trousers|shorts|coat|jacket|blazer|parka|raincoat|gilet|suit|tie|belt|scarf|gloves|hat|beanie|cap|wallet|purse|handbag|backpack|tote bag|crossbody|bag|sunglasses|watch|necklace|ring|earrings|bracelet|boots?|loafers?|heels|stilettos?|sandals|flip[\s-]?flops|slippers|levis?|gap\s|zara|h&m|uniqlo|reiss|ted baker|barbour|north face|patagonia|carhartt|stone island|cos\s|arket|ralph lauren|tommy hilfiger|hugo boss|calvin klein|polo ralph)\b/i;
+const FASHION_HOSTS    = ['asos.com', 'next.co.uk', 'marksandspencer.com', 'johnlewis.com', 'selfridges.com', 'endclothing.com', 'zalando.co.uk', 'verygoodthing.co.uk', 'very.co.uk', 'matchesfashion.com'];
+
+// Wave 99 — books / stationery / media lock.
+const BOOKS_KEYWORDS   = /\b(book|hardback|paperback|kindle edition|audiobook|cookbook|notebook|notepad|diary|journal|stationery|pen|pencil|fountain pen|fineliner|sharpie|highlighter|moleskine|leuchtturm|sticky notes?|envelopes?|gift wrap|wrapping paper|greetings? card|birthday card|board game|jigsaw|puzzle|lego|funko|action figure|barbie|hot wheels)\b/i;
+const BOOKS_HOSTS      = ['waterstones.com', 'whsmith.co.uk', 'blackwells.co.uk', 'foyles.co.uk', 'amazon.co.uk', 'argos.co.uk', 'theworks.co.uk', 'wordery.com'];
 
 function detectCategoryLock(query) {
   const q = String(query || '');
   if (GROCERY_KEYWORDS.test(q)) return { name: 'grocery', hosts: GROCERY_HOSTS };
   if (BEAUTY_KEYWORDS.test(q))  return { name: 'beauty',  hosts: BEAUTY_HOSTS };
+  if (KITCHEN_KEYWORDS.test(q)) return { name: 'kitchen', hosts: KITCHEN_HOSTS };  // Wave 99 — kitchen above DIY/BUDGET
+  if (SPORTS_KEYWORDS.test(q))  return { name: 'sports',  hosts: SPORTS_HOSTS };   // Wave 99
+  if (FASHION_KEYWORDS.test(q)) return { name: 'fashion', hosts: FASHION_HOSTS };  // Wave 99
+  if (BOOKS_KEYWORDS.test(q))   return { name: 'books',   hosts: BOOKS_HOSTS };    // Wave 99
   if (DIY_KEYWORDS.test(q))     return { name: 'diy',     hosts: DIY_HOSTS };
   if (BUDGET_KEYWORDS.test(q))  return { name: 'budget',  hosts: BUDGET_HOSTS };
   return null;
@@ -846,7 +889,20 @@ export default async function handler(req, res) {
   // wrong number (finance / accessory / trade-in). Reject the
   // verification and KEEP the snippet.
   const VERIFY_DROP_DRIFT_PCT = 0.30;
-  dedupedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+  // Wave 99 — qm:exact must rank above qm:similar regardless of price.
+  // Reason: Bose QuietComfort Ultra (~£349 retail) returned a JL £199
+  // graded `qm:similar` (likely the previous-gen QC45) AHEAD of the real
+  // exact-match Argos hit. We were surfacing the wrong product as
+  // cheapest. Sort tiers: exact first, similar second, anything else
+  // last; ties broken by price ascending. price-only ranking is the
+  // recipe for catastrophic mis-matches.
+  const QM_RANK = { exact: 0, similar: 1 };
+  const qmKey = (r) => QM_RANK[r.query_match] != null ? QM_RANK[r.query_match] : 2;
+  dedupedResults.sort((a, b) => {
+    const qa = qmKey(a), qb = qmKey(b);
+    if (qa !== qb) return qa - qb;
+    return (a.price || 0) - (b.price || 0);
+  });
   let priceVerification = { verified: false, reason: 'skipped' };
   if(dedupedResults.length > 0 && dedupedResults[0].link){
     priceVerification = await verifyLivePrice(dedupedResults[0]);
@@ -859,7 +915,11 @@ export default async function handler(req, res) {
       dedupedResults[0].price = priceVerification.live;
       dedupedResults[0].priceVerified = true;
       dedupedResults[0].priceWasOverridden = true;
-      dedupedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
+      dedupedResults.sort((a, b) => {  // Wave 99 — keep qm-priority sort after override
+        const qa = qmKey(a), qb = qmKey(b);
+        if (qa !== qb) return qa - qb;
+        return (a.price || 0) - (b.price || 0);
+      });
     } else if(priceVerification.verified){
       console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} snippet £${priceVerification.snippet} matches live (drift ${(priceVerification.drift*100).toFixed(1)}%)`);
       dedupedResults[0].priceVerified = true;
