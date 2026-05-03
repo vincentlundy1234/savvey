@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.1.1';
+const VERSION = 'ai-search.js v2.2.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -733,7 +733,44 @@ const SONAR_PRODUCT_SCHEMA = {
   required: ['products'],
 };
 
-async function fetchSonarPro(query, apiKey, refine = null) {
+
+// Savvey v2 R2 — convert parsed query intent into a hard-constraints block
+// for the Sonar Pro prompt. Each qualifier becomes an explicit REJECT rule
+// so Sonar Pro filters at retrieval time instead of returning wrong-brand
+// or wrong-tier products that pass through downstream price-band checks.
+// Empty string when no useful intent → Sonar Pro runs unconstrained (back-
+// compat with vague queries like "kettle").
+function constraintsFromParsedQuery(parsed) {
+  if (!parsed) return '';
+  const lines = [];
+  if (parsed.brand) {
+    lines.push(`- BRAND must match "${parsed.brand}" (case-insensitive). REJECT products from other brands even if otherwise similar. Example: for a Bosch query, reject Einhell, Black+Decker, Karcher, Ryobi, etc.`);
+  }
+  const q = parsed.qualifiers || {};
+  if (q.voltage != null) lines.push(`- VOLTAGE must be ${q.voltage}V. REJECT other voltages (e.g. 12V, 36V, mains-corded).`);
+  if (q.cordless === true) lines.push(`- MUST be cordless. REJECT corded variants.`);
+  if (q.cordless === false) lines.push(`- MUST be corded. REJECT cordless variants.`);
+  if (q.model) lines.push(`- MODEL must match "${q.model}" exactly. REJECT later/earlier models in the same family (e.g. for HD 660S reject HD 660S2; for Kickr Core reject Kickr Core 2; for Bambino reject Bambino Plus).`);
+  if (q.chip) lines.push(`- CHIP must be "${q.chip}". REJECT other chip generations (e.g. for M3 reject M2, M4).`);
+  if (q.generation != null) lines.push(`- GENERATION must be ${q.generation}. REJECT other generations.`);
+  if (q.tier) lines.push(`- TIER must be "${q.tier}". REJECT base/Pro/Pro Max variants that don't match.`);
+  if (q.screen_size_inches != null) lines.push(`- SCREEN SIZE must be ${q.screen_size_inches} inches. REJECT other sizes.`);
+  if (q.panel) lines.push(`- PANEL TYPE must be "${q.panel}". REJECT other panel types (OLED, LED, mini-LED).`);
+  if (q.diameter_cm != null) lines.push(`- DIAMETER must be ${q.diameter_cm}cm. REJECT other sizes.`);
+  if (q.range) lines.push(`- RANGE/COLLECTION must be "${q.range}". REJECT other ranges.`);
+  if (q.type) lines.push(`- TYPE must be "${q.type}". REJECT non-${q.type} variants.`);
+  if (lines.length === 0) return '';
+  const band = parsed.expected_price_band_gbp;
+  const bandLine = (Array.isArray(band) && band[0] != null && band[1] != null && band[1] > 0)
+    ? `\nAs a sanity check the typical UK price band for this product is GBP ${band[0]}-${band[1]}. Listings far below this range (more than 40% under the floor) are likely a different SKU and should be query_match="different".`
+    : '';
+  const emLine = parsed.exact_match_required
+    ? `\nThis is an EXACT-MATCH query - set query_match="different" for ANY product that fails the constraints above, even if it is in the same general family.`
+    : '';
+  return `\n\nHARD CONSTRAINTS (extracted from the user's query - apply strictly):\n${lines.join('\n')}${bandLine}${emLine}`;
+}
+
+async function fetchSonarPro(query, apiKey, refine = null, parsedQueryPromise = null) {
   if (!apiKey || !query) return null;
   const ac    = new AbortController();
   const timer = setTimeout(() => ac.abort(), SONAR_PRO_TIMEOUT_MS);
@@ -746,7 +783,21 @@ async function fetchSonarPro(query, apiKey, refine = null) {
     ? `\n\nThe user previously searched for "${refine.previous_query || query}" and is now asking to REFINE the results with: "${refine.refinement_text}". Apply this refinement when picking retailers/listings — for example "show cheaper" means filter for the lower price band, "in stock only" means drop out-of-stock entries, "free delivery" means prefer retailers that include shipping. Keep the original product as the subject; the refinement only narrows or re-ranks.`
     : '';
 
-  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.${refineSection}`;
+  // Savvey v2 R2 — wait briefly for parser intent (typically <1s) so we can
+  // bake hard constraints into the Sonar Pro prompt. If parser is slow or
+  // returns null, proceed unconstrained (graceful degradation).
+  let parsedQuery = null;
+  if (parsedQueryPromise) {
+    try {
+      parsedQuery = await Promise.race([
+        parsedQueryPromise,
+        new Promise((r) => setTimeout(() => r(null), 1500)),
+      ]);
+    } catch { parsedQuery = null; }
+  }
+  const hardConstraints = constraintsFromParsedQuery(parsedQuery);
+
+  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.${refineSection}${hardConstraints}`;
 
   try {
     const r = await fetch(SONAR_PRO_ENDPOINT, {
@@ -2215,7 +2266,7 @@ export default async function handler(req, res) {
   // (instead of running serially after both resolve). This is what kept
   // total latency under the Vercel 15s ceiling.
   const sonarProPromise = sonar_pro
-    ? fetchSonarPro(q, PERPLEXITY_KEY, refine).then(async (r) => {
+    ? fetchSonarPro(q, PERPLEXITY_KEY, refine, parsedQueryPromise).then(async (r) => {
         if (!r || !Array.isArray(r.products) || r.products.length === 0) return r;
         const validated = await validateSonarPro(r.products, q, ANTHROPIC_KEY);
         return { ...r, products: validated };
