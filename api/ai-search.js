@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.26';
+const VERSION = 'ai-search.js v1.27';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -422,13 +422,22 @@ function aiCacheSet(key, value){
   AI_QUERY_CACHE.set(key, { t: Date.now(), value });
 }
 
-// Wave 103 — boot-time retailer-list-drift assertion. Wave 99 silently
-// dropped BUDGET_HOSTS / GROCERY_HOSTS / etc and the bug only manifested
-// when a vacuum / kettle / Heinz query matched the lock keywords. This
-// runs once at module load and warns when any host listed in a category
-// lock isn't registered in UK_RETAILERS — fail-loud at deploy time, not
-// at first matching query.
-(function assertRetailerListsConsistent(){
+// Wave 103 — retailer-list-drift assertion (Wave 107d-bugfix v1.27).
+//
+// CRITICAL BUG FIXED: this was previously an IIFE that ran at module
+// load. Because the *_HOSTS const declarations are below this point in
+// the file, the IIFE hit the temporal dead zone (TDZ) on every request:
+//   ReferenceError: Cannot access 'GROCERY_HOSTS' before initialization
+// → 500 FUNCTION_INVOCATION_FAILED on every search since Wave 103.
+//
+// Fix: declare a regular function. Call it lazily inside the request
+// handler — by which time every const has fully initialised. We only
+// need to run the check once per cold start, so a module-scoped flag
+// short-circuits subsequent calls.
+let _driftCheckRan = false;
+function checkRetailerListsConsistent(){
+  if (_driftCheckRan) return;
+  _driftCheckRan = true;
   const allCategoryHosts = [
     ...GROCERY_HOSTS, ...BEAUTY_HOSTS, ...DIY_HOSTS, ...BUDGET_HOSTS,
     ...KITCHEN_HOSTS, ...SPORTS_HOSTS, ...FASHION_HOSTS, ...BOOKS_HOSTS,
@@ -447,7 +456,7 @@ function aiCacheSet(key, value){
   } else {
     console.log(`[${VERSION}] retailer-list consistency check passed (${allCategoryHosts.length} category hosts checked)`);
   }
-})();
+}
 
 function rawResultsOf(data) {
   return (data && data.results) ||
@@ -1278,6 +1287,11 @@ function computeCoverage(items) {
 // HANDLER
 // ─────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
+  // Wave 107d-bugfix v1.27 — runs the retailer-list consistency check
+  // lazily on first request after cold start. Was an IIFE at module load
+  // but const TDZ broke it. Now safely after all consts have initialised.
+  checkRetailerListsConsistent();
+
   console.log(`[${VERSION}] ${req.method} ${req.url}`);
   applySecurityHeaders(res, ORIGIN);
 
