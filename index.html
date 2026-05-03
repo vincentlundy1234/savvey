@@ -1078,6 +1078,19 @@
     .srch-brand-tile[data-brand="ebay"].lit       { background:#E53238; border-color:#E53238; }
     .srch-brand-tile[data-brand="homebargains"].lit{background:#0066B2; border-color:#0066B2; }
     .srch-brand-tile[data-brand="lidl"].lit       { background:#0050AA; border-color:#0050AA; }
+    /* Wave 89 — additional retailers from waves 77/84/85 (Lakeland, Dunelm,
+       Wayfair, IKEA, Habitat, Waterstones, WHSmith, Selfridges, Asda).
+       Brand-promise alignment: loading-screen marquee tiles match the
+       retailers we actually surface in results. */
+    .srch-brand-tile[data-brand="lakeland"].lit   { background:#3F1E5A; border-color:#3F1E5A; }
+    .srch-brand-tile[data-brand="dunelm"].lit     { background:#0066B2; border-color:#0066B2; }
+    .srch-brand-tile[data-brand="wayfair"].lit    { background:#7B1FA2; border-color:#7B1FA2; }
+    .srch-brand-tile[data-brand="ikea"].lit       { background:#0058AB; border-color:#0058AB; }
+    .srch-brand-tile[data-brand="habitat"].lit    { background:#FF6E15; border-color:#FF6E15; }
+    .srch-brand-tile[data-brand="waterstones"].lit{ background:#0E5C2F; border-color:#0E5C2F; }
+    .srch-brand-tile[data-brand="whsmith"].lit    { background:#003DA5; border-color:#003DA5; }
+    .srch-brand-tile[data-brand="selfridges"].lit { background:#FFEC00; border-color:#FFEC00; color:#111; }
+    .srch-brand-tile[data-brand="asda"].lit       { background:#7DC242; border-color:#7DC242; }
     /* Wave 64 — footer no longer uses margin-top:auto. The auto-margin
        was pushing the footer to the bottom of the flex container which
        in some viewports stranded the rest of the content at the top with
@@ -2086,13 +2099,14 @@
     .ret-diff{font-size:11px;color:var(--ink4);text-align:right;margin-top:3px;font-weight:600;}
     .ret-diff.over{color:var(--red);}
 
-    /* Affiliate disclosure footer (Wave 20) — sits below the Track CTA on
-       results screens. Tiny + muted; not a CTA, just a regulatory note. */
+    /* Affiliate disclosure footer. Wave 89 — bumped 11→12px and ink4→ink3
+       so it's actually readable. ASA disclosure that nobody finds isn't
+       compliance. Still subordinate to actions above. */
     .res-affiliate-note{
-      font:500 11px/1.5 "Inter",sans-serif;
-      color:var(--ink4);
+      font:500 12px/1.5 "Inter",sans-serif;
+      color:var(--ink3);
       text-align:center;
-      padding:14px 16px 4px;
+      padding:16px 16px 8px;
     }
     .res-affiliate-note span{
       color:var(--ink3);text-decoration:underline;text-underline-offset:2px;cursor:pointer;
@@ -3580,7 +3594,8 @@
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
           <input id="search-input" type="text" placeholder="any product"
-            autocomplete="off" enterkeyhint="search" inputmode="search"
+            autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+            enterkeyhint="search" inputmode="search"
             oninput="toggleSearchClear(this.value)"
             onkeydown="if(event.key==='Enter')handleSearchClick()"/>
           <button id="search-clear-btn" class="bento-clear" onclick="clearSearchInput()" aria-label="Clear search" tabindex="-1" type="button" hidden>
@@ -3828,6 +3843,14 @@
           <div class="srch-brand-tile" data-brand="wickes"      id="rc-13"><span class="srch-brand-logo">Wickes</span></div>
           <div class="srch-brand-tile" data-brand="halfords"    id="rc-14"><span class="srch-brand-logo">Halfords</span></div>
           <div class="srch-brand-tile" data-brand="ebay"        id="rc-15"><span class="srch-brand-logo">eBay</span></div>
+          <div class="srch-brand-tile" data-brand="lakeland"    id="rc-16"><span class="srch-brand-logo">Lakeland</span></div>
+          <div class="srch-brand-tile" data-brand="dunelm"      id="rc-17"><span class="srch-brand-logo">Dunelm</span></div>
+          <div class="srch-brand-tile" data-brand="ikea"        id="rc-18"><span class="srch-brand-logo">IKEA</span></div>
+          <div class="srch-brand-tile" data-brand="wayfair"     id="rc-19"><span class="srch-brand-logo">Wayfair</span></div>
+          <div class="srch-brand-tile" data-brand="habitat"     id="rc-20"><span class="srch-brand-logo">Habitat</span></div>
+          <div class="srch-brand-tile" data-brand="waterstones" id="rc-21"><span class="srch-brand-logo">Waterstones</span></div>
+          <div class="srch-brand-tile" data-brand="whsmith"     id="rc-22"><span class="srch-brand-logo">WHSmith</span></div>
+          <div class="srch-brand-tile" data-brand="asda"        id="rc-23"><span class="srch-brand-logo">ASDA</span></div>
           <!-- Set B — duplicated for seamless marquee loop -->
           <div class="srch-brand-tile" data-brand="amazon"><span class="srch-brand-logo">amazon</span></div>
           <div class="srch-brand-tile" data-brand="argos"><span class="srch-brand-logo">Argos</span></div>
@@ -3845,6 +3868,14 @@
           <div class="srch-brand-tile" data-brand="wickes"><span class="srch-brand-logo">Wickes</span></div>
           <div class="srch-brand-tile" data-brand="halfords"><span class="srch-brand-logo">Halfords</span></div>
           <div class="srch-brand-tile" data-brand="ebay"><span class="srch-brand-logo">eBay</span></div>
+          <div class="srch-brand-tile" data-brand="lakeland"><span class="srch-brand-logo">Lakeland</span></div>
+          <div class="srch-brand-tile" data-brand="dunelm"><span class="srch-brand-logo">Dunelm</span></div>
+          <div class="srch-brand-tile" data-brand="ikea"><span class="srch-brand-logo">IKEA</span></div>
+          <div class="srch-brand-tile" data-brand="wayfair"><span class="srch-brand-logo">Wayfair</span></div>
+          <div class="srch-brand-tile" data-brand="habitat"><span class="srch-brand-logo">Habitat</span></div>
+          <div class="srch-brand-tile" data-brand="waterstones"><span class="srch-brand-logo">Waterstones</span></div>
+          <div class="srch-brand-tile" data-brand="whsmith"><span class="srch-brand-logo">WHSmith</span></div>
+          <div class="srch-brand-tile" data-brand="asda"><span class="srch-brand-logo">ASDA</span></div>
         </div>
       </div>
 
@@ -7158,7 +7189,19 @@ function renderResults(sc){
       savNumEl.className = 'hero-num '+spc;
       savLblEl.textContent = isSnapGeneric ? 'below similar products' : 'below typical UK price';
       where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+(isSnapGeneric ? 'similar UK products typically' : 'typical UK price')+' <strong>£'+avg+'</strong>.';
+    } else if(n >= 2 && avg && sc.bestPrice && sc.bestPrice > avg){
+      // Wave 89 — degrade gracefully when cheapest UK retailer is ABOVE
+      // typical UK price (amber / red scores). Don't show "matches"
+      // (green-coded) when in fact the user is paying over the typical.
+      // Audit issue: the £-saved framing was misleadingly green for
+      // score 3 where best > avg by a margin.
+      const overBy = Math.round(sc.bestPrice - avg);
+      savNumEl.textContent = '£'+overBy;
+      savNumEl.className = 'hero-num '+spc;
+      savLblEl.textContent = isSnapGeneric ? 'above similar products' : 'above typical UK price';
+      where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+(isSnapGeneric ? 'similar UK products typically' : 'typical UK price')+' <strong>£'+avg+'</strong>. Worth shopping around.';
     } else if(n >= 2){
+      // Cheapest matches typical UK price exactly — that's still a win.
       savNumEl.textContent = '£'+sc.bestPrice;
       savNumEl.className = 'hero-num green';
       savLblEl.textContent = isSnapGeneric ? 'matches similar products' : 'matches typical UK price';

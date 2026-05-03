@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.23';
+const VERSION = 'search.js v6.24';
 
 // Wave 86 — CRITICAL FIX. Category / listing / search-results pages were
 // being admitted as if they were specific product pages. Vincent's case:
@@ -72,36 +72,21 @@ const VERSION = 'search.js v6.23';
 // and found the page actually has kettles ranging £8-£24+. Breaks the
 // core trust promise. Rejecting URLs that pattern-match as category /
 // listing / browse / search pages — only product-page URLs admitted.
-// Wave 86 patterns + Wave 87 additions from live-test misses (B&Q .cat?,
-// AO /l/, JL /_/N-, Selfridges /cat/, Wickes /featured/, faceted-filter
-// query strings).
+// Wave 89 — TIGHTENED. Wave 86/87 over-fired and dropped legitimate retailer
+// URLs (Halfords /all-power-tools, JL /browse/special-offers, Wickes
+// /featured/cordless-vacuum-cleaner, AO /l/ listings). Result: cordless
+// vacuum cleaner returned 0 retailers in production for 30+ minutes.
+// Lesson: URL-pattern matching for "category vs product" is fragile
+// because retailers use overlapping URL shapes. The title-based "from
+// £X" / "prices from" backstop (RANGE_TITLE_RE) is a much more
+// reliable signal. Keep the URL list narrow — only the patterns that
+// are unambiguously category pages with no chance of being a product.
 const CATEGORY_URL_PATTERNS = [
-  /,sc\.html?(?:$|\?)/i,            // Asda George category (Vincent's case)
+  /,sc\.html?(?:$|\?)/i,            // Asda George category (Vincent's original case — never a product URL)
   /,default,sc\.html?/i,            // Asda George default category
-  /\/category\//i,                   // generic /category/
-  /\/categories\//i,
-  /\/shop\/?(?:[^\/]+\/?)?$/i,      // /shop or /shop/foo (no product depth)
-  /\/browse\//i,                     // /browse/... (JL legacy too)
-  /\/c\/[^\/]+\/?$/i,                // ending with /c/foo (category)
-  /\/sitesearch\?/i,                 // Boots search
-  /\/search[\/\?]/i,                 // generic /search
+  /\/sitesearch\?/i,                 // Boots search results
   /\/searchresults/i,                // searchresults pages
-  /-c-\d+\.html?(?:$|\?)/i,          // /...-c-123.html (Marks etc category)
-  /\/all-[^\/]+\/?$/i,               // /all-kettles
-  /\/(?:browse|departments?|cats?)\?/i,
-  /\/listings?\//i,                  // /listing or /listings
-  /\/cat-?\d/i,                      // /cat-123 / cat123 indexed cats
-  /\?(?:q|query|search|searchterm|search-term|searchString|keyword|keywords|w|term)=/i, // search query URLs
-  // Wave 87 — extra patterns from live test misses
-  /\.cat(?:\?|$)/i,                  // B&Q faceted category (e.g. air-fryers.cat?Litre+capacity=8)
-  /\/l\/[a-z][a-z0-9_-]*-\d+\//i,   // AO listing pattern (/l/electric_toothbrushes-4028/...)
-  /\/_\/N-[a-z0-9]+/i,               // John Lewis catalog navigation (/_/N-1z13z3z...)
-  /\/cat\/[a-z]/i,                   // Selfridges and others /cat/ subpath
-  /\/featured\//i,                   // Wickes /featured/category-name
-  /\?(?:[A-Z][a-z]+(?:\+[A-Z][a-z]+)*)=/, // Faceted filter URLs (?Litre+capacity=8)
-  /\/products?\/?$/i,                // bare /product or /products with no further path = category
-  /\/range\//i,                      // /range/ (some retailers use this for categories)
-  /\/department\//i,
+  /\?(?:q|query|searchterm|search-term|searchString|searchTerm)=/i, // explicit search-query URLs
 ];
 
 function isLikelyCategoryPage(url){
@@ -878,11 +863,33 @@ async function fetchSerperOneRetailer(query, retailer, apiKey) {
 }
 
 async function fetchSerperPerRetailer(query, apiKey) {
-  const results = await Promise.allSettled(
+  // Wave 89 — wall-clock cap on per-retailer fan-out. With 25+ retailers
+  // each having a 5s timeout, worst-case wall-clock could exceed Vercel's
+  // 15s function limit. Race the entire batch against a hard 6s cap so
+  // slow/dead retailers don't drag the whole search down. Whatever
+  // resolved by then wins; the rest are abandoned.
+  const FAN_OUT_WALL_CLOCK_MS = 6000;
+  const fanOut = Promise.allSettled(
     PER_RETAILER_SITES.map(r => fetchSerperOneRetailer(query, r, apiKey))
   );
+  const wallClock = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), FAN_OUT_WALL_CLOCK_MS));
+  const winner = await Promise.race([fanOut, wallClock]);
+  if (winner === 'TIMEOUT') {
+    console.warn(`[${VERSION}] Per-retailer fan-out wall-clock cap (${FAN_OUT_WALL_CLOCK_MS}ms) hit — collecting partial results`);
+    // Still try to harvest whatever resolved within the window
+    try {
+      const partial = await Promise.race([fanOut, new Promise(r => setTimeout(() => r([]), 100))]);
+      if (Array.isArray(partial)) {
+        const items = [];
+        for (const r of partial) if (r.status === 'fulfilled') items.push(...r.value);
+        console.log(`[${VERSION}] Per-retailer fan-out (partial): ${items.length} hits`);
+        return items;
+      }
+    } catch (e) {}
+    return [];
+  }
   const items = [];
-  for (const r of results) {
+  for (const r of winner) {
     if (r.status === 'fulfilled') items.push(...r.value);
   }
   console.log(`[${VERSION}] Per-retailer fan-out: ${items.length} hits across ${PER_RETAILER_SITES.length} retailers`);
@@ -1192,23 +1199,21 @@ export default async function handler(req, res) {
   // negatives.
   const safe       = nuclearFilter(rawItems);
   // Wave 86 — drop category / listing / search-results pages BEFORE any
-  // other filtering. Vincent's "kettle" case: Asda George category page
-  // was leaking through with "from £24" extracted as if it were a
-  // product price, when the actual page has kettles £8-£24+. The
-  // listing-page price is meaningless as a "best price" claim.
-  // Wave 87 — also drop items whose TITLE smells like a category range
-  // ("from £X", "prices from", "ranges from £X to £Y"). The snippet
-  // backstop catches category pages even if the URL slipped past the
-  // pattern filter.
+  // other filtering. Wave 89 — softened URL list, kept title backstop
+  // (the title-based "from £X" check is the more reliable signal).
   const RANGE_TITLE_RE = /\b(from\s+£\d|prices\s+from|ranges?\s+from|starting\s+at\s+£|\bfrom\s*£\s*\d)/i;
+  const dropReasonsCategoryUrl = [];
+  const dropReasonsRangeTitle = [];
   const productOnly = safe.filter(it => {
     const link = String((it && it.link) || '');
     if (isLikelyCategoryPage(link)) {
+      dropReasonsCategoryUrl.push(link.slice(0, 100));
       console.log(`[${VERSION}] dropping category page: ${link.slice(0, 80)}`);
       return false;
     }
     const title = String((it && it.title) || '');
     if (RANGE_TITLE_RE.test(title)) {
+      dropReasonsRangeTitle.push(title.slice(0, 80) + ' [' + link.slice(0, 40) + ']');
       console.log(`[${VERSION}] dropping category-range title: "${title.slice(0, 80)}"`);
       return false;
     }
@@ -1228,28 +1233,40 @@ export default async function handler(req, res) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   const ebayDemoted  = demoteEbayIfNotUsed(anomaly, q);
   const haikuGraded  = await gradeResultsViaHaiku(ebayDemoted, q, ANTHROPIC_KEY);
-  // Wave 83 — price-anomaly floor on post-Haiku items. Haiku is the
-  // smart layer; this is the deterministic backstop. Rule: if a
-  // listing is graded "similar" (not exact) AND its price is below
-  // 25% of the cluster median, drop it as suspect — almost always
-  // a clone, accessory, or wrong-product. "exact" listings are
-  // trusted regardless of price (Lakeland £40 cordless vacuum is
-  // legitimately budget; Haiku graded it as the right product).
-  // Catches the cases Haiku was too generous on (Dunelm £3.95 yoga
-  // mat strap, Selfridges £5 wrong-product, etc).
+  // Wave 83 — price-anomaly floor on post-Haiku items.
+  const beforeAnomalyFloor = haikuGraded.length;
   const results = priceAnomalyFloorPostHaiku(haikuGraded);
+  const droppedByAnomalyFloor = beforeAnomalyFloor - results.length;
   const priced       = trusted; // backwards-compat alias for debug envelope
 
   console.log(`[${VERSION}] Final: ${results.length} items | cheapest=£${results[0]?.price ?? 'n/a'}`);
 
-  const debug = req.body && req.body.debug === true;
+  // Wave 90 — debug envelope now exposes per-stage drop counts including
+  // the Wave 83 price-anomaly floor (which was failing silently). Trigger
+  // with ?debug=true on the request (POST body or query string).
+  const debug = (req.body && req.body.debug === true) || (req.query && req.query.debug === 'true');
   const debugEnvelope = debug ? {
     counts: {
-      raw: rawItems.length, nuclear: safe.length, identity: identified.length,
-      trusted: trusted.length, priced: priced.length, final: results.length,
+      raw: rawItems.length,
+      nuclear: safe.length,
+      after_category_url_drop: productOnly.length,
+      identity: identified.length,
+      trusted: trusted.length,
+      after_dedup: deduped.length,
+      after_anomaly_floor_pre_haiku: anomaly.length,
+      after_ebay_demote: ebayDemoted.length,
+      after_haiku_grading: haikuGraded.length,
+      after_price_anomaly_post_haiku: results.length,
+      final: results.length,
+    },
+    drops: {
+      category_urls: dropReasonsCategoryUrl,
+      range_titles: dropReasonsRangeTitle,
+      anomaly_floor_post_haiku_dropped_count: droppedByAnomalyFloor,
     },
     rawSample:      rawItems.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
     identitySample: identified.slice(0, 12).map(i => ({ source: i.source, title: i.title, link: i.link, price: i.price })),
+    haikuGradedSample: haikuGraded.slice(0, 12).map(i => ({ source: i.source, title: (i.title||'').slice(0,80), price: i.price, query_match: i.query_match })),
   } : undefined;
 
   return res.status(200).json({
