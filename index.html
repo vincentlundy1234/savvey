@@ -17,6 +17,7 @@
   <script type="module" src="/components/loading-screen.js"></script>
   <script type="module" src="/components/result-banners.js"></script>
   <script type="module" src="/components/share-canvas.js"></script>
+  <script type="module" src="/components/result-rows.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" fetchpriority="high"/>
@@ -7564,28 +7565,35 @@ function renderResults(sc){
   // etc) we say "Search at [host]" because we route via retailerSearchUrl
   // anyway. For others we say "View at [host]". When real delivery
   // text exists from the source, it wins.
-  const list=document.getElementById('ret-list');
-  list.innerHTML=(sc.rets||[]).map((r, idx)=>{
-    const brandKey = retailerBrandKey(r.n||'');
-    const safeN = (r.n||'').replace(/'/g,"\\'");
-    const safeLink = (r.link||'').replace(/'/g,"\\'");
-    const meaningfulSub = retailerSubLine(r);
-    // Wave 75 — stagger delay (40ms per row) so rows tumble in instead
-    // of slamming as a block. Best-price row first, then top-3 in turn.
-    const delay = Math.min(idx * 40, 280);
-    return `
-    <div class="ret-row${r.best?' best':''}" data-brand="${brandKey}" style="animation-delay:${delay}ms" onclick="openRetailerRow('${safeN}','${safeLink}')">
-      <div class="ret-name-wrap">
-        <div class="ret-name">${r.n}</div>
-        <div class="ret-sub">${meaningfulSub}</div>
-        ${r.best?'<div class="ret-best-badge">✓ Best price</div>':''}
-      </div>
-      <div style="text-align:right">
-        <div class="ret-price ${r.best?'best':r.bad?'high':'mid'}">${r.p}</div>
-        ${r.diff?`<div class="ret-diff${r.bad?' over':''}">${r.diff}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
+  // Wave 107d — result-rows extracted. createElement + textContent +
+  // addEventListener + DocumentFragment (zero string-injection, safe with
+  // apostrophes like "Sainsbury's", single-pass layout).
+  const list = document.getElementById('ret-list');
+  list.innerHTML = '';
+  if (window.SavveyResultRows) {
+    const rowItems = (sc.rets || []).map((r) => ({
+      name:     r.n || '',
+      brandKey: retailerBrandKey(r.n || ''),
+      sub:      retailerSubLine(r),
+      price:    r.p || '',
+      diff:     r.diff || '',
+      isBest:   !!r.best,
+      isHigh:   !!r.bad,
+      link:     r.link || '',
+    }));
+    const fragment = window.SavveyResultRows.renderRetailerList(rowItems, (name, link) => {
+      openRetailerRow(name, link);
+    });
+    list.appendChild(fragment);
+  } else {
+    (sc.rets || []).forEach((r) => {
+      const div = document.createElement('div');
+      div.className = 'ret-row' + (r.best ? ' best' : '');
+      div.textContent = (r.n || '') + ' — ' + (r.p || '');
+      div.addEventListener('click', () => openRetailerRow(r.n, r.link));
+      list.appendChild(div);
+    });
+  }
 
   // ── Conditional Amazon CTA ──
   // Show "View on Amazon UK" only when no Amazon row appears in the list
