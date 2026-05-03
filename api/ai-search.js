@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.31';
+const VERSION = 'ai-search.js v1.32';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -534,8 +534,13 @@ const KITCHEN_HOSTS    = ['lakeland.co.uk', 'robertdyas.co.uk', 'dunelm.com', 'j
 // Wave 99 — sports / fitness lock. Trainers, sportswear, gym kit,
 // running shoes — JD Sports, Sports Direct, Decathlon, Wiggle, SportsShoes
 // are where the deals are. Currys/JL surface here today and that's wrong.
-const SPORTS_KEYWORDS  = /\b(trainers?|running shoes?|football boots?|cleats?|gym (?:kit|shorts|wear|leggings)|tracksuit|joggers|hoodie|sports bra|leggings|yoga (?:mat|pants|block)|dumbbells?|kettlebell|barbell|weight (?:plates?|set|bench)|treadmill|exercise bike|spin bike|rowing machine|protein (?:powder|shake|bar)|football|basketball|tennis (?:racket|ball)|cricket bat|hockey stick|swimsuit|swim trunks|goggles|cycling (?:helmet|jersey|shorts|jacket)|bike (?:helmet|lights|lock|pump)|nike|adidas|puma|under armour|reebok|asics|new balance|brooks|on running|hoka|salomon|garmin (?:fenix|forerunner|venu|epix|edge)|polar (?:vantage|grit|pacer)|fitbit|whoop|wahoo)\b/i;
-const SPORTS_HOSTS     = ['jdsports.co.uk', 'sportsdirect.com', 'decathlon.co.uk', 'wiggle.co.uk', 'sportsshoes.com', 'mandmdirect.com', 'pro-direct.com', 'wiggle.com', 'argos.co.uk', 'amazon.co.uk'];
+// Wave 200c — `wahoo`, `kickr`, `garmin edge`, smart trainer / turbo
+// trainer all moved to BIKE_KEYWORDS. They were misrouting cycling
+// hardware to general sports retailers (JD Sports, Sports Direct) which
+// don't sell smart trainers. BIKE order is BEFORE SPORTS so cycling
+// gear now hits Wiggle/Tredz/Sigmasports/Evans first.
+const SPORTS_KEYWORDS  = /\b(trainers?|running shoes?|football boots?|cleats?|gym (?:kit|shorts|wear|leggings)|tracksuit|joggers|hoodie|sports bra|leggings|yoga (?:mat|pants|block)|dumbbells?|kettlebell|barbell|weight (?:plates?|set|bench)|treadmill|exercise bike|spin bike|rowing machine|protein (?:powder|shake|bar)|football|basketball|tennis (?:racket|ball)|cricket bat|hockey stick|swimsuit|swim trunks|goggles|nike|adidas|puma|under armour|reebok|asics|new balance|brooks|on running|hoka|salomon|garmin (?:fenix|forerunner|venu|epix)|polar (?:vantage|grit|pacer)|fitbit|whoop)\b/i;
+const SPORTS_HOSTS     = ['jdsports.co.uk', 'sportsdirect.com', 'decathlon.co.uk', 'sportsshoes.com', 'mandmdirect.com', 'pro-direct.com', 'argos.co.uk', 'amazon.co.uk'];
 
 // Wave 99 — fashion / apparel lock. Dress, shirt, jeans, jacket, etc.
 // ASOS, Next, M&S, JL, Selfridges, Zalando, End. Currys is wrong here.
@@ -565,8 +570,11 @@ const APPLIANCE_KEYWORDS = /\b(washing machine|washer[\s-]?dryer|tumble dryer|di
 const APPLIANCE_HOSTS    = ['ao.com', 'currys.co.uk', 'johnlewis.com', 'argos.co.uk', 'marksandspencer.com', 'amazon.co.uk', 'directappliances.co.uk', 'appliancesdirect.co.uk'];
 
 // Wave 103 — cycling specialists.
-const BIKE_KEYWORDS    = /\b(bicycle|road bike|mountain bike|hybrid bike|electric bike|e[\s-]?bike|gravel bike|kids bike|childrens bike|bike helmet|cycling helmet|bike lights?|bike lock|bike pump|cycle (?:computer|bag|shoe|jersey|shorts|saddle)|chain lube|inner tube|bike tyre|bicycle tyre|specialized bike|trek bike|giant bike|cannondale|merida|ribble|cube bike|halfords bike|brompton)\b/i;
-const BIKE_HOSTS       = ['wiggle.co.uk', 'tredz.co.uk', 'evanscycles.com', 'leisurelakesbikes.com', 'rutlandcycling.com', 'halfords.com', 'decathlon.co.uk', 'amazon.co.uk', 'argos.co.uk'];
+// Wave 200c — added cycling-specific brands and product types that were
+// previously misrouting to SPORTS: wahoo, kickr, smart trainer, turbo
+// trainer, garmin edge (cycling computer), zwift, indoor trainer.
+const BIKE_KEYWORDS    = /\b(bicycle|road bike|mountain bike|hybrid bike|electric bike|e[\s-]?bike|gravel bike|kids bike|childrens bike|bike helmet|cycling helmet|bike lights?|bike lock|bike pump|cycle (?:computer|bag|shoe|jersey|shorts|saddle)|cycling (?:helmet|jersey|shorts|jacket|kit)|chain lube|inner tube|bike tyre|bicycle tyre|specialized bike|trek bike|giant bike|cannondale|merida|ribble|cube bike|halfords bike|brompton|wahoo (?:kickr|elemnt|bolt|roam|tickr|rival)|kickr|smart trainer|turbo trainer|indoor trainer|garmin edge|tacx|elite (?:direto|suito|tuo)|zwift)\b/i;
+const BIKE_HOSTS       = ['wiggle.co.uk', 'tredz.co.uk', 'sigmasports.com', 'evanscycles.com', 'leisurelakesbikes.com', 'rutlandcycling.com', 'cyclestore.co.uk', 'halfords.com', 'decathlon.co.uk', 'amazon.co.uk', 'argos.co.uk'];
 
 // Wave 103 — pet supplies.
 const PET_KEYWORDS     = /\b(dog food|cat food|kitten food|puppy food|raw food (?:dog|cat)|pet food|cat litter|cat tree|scratching post|dog (?:bed|crate|harness|lead|collar|treats|chew|toy|kennel|cage)|cat (?:bed|toy|carrier)|fish tank|aquarium|hamster (?:cage|wheel)|guinea pig (?:hutch|food)|pet insurance|flea treatment|worming tablets|royal canin|whiskas|felix cat|pedigree dog|james wellbeloved|burns pet|lily's kitchen|hill's science|harringtons|wagg dog|butcher's|sheba|purina|iams|tetra pond)\b/i;
