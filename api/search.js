@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.28';
+const VERSION = 'search.js v6.29';
 
 // Wave 93 — Landing-page price verification. The trust-erosion case:
 // snippet says £349, user clicks through, page shows £379. Cause is
@@ -76,12 +76,11 @@ const VERSION = 'search.js v6.28';
 // snippet by >2%, override snippet with live. Surface verification
 // status in _meta so frontend can flag if needed. Hard 3s timeout so
 // verification doesn't add meaningful latency to the search.
-// Wave 93c — bumped 3s → 5s. Battery test showed John Lewis (the most
-// common cheapest retailer) consistently timing out at 3s — meaning
-// verification wasn't running for the largest retailer in our results.
-// 5s gives JL room to respond. Hard 5s cap so worst case adds bounded
-// latency (Vercel function still has 15s ceiling overall).
-const VERIFY_TIMEOUT_MS = 5000;
+// Wave 97b — bumped 5s → 8s. Stanley flask test: JL still timing out
+// at 5s, snippet £52 vs live £24, user would see wrong price. JL is
+// the most common cheapest retailer; 8s headroom is worth the extra
+// latency (Vercel function ceiling 15s).
+const VERIFY_TIMEOUT_MS = 8000;
 const VERIFY_MAX_DRIFT_PCT = 0.02;     // >2% drift → use live price
 const VERIFY_BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
