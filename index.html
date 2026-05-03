@@ -8,6 +8,13 @@
   <meta name="apple-mobile-web-app-capable" content="yes"/>
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
   <link rel="manifest" href="/manifest.json"/>
+  <!-- Wave 107 — first ES module extracted. Loading screen logic now lives
+       in /components/loading-screen.js. Bridge: module assigns
+       window.SavveyLoader so the classic <script> code below can call it
+       without converting the whole 9k-line file. Modules defer by default,
+       so this loads after parse but before the inline script runs its
+       first search-triggered call. -->
+  <script type="module" src="/components/loading-screen.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" fetchpriority="high"/>
@@ -4341,7 +4348,8 @@ let scannerTroubleTimer = null; // surfaces "Trouble reading?" hint after 12s
 let scannerFrameCount = 0;      // diagnostic counter for ZXing
 let torchOn=false,torchTrack=null;
 let scannedBarcode=null,scannedProductName=null,scanDebounce=null;
-let chipTimers=[];
+// Wave 107 — chipTimers moved into /components/loading-screen.js. Inline
+// callers now use window.SavveyLoader.start/stop/reset.
 
 // ── PWA install — captures the browser's install event and surfaces a
 //    visible "Install" CTA on the welcome screen. The faster Savvey gets
@@ -4550,12 +4558,10 @@ function globalReset(){
   const vBar=document.getElementById('hero-verdict-bar');
   if(vBar)vBar.className='hero-verdict';
   for(let i=1;i<=5;i++){const p=document.getElementById('vp-'+i);if(p){p.className='v-pip off';p.textContent=i;}}
-  // 5. Reset chip animations + branded pills (Wave 27 = 16 pills) and
-  //    the loading-screen counter (Wave 42, copy updated Wave 61).
-  chipTimers.forEach(clearTimeout);chipTimers=[];
-  for(let i=0;i<16;i++){const c=document.getElementById('rc-'+i);if(c){c.classList.remove('lit');c.classList.remove('done');}}
-  const _counterEl=document.getElementById('srch-counter-num');
-  if(_counterEl) _counterEl.textContent='Sweeping prices…';
+  // 5. Reset loading-screen pills + counter — Wave 107 delegates to the
+  //    extracted module's full reset() which clears timers, lit/done
+  //    classes, and counter copy in one call.
+  if (window.SavveyLoader) window.SavveyLoader.reset();
   // 6. Wave 29: ALSO clear the refine-input + product-name + wit so a new
   //    search rendering can never inherit stale strings from a prior one.
   //    Vincent saw "iPhone 15 Pro 256GB" in the refine bar while the body
@@ -5738,54 +5744,18 @@ function fetchPrices(query){
   activeController=new AbortController();
   const sig=activeController.signal;
 
-  document.getElementById('searching-product').textContent=query;
-  chipTimers.forEach(clearTimeout);chipTimers=[];
-  // Wave 61 — reset the counter copy at the start of every search.
-  const counterEl = document.getElementById('srch-counter-num');
-  if(counterEl) counterEl.textContent = 'Sweeping prices…';
-  // Force the progress ring to restart its CSS animation by toggling
-  // a reflow on the element — without this it'd run only on first mount.
-  const ringEl = document.querySelector('.srch-ring-progress');
-  if(ringEl){
-    ringEl.style.animation = 'none';
-    void ringEl.offsetWidth;
-    ringEl.style.animation = '';
+  // Wave 107 — loading-screen logic extracted into /components/loading-screen.js.
+  // The 50 lines of pill-timer + counter + ring-restart code that used to
+  // live here now lives in one cohesive module. Bridge through window to
+  // keep the rest of fetchPrices as a classic script.
+  if (window.SavveyLoader) {
+    window.SavveyLoader.start({ query, generation: gen });
+  } else {
+    // Fallback if the module 404s (network failure, SW cache desync, etc.)
+    document.getElementById('searching-product').textContent = query;
+    const counterEl = document.getElementById('srch-counter-num');
+    if (counterEl) counterEl.textContent = 'Sweeping prices…';
   }
-  // Wave 27 — 16 retailer pills cycle through pending → lit → done.
-  // Spread tighter (160ms apart) so all pills get their moment in the
-  // typical 2-3s search latency. Random shuffle order so it doesn't feel
-  // mechanical row-by-row.
-  const pillOrder = Array.from({length: 16}, (_, i) => i);
-  for(let i = pillOrder.length - 1; i > 0; i--){
-    const j = Math.floor(Math.random() * (i + 1));
-    [pillOrder[i], pillOrder[j]] = [pillOrder[j], pillOrder[i]];
-  }
-  // Wave 61 — tighter cycling so most pills get their moment in even when
-  // results land in 1-2s. Was 160ms apart × 16 = 2.56s; now 90ms × 16 =
-  // 1.44s so the animation feels alive end-to-end. Counter copy now
-  // surfaces the retailer NAME being checked rather than a fake N/16
-  // count that never reached 16 before results landed (Vincent's "loading
-  // screen broken" bug).
-  pillOrder.forEach((rcIndex, position) => {
-    const litAt  = 100 + position * 90;
-    const doneAt = litAt + 480;
-    chipTimers.push(setTimeout(() => {
-      if(searchGeneration !== gen) return;
-      const c = document.getElementById('rc-'+rcIndex);
-      if(c){
-        c.classList.add('lit');
-        // Update the counter to show what's being checked right now
-        const cnt = document.getElementById('srch-counter-num');
-        const logo = c.querySelector('.srch-brand-logo');
-        if(cnt && logo) cnt.textContent = 'Checking ' + logo.textContent;
-      }
-    }, litAt));
-    chipTimers.push(setTimeout(() => {
-      if(searchGeneration !== gen) return;
-      const c = document.getElementById('rc-'+rcIndex);
-      if(c){ c.classList.remove('lit'); c.classList.add('done'); }
-    }, doneAt));
-  });
 
   const timeout=setTimeout(()=>{if(activeController)activeController.abort();},14000);
 
@@ -6076,7 +6046,9 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     sc.snapMatch = window._snapMatchMeta;
   }
   liveScen=sc;
-  chipTimers.forEach(clearTimeout);
+  // Wave 107 — stop the loading-screen pill animations now that the
+  // result is ready. Module owns the timer list internally.
+  if (window.SavveyLoader) window.SavveyLoader.stop();
   return sc;
 }
 

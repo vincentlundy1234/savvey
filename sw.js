@@ -17,10 +17,12 @@
 //  Bump FONT_VER only if font families or weights change.
 // ─────────────────────────────────────────────────────────────
 
-const STATIC_VER    = 'savvey-static-v110';
+const STATIC_VER    = 'savvey-static-v111';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json'];
+// Wave 107 — added /components/loading-screen.js as an extracted ES module.
+// Pre-caching it means first offline visit doesn't 404 the import.
+const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/components/loading-screen.js'];
 const FONT_ORIGINS  = [
   'https://fonts.googleapis.com',
   'https://fonts.gstatic.com',
