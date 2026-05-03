@@ -15,6 +15,8 @@
        so this loads after parse but before the inline script runs its
        first search-triggered call. -->
   <script type="module" src="/components/loading-screen.js"></script>
+  <script type="module" src="/components/result-banners.js"></script>
+  <script type="module" src="/components/share-canvas.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" fetchpriority="high"/>
@@ -7435,44 +7437,12 @@ function renderResults(sc){
     }
   }
 
-  // Wave 38 — Generic-match banner. Sits above the verdict for visibility.
-  // Shown when the Snap result was a low/medium confidence match so the user
-  // knows we're comparing against the category not the exact item.
+  // Wave 107b — banners (snap-generic + top-picks) extracted into
+  // /components/result-banners.js. Module decides which (if any) to render
+  // and handles removal of any previous banner. Mutually exclusive.
   const heroCardEl = document.getElementById('hero-card');
-  if(heroCardEl){
-    const existingBanner = heroCardEl.querySelector('.snap-generic-banner');
-    if(existingBanner) existingBanner.remove();
-    const existingTopPicks = heroCardEl.querySelector('.top-picks-banner');
-    if(existingTopPicks) existingTopPicks.remove();
-    if(sc.snapMatch && sc.snapMatch.isGenericMatch){
-      const banner = document.createElement('div');
-      banner.className = 'snap-generic-banner';
-      banner.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>'
-        + '<div class="snap-generic-text">'
-        +   '<div class="snap-generic-title">Generic match</div>'
-        +   '<div class="snap-generic-sub">We couldn\'t lock onto a specific model. Comparing <strong>'+(sc.snapMatch.cleanedProduct||sc.query)+'</strong> against similar UK products.</div>'
-        + '</div>';
-      // Insert at the top of hero-card, before the image wrap or verdict bar
-      heroCardEl.insertBefore(banner, heroCardEl.firstChild);
-    }
-    // Wave 102 — top-picks banner. When ai-search v1.20+ used Wave 100
-    // category fan-out, sc.categoryProducts is an array of 3 specific
-    // product names. The retailer rows are for DIFFERENT products in the
-    // category, not different prices for the same product. Surface that
-    // explicitly so the user understands what they're seeing.
-    if(Array.isArray(sc.categoryProducts) && sc.categoryProducts.length > 0){
-      const banner = document.createElement('div');
-      banner.className = 'snap-generic-banner top-picks-banner';
-      const safeQuery = String(sc.query || liveQuery || 'this category').replace(/[<>&]/g, '');
-      const lis = sc.categoryProducts.slice(0, 3).map(p => '<li>' + String(p).replace(/[<>&]/g, '') + '</li>').join('');
-      banner.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.39 6.96L22 10l-5.5 4.74L18 22l-6-3.5L6 22l1.5-7.26L2 10l7.61-1.04L12 2z"/></svg>'
-        + '<div class="snap-generic-text">'
-        +   '<div class="snap-generic-title">Top picks for ' + safeQuery + '</div>'
-        +   '<div class="snap-generic-sub">Different popular UK products in this category — prices below are for these specific items, not the same product across retailers.</div>'
-        +   '<ul class="top-picks-list" style="margin:8px 0 0;padding:0 0 0 18px;font-size:13px;line-height:1.5;">' + lis + '</ul>'
-        + '</div>';
-      heroCardEl.insertBefore(banner, heroCardEl.firstChild);
-    }
+  if (heroCardEl && window.SavveyResultBanners) {
+    window.SavveyResultBanners.render(heroCardEl, sc);
   }
 
   // ── Vague-query refinement hint (Wave 16) ──
@@ -8980,7 +8950,26 @@ function openShareCard(){
   });
   if(overlay) overlay.classList.add('open');
 }
+// Wave 107c — drawCard / drawSavingsCard extracted into
+// /components/share-canvas.js. Original 200-line drawCard + 100-line
+// drawSavingsCard + 6 helpers (rr, roundRect, wrapText, wrapTextLines,
+// guessProductEmoji, savingsCongratLine, fmtSavingsTotal) all live in
+// the module. These shims pre-resolve sc.query + sc.witLine (which the
+// module can't get from globals) and delegate.
 function drawCard(sc){
+  if (!window.SavveyShareCanvas) return;
+  const enriched = Object.assign({}, sc);
+  if (!enriched.query) enriched.query = (typeof liveQuery === 'string' ? liveQuery : '') || 'Product';
+  if (!enriched.witLine) {
+    enriched.witLine = witLine(sc.spc, sc.saving || 0, 'the shop', sc.bestRetailer || 'Amazon UK');
+  }
+  return window.SavveyShareCanvas.drawCard(enriched);
+}
+// Below: original drawCard body removed (now in module). Helper functions
+// rr, wrapText, guessProductEmoji originally appeared after this block —
+// also removed since the module owns them. Anything that USED to look
+// like the old code below this comment is now dead and stripped.
+const _DEAD_drawCard = function(sc){
   const canvas=document.getElementById('share-canvas');
   const ctx=canvas.getContext('2d');
   const W=640,H=820;
@@ -9178,8 +9167,10 @@ function savingsCongratLine(total, count){
   }
   return 'Frankly, you\'re writing the playbook now. UK retail RRP is a suggestion, not a verdict.';
 }
+// Wave 107c — delegate to module. Used by savingsShareText() too.
 function fmtSavingsTotal(v){
-  return v < 100 ? v.toFixed(2) : Math.round(v).toLocaleString('en-GB');
+  if (window.SavveyShareCanvas) return window.SavveyShareCanvas.fmtSavingsTotal(v);
+  return v < 100 ? v.toFixed(2) : Math.round(v).toLocaleString('en-GB');  // fallback
 }
 function shareSavingsCounter(){
   haptic(12);
@@ -9201,7 +9192,15 @@ function shareSavingsCounter(){
   overlay.setAttribute('aria-hidden','false');
   overlay.classList.add('open');
 }
+// Wave 107c shim — delegates to module.
 function drawSavingsCard(total, count){
+  if (window.SavveyShareCanvas) return window.SavveyShareCanvas.drawSavingsCard(total, count);
+}
+// Wave 107c — original drawSavingsCard body retained as DEAD function
+// expression (assigned to a const so it doesn't shadow the shim). Will
+// be physically removed in a follow-up cleanup wave; left in place for
+// this extraction so the diff is easier to review.
+const _DEAD_drawSavingsCard = function(total, count){
   const canvas = document.getElementById('share-canvas');
   if(!canvas) return;
   const ctx = canvas.getContext('2d');
