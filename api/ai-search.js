@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.27';
+const VERSION = 'ai-search.js v1.28';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -339,7 +339,17 @@ async function verifyLivePriceViaPerplexity(item, perplexityKey){
     // results[0].snippet or in a response field. We'll concatenate
     // searchable text and let the regex pick up a £value.
     const blob = JSON.stringify(j).slice(0, 4000);
-    if (/OUT[_ ]OF[_ ]STOCK|sold out|unavailable|discontinued/i.test(blob)) {
+    // Wave 108 — tightened OOS detection. Previously matched "unavailable"
+    // and "sold out" anywhere in the 4KB response blob, which fired false
+    // positives on AirPods Pro 2 (Argos £169 — IS in stock; Perplexity
+    // happened to mention "supply issues" in a nearby snippet) and
+    // MacBook Pro M3 (Argos £1299 — also in stock). Now we only flag OOS
+    // when Perplexity explicitly returned the OUT_OF_STOCK token we
+    // asked for in the prompt, AND there's no £-price in the same blob
+    // (a real OOS response wouldn't include a price either).
+    const explicitOOS = /\bOUT_OF_STOCK\b/.test(blob);
+    const hasPrice = /£\s*[\d,]+(?:\.\d{2})?/.test(blob);
+    if (explicitOOS && !hasPrice) {
       return { verified: false, reason: 'out_of_stock' };
     }
     // Pull the most plausible £ value out of the response. Prefer

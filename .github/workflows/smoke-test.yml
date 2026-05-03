@@ -1,0 +1,82 @@
+name: Live smoke test
+
+# Triggers after every push to master. Vercel auto-deploys ~30s after push;
+# we wait 60s then hit the live API. If basic search 500s (e.g. another
+# TDZ class bug), this fails loudly rather than letting the bug live for
+# hours undetected.
+#
+# Why this exists: 3 May 2026 had a 4-hour latent crash where every
+# /api/ai-search request returned 500 because Wave 103 added an IIFE
+# referencing later-declared `const _HOSTS` arrays — temporal dead zone.
+# A smoke test that took 2 seconds would have caught it immediately.
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:  # also fire manually from the Actions tab
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for Vercel deploy (60s)
+        run: sleep 60
+
+      - name: Specific-product search (iPhone 17)
+        run: |
+          response=$(curl -sS -w "\n%{http_code}" \
+            -X POST https://savvey.vercel.app/api/ai-search \
+            -H "Content-Type: application/json" \
+            -d '{"q":"iphone 17"}')
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "Status: $status"
+          echo "Body: $body" | head -c 400
+          if [ "$status" != "200" ]; then
+            echo "::error::ai-search returned $status (expected 200)"
+            exit 1
+          fi
+          # Confirm we got at least 1 retailer back
+          n=$(echo "$body" | python3 -c "import json,sys; d=json.load(sys.stdin); print(len(d.get('shopping',[])))")
+          if [ "$n" -lt 1 ]; then
+            echo "::error::ai-search returned 0 hits for 'iphone 17' — coverage regression"
+            exit 1
+          fi
+          echo "✓ iphone 17 returned $n hit(s)"
+
+      - name: Tier 2 search.js still alive
+        run: |
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            -X POST https://savvey.vercel.app/api/search \
+            -H "Content-Type: application/json" \
+            -d '{"q":"test","type":"shopping"}')
+          if [ "$status" != "200" ]; then
+            echo "::error::search.js returned $status"
+            exit 1
+          fi
+          echo "✓ search.js OK"
+
+      - name: Frontend HTML loads + has expected version
+        run: |
+          html=$(curl -sS https://savvey.vercel.app/)
+          if ! echo "$html" | grep -q "savvey-static-v"; then
+            echo "::error::frontend HTML missing SW version marker"
+            exit 1
+          fi
+          if ! echo "$html" | grep -q "</html>"; then
+            echo "::error::frontend HTML truncated (no </html> close tag)"
+            exit 1
+          fi
+          echo "✓ frontend HTML intact"
+
+      - name: Components served correctly
+        run: |
+          for module in loading-screen result-banners share-canvas result-rows; do
+            status=$(curl -sS -o /dev/null -w "%{http_code}" \
+              "https://savvey.vercel.app/components/$module.js")
+            if [ "$status" != "200" ]; then
+              echo "::error::/components/$module.js returned $status"
+              exit 1
+            fi
+            echo "✓ /components/$module.js OK"
+          done

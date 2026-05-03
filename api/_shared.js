@@ -154,10 +154,15 @@ export const UK_RETAILERS = [
 
 // ─────────────────────────────────────────────────────────────
 // Price bounds
-// Hard ceiling £5,000 (covers any UK consumer product).
+// Hard ceiling £50,000 (covers Rolex/Patek/Audemars luxury watches,
+// premium furniture, refurbished MacBook Pro Max, etc). Was £5,000
+// pre-Wave 108 — that ceiling was rejecting every Rolex Submariner
+// (~£9,500), Cartier Tank (~£3,000-£25,000), Patek Nautilus
+// (~£25,000+). Haiku was returning the right prices; admitPrice was
+// silently dropping them, so the WATCH lock looked broken.
 // Floor £0.50 (anything below is noise / accessory).
 // ─────────────────────────────────────────────────────────────
-export const PRICE_CEILING_HARD = 5000;
+export const PRICE_CEILING_HARD = 50000;
 export const PRICE_FLOOR        = 0.50;
 
 export function admitPrice(val) {
