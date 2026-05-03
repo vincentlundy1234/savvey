@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.38';
+const VERSION = 'ai-search.js v1.39';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1347,6 +1347,11 @@ function combineSonarProItems(products) {
       title:       String(p.title || '').slice(0, 200),
       delivery:    '',
       query_match: p.query_match || 'exact',
+      // Wave 211 — Sonar Pro provided in_stock as part of structured output.
+      // Pass it through so the frontend can render stock badges. Search-quad
+      // path doesn't have this signal so items from there are undefined
+      // (frontend treats undefined as unknown — no badge).
+      in_stock:    p.in_stock !== false,
       _via:        'sonar-pro',  // provenance tag (not surfaced to user)
     });
   }
@@ -1694,6 +1699,71 @@ Reply STRICT JSON only, no other text:
   }
 }
 
+// Wave 213 — confidence from query_match distribution of top results.
+// "high"   = top-3 are all qm:exact (we found the exact product user asked for)
+// "medium" = mix of exact + similar (some are exact, some are close cousins)
+// "low"    = top-3 are all qm:similar or "different" leaked through
+//            (e.g. Sennheiser HD 660S query returned all HD 660S2 — same family,
+//            different generation, prices not directly comparable to the queried tier)
+// Frontend uses this to drive copy: high → "Best price", low → "Compared against
+// similar products — exact match unavailable".
+function computeConfidence(items) {
+  if (!items || items.length === 0) return 'none';
+  const top = items.slice(0, 3);
+  const exactCount = top.filter(i => (i.query_match || 'exact') === 'exact').length;
+  if (exactCount === top.length) return 'high';
+  if (exactCount === 0) return 'low';
+  return 'medium';
+}
+
+// Wave 210 — reasoning line. Short Haiku-generated context that explains
+// the price comparison. Surfaced in _meta.reasoning for the frontend to
+// render (e.g. above results list, replacing generic "X retailers compared").
+// Cost ~$0.0005/query (small token budget, system prompt is reusable).
+async function generateReasoningLine(query, items, anthropicKey) {
+  if (!items || items.length === 0 || !anthropicKey) return null;
+  const top = items.slice(0, 4).map(i => ({
+    retailer: i.source,
+    price: i.price,
+    title: (i.title || '').slice(0, 80),
+    match: i.query_match || 'exact',
+  }));
+  const userPrompt = `Query: "${query}"
+Top results:
+${JSON.stringify(top, null, 2)}
+
+Write ONE plain-English sentence (max 22 words) summarising the price landscape for this query. Be factual and specific. Examples:
+- "Compared 4 UK retailers — £329 from John Lewis is in line with typical pricing for this model."
+- "All listings are HD 660S2 (the current model), £349-£499. The original HD 660S you searched is discontinued."
+- "Cheapest at Tredz is the original Kickr Core; newer Kickr Core 2 variants run £449-£499."
+
+NO greetings, no markdown, no quotes around the sentence, no "Here's a summary". Just the sentence itself.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 80,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const j = await r.json();
+    let text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    // Defensive: strip any opening/closing quotes if Haiku ignored the rule
+    text = text.replace(/^["']/, '').replace(/["']$/, '').trim();
+    if (!text || text.length > 200) return null;
+    return text;
+  } catch (e) {
+    return null;
+  }
+}
+
 function dedup(items) {
   const map = new Map();
   for (const it of items) {
@@ -1983,6 +2053,12 @@ export default async function handler(req, res) {
   const dedupedResults = dedup(items);
   const cov     = computeCoverage(dedupedResults);
 
+  // Wave 210 — kick off reasoning line generation in parallel with the
+  // verifyLivePrice block below. Both make Haiku/Perplexity calls; running
+  // them serially would breach Vercel 15s. Await this just before
+  // assembling the response body.
+  const reasoningPromise = generateReasoningLine(q, dedupedResults, ANTHROPIC_KEY);
+
   // Wave 93 — verify cheapest live price (mirrors search.js v6.25).
   // Wave 93b HOT FIX — sanity-cap on overrides. iPhone 17 case: Apple
   // extractor matched a £26.63 monthly-finance number, drift was 96.7%
@@ -2057,7 +2133,13 @@ export default async function handler(req, res) {
   }
   const results = dedupedResults;
 
-  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'} live_verified=${priceVerification.verified}`);
+  // Wave 210 — resolve reasoning line (was kicked off in parallel above).
+  // Tolerate failure with null — frontend falls back to a generic header.
+  const reasoning = await reasoningPromise.catch(() => null);
+  // Wave 213 — confidence indicator from query_match distribution
+  const confidence = computeConfidence(results);
+
+  console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'} live_verified=${priceVerification.verified} confidence=${confidence}${reasoning ? ` reasoning="${reasoning.slice(0,60)}..."` : ''}`);
 
   const debugEnvelope = debug ? {
     counts: {
@@ -2101,6 +2183,9 @@ export default async function handler(req, res) {
       query_match:      r.query_match || 'exact',  // Wave 79
       price_verified:   !!r.priceVerified,         // Wave 93
       price_was_overridden: !!r.priceWasOverridden, // Wave 93
+      // Wave 211 — stock signal from Sonar Pro structured output. Undefined
+      // for Search-quad-derived items (frontend treats as unknown).
+      in_stock:         (typeof r.in_stock === 'boolean') ? r.in_stock : null,
     })),
     organic: [],
     _meta: {
@@ -2119,6 +2204,8 @@ export default async function handler(req, res) {
       categoryLock:       raw?._categoryLock || null,        // Wave 200 — name (regex: 'watch'; AI: 'ai-watch') of the matched category lock
       categoryLockSource: raw?._categoryLockSource || null,  // Wave 200 — 'regex' | 'ai' | null
       categoryHosts:      raw?._categoryHosts || null,       // Wave 200 — host list used by category-locked Perplexity call
+      reasoning:         reasoning,                          // Wave 210 — Haiku-generated 1-sentence price-landscape line
+      confidence:        confidence,                         // Wave 213 — 'high' | 'medium' | 'low' | 'none' from query_match mix
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
