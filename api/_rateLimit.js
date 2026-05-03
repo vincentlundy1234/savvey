@@ -46,8 +46,21 @@ export function checkRateLimit(req, endpoint, limit = 30) {
 
 // Convenience: respond 429 with the right headers. Returns true if the
 // caller should stop processing (response sent).
-export function rejectIfRateLimited(req, res, endpoint, limit = 30) {
-  const r = checkRateLimit(req, endpoint, limit);
+//
+// Wave 101 — bypass mechanism for QA + a configurable default. Set the
+// env var SAVVEY_TEST_KEY to any string; requests with header
+// `x-savvey-test-key: <that value>` skip rate limiting. Also reads
+// SAVVEY_RATE_LIMIT_PER_HOUR env var to override the 30/hr default
+// without code changes (useful when battery-testing eats the budget).
+export function rejectIfRateLimited(req, res, endpoint, limit) {
+  const TEST_KEY = process.env.SAVVEY_TEST_KEY;
+  if (TEST_KEY && req.headers && req.headers['x-savvey-test-key'] === TEST_KEY) {
+    res.setHeader('X-RateLimit-Bypass', 'test');
+    return false;
+  }
+  const envLimit = parseInt(process.env.SAVVEY_RATE_LIMIT_PER_HOUR, 10);
+  const effectiveLimit = limit || (Number.isFinite(envLimit) && envLimit > 0 ? envLimit : 30);
+  const r = checkRateLimit(req, endpoint, effectiveLimit);
   if (!r.allowed) {
     const retryAfterSec = Math.max(1, Math.ceil((r.resetAt - Date.now()) / 1000));
     res.setHeader('Retry-After', String(retryAfterSec));

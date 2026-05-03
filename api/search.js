@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.29';
+const VERSION = 'search.js v6.30';
 
 // Wave 93 — Landing-page price verification. The trust-erosion case:
 // snippet says £349, user clicks through, page shows £379. Cause is
@@ -265,6 +265,15 @@ For each listing below, grade how well its TITLE matches the user's query semant
 - "different": title is clearly a different product, accessory, replacement part, fake/clone listing, wrong generation, wrong tier, or unrelated. Examples: query "Nintendo Switch" → "Nintendo Switch 2 Console" = different. Query "Stanley flask" → "Stanley Toolbox" = different. Query "yoga mat" → "yoga mat strap" or "yoga mat carrier" = different. Query "Atomic Habits book" → eBay listing for unrelated item = different.
 
 Be ASSERTIVE on "different" — wrong products surfacing as cheapest is far worse than dropping borderline-similar listings. When in doubt between similar and different, choose different.
+
+Wave 102 — PRICE-TIER SANITY. Cross-check the listing price against typical UK retail you know for the named product. When a price is implausibly low for what the title claims, the title is masking a different product (smaller set, micro-build, replacement part, accessory, clone). Mark "different".
+- "Lego Star Wars Millennium Falcon" UCS retails ~£780. Anything below ~£250 with that title is a smaller set.
+- "Dyson V15 Detect" retails ~£500. Anything under ~£300 is refurb / clone / accessory.
+- "PlayStation 5" / "Xbox Series X" retail ~£480. Anything under ~£300 is suspect.
+- "iPhone 17" base 128GB retails ~£799. Anything under ~£500 is finance / trade-in / refurb.
+- "MacBook Pro 14 M3" retails ~£1700. Under ~£1100 is wrong.
+- "Apple Watch Ultra 2" retails ~£799. Under ~£550 is wrong.
+General rule: if listing price is < 30% of typical retail for the EXACT product the title names, default to "different". Use 2026 UK retail knowledge.
 
 Return ONLY a JSON array, one entry per listing: {"index": N, "query_match": "exact" | "similar" | "different"}
 

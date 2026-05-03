@@ -1091,6 +1091,15 @@
     .srch-brand-tile[data-brand="whsmith"].lit    { background:#003DA5; border-color:#003DA5; }
     .srch-brand-tile[data-brand="selfridges"].lit { background:#FFEC00; border-color:#FFEC00; color:#111; }
     .srch-brand-tile[data-brand="asda"].lit       { background:#7DC242; border-color:#7DC242; }
+    /* Wave 102 — sport / fashion / homeware / toy specialists */
+    .srch-brand-tile[data-brand="jdsports"].lit    { background:#000000; border-color:#000000; }
+    .srch-brand-tile[data-brand="sportsdirect"].lit{ background:#0050B5; border-color:#0050B5; }
+    .srch-brand-tile[data-brand="decathlon"].lit   { background:#0078BD; border-color:#0078BD; }
+    .srch-brand-tile[data-brand="asos"].lit        { background:#000000; border-color:#000000; }
+    .srch-brand-tile[data-brand="next"].lit        { background:#1A1A1A; border-color:#1A1A1A; }
+    .srch-brand-tile[data-brand="ms"].lit          { background:#1F2D5C; border-color:#1F2D5C; }
+    .srch-brand-tile[data-brand="robertdyas"].lit  { background:#D32F2F; border-color:#D32F2F; }
+    .srch-brand-tile[data-brand="smyths"].lit      { background:#FFCD00; border-color:#FFCD00; color:#111; }
     /* Wave 64 — footer no longer uses margin-top:auto. The auto-margin
        was pushing the footer to the bottom of the flex container which
        in some viewports stranded the rest of the content at the top with
@@ -3868,6 +3877,15 @@
           <div class="srch-brand-tile" data-brand="waterstones" id="rc-21"><span class="srch-brand-logo">Waterstones</span></div>
           <div class="srch-brand-tile" data-brand="whsmith"     id="rc-22"><span class="srch-brand-logo">WHSmith</span></div>
           <div class="srch-brand-tile" data-brand="asda"        id="rc-23"><span class="srch-brand-logo">ASDA</span></div>
+          <!-- Wave 99 — sport / fashion / book / kitchen specialists -->
+          <div class="srch-brand-tile" data-brand="jdsports"    id="rc-24"><span class="srch-brand-logo">JD Sports</span></div>
+          <div class="srch-brand-tile" data-brand="sportsdirect" id="rc-25"><span class="srch-brand-logo">Sports Direct</span></div>
+          <div class="srch-brand-tile" data-brand="decathlon"   id="rc-26"><span class="srch-brand-logo">Decathlon</span></div>
+          <div class="srch-brand-tile" data-brand="asos"        id="rc-27"><span class="srch-brand-logo">ASOS</span></div>
+          <div class="srch-brand-tile" data-brand="next"        id="rc-28"><span class="srch-brand-logo">Next</span></div>
+          <div class="srch-brand-tile" data-brand="ms"          id="rc-29"><span class="srch-brand-logo">M&amp;S</span></div>
+          <div class="srch-brand-tile" data-brand="robertdyas"  id="rc-30"><span class="srch-brand-logo">Robert Dyas</span></div>
+          <div class="srch-brand-tile" data-brand="smyths"      id="rc-31"><span class="srch-brand-logo">Smyths</span></div>
           <!-- Set B — duplicated for seamless marquee loop -->
           <div class="srch-brand-tile" data-brand="amazon"><span class="srch-brand-logo">amazon</span></div>
           <div class="srch-brand-tile" data-brand="argos"><span class="srch-brand-logo">Argos</span></div>
@@ -3893,6 +3911,14 @@
           <div class="srch-brand-tile" data-brand="waterstones"><span class="srch-brand-logo">Waterstones</span></div>
           <div class="srch-brand-tile" data-brand="whsmith"><span class="srch-brand-logo">WHSmith</span></div>
           <div class="srch-brand-tile" data-brand="asda"><span class="srch-brand-logo">ASDA</span></div>
+          <div class="srch-brand-tile" data-brand="jdsports"><span class="srch-brand-logo">JD Sports</span></div>
+          <div class="srch-brand-tile" data-brand="sportsdirect"><span class="srch-brand-logo">Sports Direct</span></div>
+          <div class="srch-brand-tile" data-brand="decathlon"><span class="srch-brand-logo">Decathlon</span></div>
+          <div class="srch-brand-tile" data-brand="asos"><span class="srch-brand-logo">ASOS</span></div>
+          <div class="srch-brand-tile" data-brand="next"><span class="srch-brand-logo">Next</span></div>
+          <div class="srch-brand-tile" data-brand="ms"><span class="srch-brand-logo">M&amp;S</span></div>
+          <div class="srch-brand-tile" data-brand="robertdyas"><span class="srch-brand-logo">Robert Dyas</span></div>
+          <div class="srch-brand-tile" data-brand="smyths"><span class="srch-brand-logo">Smyths</span></div>
         </div>
       </div>
 
@@ -5717,13 +5743,26 @@ function fetchPrices(query){
   // aggregator), no WAF problems, and structured price data. Serper
   // remains as the safety net.
   // ─────────────────────────────────────────────────────────────
+  // Wave 104 — track upstream error reason so renderNoResults can explain
+  // "couldn't reach prices" vs "no products found". Without this distinction,
+  // the BUDGET_HOSTS class of bugs surfaced as silent zero-results.
+  let aiUpstreamError = null;
   const aiPromise=fetch('/api/ai-search',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     signal:sig,
     body:JSON.stringify({q:query,region:'uk'})
   }).then(async r=>{
-    if(!r.ok)return null;
+    if(!r.ok){
+      // Wave 104 — capture HTTP error reason so we can explain to user
+      try {
+        const errBody = await r.json();
+        aiUpstreamError = { status: r.status, error: errBody.error || ('http_' + r.status), message: errBody.message || '' };
+        console.warn('[fetchPrices] AI search upstream error:', aiUpstreamError);
+      } catch(e){ aiUpstreamError = { status: r.status, error: 'http_' + r.status, message: '' }; }
+      window._lastUpstreamError = aiUpstreamError;
+      return null;
+    }
     const d=await r.json();
     if(searchGeneration!==gen)return null;
     // Wave 97 — accept Tier 1 with 1+ result (was 2+). With the in-tier
@@ -5731,6 +5770,11 @@ function fetchPrices(query){
     // single-retailer is better than falling back to Serper noise.
     return d&&d.shopping&&d.shopping.length>=1?d:null;
   }).catch(()=>null);
+
+  // Wave 104 — stash the upstream error for renderNoResults to read after
+  // the promise chain completes. Window-scoped because the no-results
+  // render call sites span multiple paths in the codebase.
+  window._lastUpstreamError = null;
 
   const p=aiPromise.then(async aiResp=>{
     if(searchGeneration!==gen){console.log('[fetchPrices] stale gen discarded');return null;}
@@ -5935,6 +5979,27 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     sc.onlyEbay=!!d1._meta.onlyEbay;
     sc.dataSource=d1._meta.source||'serper';
     sc._heroImage=d1._meta.heroImage||null;  // Wave 24
+    // Wave 102 — when the backend used Wave 100 category fan-out, surface
+    // the top-3 products so the results screen can show "Top picks for X"
+    // and clarify that the prices are for different products in that
+    // category, not the same product across retailers.
+    sc.categoryProducts = Array.isArray(d1._meta.categoryProducts) ? d1._meta.categoryProducts : null;
+    // Wave 102b — when fan-out returned different products, the
+    // "saving vs UK average" framing breaks down (the average is across
+    // 3 different products). Mark scoreBasis 'category-spread' and
+    // overwrite verdict copy with honest framing. Score itself stays
+    // amber-3 since we can't calibrate against a single product price.
+    if(sc.categoryProducts && sc.categoryProducts.length > 0){
+      sc.scoreBasis = 'category-spread';
+      sc.score = 3;
+      sc.spc = 'amber';
+      const minP = sc.bestPrice;
+      const maxP = (sc.rets && sc.rets.length) ? Math.max(...sc.rets.map(r => r.price || 0)) : minP;
+      sc.vTitle = 'Range across the category.';
+      sc.vSub = (maxP > minP)
+        ? `Prices range £${minP} to £${maxP} across popular ${sc.query || 'products'} in this category.`
+        : `Top picks for ${sc.query || 'this category'} — pick the product first, then we can score it.`;
+    }
     // Wave 58 — cache the hero image keyed by query so trending + recent
     // tiles on the home screen can render real product imagery on the
     // next visit. 7-day TTL.
@@ -6160,8 +6225,8 @@ async function showResults(fetchPromise){
   // Demo data masquerading as a real verdict is the bug we just spent two
   // deploys killing; it cannot creep back in via a null-coalesce.
   if(!liveScen){
-    track('no_results', { q: (liveQuery||'').slice(0, 40) });
-    renderNoResults(liveQuery||'that product');
+    track('no_results', { q: (liveQuery||'').slice(0, 40), upstream: (window._lastUpstreamError && window._lastUpstreamError.error) || null });
+    renderNoResults(liveQuery||'that product', window._lastUpstreamError);
     goTo('results');
     return;
   }
@@ -6356,11 +6421,14 @@ function detectFutureProduct(query){
   return null;
 }
 
-function renderNoResults(query){
+function renderNoResults(query, upstreamError){
+  // Wave 104 — upstreamError lets us explain "couldn't reach prices"
+  // (server side issue) vs "no products found" (legit empty result).
   const safeQ=String(query||'that product').replace(/[<>]/g,'');
   const setText=(id,text)=>{const el=document.getElementById(id);if(el)el.textContent=text;};
   const setHTML=(id,html)=>{const el=document.getElementById(id);if(el)el.innerHTML=html;};
   const future = detectFutureProduct(safeQ);
+  const hadUpstream = !!(upstreamError && (upstreamError.status >= 500 || upstreamError.error === 'rate_limited'));
 
   // Wave 29: keep the results-screen header in sync with the actual query
   // we tried. Without this the refine-input could show a previous product
@@ -6401,7 +6469,14 @@ function renderNoResults(query){
   // direct retailer-search shortcuts so they always have a path forward.
   // Wave 40 — when the query looks like an unreleased product, frame it
   // honestly so the user understands WHY the comparison came up empty.
-  if(future){
+  if(hadUpstream){
+    // Wave 104 — server hiccup, distinct from "product not found"
+    if(ttl){ttl.textContent='Couldn\'t reach prices just now.';}
+    const reason = upstreamError.error === 'rate_limited'
+      ? `Too many checks from this connection in the last hour — please try again in a few minutes.`
+      : `Our price-check service had a hiccup. Try again in a moment, or use the retailer shortcuts below.`;
+    setText('hero-wit', reason);
+  } else if(future){
     if(ttl){ttl.textContent=future.label+' may not be out yet.';}
     setText('hero-wit', `${future.label} doesn't have widespread UK retailer pricing yet — likely because it's not released or just landed. We've added direct retailer searches in case it has dropped.`);
   } else {
@@ -6823,6 +6898,62 @@ function retailerSearchUrl(retailerName, query){
   if(r.includes('space nk'))     return `https://www.spacenk.com/uk/search?q=${q}`;
   if(r.includes('perfume shop'))return `https://www.theperfumeshop.com/search?q=${q}`;
   if(r.includes('beauty bay'))   return `https://www.beautybay.com/search/?q=${q}`;
+  // Wave 99/102/103 — sport, fashion, watch, toy, audio, appliance, bike, pet, garden retailers
+  if(r.includes('jd sports')||r.includes('jdsports')) return `https://www.jdsports.co.uk/search/?q=${q}`;
+  if(r.includes('sports direct')||r.includes('sportsdirect')) return `https://www.sportsdirect.com/SearchResults.aspx?Search=${q}`;
+  if(r.includes('decathlon'))    return `https://www.decathlon.co.uk/search?Ntt=${q}`;
+  if(r.includes('wiggle'))       return `https://www.wiggle.co.uk/search?text=${q}`;
+  if(r.includes('sportsshoes'))  return `https://www.sportsshoes.com/search?q=${q}`;
+  if(r.includes('m and m direct')||r.includes('mandmdirect')) return `https://www.mandmdirect.com/search?q=${q}`;
+  if(r.includes('pro:direct')||r.includes('pro-direct')) return `https://www.pro-direct.com/search?searchphrase=${q}`;
+  if(r.includes('asos'))         return `https://www.asos.com/search/?q=${q}`;
+  if(r.includes('next.co.uk')||r==='next') return `https://www.next.co.uk/search?w=${q}`;
+  if(r.includes('m&s')||r.includes('marks and spencer')||r.includes('marks & spencer')) return `https://www.marksandspencer.com/l/search?q=${q}`;
+  if(r.includes('end clothing')||r.includes('end.')||r.includes('endclothing')) return `https://www.endclothing.com/gb/catalogsearch/result/?q=${q}`;
+  if(r.includes('zalando'))      return `https://www.zalando.co.uk/catalog/?q=${q}`;
+  if(r.includes('matches'))      return `https://www.matchesfashion.com/intl/search?q=${q}`;
+  if(r.includes('robert dyas')||r.includes('robertdyas')) return `https://www.robertdyas.co.uk/search?q=${q}`;
+  if(r.includes('amara'))        return `https://www.amara.com/search?q=${q}`;
+  if(r.includes('foyles'))       return `https://www.foyles.co.uk/search?term=${q}`;
+  if(r.includes('wordery'))      return `https://wordery.com/search?term=${q}`;
+  // Watches / jewellery
+  if(r.includes('watches of switzerland')||r.includes('watchesofswitzerland')) return `https://www.watchesofswitzerland.co.uk/search?q=${q}`;
+  if(r.includes('goldsmiths'))   return `https://www.goldsmiths.co.uk/search?q=${q}`;
+  if(r.includes('mappin'))       return `https://www.mappinandwebb.com/search?q=${q}`;
+  if(r.includes('ernest jones')||r.includes('ernestjones')) return `https://www.ernestjones.co.uk/search?q=${q}`;
+  if(r.includes('h. samuel')||r.includes('h samuel')||r.includes('hsamuel')) return `https://www.hsamuel.co.uk/search?q=${q}`;
+  if(r.includes('beaverbrooks')) return `https://www.beaverbrooks.co.uk/search?q=${q}`;
+  if(r.includes('harrods'))      return `https://www.harrods.com/en-gb/search?q=${q}`;
+  // Toys
+  if(r.includes('smyths'))       return `https://www.smythstoys.com/uk/en-gb/search?text=${q}`;
+  if(r.includes('the entertainer')||r.includes('thetoyshop')) return `https://www.thetoyshop.com/search?q=${q}`;
+  if(r.includes('hamleys'))      return `https://www.hamleys.com/search?q=${q}`;
+  // Audio / hifi
+  if(r.includes('sevenoaks'))    return `https://www.ssav.com/search?text=${q}`;
+  if(r.includes('peter tyson')||r.includes('peterstyles')) return `https://www.peterstyles.co.uk/search?q=${q}`;
+  if(r.includes('henley audio')) return `https://www.henleyaudio.co.uk/search?q=${q}`;
+  // Appliances
+  if(r.includes('direct appliances')||r.includes('directappliances')) return `https://www.directappliances.co.uk/search?q=${q}`;
+  if(r.includes('appliances direct')||r.includes('appliancesdirect')) return `https://www.appliancesdirect.co.uk/search?q=${q}`;
+  // Bike / cycling
+  if(r.includes('tredz'))        return `https://www.tredz.co.uk/search?keyword=${q}`;
+  if(r.includes('evans cycles')||r.includes('evanscycles')) return `https://www.evanscycles.com/search?text=${q}`;
+  if(r.includes('leisure lakes')) return `https://www.leisurelakesbikes.com/search.aspx?keyword=${q}`;
+  if(r.includes('rutland'))      return `https://www.rutlandcycling.com/search?keyword=${q}`;
+  // Pets
+  if(r.includes('pets at home')||r.includes('petsathome')) return `https://www.petsathome.com/search?q=${q}`;
+  if(r.includes('zooplus'))      return `https://www.zooplus.co.uk/search.htm?q=${q}`;
+  if(r.includes('petplanet'))    return `https://www.petplanet.co.uk/search.asp?q=${q}`;
+  if(r.includes('jollyes'))      return `https://www.jollyes.co.uk/search?q=${q}`;
+  if(r.includes('fetch'))        return `https://fetch.co.uk/search?q=${q}`;
+  // Garden
+  if(r.includes('crocus'))       return `https://www.crocus.co.uk/search/?searchTerm=${q}`;
+  if(r.includes('thompson') && r.includes('morgan')) return `https://www.thompson-morgan.com/search?q=${q}`;
+  if(r.includes('suttons'))      return `https://www.suttons.co.uk/search?q=${q}`;
+  if(r.includes('garden buildings')) return `https://www.gardenbuildingsdirect.co.uk/search?q=${q}`;
+  if(r.includes('dobbies'))      return `https://www.dobbies.com/search?q=${q}`;
+  // Toy adjacency
+  if(r.includes('very baby')||r.includes('verybaby')) return `https://www.very.co.uk/search/${q}.end`;
   return null;
 }
 
@@ -7000,7 +7131,10 @@ function renderResults(sc){
   //
   // Both reflect real money the user would have lost paying the typical
   // UK price. Single-retailer results are skipped — there's no comparison.
-  if(sc && sc.retailerCount >= 2){
+  if(sc && sc.retailerCount >= 2 && sc.scoreBasis !== 'category-spread'){
+    // Wave 102b — don't tick the savings counter on category-spread results
+    // (Wave 100 fan-out). The "savings" would be vs an average of different
+    // products, which isn't a real saving for the user.
     let saved = 0;
     if(sc.scoreBasis === 'shelf' && sc.saving > 0){
       saved = sc.saving;
@@ -7254,6 +7388,8 @@ function renderResults(sc){
   if(heroCardEl){
     const existingBanner = heroCardEl.querySelector('.snap-generic-banner');
     if(existingBanner) existingBanner.remove();
+    const existingTopPicks = heroCardEl.querySelector('.top-picks-banner');
+    if(existingTopPicks) existingTopPicks.remove();
     if(sc.snapMatch && sc.snapMatch.isGenericMatch){
       const banner = document.createElement('div');
       banner.className = 'snap-generic-banner';
@@ -7263,6 +7399,24 @@ function renderResults(sc){
         +   '<div class="snap-generic-sub">We couldn\'t lock onto a specific model. Comparing <strong>'+(sc.snapMatch.cleanedProduct||sc.query)+'</strong> against similar UK products.</div>'
         + '</div>';
       // Insert at the top of hero-card, before the image wrap or verdict bar
+      heroCardEl.insertBefore(banner, heroCardEl.firstChild);
+    }
+    // Wave 102 — top-picks banner. When ai-search v1.20+ used Wave 100
+    // category fan-out, sc.categoryProducts is an array of 3 specific
+    // product names. The retailer rows are for DIFFERENT products in the
+    // category, not different prices for the same product. Surface that
+    // explicitly so the user understands what they're seeing.
+    if(Array.isArray(sc.categoryProducts) && sc.categoryProducts.length > 0){
+      const banner = document.createElement('div');
+      banner.className = 'snap-generic-banner top-picks-banner';
+      const safeQuery = String(sc.query || liveQuery || 'this category').replace(/[<>&]/g, '');
+      const lis = sc.categoryProducts.slice(0, 3).map(p => '<li>' + String(p).replace(/[<>&]/g, '') + '</li>').join('');
+      banner.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l2.39 6.96L22 10l-5.5 4.74L18 22l-6-3.5L6 22l1.5-7.26L2 10l7.61-1.04L12 2z"/></svg>'
+        + '<div class="snap-generic-text">'
+        +   '<div class="snap-generic-title">Top picks for ' + safeQuery + '</div>'
+        +   '<div class="snap-generic-sub">Different popular UK products in this category — prices below are for these specific items, not the same product across retailers.</div>'
+        +   '<ul class="top-picks-list" style="margin:8px 0 0;padding:0 0 0 18px;font-size:13px;line-height:1.5;">' + lis + '</ul>'
+        + '</div>';
       heroCardEl.insertBefore(banner, heroCardEl.firstChild);
     }
   }

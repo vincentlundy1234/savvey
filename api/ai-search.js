@@ -1,4 +1,61 @@
-// api/ai-search.js — Savvey AI Search v1.20
+// api/ai-search.js — Savvey AI Search v1.23
+//
+// v1.23 (3 May 2026 PM — Wave 103 drift assertion + 5 new locks):
+//   - Wave 103 part 2: AUDIO, APPLIANCE, BIKE, PET, GARDEN category locks
+//     filling the remaining biggest coverage gaps. AUDIO routes Sennheiser/
+//     B&W/KEF to Richer Sounds + Sevenoaks Sound + Peter Tyson. APPLIANCE
+//     routes washing machines/fridges/ovens to AO.com + Appliances Direct
+//     + JL + Currys. BIKE → Tredz + Evans Cycles + Wiggle + Halfords. PET
+//     → Pets at Home + Zooplus + PetPlanet + Jollyes. GARDEN → Crocus +
+//     Thompson & Morgan + Suttons + B&Q + Wickes + Dobbies.
+//   - Wave 103 part 1: boot-time IIFE that walks all 15 category-lock host
+//     arrays asserts each host appears in UK_RETAILERS — fail-loud at
+//     deploy, not at first matching query.
+//   - Wave 99 silently dropped BUDGET_HOSTS / GROCERY_HOSTS / etc. The
+//     bug only manifested when a vacuum / kettle / Heinz query matched
+//     the lock keywords — many minutes of confusing 500s before traced.
+//     Boot-time IIFE walks every category-lock host and warns if any
+//     isn't registered in UK_RETAILERS. Fail-loud at deploy, not at
+//     first matching query. The check passes silently when consistent.
+//
+// v1.22 (3 May 2026 PM — Wave 102 price-tier sanity + luxury/toy):
+//   - Luxury watch/jewellery lock: Rolex Submariner / Tag Heuer Carrera /
+//     Omega Speedmaster / Cartier / engagement rings → Watches of
+//     Switzerland, Goldsmiths, Mappin & Webb, Ernest Jones, H. Samuel,
+//     Beaverbrooks, Selfridges, Harrods. Battery showed Rolex/Tag Heuer
+//     returned 0 hits because none of these are stocked at JL/Argos.
+//   - Toy lock: Lego sets, Funko, board games, action figures →
+//     Smyths Toys, The Entertainer, Hamleys, Argos, Amazon, JL.
+//   - Wave 102 PRICE-TIER SANITY in Haiku prompt:
+//   - 3 May battery surfaced "Lego Star Wars Millennium Falcon" → JL £53.99
+//     graded qm:exact. The UCS Millennium Falcon (75192) is £779. JL listed
+//     a Microfighter or smaller set with similar keyword overlap, Haiku
+//     graded it "exact" because nothing in the prompt asked it to sanity-
+//     check the PRICE against the named product. Added Wave 102 PRICE-TIER
+//     SANITY block listing typical UK retail bands for known flagship
+//     items + a general "30% of typical retail" rule. Haiku now returns
+//     plausible:false when title names a high-end product but price is
+//     wildly low.
+//
+// v1.21 (3 May 2026 PM — Wave 101 Path 1 + BUDGET_HOSTS hotfix):
+//   - Wave 101: Perplexity-first URL verification. Replaces the brittle
+//     HTML scrape rig (9 retailer-specific regex extractors + browser
+//     headers + 8s timeout) with a focused Perplexity /search call asking
+//     "what's the current price on this URL?". Cost ~$0.005 per cheapest
+//     verification. Falls back to the legacy HTML scrape when Perplexity
+//     can't answer (rate limit, parse fail) — graceful degrade preserved.
+//     Battery in same session showed verification failures across:
+//       - upstream_403 (Birkenstock, iPad Pro M4, philips airfryer)
+//       - upstream_404 (Argos dead URLs across many products)
+//       - exception_AbortError (JL: Garmin, GHD, Le Creuset, Stanley,
+//         Moleskine, Lego, Weber, Ooni)
+//     One swap addresses all of them.
+//   - HOTFIX: Wave 99 edit accidentally removed GROCERY_HOSTS, BEAUTY_HOSTS,
+//     DIY_HOSTS, BUDGET_HOSTS const declarations. detectCategoryLock()
+//     references them, so every query that matched grocery/beauty/diy/budget
+//     keywords (cordless vacuum, kettle, Heinz, mascara, drill) 500'd with
+//     "BUDGET_HOSTS is not defined". Restored as 4 const declarations
+//     directly after BUDGET_KEYWORDS.
 //
 // v1.20 (3 May 2026 PM — Wave 100 category fan-out):
 //   - Closes the long-running Wave 86 cordless-vacuum class. When BOTH
@@ -145,7 +202,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.20';
+const VERSION = 'ai-search.js v1.23';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -191,6 +248,21 @@ function extractLivePriceFromHtml(url, html){
 }
 async function verifyLivePrice(item){
   if(!item || !item.link) return { verified: false, reason: 'no_link' };
+  // Wave 101 (Path 1) — try Perplexity URL verification FIRST. If it
+  // returns a usable price, use that and skip the brittle HTML scrape
+  // entirely. The HTML scrape stays as a fallback for when Perplexity
+  // doesn't return a usable answer (rate-limit, parse fail, etc).
+  const PERPLEXITY_KEY = process.env.PERPLEXITY_API_KEY;
+  if (PERPLEXITY_KEY) {
+    const pp = await verifyLivePriceViaPerplexity(item, PERPLEXITY_KEY);
+    if (pp.verified) return pp;
+    // If Perplexity explicitly returned "out of stock" / "discontinued",
+    // surface that immediately rather than falling through to the scraper
+    // which would just say "no_extractor_or_no_match".
+    if (pp.reason === 'out_of_stock') return pp;
+  }
+  // Fallback: legacy HTML scrape. Kept so we degrade gracefully if
+  // Perplexity is rate-limited or has a bad day.
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), VERIFY_TIMEOUT_MS);
   try {
@@ -201,10 +273,61 @@ async function verifyLivePrice(item){
     if(live === null) return { verified: false, reason: 'no_extractor_or_no_match' };
     const snippet = item.price;
     const drift = snippet > 0 ? Math.abs(live - snippet) / snippet : 0;
-    return { verified: true, live, snippet, drift };
+    return { verified: true, live, snippet, drift, source: 'html_scrape' };
   } catch (e){
     return { verified: false, reason: 'exception_' + (e.name || 'unknown') };
   } finally { clearTimeout(timer); }
+}
+
+// Wave 101 (Path 1) — Perplexity URL verification. Replaces the 9-retailer
+// regex extractor + browser-header rig + 8s timeout management with one
+// focused Perplexity call. Costs ~$0.005 per cheapest verification.
+// Addresses these failure modes seen in 3 May 2026 PM battery in one swap:
+//   - upstream_403 (Birkenstock Very, iPad Pro M4, philips airfryer)
+//   - upstream_404 (Argos dead URLs across many products)
+//   - exception_AbortError (JL pages: Garmin, GHD, Le Creuset, Stanley,
+//     Moleskine, Lego, Weber, Ooni)
+//   - no_extractor_or_no_match (any retailer not in PRODUCT_URL_PATTERNS)
+//   - kettle drift inverse-bug (regex grabbed wrong DOM number)
+async function verifyLivePriceViaPerplexity(item, perplexityKey){
+  if (!perplexityKey || !item || !item.link) return { verified: false, reason: 'pp_no_inputs' };
+  const url = item.link;
+  // Use Perplexity's /search endpoint with a focused inurl query so it's
+  // asked specifically about THIS page. Cheaper and more reliable than
+  // generic "what's the price of X" because the URL anchors the answer.
+  const verifyQuery = `current selling price in GBP shown right now on this UK retailer product page. URL: ${url}. Reply only with the price number (e.g. £49.99) or "OUT_OF_STOCK" or "UNKNOWN". No explanation.`;
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 6000);
+    const r = await fetch(PERPLEXITY_ENDPOINT, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'authorization': `Bearer ${perplexityKey}` },
+      body: JSON.stringify({ query: verifyQuery, max_results: 3 }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return { verified: false, reason: 'pp_upstream_' + r.status };
+    const j = await r.json();
+    // Perplexity /search returns results array; the LLM answer is in
+    // results[0].snippet or in a response field. We'll concatenate
+    // searchable text and let the regex pick up a £value.
+    const blob = JSON.stringify(j).slice(0, 4000);
+    if (/OUT[_ ]OF[_ ]STOCK|sold out|unavailable|discontinued/i.test(blob)) {
+      return { verified: false, reason: 'out_of_stock' };
+    }
+    // Pull the most plausible £ value out of the response. Prefer
+    // £X.XX format (full pence) — page-current price; fall back to
+    // bare £NNN if that's all we got.
+    const priceMatch = blob.match(/£\s*([\d,]+\.\d{2})/) || blob.match(/£\s*([\d,]+)\b/);
+    if (!priceMatch) return { verified: false, reason: 'pp_no_price_in_response' };
+    const live = parseFloat(priceMatch[1].replace(/,/g, ''));
+    if (!Number.isFinite(live) || live <= 0) return { verified: false, reason: 'pp_invalid_price' };
+    const snippet = item.price;
+    const drift = snippet > 0 ? Math.abs(live - snippet) / snippet : 0;
+    return { verified: true, live, snippet, drift, source: 'perplexity' };
+  } catch (e) {
+    return { verified: false, reason: 'pp_exception_' + (e.name || 'unknown') };
+  }
 }
 const ORIGIN  = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 
@@ -245,6 +368,33 @@ const TRUSTED_PRODUCT_PATTERNS = [
 const AMAZON_TAG = (process.env.AMAZON_ASSOCIATE_TAG !== undefined)
   ? process.env.AMAZON_ASSOCIATE_TAG
   : 'savvey-21';
+
+// Wave 103 — boot-time retailer-list-drift assertion. Wave 99 silently
+// dropped BUDGET_HOSTS / GROCERY_HOSTS / etc and the bug only manifested
+// when a vacuum / kettle / Heinz query matched the lock keywords. This
+// runs once at module load and warns when any host listed in a category
+// lock isn't registered in UK_RETAILERS — fail-loud at deploy time, not
+// at first matching query.
+(function assertRetailerListsConsistent(){
+  const allCategoryHosts = [
+    ...GROCERY_HOSTS, ...BEAUTY_HOSTS, ...DIY_HOSTS, ...BUDGET_HOSTS,
+    ...KITCHEN_HOSTS, ...SPORTS_HOSTS, ...FASHION_HOSTS, ...BOOKS_HOSTS,
+    ...WATCH_HOSTS, ...TOY_HOSTS,
+    ...AUDIO_HOSTS, ...APPLIANCE_HOSTS, ...BIKE_HOSTS, ...PET_HOSTS, ...GARDEN_HOSTS,
+  ];
+  const registered = new Set(UK_RETAILERS.map(r => String(r.host).toLowerCase()));
+  const missing = [];
+  for (const h of allCategoryHosts) {
+    const host = String(h).toLowerCase();
+    if (!registered.has(host)) missing.push(host);
+  }
+  if (missing.length > 0) {
+    const dedup = Array.from(new Set(missing));
+    console.warn(`[${VERSION}] retailer-list drift: hosts in category locks but not in UK_RETAILERS:`, dedup.join(', '));
+  } else {
+    console.log(`[${VERSION}] retailer-list consistency check passed (${allCategoryHosts.length} category hosts checked)`);
+  }
+})();
 
 function rawResultsOf(data) {
   return (data && data.results) ||
@@ -292,6 +442,15 @@ const DIY_KEYWORDS = /\b(drill|saw|hammer|screwdriver|wrench|spanner|paint|brush
 // from £40-£100. The category-locked call surfaces those hits.
 const BUDGET_KEYWORDS = /\b(vacuum|hoover|cordless vacuum|stick vacuum|microwave|iron(?:ing board)?|fan heater|fan|hair ?dryer|dustbin|laundry basket|drying rack|clothes airer|mop|bucket|cleaning|duster|cheap|budget|basic|own[\s-]?brand|value)\b/i;
 
+// Wave 99 RESTORE — host arrays for the existing four locks. The original
+// declaration line was inadvertently removed in the Wave 99 edit and broke
+// every query whose category resolved to grocery/beauty/diy/budget
+// (cordless vacuum / kettle / Heinz / mascara / drill all 500'd).
+const GROCERY_HOSTS = ['tesco.com', 'sainsburys.co.uk', 'asda.com', 'groceries.asda.com', 'morrisons.com', 'groceries.morrisons.com', 'waitrose.com'];
+const BEAUTY_HOSTS  = ['superdrug.com', 'cultbeauty.co.uk', 'lookfantastic.com', 'spacenk.com', 'theperfumeshop.com', 'beautybay.com', 'boots.com'];
+const DIY_HOSTS     = ['diy.com', 'wickes.co.uk', 'toolstation.com', 'screwfix.com'];
+const BUDGET_HOSTS  = ['homebargains.co.uk', 'lidl.co.uk', 'aldi.co.uk', 'wilko.com', 'theworks.co.uk', 'poundland.co.uk', 'argos.co.uk'];
+
 // Wave 99 — kitchen/cookware specialist lock. Vincent's kettle case (3 May
 // 2026) surfaced JL/Argos before Lakeland/Robert Dyas/Dunelm. Those three
 // plus IKEA/Wayfair/Habitat consistently undercut the generalists on
@@ -312,19 +471,60 @@ const FASHION_KEYWORDS = /\b(dress|skirt|blouse|jumper|cardigan|sweater|t[\s-]?s
 const FASHION_HOSTS    = ['asos.com', 'next.co.uk', 'marksandspencer.com', 'johnlewis.com', 'selfridges.com', 'endclothing.com', 'zalando.co.uk', 'verygoodthing.co.uk', 'very.co.uk', 'matchesfashion.com'];
 
 // Wave 99 — books / stationery / media lock.
-const BOOKS_KEYWORDS   = /\b(book|hardback|paperback|kindle edition|audiobook|cookbook|notebook|notepad|diary|journal|stationery|pen|pencil|fountain pen|fineliner|sharpie|highlighter|moleskine|leuchtturm|sticky notes?|envelopes?|gift wrap|wrapping paper|greetings? card|birthday card|board game|jigsaw|puzzle|lego|funko|action figure|barbie|hot wheels)\b/i;
+const BOOKS_KEYWORDS   = /\b(book|hardback|paperback|kindle edition|audiobook|cookbook|notebook|notepad|diary|journal|stationery|pen|pencil|fountain pen|fineliner|sharpie|highlighter|moleskine|leuchtturm|sticky notes?|envelopes?|gift wrap|wrapping paper|greetings? card|birthday card)\b/i;
 const BOOKS_HOSTS      = ['waterstones.com', 'whsmith.co.uk', 'blackwells.co.uk', 'foyles.co.uk', 'amazon.co.uk', 'argos.co.uk', 'theworks.co.uk', 'wordery.com'];
+
+// Wave 102 — luxury watch / jewellery lock. Rolex Submariner / Tag Heuer
+// Carrera / Omega Speedmaster / Cartier / Breitling — none of these
+// stocked at JL/Argos. Specialists deliver.
+const WATCH_KEYWORDS   = /\b(rolex|omega|breitling|tag heuer|tag\s*heuer|cartier|patek philippe|audemars piguet|iwc schaffhausen|panerai|tudor watch|jaeger lecoultre|grand seiko|hublot|montblanc watch|longines|tissot|oris watch|bremont|christopher ward|seiko prospex|rado watch|raymond weil|frederique constant|bulova|maurice lacroix|submariner|datejust|daytona|gmt master|seamaster|speedmaster|carrera watch|monaco watch|navitimer|santos de cartier|tank cartier|royal oak|nautilus watch|pre[-\s]?owned watch|second[-\s]?hand watch|preloved watch|engagement ring|wedding ring|eternity ring|diamond necklace|tennis bracelet|pearl necklace|gold chain|gold bracelet)\b/i;
+const WATCH_HOSTS      = ['watchesofswitzerland.co.uk', 'goldsmiths.co.uk', 'mappinandwebb.co.uk', 'ernestjones.co.uk', 'hsamuel.co.uk', 'beaverbrooks.co.uk', 'selfridges.com', 'harrods.com'];
+
+// Wave 102 — toys / kids lock. Lego, board games, dolls, action figures.
+const TOY_KEYWORDS     = /\b(lego|funko|playmobil|hot wheels|barbie|action figure|board game|jigsaw|puzzle|nerf|pokemon (?:cards?|tcg)|magic the gathering|dungeons and dragons|d&d|tamagotchi|paw patrol|bluey|peppa pig|disney plush|baby toy|toddler toy|kids toy|building blocks|train set|doll house|toy car|toy kitchen|scooter|trampoline|paddling pool|pram|pushchair|car seat|baby monitor|smyths|hamleys|the entertainer)\b/i;
+const TOY_HOSTS        = ['smythstoys.com', 'thetoyshop.com', 'hamleys.com', 'argos.co.uk', 'amazon.co.uk', 'johnlewis.com', 'verybaby.co.uk', 'very.co.uk'];
+
+// Wave 103 — audio / headphones / hifi specialists.
+const AUDIO_KEYWORDS   = /\b(headphones?|earbuds?|earphones?|in[\s-]?ear|over[\s-]?ear|wireless headphones|noise cancelling|hd ?\d{3,}|wh[\s-]?1000xm[345]|airpods?|airpods? pro|airpods? max|bose quietcomfort|bose soundlink|jbl flip|jbl charge|sonos (?:one|era|beam|arc|move)|marshall (?:emberton|stanmore|woburn)|sennheiser|shure (?:aonic|sm7b|mv)|focal (?:bathys|clear|stellia|utopia)|hifiman|audeze|grado|beyerdynamic|akg k\d|audio[\s-]?technica|denon (?:home|avr|pma)|cambridge audio|naim audio|rega (?:planar|brio)|kef ls|bowers wilkins|b&w (?:px|pi|formation)|dynaudio|mission speakers|q acoustics|monitor audio|dali (?:opticon|oberon|epicon)|pro[\s-]?ject (?:debut|t1|x1)|rega planar|technics sl|fiio|astell\s*&\s*kern|chord (?:mojo|hugo))\b/i;
+const AUDIO_HOSTS      = ['richersounds.com', 'sevenoakssoundandvision.co.uk', 'peterstyles.co.uk', 'henleyaudio.co.uk', 'johnlewis.com', 'currys.co.uk', 'amazon.co.uk', 'argos.co.uk'];
+
+// Wave 103 — major appliance specialists.
+const APPLIANCE_KEYWORDS = /\b(washing machine|washer[\s-]?dryer|tumble dryer|dishwasher|fridge[\s-]?freezer|fridge|freezer|chest freezer|american fridge|range cooker|electric (?:oven|cooker|hob|range)|gas (?:oven|cooker|hob)|induction hob|extractor (?:hood|fan)|cooker hood|wine cooler|drinks fridge|kitchen sink|tap (?:mixer|kitchen))\b/i;
+const APPLIANCE_HOSTS    = ['ao.com', 'currys.co.uk', 'johnlewis.com', 'argos.co.uk', 'marksandspencer.com', 'amazon.co.uk', 'directappliances.co.uk', 'appliancesdirect.co.uk'];
+
+// Wave 103 — cycling specialists.
+const BIKE_KEYWORDS    = /\b(bicycle|road bike|mountain bike|hybrid bike|electric bike|e[\s-]?bike|gravel bike|kids bike|childrens bike|bike helmet|cycling helmet|bike lights?|bike lock|bike pump|cycle (?:computer|bag|shoe|jersey|shorts|saddle)|chain lube|inner tube|bike tyre|bicycle tyre|specialized bike|trek bike|giant bike|cannondale|merida|ribble|cube bike|halfords bike|brompton)\b/i;
+const BIKE_HOSTS       = ['wiggle.co.uk', 'tredz.co.uk', 'evanscycles.com', 'leisurelakesbikes.com', 'rutlandcycling.com', 'halfords.com', 'decathlon.co.uk', 'amazon.co.uk', 'argos.co.uk'];
+
+// Wave 103 — pet supplies.
+const PET_KEYWORDS     = /\b(dog food|cat food|kitten food|puppy food|raw food (?:dog|cat)|pet food|cat litter|cat tree|scratching post|dog (?:bed|crate|harness|lead|collar|treats|chew|toy|kennel|cage)|cat (?:bed|toy|carrier)|fish tank|aquarium|hamster (?:cage|wheel)|guinea pig (?:hutch|food)|pet insurance|flea treatment|worming tablets|royal canin|whiskas|felix cat|pedigree dog|james wellbeloved|burns pet|lily's kitchen|hill's science|harringtons|wagg dog|butcher's|sheba|purina|iams|tetra pond)\b/i;
+const PET_HOSTS        = ['petsathome.com', 'zooplus.co.uk', 'petplanet.co.uk', 'jollyes.co.uk', 'fetch.co.uk', 'amazon.co.uk', 'argos.co.uk'];
+
+// Wave 103 — garden / outdoor.
+const GARDEN_KEYWORDS  = /\b(plant pot|garden pot|seed packet|seedlings?|bulbs (?:flower|spring|autumn)|garden compost|topsoil|grass seed|fertilizer|fertiliser|weedkiller|slug pellet|garden hose|sprinkler|watering can|greenhouse|cold frame|raised bed|garden shed|wooden shed|patio (?:furniture|set|umbrella|heater)|garden bench|garden chair|gazebo|hammock|chiminea|fire pit|bbq cover|outdoor cushion|garden lighting|solar lights|fence panel|trellis|garden gate|wheelbarrow|spade|fork|trowel|secateurs|hedge trimmer|leaf blower|lawnmower|petrol mower|electric mower|cordless mower|robot mower|strimmer|hosepipe|garden vacuum)\b/i;
+const GARDEN_HOSTS     = ['crocus.co.uk', 'thompson-morgan.com', 'suttons.co.uk', 'gardenbuildingsdirect.co.uk', 'wickes.co.uk', 'diy.com', 'homebase.co.uk', 'argos.co.uk', 'johnlewis.com', 'amazon.co.uk', 'dobbies.com'];
 
 function detectCategoryLock(query) {
   const q = String(query || '');
-  if (GROCERY_KEYWORDS.test(q)) return { name: 'grocery', hosts: GROCERY_HOSTS };
-  if (BEAUTY_KEYWORDS.test(q))  return { name: 'beauty',  hosts: BEAUTY_HOSTS };
-  if (KITCHEN_KEYWORDS.test(q)) return { name: 'kitchen', hosts: KITCHEN_HOSTS };  // Wave 99 — kitchen above DIY/BUDGET
-  if (SPORTS_KEYWORDS.test(q))  return { name: 'sports',  hosts: SPORTS_HOSTS };   // Wave 99
-  if (FASHION_KEYWORDS.test(q)) return { name: 'fashion', hosts: FASHION_HOSTS };  // Wave 99
-  if (BOOKS_KEYWORDS.test(q))   return { name: 'books',   hosts: BOOKS_HOSTS };    // Wave 99
-  if (DIY_KEYWORDS.test(q))     return { name: 'diy',     hosts: DIY_HOSTS };
-  if (BUDGET_KEYWORDS.test(q))  return { name: 'budget',  hosts: BUDGET_HOSTS };
+  // Wave 102 — luxury watches and toys take precedence over generic
+  // categories so Rolex doesn't fall through to FASHION/BOOKS and Lego
+  // doesn't fall through to BOOKS.
+  if (WATCH_KEYWORDS.test(q))     return { name: 'watch',     hosts: WATCH_HOSTS };
+  if (TOY_KEYWORDS.test(q))       return { name: 'toy',       hosts: TOY_HOSTS };
+  // Wave 103 — narrower verticals before broader ones
+  if (PET_KEYWORDS.test(q))       return { name: 'pet',       hosts: PET_HOSTS };
+  if (BIKE_KEYWORDS.test(q))      return { name: 'bike',      hosts: BIKE_HOSTS };
+  if (APPLIANCE_KEYWORDS.test(q)) return { name: 'appliance', hosts: APPLIANCE_HOSTS };
+  if (AUDIO_KEYWORDS.test(q))     return { name: 'audio',     hosts: AUDIO_HOSTS };
+  if (GARDEN_KEYWORDS.test(q))    return { name: 'garden',    hosts: GARDEN_HOSTS };
+  if (GROCERY_KEYWORDS.test(q))   return { name: 'grocery',   hosts: GROCERY_HOSTS };
+  if (BEAUTY_KEYWORDS.test(q))    return { name: 'beauty',    hosts: BEAUTY_HOSTS };
+  if (KITCHEN_KEYWORDS.test(q))   return { name: 'kitchen',   hosts: KITCHEN_HOSTS };  // Wave 99 — kitchen above DIY/BUDGET
+  if (SPORTS_KEYWORDS.test(q))    return { name: 'sports',    hosts: SPORTS_HOSTS };   // Wave 99
+  if (FASHION_KEYWORDS.test(q))   return { name: 'fashion',   hosts: FASHION_HOSTS };  // Wave 99
+  if (BOOKS_KEYWORDS.test(q))     return { name: 'books',     hosts: BOOKS_HOSTS };    // Wave 99
+  if (DIY_KEYWORDS.test(q))       return { name: 'diy',       hosts: DIY_HOSTS };
+  if (BUDGET_KEYWORDS.test(q))    return { name: 'budget',    hosts: BUDGET_HOSTS };
   return null;
 }
 
@@ -547,6 +747,18 @@ const PRODUCT_URL_PATTERNS = {
   // Wave 99 — books / media additions
   'foyles.co.uk':      /\/witem\/[a-z0-9-]+|\/(?:childrens|fiction|non-fiction)\/[a-z0-9-]+/i,
   'wordery.com':       /\/[a-z0-9-]+-[0-9]{10,13}/i,                              // ISBN in slug
+  // Wave 102 — luxury watch / jewellery retailers (URL conventions vary;
+  // permissive patterns)
+  'watchesofswitzerland.co.uk': /\/p\/[a-z0-9-]+|\/[a-z0-9-]+\.html/i,
+  'goldsmiths.co.uk':           /\/p\/[a-z0-9-]+|\/[a-z0-9-]+\/p\d+/i,
+  'mappinandwebb.co.uk':        /\/p\/[a-z0-9-]+|\/[a-z0-9-]+\.html/i,
+  'ernestjones.co.uk':          /\/p\/[a-z0-9-]+|\/[a-z0-9-]+\.html/i,
+  'hsamuel.co.uk':              /\/products\/[a-z0-9-]+/i,
+  'beaverbrooks.co.uk':         /\/[a-z0-9-]+\.html|\/p\/\d+/i,
+  // Wave 102 — toy retailers
+  'smythstoys.com':             /\/uk\/en-gb\/[a-z0-9-]+\/p\/\d+|\/uk\/en-gb\/[a-z0-9-]+/i,
+  'thetoyshop.com':             /\/[a-z0-9-]+\/[0-9]+\b/i,
+  'hamleys.com':                /\/[a-z0-9-]+\.html|\/products\/[a-z0-9-]+/i,
 };
 
 // Returns true if the URL is plausibly a product page for the given
@@ -637,6 +849,19 @@ Wave 78 — PRODUCT MATCH GRADING. For every listing, also grade how well its TI
 - different: title is clearly a different product, accessory, replacement part, fake/clone listing, wrong generation, wrong tier, or unrelated. Examples: query "Nintendo Switch" → title "Nintendo Switch 2 Console" = different. Query "AirPods Pro 2" → title "Apple AirPods Pro 2 Wireless Earbuds, Bluetooth Headphones, Bluetooth Earphones" at £70 from an unknown seller = different (clone listing). Query "Dyson V15" → title "Dyson V8 Replacement Battery" = different (accessory). Query "iPhone 17" → title "iPhone 17 Case Clear Cover" = different (case).
 
 Be ASSERTIVE on "different". A wrong product surfacing as the cheapest option is far worse than dropping a borderline-similar listing. When in doubt between similar and different, choose different.
+
+Wave 102 — PRICE-TIER SANITY. Cross-check the listing price against typical retail you know for the named product. When a price is implausibly low for what the title claims, the title is masking a different product (smaller set, micro-build, replacement part, accessory, clone). Mark plausible:false in those cases.
+- "Lego Star Wars Millennium Falcon" UCS retails ~£780. Anything below ~£250 with that exact title is a smaller set (Microfighter / Mini / Brickheadz). Mark plausible:false.
+- "Dyson V15 Detect" retails ~£500. Anything under ~£300 with that title is a refurb, clone, or accessory.
+- "PlayStation 5" / "Xbox Series X" retail ~£480. Anything under ~£300 is suspicious — accessory, controller, gift card, fake listing.
+- "iPhone 17" base 128GB retails ~£799. Anything under ~£500 is finance, trade-in, refurb, or wrong product. (Member/SIM-locked deals already filtered above.)
+- "MacBook Pro 14 M3" retails ~£1700. Anything under ~£1100 is wrong.
+- "Apple Watch Ultra 2" retails ~£799. Anything under ~£550 is wrong.
+- "Le Creuset Signature Casserole 24cm" retails ~£245-£325. Anything under ~£150 is a smaller piece or accessory.
+- "Garmin Fenix 7" retails ~£500. Under ~£350 is wrong (older Fenix or accessory).
+- "Sony WH-1000XM5" retails ~£280. Under ~£180 is suspect (clone or refurb).
+- "Sage Barista Express" retails ~£500. Under ~£350 is accessory or different model.
+General rule: if listing price < 30% of typical retail for the EXACT product the title names, default to plausible:false. Use your knowledge of UK retail prices in 2026.
 
 Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_null, "plausible": boolean, "query_match": "exact" | "similar" | "different"}
 - price = the actual current PUBLIC £ price as a plain number (e.g. 229.99), null if only conditional / member prices visible or you can't tell

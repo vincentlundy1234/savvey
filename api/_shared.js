@@ -109,6 +109,47 @@ export const UK_RETAILERS = [
   // Wave 99 — books / media additions
   { host: 'foyles.co.uk',               name: 'Foyles',        srcTerms: ['foyles'] },
   { host: 'wordery.com',                name: 'Wordery',       srcTerms: ['wordery'] },
+  // Wave 102 — luxury watch / jewellery retailers. Battery showed Rolex
+  // Submariner / Tag Heuer Carrera return 0 because none of these are
+  // stocked at JL/Argos/Currys.
+  { host: 'watchesofswitzerland.co.uk', name: 'Watches of Switzerland', srcTerms: ['watches of switzerland', 'watchesofswitzerland'] },
+  { host: 'goldsmiths.co.uk',           name: 'Goldsmiths',    srcTerms: ['goldsmiths'] },
+  { host: 'mappinandwebb.co.uk',        name: 'Mappin & Webb', srcTerms: ['mappin', 'mappin and webb', 'mappin & webb'] },
+  { host: 'ernestjones.co.uk',          name: 'Ernest Jones',  srcTerms: ['ernest jones', 'ernestjones'] },
+  { host: 'hsamuel.co.uk',              name: 'H. Samuel',     srcTerms: ['h samuel', 'h. samuel', 'hsamuel'] },
+  { host: 'beaverbrooks.co.uk',         name: 'Beaverbrooks',  srcTerms: ['beaverbrooks'] },
+  // Wave 102 — toy retailers
+  { host: 'smythstoys.com',             name: 'Smyths Toys',   srcTerms: ['smyths', 'smythstoys'] },
+  { host: 'thetoyshop.com',             name: 'The Entertainer', srcTerms: ['the entertainer', 'thetoyshop'] },
+  { host: 'hamleys.com',                name: 'Hamleys',       srcTerms: ['hamleys'] },
+  // Wave 102 — addresses Selfridges/Harrods overlap in WATCH lock (selfridges already registered above)
+  { host: 'harrods.com',                name: 'Harrods',       srcTerms: ['harrods'] },
+  // Wave 103 — audio / hifi specialists (richersounds already registered above)
+  { host: 'sevenoakssoundandvision.co.uk', name: 'Sevenoaks Sound & Vision', srcTerms: ['sevenoaks sound', 'sevenoakssound'] },
+  { host: 'peterstyles.co.uk',          name: 'Peter Tyson',   srcTerms: ['peter tyson', 'peterstyles', 'petertyson'] },
+  { host: 'henleyaudio.co.uk',          name: 'Henley Audio',  srcTerms: ['henley audio', 'henleyaudio'] },
+  // Wave 103 — appliance specialists (ao.com, currys, jl, argos, marksandspencer all registered above)
+  { host: 'directappliances.co.uk',     name: 'Direct Appliances', srcTerms: ['direct appliances', 'directappliances'] },
+  { host: 'appliancesdirect.co.uk',     name: 'Appliances Direct', srcTerms: ['appliances direct', 'appliancesdirect'] },
+  // Wave 103 — bike / cycling specialists
+  { host: 'tredz.co.uk',                name: 'Tredz',         srcTerms: ['tredz'] },
+  { host: 'evanscycles.com',            name: 'Evans Cycles',  srcTerms: ['evans cycles', 'evanscycles'] },
+  { host: 'leisurelakesbikes.com',      name: 'Leisure Lakes Bikes', srcTerms: ['leisure lakes', 'leisurelakesbikes'] },
+  { host: 'rutlandcycling.com',         name: 'Rutland Cycling', srcTerms: ['rutland cycling', 'rutlandcycling'] },
+  // Wave 103 — pet specialists
+  { host: 'petsathome.com',             name: 'Pets at Home',  srcTerms: ['pets at home', 'petsathome'] },
+  { host: 'zooplus.co.uk',              name: 'Zooplus',       srcTerms: ['zooplus'] },
+  { host: 'petplanet.co.uk',            name: 'PetPlanet',     srcTerms: ['petplanet'] },
+  { host: 'jollyes.co.uk',              name: 'Jollyes',       srcTerms: ['jollyes'] },
+  { host: 'fetch.co.uk',                name: 'Fetch',         srcTerms: ['fetch.co.uk'] },
+  // Wave 103 — garden specialists
+  { host: 'crocus.co.uk',               name: 'Crocus',        srcTerms: ['crocus'] },
+  { host: 'thompson-morgan.com',        name: 'Thompson & Morgan', srcTerms: ['thompson morgan', 'thompson-morgan'] },
+  { host: 'suttons.co.uk',              name: 'Suttons',       srcTerms: ['suttons'] },
+  { host: 'gardenbuildingsdirect.co.uk', name: 'Garden Buildings Direct', srcTerms: ['garden buildings'] },
+  { host: 'dobbies.com',                name: 'Dobbies',       srcTerms: ['dobbies'] },
+  // Wave 103 — toy adjacency
+  { host: 'verybaby.co.uk',             name: 'Very Baby',     srcTerms: ['very baby', 'verybaby'] },
 ];
 
 // ─────────────────────────────────────────────────────────────
