@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.3.0';
+const VERSION = 'ai-search.js v2.4.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -789,19 +789,44 @@ function titleMatchesBrand(title, brand, parsedAliases) {
   return aliases.some((a) => t.includes(a));
 }
 
-// Savvey v2 R3-lite — model qualifier gate. When parser supplies a specific
-// model name (HD 660S, Classic Pro, V15 Detect), the result title must
-// contain it (normalised: lowercase, no whitespace/dashes). Without this
-// Sonar Pro's loose match admits "Classic Evo Pro" for "Classic Pro".
+// Savvey v2.4 — model qualifier gate (token-set + upgrade-marker rejection).
+// REPLACES the v2.3 substring approach which admitted "Classic Evo Pro" for
+// "Classic Pro" queries (substring "classic pro" present in "classic evo pro"
+// is false but "classic" alone leaks). Token-set with EXACT equality fixes:
+// - "HD 660S" → reject "HD 660S2" (token "660s" ≠ "660s2")
+// - "Bambino" → reject "Bambino Plus" (model has no "plus", title leaks "plus")
+// - "OptiGrill Elite" → reject "OptiGrill+ XL" (model needs "elite", title doesn't have it)
+const UPGRADE_MARKERS = new Set([
+  'plus','pro','max','ultra','elite','xl','mini','lite','air',
+  's2','s3','mk2','mk3','ii','iii','iv','v','vi','vii','viii','ix','x',
+  '2','3','4','5','6','7','8','9','10',
+]);
 function titleMatchesModel(title, model) {
   if (!model || typeof model !== 'string') return true;
   if (!title || typeof title !== 'string') return true;
-  const norm = (str) => String(str).toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
-  const t = norm(title);
-  const m = norm(model);
-  if (t.includes(m)) return true;
-  // Try ultra-condensed (no spaces) — "HD 660S" matches "hd660s" titles
-  return t.replace(/\s+/g, '').includes(m.replace(/\s+/g, ''));
+  // Tokenise: split on whitespace, dashes, underscores, slashes, parens, commas.
+  // KEEP "+" attached to its token so "Optigrill+" doesn't equal "optigrill".
+  const tokenize = (str) => String(str).toLowerCase().split(/[\s\-_,()/.]+/).filter((t) => t.length > 0);
+  const titleTokens = tokenize(title);
+  const titleSet = new Set(titleTokens);
+  const modelTokens = tokenize(model);
+  if (modelTokens.length === 0) return true;
+  // 1. Every model token must appear as an exact token in title
+  if (!modelTokens.every((t) => titleSet.has(t))) return false;
+  // 2. Title must not contain upgrade markers absent from model tokens
+  const modelMarkers = new Set(modelTokens.filter((t) => UPGRADE_MARKERS.has(t)));
+  for (const t of titleTokens) {
+    if (UPGRADE_MARKERS.has(t) && !modelMarkers.has(t)) return false;
+  }
+  return true;
+}
+// Savvey v2.4 — tier gate (base-tier only). For "iPhone 17" (tier=base),
+// reject titles with Pro/Max/Plus/Ultra. Named tiers (Pro, Pro Max) are
+// best handled by Sonar Pro constraints + AI identity check.
+function titleMatchesBaseTier(title) {
+  if (!title || typeof title !== 'string') return true;
+  const t = title.toLowerCase();
+  return !['pro','max','plus','ultra','elite'].some((m) => new RegExp(`\\b${m}\\b`, 'i').test(t));
 }
 
 // Savvey v2 R2 — convert parsed query intent into a hard-constraints block
@@ -832,7 +857,7 @@ function constraintsFromParsedQuery(parsed) {
   if (lines.length === 0) return '';
   const band = parsed.expected_price_band_gbp;
   const bandLine = (Array.isArray(band) && band[0] != null && band[1] != null && band[1] > 0)
-    ? `\nThe typical UK price band for this product is GBP ${band[0]}-${band[1]}. DO NOT INCLUDE listings more than 40% below the floor (£${Math.round(band[0]*0.6)}) — these are different SKUs (chassis-only, non-UK, refurbished, or member-only). Set query_match="different" only for borderline cases within the band.`
+    ? `\nThe typical UK price band for this product is GBP ${band[0]}-${band[1]}. DO NOT INCLUDE listings more than 30% below the floor (£${Math.round(band[0]*0.7)}) — these are different SKUs (chassis-only, non-UK, refurbished, member-only, or accessories). Set query_match="different" only for borderline cases within the band.`
     : '';
   const emLine = parsed.exact_match_required
     ? `\nThis is an EXACT-MATCH query - set query_match="different" for ANY product that fails the constraints above, even if it is in the same general family.`
@@ -2542,6 +2567,63 @@ export default async function handler(req, res) {
     }
   }
 
+// Savvey v2.4 (M4 in plan) — AI per-item identity check. Calls Haiku once
+// with all retained items + parser intent and returns a 0-1 score per item.
+// Drops items below 0.6 (the "probably right" floor). Catches what regex
+// gates miss — diacritics (fēnix vs fenix), missing brand-in-title (Stanley
+// Quencher), and judgment cases (Tefal Optigrill+ XL vs Optigrill Elite).
+async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
+  if (!items || items.length === 0) return items;
+  if (!parsedQuery || !parsedQuery.brand) return items;
+  if (parsedQuery.tier_signal_strength === 'absent') return items;
+  if (!anthropicKey) return items;
+  const idxList = items.map((it, i) => `${i + 1}. [${it.source || it.host || '?'}] "${(it.title || '').slice(0, 120)}" — £${(it.price ?? '?')}`).join('\n');
+  const sys = `You are a UK retail product disambiguator. Score how well each result matches the user's parsed intent.\n\nReturn ONLY this JSON: {"identities":[{"i":1,"s":0.95,"w":null}, ...]}\nWhere s is 0.0-1.0 and w is a short warning string or null.\n\nScoring rubric:\n- 0.85-1.00: confident exact match (right brand, model, qualifiers)\n- 0.60-0.85: probably right, minor uncertainty (variant year, colour)\n- 0.30-0.60: same family but likely wrong tier or SKU\n- 0.00-0.30: clearly different product (wrong brand or wrong model entirely)\n\nIf the price is far below the expected band, score lower (likely refurb / non-UK / chassis-only / accessory-not-product).`;
+  const user = `User parsed intent:\n${JSON.stringify({brand: parsedQuery.brand, family: parsedQuery.family, qualifiers: parsedQuery.qualifiers, expected_price_band_gbp: parsedQuery.expected_price_band_gbp, exact_match_required: parsedQuery.exact_match_required})}\n\nResults:\n${idxList}\n\nReturn only the JSON.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 600, system: sys, messages: [{ role: 'user', content: user }] }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) { console.warn(`[${VERSION}] aiIdentityCheck non-200: ${r.status}`); return items; }
+    const j = await r.json();
+    const text = ((j.content || []).filter((b) => b && b.type === 'text').map((b) => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch { return items; }
+    const identities = Array.isArray(parsed.identities) ? parsed.identities : [];
+    if (identities.length === 0) return items;
+    // Build score map (1-indexed → score)
+    const scoreMap = new Map();
+    for (const id of identities) {
+      const i = parseInt(id.i, 10);
+      const sc = typeof id.s === 'number' ? id.s : null;
+      if (i > 0 && sc != null) scoreMap.set(i, { score: sc, warning: id.w || null });
+    }
+    const before = items.length;
+    const kept = items.filter((it, idx) => {
+      const r = scoreMap.get(idx + 1);
+      if (!r) return true; // missing score → don't drop
+      if (r.score < 0.6) {
+        console.log(`[${VERSION}] aiIdentityCheck dropped item ${idx + 1} score=${r.score} reason="${r.warning}" title="${(it.title || '').slice(0, 60)}"`);
+        return false;
+      }
+      return true;
+    });
+    if (kept.length < before) console.log(`[${VERSION}] aiIdentityCheck dropped ${before - kept.length}/${before} items below 0.6 confidence`);
+    return kept;
+  } catch (e) {
+    clearTimeout(timer);
+    console.warn(`[${VERSION}] aiIdentityCheck failed: ${e.message}`);
+    return items;
+  }
+}
+
   // Savvey v2 R2 — post-merge brand gate. The Search-API quad doesn't go
   // through Sonar Pro's hard constraints, so wrong-brand URLs (e.g. Einhell
   // for a Bosch query) can leak in via gatherRetailerHits. Filter merged
@@ -2555,20 +2637,32 @@ export default async function handler(req, res) {
       console.log(`[${VERSION}] R2 brand gate dropped ${droppedByBrandGate} wrong-brand items (kept brand="${parsedForGate.brand}", remaining=${items.length})`);
     }
   }
-  // Savvey v2 R3-lite — model qualifier gate. After the brand gate, also
-  // drop items whose title doesn't contain the parsed model. Catches the
-  // "Classic Pro" admits "Classic Evo Pro" / "HD 660S" admits "HD 660S2"
-  // / "Bambino" admits "Bambino Plus" class — Sonar Pro's loose model
-  // match doesn't reject these strictly enough on its own.
+  // Savvey v2.4 — model qualifier gate (token-set + upgrade-marker reject).
+  // Catches HD 660S vs HD 660S2, Bambino vs Bambino Plus, OptiGrill vs OptiGrill+ XL.
   if (parsedForGate && parsedForGate.qualifiers && parsedForGate.qualifiers.model && items.length > 0) {
     const modelStr = String(parsedForGate.qualifiers.model);
     const beforeModelGate = items.length;
     items = items.filter((it) => titleMatchesModel(it.title, modelStr));
     const droppedByModelGate = beforeModelGate - items.length;
     if (droppedByModelGate > 0) {
-      console.log(`[${VERSION}] R3-lite model gate dropped ${droppedByModelGate} wrong-model items (kept model="${modelStr}", remaining=${items.length})`);
+      console.log(`[${VERSION}] v2.4 model gate dropped ${droppedByModelGate} wrong-model items (kept model="${modelStr}", remaining=${items.length})`);
     }
   }
+  // Savvey v2.4 — tier gate (base-tier). For "iPhone 17" (tier=base), reject
+  // titles with Pro/Max/Plus/Ultra/Elite markers.
+  if (parsedForGate && parsedForGate.qualifiers && String(parsedForGate.qualifiers.tier || '').toLowerCase() === 'base' && items.length > 0) {
+    const beforeTierGate = items.length;
+    items = items.filter((it) => titleMatchesBaseTier(it.title));
+    const droppedByTierGate = beforeTierGate - items.length;
+    if (droppedByTierGate > 0) {
+      console.log(`[${VERSION}] v2.4 base-tier gate dropped ${droppedByTierGate} upgrade-tier items (remaining=${items.length})`);
+    }
+  }
+
+  // Savvey v2.4 — AI identity check fires in parallel with URL HEAD verify
+  // and hero image. Adds ~400-800ms but lives inside the existing parallel
+  // block so it doesn't add to total latency. Drops items below 0.6 confidence.
+  const identityPromise = aiIdentityCheck(items, parsedForGate, ANTHROPIC_KEY);
 
   // URL HEAD verification + hero image fetch — fired in parallel so the
   // image API call doesn't add to total latency. Image is optional; null
@@ -2580,11 +2674,15 @@ export default async function handler(req, res) {
   // category photos. Use the first specific product instead so the hero
   // image is an actual product photo.
   const heroImageQuery = (categoryProducts && categoryProducts[0]) ? categoryProducts[0] : q;
-  const [verifiedItems, heroImage] = await Promise.all([
+  const [verifiedItems, heroImage, identityKept] = await Promise.all([
     verify ? verifyUrls(items) : Promise.resolve(items),
     fetchHeroImage(heroImageQuery, SERPER_KEY_FOR_IMG),
+    identityPromise,
   ]);
-  items = verifiedItems;
+  // Intersect verified-by-URL with kept-by-AI-identity (both filtered subsets of items).
+  // Keep only items present in BOTH lists. Match by URL (the stable identifier).
+  const identityKeptUrls = new Set((identityKept || items).map((it) => it.link || it.url));
+  items = verifiedItems.filter((it) => identityKeptUrls.has(it.link || it.url));
   const verifiedDropped = beforeVerify - items.length;
 
   const dedupedResults = dedup(items);
