@@ -2088,6 +2088,92 @@
       letter-spacing:1px;
       padding:14px 4px 6px;
     }
+    /* Wave 210 — reasoning banner: subtle context strip above the retailer
+       list. Calm tone; not competing with the verdict card. Hidden when
+       sc.reasoning is null (validator rejected hallucination). */
+    .reasoning-banner{
+      display:flex;
+      gap:10px;
+      align-items:flex-start;
+      background:rgba(42,107,34,0.06);
+      border:1px solid rgba(42,107,34,0.15);
+      border-radius:12px;
+      padding:10px 12px;
+      margin:14px 0 4px;
+      color:var(--ink2,#3a3a3a);
+      font:500 13px/1.45 "Inter";
+    }
+    .reasoning-icon{
+      flex:0 0 auto;
+      color:#2a6b22;
+      margin-top:2px;
+    }
+    .reasoning-text{flex:1;}
+    /* Wave 220 — refinement-applied chip. Pill-shaped indicator showing
+       which refinement is active. The clear button reverts to bare query. */
+    .refine-applied-chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      background:#2a6b22;
+      color:#fff;
+      border-radius:999px;
+      padding:5px 6px 5px 12px;
+      margin:8px 0 0;
+      font:600 12px/1 "Inter";
+      max-width:100%;
+    }
+    .refine-applied-label{opacity:0.75;font-weight:500;}
+    .refine-applied-text{
+      font-weight:600;
+      max-width:240px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .refine-applied-clear{
+      background:rgba(255,255,255,0.2);
+      border:0;
+      color:#fff;
+      width:20px;
+      height:20px;
+      border-radius:50%;
+      font:600 14px/1 sans-serif;
+      cursor:pointer;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      padding:0;
+    }
+    .refine-applied-clear:hover{background:rgba(255,255,255,0.35);}
+    /* Wave 211 — stock badges on retailer rows. Rendered inside the row
+       by result-rows.js when in_stock signal is provided. */
+    .ret-row .stock-badge{
+      display:inline-flex;
+      align-items:center;
+      gap:4px;
+      font:600 11px/1 "Inter";
+      padding:3px 7px;
+      border-radius:999px;
+      margin-left:6px;
+    }
+    .ret-row .stock-badge.in{
+      background:rgba(42,107,34,0.12);
+      color:#2a6b22;
+    }
+    .ret-row .stock-badge.out{
+      background:rgba(180,40,40,0.10);
+      color:#b42828;
+    }
+    /* Wave 213 — confidence-aware verdict subtitle. Shown when
+       sc.confidence === 'low' to set honest expectations. */
+    .confidence-note{
+      display:block;
+      font:500 11px/1.4 "Inter";
+      color:var(--ink3);
+      margin-top:6px;
+      letter-spacing:0.2px;
+    }
     .ret-row{
       position:relative;
       background:var(--card);border:1px solid var(--border);border-radius:14px;
@@ -4000,7 +4086,7 @@
             type="text"
             inputmode="search"
             autocomplete="off"
-            placeholder="Refine search…"
+            placeholder="Refine — try “show cheaper” or new product…"
             aria-label="Refine search"
             onkeydown="if(event.key==='Enter'){event.preventDefault();refineSearch();}"
           />
@@ -4068,6 +4154,19 @@
       <svg style="display:none"><circle id="score-arc"/></svg>
       <div class="signal" id="signal-wrap" style="display:none"><div class="signal-text"><div class="signal-lbl">Save Score</div><div class="signal-val" id="signal-verdict"></div></div></div>
 
+      <!-- Wave 210 — reasoning line populated by renderResults from
+           sc.reasoning. Hidden when null (validator rejected hallucination). -->
+      <div class="reasoning-banner" id="reasoning-banner" hidden>
+        <svg class="reasoning-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+        <div class="reasoning-text" id="reasoning-text"></div>
+      </div>
+      <!-- Wave 220 — refinement-applied chip. Visible when the current
+           result set was generated via refine: payload (e.g. "show cheaper"). -->
+      <div class="refine-applied-chip" id="refine-applied-chip" hidden>
+        <span class="refine-applied-label">Refined:</span>
+        <span class="refine-applied-text" id="refine-applied-text"></span>
+        <button class="refine-applied-clear" id="refine-applied-clear" aria-label="Clear refinement">×</button>
+      </div>
       <div class="res-section-lbl">All prices found</div>
       <div id="ret-list"></div>
 
@@ -4336,6 +4435,9 @@ const CIRC=2*Math.PI*42; // r=42 on new SVG
 let currentScreen='welcome';
 let liveQuery='';
 let liveScen=null;
+// Wave 220 — current refinement context. Set by doLiveSearch(query, ctx);
+// fetchPrices reads it to forward into the /api/ai-search refine: field.
+let liveRefine=null;
 let userPrice=null;
 let bestPriceOnly=false;
 let inputMethod='search';
@@ -4412,6 +4514,16 @@ window.addEventListener('appinstalled',()=>{
 // On iOS the beforeinstallprompt event never fires — surface the banner
 // after a short delay so the welcome screen has rendered first.
 window.addEventListener('load',()=>{
+  // Wave 220 — wire the refine-applied chip clear button. Clicking ✕
+  // drops liveRefine, re-runs doLiveSearch on the bare query.
+  const clearBtn = document.getElementById('refine-applied-clear');
+  if(clearBtn){
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if(typeof clearRefinement === 'function') clearRefinement();
+    });
+  }
   // Wave 63 — eager service worker registration. Was missing entirely
   // (live audit confirmed `navigator.serviceWorker.controller` was null
   // on first visit). SW caches the shell + provides offline + the
@@ -4554,6 +4666,9 @@ function globalReset(){
   // 3. Wipe all state derived from the previous search
   liveScen=null;
   liveQuery='';
+  // Wave 220 — clear refinement context so the next bare search doesn't
+  // inherit stale "show cheaper" intent.
+  liveRefine=null;
   userPrice=null;
   bestPriceOnly=false;
   // 4. Clear the DOM — results list, verdict banner, pips
@@ -5678,7 +5793,10 @@ function buildScenV3(items, uPrice, query){
       bad:p.bad,
       sub:p.sub||'Check retailer',
       diff:p.best?'':'+£'+(p.price-bestP).toFixed(0)+' more',
-      query_match: p.query_match || null
+      query_match: p.query_match || null,
+      // Wave 211 — preserve in_stock through to the rets array so the
+      // row renderer can show stock badges.
+      in_stock: (typeof p.in_stock === 'boolean') ? p.in_stock : null
     })),
     shareMsg:spc==='red'
       ?`Scanned ${query}. ${deduped[1]?.retailer||'The shop'} wanted £${uPrice||'more'}. ${deduped[0].retailer} has it for £${bestP}. Savvey — savvey.app`
@@ -5689,10 +5807,17 @@ function buildScenV3(items, uPrice, query){
 }
 
 // ── Main search ──
-async function doLiveSearch(forced){
+async function doLiveSearch(forced, refineCtx){
   const inp=document.getElementById('search-input');
   const raw=forced||(inp?inp.value.trim():'');
   if(!raw){if(inp)inp.focus();return;}
+  // Wave 220 — refineCtx, if present, is forwarded to the API as
+  // `refine: {previous_query, refinement_text}`. Sonar Pro applies
+  // it contextually. liveRefine globalled so fetchPrices reads it
+  // without changing every call signature in the chain.
+  // Capture into a local because globalReset() below clears liveRefine —
+  // we set it AGAIN after the reset so the upcoming search sees it.
+  const refineNow = (refineCtx && typeof refineCtx === 'object' && refineCtx.refinement_text) ? refineCtx : null;
 
   // Direct Scrape Mode — if the user typed/pasted a URL into the search box
   if(isURL(raw)){
@@ -5711,6 +5836,10 @@ async function doLiveSearch(forced){
   const query=cleanQuery(raw);
   if(!forced&&inp&&query!==raw)inp.value=query;
   liveQuery=query;
+  // Wave 220 — re-apply the captured refine context AFTER globalReset
+  // (which wiped liveRefine). Without this re-set, refinement intent is
+  // dropped and we'd run a bare search on the previous query.
+  liveRefine = refineNow;
   if(!forced)inputMethod='search';
   userPrice=null;
   bestPriceOnly=true;
@@ -5775,11 +5904,18 @@ function fetchPrices(query){
   // "couldn't reach prices" vs "no products found". Without this distinction,
   // the BUDGET_HOSTS class of bugs surfaced as silent zero-results.
   let aiUpstreamError = null;
+  // Wave 220 — pass through refine context (previous_query + refinement_text)
+  // when present. Sonar Pro applies the refinement to the original query
+  // ("show cheaper", "in stock only", etc).
+  const aiBody = { q: query, region: 'uk' };
+  if (typeof liveRefine === 'object' && liveRefine && liveRefine.refinement_text) {
+    aiBody.refine = liveRefine;
+  }
   const aiPromise=fetch('/api/ai-search',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     signal:sig,
-    body:JSON.stringify({q:query,region:'uk'})
+    body:JSON.stringify(aiBody)
   }).then(async r=>{
     if(!r.ok){
       // Wave 104 — capture HTTP error reason so we can explain to user
@@ -5993,9 +6129,12 @@ function processSearchResponse(d1, query, snapshotUserPrice){
       sub:i.delivery||'Check retailer',
       // Wave 78 — pass-through Haiku query_match grade so the rets array
       // and Amazon-fallback CTA can decide UX based on confidence.
-      query_match: i.query_match || null
+      query_match: i.query_match || null,
+      // Wave 211 — Sonar Pro provided in_stock signal. true/false/null.
+      // Frontend renders a stock badge when boolean is present.
+      in_stock: (typeof i.in_stock === 'boolean') ? i.in_stock : null
     };
-  }).filter(i=>i&&i.price>1&&i.price<5000);
+  }).filter(i=>i&&i.price>1&&i.price<50000);
   console.log('[fetchPrices] raw='+raw.length+' mapped='+mapped.length+' source='+(d1._meta&&d1._meta.source||'serper')+' uPrice='+(snapshotUserPrice||'null'));
   // Wave 61 — prefer the snapshot. If absent, fall back to the global
   // (legacy callers that don't pass it). The snapshot is the value that
@@ -6012,6 +6151,15 @@ function processSearchResponse(d1, query, snapshotUserPrice){
     // and clarify that the prices are for different products in that
     // category, not the same product across retailers.
     sc.categoryProducts = Array.isArray(d1._meta.categoryProducts) ? d1._meta.categoryProducts : null;
+    // Wave 210 — Haiku-generated reasoning line. Null when validator
+    // rejected as hallucination — frontend falls back to generic copy.
+    sc.reasoning = (typeof d1._meta.reasoning === 'string' && d1._meta.reasoning.trim()) ? d1._meta.reasoning.trim() : null;
+    // Wave 213 — confidence indicator from query_match distribution.
+    // 'high' | 'medium' | 'low' | 'none' — drives copy decisions on render.
+    sc.confidence = d1._meta.confidence || null;
+    // Wave 220 — echo of applied refinement so we can render a
+    // "Refined: 'show cheaper'" badge above results.
+    sc.refineApplied = (d1._meta.refine && d1._meta.refine.applied) ? d1._meta.refine.text : null;
     // Wave 110b — Wave 93/99c verification telemetry. Surface to renderResults
     // so the user sees a small badge under the cheapest price explaining
     // what happened (verified, overridden, snippet-kept, etc.) instead of
@@ -7029,6 +7177,27 @@ function bestBuyUrl(scen){
 // doLiveSearch path so the new query goes through globalReset, fetchPrices,
 // renderResults like a fresh search would. Skips the price-entry screen
 // because the user is in Discovery mode (just looking for prices).
+// Wave 220 — refinement-intent detection. If the user types something
+// that LOOKS like a refinement of the existing results (e.g. "show
+// cheaper", "in stock only", "with free delivery", "alternatives") we
+// fire /api/ai-search with refine: payload — Sonar Pro applies the
+// refinement contextually to the current query. Otherwise it's a brand
+// new product search. Detection is regex-based and conservative — when
+// in doubt, treat as new search (the safe default).
+function looksLikeRefinement(text){
+  if(!text) return false;
+  const t = text.toLowerCase().trim();
+  // Too long to be a refinement instruction
+  if(t.length > 50) return false;
+  if(t.split(/\s+/).length > 6) return false;
+  // Common refinement triggers
+  const REFINE_TRIGGERS = /\b(cheap|cheaper|cheapest|expensive|in[\s-]?stock|out[\s-]?of[\s-]?stock|available|free[\s-]?delivery|free[\s-]?shipping|with[\s-]?(?:delivery|shipping)|alternatives?|differen[a-z]+|smaller|bigger|larger|other|more|fewer|less|under[\s-]?£?\d|below[\s-]?£?\d|over[\s-]?£?\d|above[\s-]?£?\d|prime|next[\s-]?day|same[\s-]?day|click[\s-]?and[\s-]?collect|c\&c)\b/i;
+  if(REFINE_TRIGGERS.test(t)) return true;
+  // Imperative starts: "show", "find", "get", "filter", "only"
+  if(/^(show|find|get|filter|only|just|now|rank|sort)\b/i.test(t)) return true;
+  return false;
+}
+
 function refineSearch(){
   const inp=document.getElementById('results-refine-input');
   const next=(inp&&inp.value||'').trim();
@@ -7036,12 +7205,32 @@ function refineSearch(){
   // If they just pressed Enter on the existing query, no-op (avoid burning
   // a Serper call for the same string).
   if(next===liveQuery){if(inp)inp.blur();return;}
-  // Mirror the input value into the home screen search box so back-nav
-  // shows the latest query, then fire a normal search.
+  if(inp)inp.blur();
+  // Wave 220 — conversational refinement path. If the input reads like
+  // a refinement instruction, run a refine: search against the current
+  // query rather than starting a new search. Keeps the user on the same
+  // product context. liveQuery is the "previous_query" anchor.
+  if(liveQuery && looksLikeRefinement(next)){
+    console.log('[refineSearch] refining "' + liveQuery + '" with "' + next + '"');
+    if(typeof doLiveSearch === 'function'){
+      // Pass refine context as 2nd arg; doLiveSearch interprets it.
+      doLiveSearch(liveQuery, { previous_query: liveQuery, refinement_text: next });
+      return;
+    }
+  }
+  // Otherwise: full new search. Mirror the value into the home search box
+  // so back-nav shows the latest query.
   const homeInp=document.getElementById('search-input');
   if(homeInp)homeInp.value=next;
-  if(inp)inp.blur();
   doLiveSearch(next);
+}
+
+// Wave 220 — clear an applied refinement and re-search the bare query.
+function clearRefinement(){
+  if(!liveQuery) return;
+  const inp = document.getElementById('results-refine-input');
+  if(inp) inp.value = '';
+  doLiveSearch(liveQuery);
 }
 
 // View on Amazon UK — conditional CTA (reinstated 1 May 2026).
@@ -7557,6 +7746,53 @@ function renderResults(sc){
   const mm = String(now.getMinutes()).padStart(2,'0');
   modeEl.textContent = modeLabel + '  ·  prices ' + hh + ':' + mm;
 
+  // ── Wave 210 / 213 / 220 — reasoning + refinement chip ──
+  // Wave 210: reasoning line. Show only when sc.reasoning is non-null
+  // (validator passed). Frontend never invents a fallback line — better
+  // to show nothing than something wrong. Confidence-aware: when low
+  // confidence, append a "compared against similar products" caveat
+  // unless the snap-generic banner is already saying that.
+  const reasoningEl = document.getElementById('reasoning-banner');
+  const reasoningTextEl = document.getElementById('reasoning-text');
+  if(reasoningEl && reasoningTextEl){
+    const showLowConfNote = (sc.confidence === 'low' && !(sc.snapMatch && sc.snapMatch.isGenericMatch) && !(sc.categoryProducts && sc.categoryProducts.length));
+    if(sc.reasoning){
+      reasoningTextEl.textContent = sc.reasoning;
+      // When confidence is low and reasoning didn't mention "similar" /
+      // "variant" itself, append a calm note so the user knows to
+      // interpret prices loosely.
+      if(showLowConfNote && !/similar|variant|different model|newer|older|generation/i.test(sc.reasoning)){
+        const note = document.createElement('span');
+        note.className = 'confidence-note';
+        note.textContent = 'These look like similar products rather than the exact match — prices vary by version.';
+        reasoningTextEl.appendChild(note);
+      }
+      reasoningEl.hidden = false;
+    } else if(showLowConfNote){
+      // No reasoning but confidence low — still surface the caveat
+      reasoningTextEl.textContent = 'Compared against similar products — exact match unavailable.';
+      reasoningEl.hidden = false;
+    } else {
+      reasoningEl.hidden = true;
+      reasoningTextEl.textContent = '';
+    }
+  }
+  // Wave 220 — refinement-applied chip. Visible when current results were
+  // generated from a refine: payload (e.g. "show cheaper"). Click ✕ to
+  // clear refinement and re-search the bare query.
+  const refineChip = document.getElementById('refine-applied-chip');
+  const refineChipText = document.getElementById('refine-applied-text');
+  if(refineChip && refineChipText){
+    if(sc.refineApplied){
+      refineChipText.textContent = sc.refineApplied;
+      refineChipText.title = sc.refineApplied;
+      refineChip.hidden = false;
+    } else {
+      refineChip.hidden = true;
+      refineChipText.textContent = '';
+    }
+  }
+
   // ── Retailer list ──
   // Wave 36 — each row gets a data-brand attribute so the CSS can paint
   // a brand-coloured left rail (instant retailer recognition).
@@ -7580,6 +7816,9 @@ function renderResults(sc){
       isBest:   !!r.best,
       isHigh:   !!r.bad,
       link:     r.link || '',
+      // Wave 211 — pass through Sonar Pro in_stock signal so the row
+      // renders a stock badge. true | false | null (null = no badge).
+      inStock:  (typeof r.in_stock === 'boolean') ? r.in_stock : null,
     }));
     const fragment = window.SavveyResultRows.renderRetailerList(rowItems, (name, link) => {
       openRetailerRow(name, link);

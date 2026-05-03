@@ -58,6 +58,21 @@ export function renderRetailerList(items, onRowClick) {
       nameWrap.appendChild(badge);
     }
 
+    // Wave 211 — stock badge from Sonar Pro structured output.
+    // item.inStock is true (in stock), false (out of stock), or null
+    // (no signal — Search-quad-derived item; render no badge).
+    if (item.inStock === true) {
+      const badge = document.createElement('span');
+      badge.className = 'stock-badge in';
+      badge.textContent = 'In stock';
+      nameWrap.appendChild(badge);
+    } else if (item.inStock === false) {
+      const badge = document.createElement('span');
+      badge.className = 'stock-badge out';
+      badge.textContent = 'Out of stock';
+      nameWrap.appendChild(badge);
+    }
+
     row.appendChild(nameWrap);
 
     // ── Right side: price + diff ──
