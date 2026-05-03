@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.28';
+const VERSION = 'ai-search.js v1.29';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1377,18 +1377,31 @@ export default async function handler(req, res) {
   // Cost: 1× Haiku ($0.0002) + up to 3× fetchPerplexitySearch (~$0.015
   // total) — only when we'd otherwise return 0. Closes the long-running
   // Wave 86 cordless-vacuum class.
+  // B4 fix (Wave 109) — fan-out trigger lowered from `hits.length === 0`
+  // to `hits.length <= 2`. The previous threshold meant fan-out only
+  // fired when the query was a complete miss. But many category queries
+  // (kettle, vacuum, air fryer) returned 1-2 hits via the broad call —
+  // enough to skip fan-out, not enough for a useful comparison. The
+  // user saw a "Top picks" banner with one item or two, no real signal.
+  // Lowering to ≤2 means category-style queries that surface thinly
+  // also get the AI fan-out enrichment.
   let categoryProducts = null;
-  if (hits.length === 0) {
+  if (hits.length <= 2) {
     try {
       const cls = await classifyQueryViaHaiku(q, ANTHROPIC_KEY);
       if (cls.kind === 'category' && cls.products && cls.products.length > 0) {
         categoryProducts = cls.products;
-        console.log(`[${VERSION}] category fan-out: ${q} → ${categoryProducts.join(' | ')}`);
+        console.log(`[${VERSION}] category fan-out: ${q} → ${categoryProducts.join(' | ')} (existing hits=${hits.length})`);
         const fanResults = await Promise.allSettled(
           categoryProducts.map(p => fetchPerplexitySearch(p, PERPLEXITY_KEY))
         );
         const fanHits = [];
         const seen = new Set();
+        // Preserve any existing hits — fan-out hits ADD to them rather
+        // than replace. User gets cumulative coverage.
+        for (const h of hits) {
+          if (h.url && !seen.has(h.url)) { seen.add(h.url); fanHits.push(h); }
+        }
         for (let i = 0; i < fanResults.length; i++) {
           const fr = fanResults[i];
           if (fr.status !== 'fulfilled' || !fr.value) continue;
@@ -1397,9 +1410,9 @@ export default async function handler(req, res) {
             if (!seen.has(h.url)) { seen.add(h.url); fanHits.push({ ...h, fanProduct: categoryProducts[i] }); }
           }
         }
-        if (fanHits.length > 0) {
+        if (fanHits.length > hits.length) {
+          console.log(`[${VERSION}] category fan-out grew ${hits.length} → ${fanHits.length} hits across ${categoryProducts.length} products`);
           hits = fanHits;
-          console.log(`[${VERSION}] category fan-out rescued ${hits.length} hits across ${categoryProducts.length} products`);
         }
       }
     } catch (e) {
