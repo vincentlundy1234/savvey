@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.39';
+const VERSION = 'ai-search.js v1.40';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -434,8 +434,13 @@ const AMAZON_TAG = (process.env.AMAZON_ASSOCIATE_TAG !== undefined)
 const AI_QUERY_CACHE = new Map();
 const AI_CACHE_TTL_MS = 60 * 60 * 1000;
 const AI_CACHE_MAX_ENTRIES = 100;
-function aiCacheKey(q, region){
-  return `${region || 'uk'}|${String(q || '').toLowerCase().trim()}`;
+function aiCacheKey(q, region, refine){
+  // Wave 220 — refinement text is part of the cache key so refined
+  // searches don't return the bare-query cached response.
+  const refineKey = refine && refine.refinement_text
+    ? `|r:${String(refine.refinement_text).toLowerCase().trim().slice(0, 80)}`
+    : '';
+  return `${region || 'uk'}|${String(q || '').toLowerCase().trim()}${refineKey}`;
 }
 function aiCacheGet(key){
   const entry = AI_QUERY_CACHE.get(key);
@@ -543,12 +548,20 @@ const SONAR_PRODUCT_SCHEMA = {
   required: ['products'],
 };
 
-async function fetchSonarPro(query, apiKey) {
+async function fetchSonarPro(query, apiKey, refine = null) {
   if (!apiKey || !query) return null;
   const ac    = new AbortController();
   const timer = setTimeout(() => ac.abort(), SONAR_PRO_TIMEOUT_MS);
 
-  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.`;
+  // Wave 220 — conversational refinement. When a refinement is passed,
+  // Sonar Pro is told to apply it to the original query (e.g. "show cheaper",
+  // "in stock only", "with free delivery"). The original query is preserved
+  // as the product subject; the refinement narrows the result set.
+  const refineSection = refine && refine.refinement_text
+    ? `\n\nThe user previously searched for "${refine.previous_query || query}" and is now asking to REFINE the results with: "${refine.refinement_text}". Apply this refinement when picking retailers/listings — for example "show cheaper" means filter for the lower price band, "in stock only" means drop out-of-stock entries, "free delivery" means prefer retailers that include shipping. Keep the original product as the subject; the refinement only narrows or re-ranks.`
+    : '';
+
+  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.${refineSection}`;
 
   try {
     const r = await fetch(SONAR_PRO_ENDPOINT, {
@@ -1805,13 +1818,18 @@ export default async function handler(req, res) {
   // Wave 201b — Sonar Pro is now ON by default (parallel + merge with
   // Search API quad). Pass sonar_pro:false in body to disable for
   // emergency fallback.
-  const { q, region = 'uk', debug = false, verify = true, sonar_pro = true } = req.body || {};
+  // Wave 220 — `refine` is the conversational-refinement payload:
+  //   { previous_query: string, refinement_text: string }
+  // When present, Sonar Pro applies the refinement to the original query
+  // (e.g. "show cheaper", "in stock only"). Cache key includes refinement
+  // so the same query+refine combo caches independently of the bare query.
+  const { q, region = 'uk', debug = false, verify = true, sonar_pro = true, refine = null } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
   if (region !== 'uk') return res.status(400).json({ error: 'unsupported_region', message: `region "${region}" not yet supported` });
 
   // Wave 105 (Tier A2) — query cache hit short-circuits the entire pipeline.
   // Skip cache when debug requested (we want fresh debug envelopes).
-  const cacheK = aiCacheKey(q, region);
+  const cacheK = aiCacheKey(q, region, refine);
   if (!debug) {
     const cached = aiCacheGet(cacheK);
     if (cached) {
@@ -1828,7 +1846,7 @@ export default async function handler(req, res) {
   // (instead of running serially after both resolve). This is what kept
   // total latency under the Vercel 15s ceiling.
   const sonarProPromise = sonar_pro
-    ? fetchSonarPro(q, PERPLEXITY_KEY).then(async (r) => {
+    ? fetchSonarPro(q, PERPLEXITY_KEY, refine).then(async (r) => {
         if (!r || !Array.isArray(r.products) || r.products.length === 0) return r;
         const validated = await validateSonarPro(r.products, q, ANTHROPIC_KEY);
         return { ...r, products: validated };
@@ -2206,6 +2224,7 @@ export default async function handler(req, res) {
       categoryHosts:      raw?._categoryHosts || null,       // Wave 200 — host list used by category-locked Perplexity call
       reasoning:         reasoning,                          // Wave 210 — Haiku-generated 1-sentence price-landscape line
       confidence:        confidence,                         // Wave 213 — 'high' | 'medium' | 'low' | 'none' from query_match mix
+      refine:            refine && refine.refinement_text ? { applied: true, text: String(refine.refinement_text).slice(0, 120) } : null,  // Wave 220 — echo refinement so frontend can render "Refined: 'show cheaper'" badge
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
