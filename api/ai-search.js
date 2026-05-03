@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.34';
+const VERSION = 'ai-search.js v1.35';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -494,6 +494,115 @@ function rawResultsOf(data) {
          (data && data.web_results) ||
          (data && data.data && data.data.results) ||
          [];
+}
+
+// ── Wave 201 — Sonar Pro structured product search ──
+//
+// Replaces the Search API quad (broad + amazon + category + loose) with a
+// single Sonar Pro chat completion that returns structured product data
+// (retailer, URL, price, in_stock, query_match) directly. Sonar Pro reads
+// retailer pages instead of just stitching search results, which is the
+// difference between getting Apple App Store entries for "Wahoo Kickr Core"
+// (today) and getting Tredz/Sigma/Evans with live prices (Sonar Pro).
+//
+// Cost: ~$0.040/query (vs ~$0.025/query Search API quad). Premium pays for
+// structured output AND multi-retailer coverage on long-tail. Skips the
+// downstream Haiku extraction step because Sonar Pro already grades and
+// extracts prices.
+//
+// Wave 201 ships as OPT-IN via { sonar_pro: true } body flag. Wave 201b
+// promotes to primary with Search API quad as fallback when Sonar Pro
+// returns thin (<3 products with valid prices).
+const SONAR_PRO_ENDPOINT      = 'https://api.perplexity.ai/chat/completions';
+const SONAR_PRO_MODEL         = 'sonar-pro';
+const SONAR_PRO_TIMEOUT_MS    = 13000;  // tight against Vercel 15s ceiling
+const SONAR_PRODUCT_SCHEMA = {
+  type: 'object',
+  properties: {
+    products: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          retailer_name:  { type: 'string',  description: 'UK retailer brand name (e.g. "John Lewis", "Tredz")' },
+          retailer_host:  { type: 'string',  description: 'lowercase retailer hostname (e.g. "johnlewis.com", "tredz.co.uk")' },
+          product_url:    { type: 'string',  description: 'full https URL to the product page on that retailer' },
+          title:          { type: 'string',  description: 'product title as listed by retailer' },
+          price_gbp:      { type: ['number', 'null'], description: 'current public selling price in GBP, null if member-only / out-of-stock / not visible' },
+          in_stock:       { type: 'boolean', description: 'true if available for purchase right now' },
+          query_match:    { type: 'string',  enum: ['exact', 'similar', 'different'], description: 'exact = same product/tier; similar = same category/use; different = wrong tier or unrelated' },
+        },
+        required: ['retailer_host', 'product_url', 'title', 'price_gbp', 'query_match'],
+      },
+    },
+  },
+  required: ['products'],
+};
+
+async function fetchSonarPro(query, apiKey) {
+  if (!apiKey || !query) return null;
+  const ac    = new AbortController();
+  const timer = setTimeout(() => ac.abort(), SONAR_PRO_TIMEOUT_MS);
+
+  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.`;
+
+  try {
+    const r = await fetch(SONAR_PRO_ENDPOINT, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: SONAR_PRO_MODEL,
+        messages: [{ role: 'user', content: userPrompt }],
+        web_search_options: { search_context_size: 'high' },
+        response_format: { type: 'json_schema', json_schema: { schema: SONAR_PRODUCT_SCHEMA } },
+        max_tokens: 2500,
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      const txt = await r.text().catch(() => '');
+      console.warn(`[${VERSION}] Sonar Pro non-200: ${r.status} ${txt.slice(0, 200)}`);
+      return null;
+    }
+    const j = await r.json();
+    const content = j?.choices?.[0]?.message?.content || '';
+    let parsed;
+    try { parsed = JSON.parse(content); }
+    catch (e) {
+      console.warn(`[${VERSION}] Sonar Pro JSON parse failed: ${e.message}; first 200 chars: ${content.slice(0, 200)}`);
+      return null;
+    }
+    if (!parsed || !Array.isArray(parsed.products)) return null;
+    // Normalise hosts (strip protocol/path/www, lowercase).
+    const products = parsed.products
+      .map(p => {
+        const host = String(p.retailer_host || '')
+          .toLowerCase()
+          .replace(/^https?:\/\//, '')
+          .replace(/^www\./, '')
+          .replace(/\/.*$/, '')
+          .trim();
+        return {
+          retailer_name: p.retailer_name || host.split('.')[0],
+          retailer_host: host,
+          product_url:   p.product_url,
+          title:         p.title,
+          price_gbp:     typeof p.price_gbp === 'number' ? p.price_gbp : null,
+          in_stock:      p.in_stock !== false,
+          query_match:   p.query_match || 'exact',
+        };
+      })
+      .filter(p => p.retailer_host && p.product_url && p.product_url.startsWith('http'));
+    console.log(`[${VERSION}] Sonar Pro returned ${products.length} structured products for "${query}" (citations: ${j?.citations?.length || 0})`);
+    return {
+      products,
+      _sonarProUsage: j?.usage || null,
+      _sonarProCitations: j?.citations?.length || 0,
+    };
+  } catch (e) {
+    console.warn(`[${VERSION}] Sonar Pro fetch failed: ${e.message}`);
+    return null;
+  } finally { clearTimeout(timer); }
 }
 
 // Single Perplexity /search call. Caller passes the fully-formed augmented
@@ -1495,7 +1604,7 @@ export default async function handler(req, res) {
   if (!PERPLEXITY_KEY) return res.status(503).json({ error: 'perplexity_not_configured' });
   if (!ANTHROPIC_KEY)  return res.status(503).json({ error: 'anthropic_not_configured' });
 
-  const { q, region = 'uk', debug = false, verify = true } = req.body || {};
+  const { q, region = 'uk', debug = false, verify = true, sonar_pro = false } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
   if (region !== 'uk') return res.status(400).json({ error: 'unsupported_region', message: `region "${region}" not yet supported` });
 
@@ -1512,6 +1621,14 @@ export default async function handler(req, res) {
     }
   }
 
+  // Wave 201 — opt-in Sonar Pro probe. Runs in parallel with existing
+  // Search API quad so we can A/B compare on real queries before betting
+  // the flow on it. Surfaces in _debug.sonarPro for evaluation.
+  // Promote to primary in Wave 201b after observed quality/latency.
+  const sonarProPromise = sonar_pro
+    ? fetchSonarPro(q, PERPLEXITY_KEY)
+    : Promise.resolve(null);
+
   // Perplexity search via circuit breaker
   let raw;
   try {
@@ -1519,6 +1636,11 @@ export default async function handler(req, res) {
   } catch (e) {
     console.error(`[${VERSION}] Perplexity failed:`, e.message, e.body || '');
     return res.status(502).json({ error: 'perplexity_error', message: e.message, status: e.status });
+  }
+  // Resolve Sonar Pro probe (best-effort — never fails the request).
+  const sonarProResult = await sonarProPromise.catch(() => null);
+  if (sonarProResult) {
+    console.log(`[${VERSION}] Sonar Pro probe: ${sonarProResult.products.length} products, ${sonarProResult._sonarProCitations} citations`);
   }
 
   let hits = gatherRetailerHits(raw, q);
@@ -1769,6 +1891,21 @@ export default async function handler(req, res) {
     },
     rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })),
     priceDataSample: priceData.slice(0, 12),
+    // Wave 201 — Sonar Pro probe payload (only present when sonar_pro=true)
+    sonarPro: sonarProResult ? {
+      productCount: sonarProResult.products.length,
+      citationCount: sonarProResult._sonarProCitations,
+      usage: sonarProResult._sonarProUsage,
+      products: sonarProResult.products.slice(0, 10).map(p => ({
+        retailer: p.retailer_name,
+        host: p.retailer_host,
+        price: p.price_gbp,
+        in_stock: p.in_stock,
+        match: p.query_match,
+        url: p.product_url,
+        title: (p.title || '').slice(0, 80),
+      })),
+    } : null,
   } : undefined;
 
   const responseBody = {
