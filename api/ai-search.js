@@ -1,4 +1,17 @@
-// api/ai-search.js — Savvey AI Search v1.6
+// api/ai-search.js — Savvey AI Search v1.16
+//
+// v1.16 (3 May 2026 — battery-test learnings):
+//   - Wave 98 zero-hit fallback. Generic-category queries ("cordless
+//     vacuum cleaner", "kettle", "air fryer") were hitting hits.length===0
+//     because Perplexity's broad call surfaced review articles instead of
+//     direct retailer product URLs. We had a comparison-angle top-up
+//     downstream (Wave 97), but it only fired when items.length<3 AFTER
+//     Haiku — so a zero-hit broad call returned 0 to the user without
+//     ever trying the comparison angle. Now: if hits.length===0 from the
+//     broad call, fall through to the comparison query before declaring
+//     no results. usedFallback=true surfaced in _meta when this fires.
+//   - _debug envelope now also returned on the zero-hit path so we can
+//     diagnose when both calls produce nothing.
 //
 // v1.6 (2 May 2026, post-launch user feedback):
 //   - Per-retailer URL admission. Some Perplexity hits returned retailer
@@ -69,7 +82,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.15';
+const VERSION = 'ai-search.js v1.16';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -724,12 +737,39 @@ export default async function handler(req, res) {
     return res.status(502).json({ error: 'perplexity_error', message: e.message, status: e.status });
   }
 
-  const hits = gatherRetailerHits(raw, q);
+  let hits = gatherRetailerHits(raw, q);
+
+  // Wave 98 — when the broad call returns ZERO retailer URLs (common for
+  // generic categories like "cordless vacuum cleaner" or "kettle" where
+  // Perplexity surfaces review articles instead of retailer product pages),
+  // fall through to the comparison-angle top-up before declaring no
+  // results. Same call shape as the post-Haiku top-up at line ~761, just
+  // moved earlier so it can rescue the zero-hit case.
+  // Why: previously the early-return at this exact spot is what re-broke
+  // cordless vacuum and the generic-category coverage gap (Wave 86).
+  // Cost: one extra Perplexity call (~$0.005) only when broad returns zero.
+  let usedFallback = false;
+  if (hits.length === 0) {
+    try {
+      const fallbackQuery = `${q} review price comparison UK 2026 cheapest`;
+      const fallbackData = await callPerplexity(fallbackQuery, PERPLEXITY_KEY, 10);
+      const fallbackHits = gatherRetailerHits(fallbackData, q);
+      if (fallbackHits.length > 0) {
+        hits = fallbackHits;
+        usedFallback = true;
+        console.log(`[${VERSION}] zero-hit fallback rescued ${hits.length} retailer URLs`);
+      }
+    } catch (e) {
+      console.warn(`[${VERSION}] zero-hit fallback failed: ${e.message}`);
+    }
+  }
+
   if (hits.length === 0) {
     return res.status(200).json({
       shopping: [],
       organic:  [],
-      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region },
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback },
+      _debug: debug ? { counts: { raw_results: rawResultsOf(raw).length, uk_hits: 0, ai_plausible: 0, url_verified: 0, verified_dropped: 0, final: 0 }, rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })) } : undefined,
     });
   }
 
@@ -871,6 +911,7 @@ export default async function handler(req, res) {
       verified:          verify,
       verifiedDropped,
       amazonTagged:      Boolean(AMAZON_TAG),
+      usedFallback,                                         // Wave 98 — true if zero-hit comparison fallback rescued the search
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
