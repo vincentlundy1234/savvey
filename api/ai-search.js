@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.2.1';
+const VERSION = 'ai-search.js v2.3.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -524,6 +524,7 @@ const PARSER_SYSTEM_PROMPT = `You are a UK product-query parser. Given a shopper
 OUTPUT SCHEMA (return ONLY this JSON, no other text, no markdown fences):
 {
   "brand":                 string | null,
+  "brand_aliases":         string[] | null,
   "family":                string | null,
   "product_type":          string | null,
   "qualifiers":            object,
@@ -534,6 +535,7 @@ OUTPUT SCHEMA (return ONLY this JSON, no other text, no markdown fences):
 
 FIELD RULES:
 - brand: lowercase the brand if you're highly confident; null if generic/unknown ("kettle" → null; "Bosch leaf blower" → "Bosch")
+- brand_aliases: array of lowercase substrings that, when found in a retailer page title, indicate THIS brand. Include the brand itself plus product-line names. Examples: "Apple" → ["apple","iphone","macbook","ipad","airpods","imac"]; "Samsung" → ["samsung","galaxy"]; "Bosch" → ["bosch"]; "Sony" → ["sony","playstation","ps5"]; "Lenovo" → ["lenovo","thinkpad"]. Null when brand is null.
 - family: the noun-phrase product family ("leaf blower", "headphones", "espresso machine", "casserole dish")
 - product_type: descriptive variant ("cordless leaf blower", "open-back headphones") — null if redundant with family
 - qualifiers: ONLY tier-discriminating signals the user actually typed. Use normalised keys/values:
@@ -555,13 +557,13 @@ FIELD RULES:
 EXAMPLES:
 
 Query: "Bosch Cordless Leaf Blower 18V"
-{"brand":"Bosch","family":"leaf blower","product_type":"cordless leaf blower","qualifiers":{"voltage":18,"cordless":true},"expected_price_band_gbp":[80,200],"exact_match_required":true,"tier_signal_strength":"strong"}
+{"brand":"Bosch","brand_aliases":["bosch"],"family":"leaf blower","product_type":"cordless leaf blower","qualifiers":{"voltage":18,"cordless":true},"expected_price_band_gbp":[80,200],"exact_match_required":true,"tier_signal_strength":"strong"}
 
 Query: "Sennheiser HD 660S"
-{"brand":"Sennheiser","family":"headphones","product_type":"open-back headphones","qualifiers":{"model":"HD 660S"},"expected_price_band_gbp":[350,550],"exact_match_required":true,"tier_signal_strength":"strong"}
+{"brand":"Sennheiser","brand_aliases":["sennheiser"],"family":"headphones","product_type":"open-back headphones","qualifiers":{"model":"HD 660S"},"expected_price_band_gbp":[350,550],"exact_match_required":true,"tier_signal_strength":"strong"}
 
 Query: "iPhone 17 Pro"
-{"brand":"Apple","family":"smartphone","product_type":null,"qualifiers":{"generation":17,"tier":"Pro"},"expected_price_band_gbp":[999,1199],"exact_match_required":true,"tier_signal_strength":"strong"}
+{"brand":"Apple","brand_aliases":["apple","iphone","macbook","ipad","airpods","imac"],"family":"smartphone","product_type":null,"qualifiers":{"generation":17,"tier":"Pro"},"expected_price_band_gbp":[999,1199],"exact_match_required":true,"tier_signal_strength":"strong"}
 
 Query: "Le Creuset Signature 24cm casserole"
 {"brand":"Le Creuset","family":"casserole dish","product_type":"cast-iron casserole","qualifiers":{"range":"Signature","diameter_cm":24},"expected_price_band_gbp":[239,349],"exact_match_required":true,"tier_signal_strength":"strong"}
@@ -570,14 +572,29 @@ Query: "Bosch leaf blower"
 {"brand":"Bosch","family":"leaf blower","product_type":null,"qualifiers":{},"expected_price_band_gbp":[50,250],"exact_match_required":false,"tier_signal_strength":"weak"}
 
 Query: "kettle"
-{"brand":null,"family":"kettle","product_type":null,"qualifiers":{},"expected_price_band_gbp":[10,200],"exact_match_required":false,"tier_signal_strength":"absent"}
+{"brand":null,"brand_aliases":null,"family":"kettle","product_type":null,"qualifiers":{},"expected_price_band_gbp":[10,200],"exact_match_required":false,"tier_signal_strength":"absent"}
 
 Query: "Wahoo Kickr Core 2"
 {"brand":"Wahoo","family":"smart trainer","product_type":"indoor cycling trainer","qualifiers":{"model":"Kickr Core 2"},"expected_price_band_gbp":[449,549],"exact_match_required":true,"tier_signal_strength":"strong"}
 
 Return ONLY the JSON object. No prose, no markdown, no commentary.`;
 
+// Savvey v2 R3-lite — parseQueryIntent wrapper with single retry on null.
+// Anthropic API can transiently fail under burst load (e.g. battery runs);
+// a 500ms-spaced retry catches most of those without adding latency on the
+// success path. Cache hits are handled inside _parseQueryIntentOnce so a
+// repeat-call is free.
 async function parseQueryIntent(query, anthropicKey) {
+  if (!query || !anthropicKey) return null;
+  const first = await _parseQueryIntentOnce(query, anthropicKey);
+  if (first) return first;
+  await new Promise((r) => setTimeout(r, 500));
+  const second = await _parseQueryIntentOnce(query, anthropicKey);
+  if (second) console.log(`[${VERSION}] parser succeeded on retry for "${query}"`);
+  return second;
+}
+
+async function _parseQueryIntentOnce(query, anthropicKey) {
   if (!query) return null;
   if (!anthropicKey) return null;
 
@@ -620,6 +637,7 @@ async function parseQueryIntent(query, anthropicKey) {
     }
     // Sanity defaults on missing fields
     parsed.brand = parsed.brand || null;
+    parsed.brand_aliases = Array.isArray(parsed.brand_aliases) ? parsed.brand_aliases.filter((x) => typeof x === "string").map((x) => x.toLowerCase()) : (parsed.brand ? [parsed.brand.toLowerCase()] : null);
     parsed.family = parsed.family || null;
     parsed.product_type = parsed.product_type || null;
     parsed.qualifiers = parsed.qualifiers && typeof parsed.qualifiers === 'object' ? parsed.qualifiers : {};
@@ -758,13 +776,32 @@ const BRAND_ALIASES_SERVER = {
   ryobi: ['ryobi'],
   karcher: ['karcher','k\u00e4rcher'],
 };
-function titleMatchesBrand(title, brand) {
+function titleMatchesBrand(title, brand, parsedAliases) {
   if (!brand) return true;
   if (!title || typeof title !== 'string') return true; // missing title — don't filter
   const t = title.toLowerCase();
   const key = brand.toLowerCase();
-  const aliases = BRAND_ALIASES_SERVER[key] || [key];
-  return aliases.some(a => t.includes(a));
+  // Prefer parser-supplied aliases (R1+ teaches per-brand aliases inline).
+  // Fall back to server map, then to bare brand-name match.
+  const aliases = (Array.isArray(parsedAliases) && parsedAliases.length > 0)
+    ? parsedAliases
+    : (BRAND_ALIASES_SERVER[key] || [key]);
+  return aliases.some((a) => t.includes(a));
+}
+
+// Savvey v2 R3-lite — model qualifier gate. When parser supplies a specific
+// model name (HD 660S, Classic Pro, V15 Detect), the result title must
+// contain it (normalised: lowercase, no whitespace/dashes). Without this
+// Sonar Pro's loose match admits "Classic Evo Pro" for "Classic Pro".
+function titleMatchesModel(title, model) {
+  if (!model || typeof model !== 'string') return true;
+  if (!title || typeof title !== 'string') return true;
+  const norm = (str) => String(str).toLowerCase().replace(/[\s\-_]+/g, ' ').trim();
+  const t = norm(title);
+  const m = norm(model);
+  if (t.includes(m)) return true;
+  // Try ultra-condensed (no spaces) — "HD 660S" matches "hd660s" titles
+  return t.replace(/\s+/g, '').includes(m.replace(/\s+/g, ''));
 }
 
 // Savvey v2 R2 — convert parsed query intent into a hard-constraints block
@@ -795,7 +832,7 @@ function constraintsFromParsedQuery(parsed) {
   if (lines.length === 0) return '';
   const band = parsed.expected_price_band_gbp;
   const bandLine = (Array.isArray(band) && band[0] != null && band[1] != null && band[1] > 0)
-    ? `\nAs a sanity check the typical UK price band for this product is GBP ${band[0]}-${band[1]}. Listings far below this range (more than 40% under the floor) are likely a different SKU and should be query_match="different".`
+    ? `\nThe typical UK price band for this product is GBP ${band[0]}-${band[1]}. DO NOT INCLUDE listings more than 40% below the floor (£${Math.round(band[0]*0.6)}) — these are different SKUs (chassis-only, non-UK, refurbished, or member-only). Set query_match="different" only for borderline cases within the band.`
     : '';
   const emLine = parsed.exact_match_required
     ? `\nThis is an EXACT-MATCH query - set query_match="different" for ANY product that fails the constraints above, even if it is in the same general family.`
@@ -2512,10 +2549,24 @@ export default async function handler(req, res) {
   const parsedForGate = await parsedQueryPromise.catch(() => null);
   if (parsedForGate && parsedForGate.brand && items.length > 0) {
     const beforeBrandGate = items.length;
-    items = items.filter((it) => titleMatchesBrand(it.title, parsedForGate.brand));
+    items = items.filter((it) => titleMatchesBrand(it.title, parsedForGate.brand, parsedForGate.brand_aliases));
     const droppedByBrandGate = beforeBrandGate - items.length;
     if (droppedByBrandGate > 0) {
       console.log(`[${VERSION}] R2 brand gate dropped ${droppedByBrandGate} wrong-brand items (kept brand="${parsedForGate.brand}", remaining=${items.length})`);
+    }
+  }
+  // Savvey v2 R3-lite — model qualifier gate. After the brand gate, also
+  // drop items whose title doesn't contain the parsed model. Catches the
+  // "Classic Pro" admits "Classic Evo Pro" / "HD 660S" admits "HD 660S2"
+  // / "Bambino" admits "Bambino Plus" class — Sonar Pro's loose model
+  // match doesn't reject these strictly enough on its own.
+  if (parsedForGate && parsedForGate.qualifiers && parsedForGate.qualifiers.model && items.length > 0) {
+    const modelStr = String(parsedForGate.qualifiers.model);
+    const beforeModelGate = items.length;
+    items = items.filter((it) => titleMatchesModel(it.title, modelStr));
+    const droppedByModelGate = beforeModelGate - items.length;
+    if (droppedByModelGate > 0) {
+      console.log(`[${VERSION}] R3-lite model gate dropped ${droppedByModelGate} wrong-model items (kept model="${modelStr}", remaining=${items.length})`);
     }
   }
 
