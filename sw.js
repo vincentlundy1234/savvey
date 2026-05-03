@@ -17,7 +17,7 @@
 //  Bump FONT_VER only if font families or weights change.
 // ─────────────────────────────────────────────────────────────
 
-const STATIC_VER    = 'savvey-static-v136';
+const STATIC_VER    = 'savvey-static-v200';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 // Wave 107 — added /components/loading-screen.js as an extracted ES module.
