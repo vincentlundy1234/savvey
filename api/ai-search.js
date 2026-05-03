@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.33';
+const VERSION = 'ai-search.js v1.34';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -386,6 +386,18 @@ const TRUSTED_NO_HEAD = new Set([
   'amazon.co.uk',
   'johnlewis.com',
   'argos.co.uk',
+  // Wave 200e — cycling specialists. Tredz/Sigmasports/Evans/etc all have
+  // stable structural URLs but block HEAD from cloud IPs (Cloudflare /
+  // bot detection). Without this bypass, real Kickr/turbo-trainer hits get
+  // dropped at verifyUrls and the app shows zero results for cycling kit.
+  'tredz.co.uk',
+  'sigmasports.com',
+  'evanscycles.com',
+  'leisurelakesbikes.com',
+  'rutlandcycling.com',
+  'cyclestore.co.uk',
+  'wiggle.com',
+  'wiggle.co.uk',
 ]);
 
 // URL must match one of these patterns to be trusted-skipped. A bare
@@ -395,6 +407,14 @@ const TRUSTED_PRODUCT_PATTERNS = [
   /amazon\.co\.uk\/(?:[^\/]+\/)?(?:dp|gp\/product)\/[A-Z0-9]{10}/i,  // Amazon ASIN
   /johnlewis\.com\/.+\/p\d+/i,                                        // JL /p123456
   /argos\.co\.uk\/product\/\d+/i,                                     // Argos /product/123
+  // Wave 200e — bike specialist structural patterns
+  /tredz\.co\.uk\/[^?]*_\d{5,}(?:\.html?)?/i,                         // Tredz: /name_245937.htm
+  /sigmasports\.com\/products?\/[a-z0-9-]+/i,                         // Sigma Sports: /products/slug
+  /evanscycles\.com\/products?\/[a-z0-9-]+/i,                         // Evans: /products/slug
+  /leisurelakesbikes\.com\/(?:products?\/[a-z0-9-]+|[a-z0-9-]+-p\d+)/i,
+  /rutlandcycling\.com\/(?:products?\/[a-z0-9-]+|p\d+\/[a-z0-9-]+)/i,
+  /cyclestore\.co\.uk\/(?:products?\/[a-z0-9-]+|[a-z0-9-]+-p\d+)/i,
+  /wiggle\.(?:co\.uk|com)\/p\/[a-z0-9-]+/i,
 ];
 
 // Amazon Associates tag. Set AMAZON_ASSOCIATE_TAG in Vercel env vars; falls
@@ -1212,8 +1232,13 @@ async function verifyUrls(items) {
       });
       clearTimeout(t);
       // Some retailers (Cloudflare-protected) return 403 to HEAD but page is fine for users.
-      // We accept 200-399 and 403 (Forbidden often signals "human only" gate).
-      return (r.ok || r.status === 403) ? item : null;
+      // We accept 200-399, 403 (Forbidden often signals "human only" gate),
+      // 405 (Method Not Allowed — server doesn't support HEAD; URL itself
+      // probably valid), and 429 (rate limited — retailer fine, just throttled).
+      // Wave 200e — added 405 + 429 after Tredz Kickr Core hit was being
+      // dropped despite being a real product page.
+      const acceptable = r.ok || r.status === 403 || r.status === 405 || r.status === 429;
+      return acceptable ? item : null;
     } catch (_) {
       return null; // timeout / network error — drop
     }
