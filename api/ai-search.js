@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.11';
+const VERSION = 'ai-search.js v1.12';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -760,12 +760,22 @@ export default async function handler(req, res) {
   const cov     = computeCoverage(dedupedResults);
 
   // Wave 93 — verify cheapest live price (mirrors search.js v6.25).
-  // Sort ascending so [0] is cheapest.
+  // Wave 93b HOT FIX — sanity-cap on overrides. iPhone 17 case: Apple
+  // extractor matched a £26.63 monthly-finance number, drift was 96.7%
+  // and we overrode £799 snippet with £26.63 — user saw iPhone at £26.
+  // Rule: if drift > 30%, the extractor almost certainly grabbed the
+  // wrong number (finance / accessory / trade-in). Reject the
+  // verification and KEEP the snippet.
+  const VERIFY_DROP_DRIFT_PCT = 0.30;
   dedupedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
   let priceVerification = { verified: false, reason: 'skipped' };
   if(dedupedResults.length > 0 && dedupedResults[0].link){
     priceVerification = await verifyLivePrice(dedupedResults[0]);
-    if(priceVerification.verified && priceVerification.drift > VERIFY_MAX_DRIFT_PCT){
+    if(priceVerification.verified && priceVerification.drift > VERIFY_DROP_DRIFT_PCT){
+      console.warn(`[${VERSION}] price-verify: ${dedupedResults[0].source} drift ${(priceVerification.drift*100).toFixed(1)}% TOO LARGE — likely extractor mis-match. Keeping snippet £${dedupedResults[0].price}, ignoring live £${priceVerification.live}`);
+      priceVerification.reason = 'drift_too_large';
+      priceVerification.verified = false;
+    } else if(priceVerification.verified && priceVerification.drift > VERIFY_MAX_DRIFT_PCT){
       console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} snippet £${priceVerification.snippet} → live £${priceVerification.live} (drift ${(priceVerification.drift*100).toFixed(1)}%) — overriding`);
       dedupedResults[0].price = priceVerification.live;
       dedupedResults[0].priceVerified = true;

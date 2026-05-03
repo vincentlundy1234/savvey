@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.25';
+const VERSION = 'search.js v6.26';
 
 // Wave 93 — Landing-page price verification. The trust-erosion case:
 // snippet says £349, user clicks through, page shows £379. Cause is
@@ -1322,19 +1322,27 @@ export default async function handler(req, res) {
   const droppedByAnomalyFloor = beforeAnomalyFloor - sortedResults.length;
   // Sort ascending by price so [0] is the cheapest — that's the one we verify.
   sortedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
-  // Wave 93 — verify cheapest's live price. If snippet differs from
-  // landing-page price by >2%, override snippet with live so the user
-  // sees the price they'll actually find. Best-price slot is the
-  // highest-leverage one to verify (it's the one users tap). 3s budget.
+  // Wave 93 — verify cheapest's live price.
+  // Wave 93b HOT FIX — sanity-cap on overrides. iPhone 17 case: Apple
+  // extractor matched a £26.63 monthly-finance number, drift was 96.7%
+  // and we overrode £799 snippet with £26.63 — user saw iPhone at £26.
+  // Rule: if drift > VERIFY_DROP_DRIFT_PCT (30%), the extractor almost
+  // certainly grabbed the wrong number (finance / accessory / trade-in).
+  // Reject the verification and KEEP the snippet — better to show
+  // slightly stale than wildly wrong.
+  const VERIFY_DROP_DRIFT_PCT = 0.30;
   let verification = { verified: false, reason: 'skipped' };
   if(sortedResults.length > 0 && sortedResults[0].link){
     verification = await verifyCheapestLivePrice(sortedResults[0]);
-    if(verification.verified && verification.drift > VERIFY_MAX_DRIFT_PCT){
+    if(verification.verified && verification.drift > VERIFY_DROP_DRIFT_PCT){
+      console.warn(`[${VERSION}] price-verify: ${sortedResults[0].source} drift ${(verification.drift*100).toFixed(1)}% TOO LARGE — likely extractor mis-match (finance / accessory / etc). Keeping snippet £${sortedResults[0].price}, ignoring live £${verification.live}`);
+      verification.reason = 'drift_too_large';
+      verification.verified = false;
+    } else if(verification.verified && verification.drift > VERIFY_MAX_DRIFT_PCT){
       console.log(`[${VERSION}] price-verify: ${sortedResults[0].source} snippet £${verification.snippet} → live £${verification.live} (drift ${(verification.drift*100).toFixed(1)}%) — overriding`);
       sortedResults[0].price = verification.live;
       sortedResults[0].priceVerified = true;
       sortedResults[0].priceWasOverridden = true;
-      // Re-sort in case the live price moves it down the order.
       sortedResults.sort((a, b) => (a.price || 0) - (b.price || 0));
     } else if(verification.verified){
       console.log(`[${VERSION}] price-verify: ${sortedResults[0].source} snippet £${verification.snippet} matches live £${verification.live} (drift ${(verification.drift*100).toFixed(1)}%)`);
