@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.4.1';
+const VERSION = 'ai-search.js v2.5.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -432,7 +432,7 @@ const AMAZON_TAG = (process.env.AMAZON_ASSOCIATE_TAG !== undefined)
 // Cache value is the full final response object so the frontend gets the
 // same shape it would have got from a fresh search.
 const AI_QUERY_CACHE = new Map();
-const AI_CACHE_TTL_MS = 60 * 60 * 1000;
+const AI_CACHE_TTL_MS = 6 * 60 * 60 * 1000; // v2.5 — was 1hr, bumped to 6hr (variance dampener)
 const AI_CACHE_MAX_ENTRIES = 100;
 function aiCacheKey(q, region, refine){
   // Wave 220 — refinement text is part of the cache key so refined
@@ -2614,28 +2614,31 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       const sc = typeof id.s === 'number' ? id.s : null;
       if (i > 0 && sc != null) scoreMap.set(i, { score: sc, warning: id.w || null });
     }
+    // Savvey v2.5 — RANK not FILTER. Annotate every item with _aiScore so
+    // downstream sort can rank by confidence-bucket first, price second.
+    // Drop only items scored < 0.3 (clearly wrong product entirely).
     const before = items.length;
-    const THRESHOLD = 0.4; // v2.4.1 — was 0.6, too aggressive (canonical products dropped)
+    const HARD_DROP = 0.3; // below this = clearly different product
     const annotated = items.map((it, idx) => {
       const r = scoreMap.get(idx + 1);
-      return { it, idx, score: r ? r.score : null, warning: r ? r.warning : null };
+      const score = r ? r.score : null;
+      const warning = r ? r.warning : null;
+      // Mutate item in place to attach _aiScore for downstream sort.
+      // Items unscored by AI keep null — sort treats them as medium.
+      it._aiScore = score;
+      it._aiWarning = warning;
+      return { it, idx, score, warning };
     });
-    let kept = annotated.filter((a) => a.score === null || a.score >= THRESHOLD).map((a) => a.it);
-    // Safety net: if filtering emptied the list, keep top-2 by AI score so we
-    // never regress to no-results when retrieval succeeded. Better to show
-    // something the user can judge than nothing at all.
+    let kept = annotated.filter((a) => a.score === null || a.score >= HARD_DROP).map((a) => a.it);
+    // Safety net: if everything is below HARD_DROP, keep top-2 by score.
     if (kept.length === 0 && before > 0) {
-      const sorted = annotated
-        .filter((a) => a.score !== null)
-        .sort((x, y) => (y.score || 0) - (x.score || 0));
+      const sorted = annotated.filter((a) => a.score !== null).sort((x, y) => (y.score || 0) - (x.score || 0));
       kept = sorted.slice(0, 2).map((a) => a.it);
-      console.log(`[${VERSION}] aiIdentityCheck SAFETY-NET: would have dropped all ${before}, kept top ${kept.length} by score`);
+      console.log(`[${VERSION}] aiIdentityCheck SAFETY-NET: all below ${HARD_DROP}, kept top ${kept.length}`);
     } else if (kept.length < before) {
-      const dropped = annotated.filter((a) => a.score !== null && a.score < THRESHOLD);
-      for (const d of dropped) {
-        console.log(`[${VERSION}] aiIdentityCheck dropped item ${d.idx + 1} score=${d.score} reason="${d.warning}" title="${(d.it.title || '').slice(0, 60)}"`);
-      }
-      console.log(`[${VERSION}] aiIdentityCheck dropped ${before - kept.length}/${before} items below ${THRESHOLD} confidence`);
+      const dropped = annotated.filter((a) => a.score !== null && a.score < HARD_DROP);
+      for (const d of dropped) console.log(`[${VERSION}] aiIdentityCheck HARD-DROP item ${d.idx + 1} score=${d.score} title="${(d.it.title || '').slice(0, 60)}"`);
+      console.log(`[${VERSION}] aiIdentityCheck dropped ${before - kept.length}/${before} below ${HARD_DROP}; remaining items annotated for sort`);
     }
     return kept;
   } catch (e) {
@@ -2730,9 +2733,21 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
   // cheapest. Sort tiers: exact first, similar second, anything else
   // last; ties broken by price ascending. price-only ranking is the
   // recipe for catastrophic mis-matches.
+  // Savvey v2.5 — sort tiers: AI confidence bucket DESC → query_match ASC → price ASC.
+  // High-confidence cheap beats low-confidence cheaper. Items unscored by
+  // the AI judge land in the "medium" bucket (treated as 0.6 default).
   const QM_RANK = { exact: 0, similar: 1 };
   const qmKey = (r) => QM_RANK[r.query_match] != null ? QM_RANK[r.query_match] : 2;
+  const aiBucket = (r) => {
+    const s = r._aiScore;
+    if (s == null) return 1; // unscored → medium bucket
+    if (s >= 0.7) return 0;  // high confidence
+    if (s >= 0.5) return 1;  // medium
+    return 2;                // low (kept for context, ranked last)
+  };
   dedupedResults.sort((a, b) => {
+    const ba = aiBucket(a), bb = aiBucket(b);
+    if (ba !== bb) return ba - bb;
     const qa = qmKey(a), qb = qmKey(b);
     if (qa !== qb) return qa - qb;
     return (a.price || 0) - (b.price || 0);
@@ -2761,6 +2776,8 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
         dedupedResults[0].priceWasOverridden = true;
         priceVerification.reason = 'drift_haiku_live';
         dedupedResults.sort((a, b) => {
+          const ba = aiBucket(a), bb = aiBucket(b);
+          if (ba !== bb) return ba - bb;
           const qa = qmKey(a), qb = qmKey(b);
           if (qa !== qb) return qa - qb;
           return (a.price || 0) - (b.price || 0);
