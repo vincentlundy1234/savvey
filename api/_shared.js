@@ -85,6 +85,30 @@ export const UK_RETAILERS = [
   { host: 'theworks.co.uk',             name: 'The Works',     srcTerms: ['the works', 'theworks'] },
   { host: 'wilko.com',                  name: 'Wilko',         srcTerms: ['wilko'] },
   { host: 'poundland.co.uk',            name: 'Poundland',     srcTerms: ['poundland'] },
+  // Wave 99 — kitchen / homeware specialists. Lakeland/Dunelm already
+  // registered above (Wave 77/84). Adding Robert Dyas + Amara to round out
+  // the kitchen lock so kettles/casseroles/saucepans hit specialists.
+  { host: 'robertdyas.co.uk',           name: 'Robert Dyas',   srcTerms: ['robert dyas', 'robertdyas'] },
+  { host: 'amara.com',                  name: 'Amara',         srcTerms: ['amara'] },
+  // Wave 99 — sports / fitness retailers. Trainers, sportswear, gym kit,
+  // running shoes — these specialists undercut JL/Argos consistently.
+  { host: 'jdsports.co.uk',             name: 'JD Sports',     srcTerms: ['jd sports', 'jdsports'] },
+  { host: 'sportsdirect.com',           name: 'Sports Direct', srcTerms: ['sports direct', 'sportsdirect'] },
+  { host: 'decathlon.co.uk',            name: 'Decathlon',     srcTerms: ['decathlon'] },
+  { host: 'wiggle.co.uk',               name: 'Wiggle',        srcTerms: ['wiggle'] },
+  { host: 'sportsshoes.com',            name: 'SportsShoes',   srcTerms: ['sportsshoes', 'sports shoes'] },
+  { host: 'mandmdirect.com',            name: 'M and M Direct',srcTerms: ['m and m direct', 'mandmdirect'] },
+  { host: 'pro-direct.com',             name: 'Pro:Direct',    srcTerms: ['pro:direct', 'pro-direct', 'prodirect'] },
+  // Wave 99 — fashion / apparel specialists.
+  { host: 'asos.com',                   name: 'ASOS',          srcTerms: ['asos'] },
+  { host: 'next.co.uk',                 name: 'Next',          srcTerms: ['next.co.uk', 'next '] },
+  { host: 'marksandspencer.com',        name: 'M&S',           srcTerms: ['m&s', 'marks and spencer', 'marks & spencer', 'marksandspencer'] },
+  { host: 'endclothing.com',            name: 'End.',          srcTerms: ['end clothing', 'endclothing', 'end.'] },
+  { host: 'zalando.co.uk',              name: 'Zalando',       srcTerms: ['zalando'] },
+  { host: 'matchesfashion.com',         name: 'Matches',       srcTerms: ['matches fashion', 'matchesfashion'] },
+  // Wave 99 — books / media additions
+  { host: 'foyles.co.uk',               name: 'Foyles',        srcTerms: ['foyles'] },
+  { host: 'wordery.com',                name: 'Wordery',       srcTerms: ['wordery'] },
 ];
 
 // ─────────────────────────────────────────────────────────────

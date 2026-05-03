@@ -1,4 +1,46 @@
-// api/ai-search.js — Savvey AI Search v1.17
+// api/ai-search.js — Savvey AI Search v1.20
+//
+// v1.20 (3 May 2026 PM — Wave 100 category fan-out):
+//   - Closes the long-running Wave 86 cordless-vacuum class. When BOTH
+//     the broad call AND the comparison-angle fallback return zero
+//     retailer URLs (signature of a generic-category query), Haiku
+//     classifies the query and names top-3 popular UK products in that
+//     category. We then run fetchPerplexitySearch on each top-3 product,
+//     gather hits, and merge. Cordless vacuum cleaner → "Dyson V15
+//     Detect" + "Shark Stratos IZ400UKT" + "Bosch BCH3K2861GB" → real
+//     retailer hits with real prices.
+//   - Cost: 1× Haiku ($0.0002) + up to 3× fetchPerplexitySearch (~$0.015
+//     total premium) — only when broad+fallback would have returned 0.
+//     ~5% of queries today; will drop further as Wave 99 category locks
+//     improve direct hit rate.
+//   - _meta.categoryProducts surfaces the top-3 product list to the
+//     frontend so the results screen can show "Top picks for cordless
+//     vacuum cleaner" instead of "Best deal for cordless vacuum cleaner".
+//
+// v1.19 (3 May 2026 PM — Wave 99c drift tiebreaker):
+//   - The boolean drift cap (>30% drift → keep snippet) was correctly
+//     rejecting iPhone 17's £26.63 finance number, but ALSO rejecting
+//     legitimate corrections (kettle: snippet £40 stale, live £60 correct,
+//     drift 50%, drift cap rejected the FIX). Replaced with one Haiku
+//     tiebreaker call (~$0.0002) that asks: "snippet £X, live £Y, retailer Z,
+//     query Q — which is the actual current public price?". Reply: live /
+//     snippet / unknown. On unknown or call failure → keep snippet (safe
+//     default, preserves iPhone 17 protection).
+//   - Wave 99c reason values surfaced in _meta.cheapestVerification.reason:
+//     drift_haiku_live (overrode), drift_haiku_snippet (kept snippet),
+//     drift_haiku_unknown (kept snippet, ambiguous).
+//
+// v1.18 (3 May 2026 PM — Wave 99b retailer registration):
+//   - Wave 99 added category locks for KITCHEN/SPORTS/FASHION/BOOKS but
+//     the new retailer hosts (JD Sports, Sports Direct, Decathlon, Wiggle,
+//     SportsShoes, M&M Direct, Pro:Direct, ASOS, Next, M&S, End., Zalando,
+//     Matches, Robert Dyas, Amara, Foyles, Wordery) weren't registered in
+//     UK_RETAILERS. So gatherRetailerHits dropped them at host admission
+//     even when Perplexity returned valid product URLs. Live test: Nike
+//     Air Max 90 returned 0 hits, kettle returned only Argos (no Lakeland).
+//   - Wave 99b: registered all new hosts in _shared.js UK_RETAILERS plus
+//     PRODUCT_URL_PATTERNS regex per host so admission accepts product
+//     pages and rejects category/listing landings.
 //
 // v1.17 (3 May 2026 PM — per-category retailer curation):
 //   - Wave 99 adds KITCHEN, SPORTS, FASHION, BOOKS category locks alongside
@@ -103,7 +145,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.17';
+const VERSION = 'ai-search.js v1.20';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -478,6 +520,33 @@ const PRODUCT_URL_PATTERNS = {
   'theworks.co.uk':    /\/p\/[a-z0-9-]+|\/products\/[a-z0-9-]+/i,
   'wilko.com':         /\/[a-z0-9-]+-product\/[a-z0-9-]+/i,
   'poundland.co.uk':   /\/product\/[a-z0-9-]+|\/p\/[a-z0-9-]+/i,
+  // Wave 99 — kitchen / homeware specialists
+  'lakeland.co.uk':    /\/\d{4,}\/[a-z0-9-]+|\/products\/[a-z0-9-]+/i,           // /12345/product-slug or /products/slug
+  'dunelm.com':        /\/product\/[a-z0-9-]+|\/[a-z0-9-]+\/\d{6,}/i,
+  'robertdyas.co.uk':  /\/[a-z0-9-]+\.html|\/p\/\d+/i,
+  'wayfair.co.uk':     /\/[a-z0-9-]+\/pdp\/[a-z0-9-]+/i,                          // /slug/pdp/product
+  'habitat.co.uk':     /\/[a-z0-9-]+\/[a-z0-9-]+\/\d+/i,
+  'ikea.com':          /\/p\/|\/products\/|-\d{8,}/i,                             // IKEA product IDs are 8 digits
+  'amara.com':         /\/products\/[a-z0-9-]+/i,
+  // Wave 99 — sports / fitness retailers (URL conventions vary widely; use
+  // permissive patterns so we don't drop legitimate hits)
+  'jdsports.co.uk':    /\/product\/[a-z0-9-]+\/\d+|\/p\/[a-z0-9-]+/i,             // /product/nike-air-max-90/123456
+  'sportsdirect.com':  /\/[a-z0-9-]+\/\d{6,}|\/p\/\d+/i,                          // /nike-air-max-90/123456
+  'decathlon.co.uk':   /\/p\/[a-z0-9-]+|\/[a-z0-9-]+-id_[a-z0-9-]+/i,             // /p/abc or /slug-id_xxx
+  'wiggle.co.uk':      /\/[a-z0-9-]+\/?$|\/products\/[a-z0-9-]+/i,
+  'sportsshoes.com':   /\/product\/[a-z0-9-]+/i,
+  'mandmdirect.com':   /\/[a-z0-9-]+\/\d+\/[a-z0-9-]+/i,
+  'pro-direct.com':    /\/[a-z0-9-]+\/[a-z0-9-]+\/\d+/i,
+  // Wave 99 — fashion / apparel specialists
+  'asos.com':          /\/prd\/\d+|\/[a-z0-9-]+\/[a-z0-9-]+\/prd\/\d+/i,          // /prd/12345
+  'next.co.uk':        /\/style\/[a-z0-9-]+|\/g\d+/i,
+  'marksandspencer.com':/\/p\/[a-z0-9-]+|\/(?:gb|en-gb)\/[a-z0-9-]+\/p\//i,
+  'endclothing.com':   /\/gb\/[a-z0-9-]+|\/products\/[a-z0-9-]+/i,
+  'zalando.co.uk':     /\/[a-z0-9-]+-[a-z0-9]{6,}\.html/i,
+  'matchesfashion.com':/\/products\/[a-z0-9-]+-\d+/i,
+  // Wave 99 — books / media additions
+  'foyles.co.uk':      /\/witem\/[a-z0-9-]+|\/(?:childrens|fiction|non-fiction)\/[a-z0-9-]+/i,
+  'wordery.com':       /\/[a-z0-9-]+-[0-9]{10,13}/i,                              // ISBN in slug
 };
 
 // Returns true if the URL is plausibly a product page for the given
@@ -650,6 +719,51 @@ function isTrustedProductUrl(url) {
   return false;
 }
 
+// Wave 99c — drift tiebreaker. When live-page extraction differs from the
+// snippet by > 30%, the boolean drift cap conservatively kept the snippet
+// (right call for iPhone 17's £26 finance number, wrong call for kettle
+// where snippet £40 was stale and live £60 was correct). Ask Haiku which
+// is the actual current public price. Returns "live" / "snippet" /
+// "unknown". On any failure / ambiguity → "unknown" (caller keeps snippet,
+// preserves the iPhone safety guarantee).
+async function driftTiebreaker(snippet, live, retailer, query, anthropicKey){
+  if (!anthropicKey || !snippet || !live) return 'unknown';
+  const userPrompt = `Two prices were extracted for this product at this retailer. Which is the actual current public selling price a UK shopper would see and pay right now?
+
+Query: "${query}"
+Retailer: ${retailer}
+Snippet (Google search result): £${snippet}
+Live (current product page extraction): £${live}
+
+Rules:
+- If "live" looks like a monthly finance figure (£20-£40 for a £400+ product), choose "snippet".
+- If "live" looks like an accessory or replacement-part price (e.g. £15 for a £300 vacuum, £30 for an iPhone), choose "snippet".
+- If "snippet" looks like an old promo / pre-order / member-only price and "live" is a normal current price, choose "live".
+- If both look like plausible standalone unit prices and you can't tell which is current, reply "unknown" (the caller will play safe).
+
+Reply with exactly one word: "live", "snippet", or "unknown". No explanation.`;
+
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 4000);
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 12, messages: [{role:'user', content: userPrompt}] }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return 'unknown';
+    const j = await r.json();
+    const text = (j?.content?.[0]?.text || '').trim().toLowerCase();
+    if (text.includes('live')) return 'live';
+    if (text.includes('snippet')) return 'snippet';
+    return 'unknown';
+  } catch (e) {
+    return 'unknown';
+  }
+}
+
 // HEAD-check every URL in parallel. Drop any that 4xx/5xx or time out.
 // Eliminates dead-link Buy buttons (audit issue H4).
 //
@@ -734,6 +848,67 @@ function tagAmazonUrl(url) {
   }
 }
 
+// Wave 100 — Haiku category-router preflight. The biggest unsolved class
+// of zero-hit failures comes from generic-category queries ("cordless
+// vacuum cleaner", "kettle", "air fryer", "fan"). Perplexity returns
+// review articles or category-LISTING URLs, none of which match
+// PRODUCT_URL_PATTERNS, so admission rejects everything. Live test 3 May:
+// cordless vacuum returned 28 raw, 0 UK_hits, 0 final.
+//
+// Fix: one $0.0002 Haiku call up front asking "is this a specific product
+// or a category? If category, name 3 popular UK products in it right now."
+// For category queries we then fan out and run normal flow on each top-3
+// product, merge results, surface them. ~$0.0002 total premium for the
+// router; the extra Perplexity calls only fire when we'd have returned
+// zero anyway.
+//
+// Returns:
+//   { kind: 'specific' }                — proceed normally
+//   { kind: 'category', products: [...] } — fan out
+//   { kind: 'specific' }                — on any failure (safe default)
+async function classifyQueryViaHaiku(query, anthropicKey){
+  if (!anthropicKey || !query) return { kind: 'specific' };
+  const prompt = `Classify this UK shopping query.
+
+Query: "${query}"
+
+Reply STRICT JSON only, no other text:
+{"kind": "specific"|"category", "products": ["...", "...", "..."]}
+
+- "specific" = a particular product or model (e.g. "Dyson V15 Detect", "iPhone 17 Pro 256GB", "Nike Air Max 90", "Le Creuset signature 24cm").
+  Reply: {"kind":"specific","products":[]}
+- "category" = a generic category with many possible products (e.g. "cordless vacuum cleaner", "kettle", "running shoes", "air fryer", "casserole dish", "midi dress").
+  Reply: {"kind":"category","products":["Top product 1","Top product 2","Top product 3"]}
+  - Pick THREE products that are popular and currently widely available in the UK in 2026 IN THIS CATEGORY.
+  - Use exact specific product names a UK shopper would type to find a single SKU (e.g. "Dyson V15 Detect", "Shark Stratos IZ400UKT", "Bosch BCH3K2861GB"; NOT "Dyson cordless").
+  - Cover at least one budget-tier and one premium-tier option to give the user range.
+- If unclear, default to "specific".`;
+
+  try {
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), 4000);
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method:'POST',
+      headers:{'content-type':'application/json','x-api-key':anthropicKey,'anthropic-version':'2023-06-01'},
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 200, messages: [{role:'user', content: prompt}] }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return { kind: 'specific' };
+    const j = await r.json();
+    const text = (j?.content?.[0]?.text || '').trim();
+    // Tolerate markdown fences
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    const parsed = JSON.parse(cleaned);
+    if (parsed?.kind === 'category' && Array.isArray(parsed.products) && parsed.products.length > 0) {
+      return { kind: 'category', products: parsed.products.slice(0, 3).map(s => String(s).trim()).filter(Boolean) };
+    }
+    return { kind: 'specific' };
+  } catch (e) {
+    return { kind: 'specific' };
+  }
+}
+
 function dedup(items) {
   const map = new Map();
   for (const it of items) {
@@ -807,11 +982,49 @@ export default async function handler(req, res) {
     }
   }
 
+  // Wave 100 — category fan-out. When BOTH the broad call and the
+  // comparison fallback return zero retailer URLs, the query is almost
+  // certainly a generic category ("cordless vacuum cleaner", "kettle",
+  // "air fryer"). Ask Haiku to name top-3 specific products in that
+  // category, then re-run the broad search for each. Merge product hits.
+  // Cost: 1× Haiku ($0.0002) + up to 3× fetchPerplexitySearch (~$0.015
+  // total) — only when we'd otherwise return 0. Closes the long-running
+  // Wave 86 cordless-vacuum class.
+  let categoryProducts = null;
+  if (hits.length === 0) {
+    try {
+      const cls = await classifyQueryViaHaiku(q, ANTHROPIC_KEY);
+      if (cls.kind === 'category' && cls.products && cls.products.length > 0) {
+        categoryProducts = cls.products;
+        console.log(`[${VERSION}] category fan-out: ${q} → ${categoryProducts.join(' | ')}`);
+        const fanResults = await Promise.allSettled(
+          categoryProducts.map(p => fetchPerplexitySearch(p, PERPLEXITY_KEY))
+        );
+        const fanHits = [];
+        const seen = new Set();
+        for (let i = 0; i < fanResults.length; i++) {
+          const fr = fanResults[i];
+          if (fr.status !== 'fulfilled' || !fr.value) continue;
+          const productHits = gatherRetailerHits(fr.value, categoryProducts[i]);
+          for (const h of productHits) {
+            if (!seen.has(h.url)) { seen.add(h.url); fanHits.push({ ...h, fanProduct: categoryProducts[i] }); }
+          }
+        }
+        if (fanHits.length > 0) {
+          hits = fanHits;
+          console.log(`[${VERSION}] category fan-out rescued ${hits.length} hits across ${categoryProducts.length} products`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[${VERSION}] category fan-out failed: ${e.message}`);
+    }
+  }
+
   if (hits.length === 0) {
     return res.status(200).json({
       shopping: [],
       organic:  [],
-      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback },
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts },
       _debug: debug ? { counts: { raw_results: rawResultsOf(raw).length, uk_hits: 0, ai_plausible: 0, url_verified: 0, verified_dropped: 0, final: 0 }, rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })) } : undefined,
     });
   }
@@ -907,9 +1120,35 @@ export default async function handler(req, res) {
   if(dedupedResults.length > 0 && dedupedResults[0].link){
     priceVerification = await verifyLivePrice(dedupedResults[0]);
     if(priceVerification.verified && priceVerification.drift > VERIFY_DROP_DRIFT_PCT){
-      console.warn(`[${VERSION}] price-verify: ${dedupedResults[0].source} drift ${(priceVerification.drift*100).toFixed(1)}% TOO LARGE — likely extractor mis-match. Keeping snippet £${dedupedResults[0].price}, ignoring live £${priceVerification.live}`);
-      priceVerification.reason = 'drift_too_large';
-      priceVerification.verified = false;
+      // Wave 99c — drift > 30% used to mean "extractor wrong, keep snippet"
+      // (good for iPhone 17's £26 finance number). But sometimes the
+      // SNIPPET is the stale one (kettle £40 snippet vs live £60). Ask
+      // Haiku which is the real current price. ~$0.0002 per call, only
+      // fires when drift > 30% (rare). Defaults to keeping snippet on
+      // unknown / failure (preserves iPhone safety).
+      const verdict = await driftTiebreaker(
+        priceVerification.snippet,
+        priceVerification.live,
+        dedupedResults[0].source,
+        q,
+        ANTHROPIC_KEY
+      );
+      if (verdict === 'live') {
+        console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} drift ${(priceVerification.drift*100).toFixed(1)}% — Haiku says LIVE (£${priceVerification.snippet} → £${priceVerification.live}), overriding`);
+        dedupedResults[0].price = priceVerification.live;
+        dedupedResults[0].priceVerified = true;
+        dedupedResults[0].priceWasOverridden = true;
+        priceVerification.reason = 'drift_haiku_live';
+        dedupedResults.sort((a, b) => {
+          const qa = qmKey(a), qb = qmKey(b);
+          if (qa !== qb) return qa - qb;
+          return (a.price || 0) - (b.price || 0);
+        });
+      } else {
+        console.warn(`[${VERSION}] price-verify: ${dedupedResults[0].source} drift ${(priceVerification.drift*100).toFixed(1)}% TOO LARGE — Haiku verdict "${verdict}" — keeping snippet £${dedupedResults[0].price}, ignoring live £${priceVerification.live}`);
+        priceVerification.reason = verdict === 'snippet' ? 'drift_haiku_snippet' : 'drift_haiku_unknown';
+        priceVerification.verified = false;
+      }
     } else if(priceVerification.verified && priceVerification.drift > VERIFY_MAX_DRIFT_PCT){
       console.log(`[${VERSION}] price-verify: ${dedupedResults[0].source} snippet £${priceVerification.snippet} → live £${priceVerification.live} (drift ${(priceVerification.drift*100).toFixed(1)}%) — overriding`);
       dedupedResults[0].price = priceVerification.live;
@@ -972,6 +1211,7 @@ export default async function handler(req, res) {
       verifiedDropped,
       amazonTagged:      Boolean(AMAZON_TAG),
       usedFallback,                                         // Wave 98 — true if zero-hit comparison fallback rescued the search
+      categoryProducts,                                     // Wave 100 — top-3 product list when query was classified as category, else null
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
