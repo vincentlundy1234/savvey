@@ -181,6 +181,16 @@
       background:#111;
       display:flex;align-items:center;justify-content:center;
     }
+    /* A1 — Audit fix. The HTML5 [hidden] attribute is a user-agent
+       declaration of `display:none` — but any element-level `display`
+       value (flex / grid / inline-flex etc) overrides it. Multiple
+       elements in this app set display values on classes that ALSO
+       use the hidden attribute (.refine-applied-chip is inline-flex,
+       .reasoning-banner is flex, etc). Without this rule, JS toggles
+       of .hidden = true do not visually hide the element — the empty
+       Refined: chip bug shipped to production for hours because of
+       this. Use !important so explicit display values cannot beat it. */
+    [hidden] { display: none !important; }
 
     /* ── Phone shell (desktop preview only) ── */
     .phone{

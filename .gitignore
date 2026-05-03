@@ -1,3 +1,22 @@
+# Junk artifacts from PowerShell-vs-Cmd shell mismatches
 $null
 .gitignore_tmp
+
+# Vercel deploy state
 .vercel
+
+# Backup HTML files — historical references, not part of build
+*.backup-*
+*.recovered
+savvey-v[0-9]*.html
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+
+# Node
+node_modules/

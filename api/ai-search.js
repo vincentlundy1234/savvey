@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.43';
+const VERSION = 'ai-search.js v1.44';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1758,11 +1758,74 @@ function priceMatchesAllowed(n, allowed) {
   return false;
 }
 
+// A3 — Audit fix. Extract retailer name candidates from reasoning text
+// for hallucination check. We look for capitalised word phrases and
+// known generic words to skip. Returns lowercased candidates.
+function extractRetailerCandidates(text) {
+  if (!text) return [];
+  // Match runs of capitalised words: "John Lewis", "Coffee Bean Shop",
+  // "HBH Woolacotts", "Amazon UK". Allow up to 4 words.
+  const re = /\b([A-Z][a-zA-Z&'.]*(?:\s+[A-Z][a-zA-Z&'.]*){0,3})\b/g;
+  const candidates = [];
+  let m;
+  while ((m = re.exec(text)) !== null) candidates.push(m[1]);
+  return candidates;
+}
+// Words that LOOK like retailer names but aren't — skip these so we
+// don't false-reject a sentence that legitimately starts with a
+// product name like "Sage" or "iPhone" or "Sennheiser".
+const RETAILER_STOPWORDS = new Set([
+  'the','a','an','at','for','from','to','and','or','with','in','on',
+  'best','price','prices','typical','range','ranges','offer','offers','offering',
+  'cheapest','low','high','across','retailers','retailer','model','models','variant','variants',
+  'sage','iphone','sennheiser','wahoo','rado','nike','adidas','dyson','shark','bosch',
+  'samsung','apple','sony','lg','philips','le','creuset','tineco','garmin','wahoo',
+  'kickr','core','bambino','captain','cook','air','max','millennium','falcon',
+  'compared','compare','similar','same','exact','newer','older','generation',
+  'uk','gbp','pounds','sterling',
+  'in','out','of','stock','available','unavailable','delivery','shipping','collect',
+]);
+
 function validateReasoningGrounding(text, items) {
   if (!text || !items || items.length === 0) return { ok: false, reason: 'no-text-or-items' };
   // Reject any non-GBP currency mention — catches Rado/Nike USD-leak class
   if (/\$|\bUSD\b|\bdollar|\beuro|€|\bEUR\b/i.test(text)) {
     return { ok: false, reason: 'non-gbp-currency' };
+  }
+  // A3 — count check. If reasoning says "across N retailers" or "N UK
+  // retailers" or "found at N retailers", N must equal items.length.
+  // Catches the cordless-vacuum class where reasoning said "across four
+  // retailers" while items.length was 5.
+  const NUMBER_WORDS = { one:1, two:2, three:3, four:4, five:5, six:6, seven:7, eight:8, nine:9, ten:10 };
+  const countMatch = text.match(/\b(?:across|at|from|found at)\s+(one|two|three|four|five|six|seven|eight|nine|ten|\d+)\s+(?:UK\s+)?retailers?\b/i);
+  if (countMatch) {
+    const claimed = NUMBER_WORDS[countMatch[1].toLowerCase()] ?? Number(countMatch[1]);
+    if (Number.isFinite(claimed) && claimed !== items.length) {
+      return { ok: false, reason: `count-mismatch:claimed-${claimed}-actual-${items.length}` };
+    }
+  }
+  // A3 — retailer-name check. Every capitalised phrase in the reasoning
+  // (excluding generic stop-words and product-name fragments) must
+  // substring-match at least one retailer's `source` field. Catches the
+  // kettle-Dualit class where Haiku invented a brand not in the data.
+  const retailerCandidates = extractRetailerCandidates(text);
+  const allowedRetailerNames = items
+    .map(i => String(i.source || '').toLowerCase())
+    .filter(Boolean);
+  for (const cand of retailerCandidates) {
+    const candLc = cand.toLowerCase().trim();
+    if (!candLc) continue;
+    // Skip if entire candidate is a stop-word or contains only stop-words
+    const tokens = candLc.split(/\s+/);
+    if (tokens.every(t => RETAILER_STOPWORDS.has(t))) continue;
+    // Skip if very short single tokens — too noisy
+    if (tokens.length === 1 && tokens[0].length < 4) continue;
+    // Pass if candidate substring-matches ANY allowed retailer name OR
+    // any allowed retailer substring-matches the candidate.
+    const matched = allowedRetailerNames.some(n => n.includes(candLc) || candLc.includes(n));
+    if (!matched) {
+      return { ok: false, reason: `retailer-not-in-items:"${cand}" (allowed: ${allowedRetailerNames.join(' | ')})` };
+    }
   }
   // Extract every £-amount from the generated line
   const priceMatches = text.match(/£\s*[\d,]+(?:\.\d{1,2})?/g) || [];
@@ -1869,7 +1932,18 @@ function dedup(items) {
     const key = String(it.source || '').toLowerCase();
     if (!map.has(key) || it.price < map.get(key).price) map.set(key, it);
   }
-  return [...map.values()].sort((a, b) => a.price - b.price);
+  // A5 — Audit fix. Push items where in_stock === false to the end of
+  // the sort regardless of price. Catches the case where Sonar Pro
+  // returned an out-of-stock listing as the cheapest — the user would
+  // see "best price confirmed ✓" pointing at something they can't buy.
+  // Items with in_stock === null (Search-quad path, no signal) and
+  // in_stock === true sort by price ascending as before.
+  return [...map.values()].sort((a, b) => {
+    const aOos = a.in_stock === false ? 1 : 0;
+    const bOos = b.in_stock === false ? 1 : 0;
+    if (aOos !== bOos) return aOos - bOos;  // out-of-stock to the back
+    return a.price - b.price;
+  });
 }
 
 function computeCoverage(items) {
