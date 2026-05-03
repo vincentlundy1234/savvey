@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.36';
+const VERSION = 'ai-search.js v1.37';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1174,6 +1174,93 @@ Return ONLY a JSON array, one entry per result: {"index": N, "price": number_or_
 
 Output ONLY the JSON array, no other text.`;
 
+// Wave 201c — Sonar Pro sanity re-grade.
+//
+// Sonar Pro's structured output is rich but not always price-tier-sane.
+// Sennheiser HD 660S returned £166 from Sennheiser UK (MSRP £499) — likely
+// a refurb / outlet price slipping through Pro's grading. The Wave 102
+// price-tier sanity rules live inside HAIKU_EXTRACT_SYSTEM_PROMPT, so by
+// re-feeding Pro's products through Haiku with synthetic snippets ("Title
+// X | Price £Y | In stock"), we apply the same gate to both pipeline
+// branches and drop implausible-low prices uniformly.
+//
+// Cost: ~$0.0005/query (the system prompt is already cached from the
+// extractPricesViaHaiku call on the Search-quad path; this is a marginal
+// user-message-only call).
+async function validateSonarPro(products, query, anthropicKey) {
+  if (!Array.isArray(products) || products.length === 0) return products;
+  if (!anthropicKey) return products;
+  // Build numbered listings with the price embedded in the snippet so
+  // Haiku has the price-tier sanity context it needs.
+  const numbered = products.map((p, i) => ({
+    index: i,
+    title: String(p.title || '').slice(0, 200),
+    snippet: `Price extracted: £${p.price_gbp == null ? '?' : p.price_gbp}. In stock: ${p.in_stock ? 'yes' : 'no'}. Retailer: ${p.retailer_name || p.retailer_host}. Sonar Pro graded query_match: ${p.query_match || 'exact'}.`,
+    url: String(p.product_url || '').slice(0, 200),
+  }));
+  const userContent = `Query: "${query}"
+
+Sonar Pro returned these structured listings. Apply price-tier sanity (Wave 102 rules) — the EXTRACTED price is in the snippet. Reject any where price < ~30% of expected MSRP for what the title claims (refurb/clone/accessory/finance).
+
+Listings to validate:
+${JSON.stringify(numbered, null, 2)}`;
+  const ac    = new AbortController();
+  const timer = setTimeout(() => ac.abort(), HAIKU_TIMEOUT_MS);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 600,
+        system: HAIKU_EXTRACT_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: userContent }],
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[${VERSION}] Sonar Pro validate Haiku non-200: ${r.status}`);
+      return products;  // fail-open: keep Pro's grading on Haiku failure
+    }
+    const data = await r.json();
+    const text = ((data.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const m = text.match(/\[[\s\S]*\]/);
+    if (!m) {
+      console.warn(`[${VERSION}] Sonar Pro validate Haiku not parseable:`, text.slice(0, 200));
+      return products;
+    }
+    const parsed = JSON.parse(m[0]);
+    if (!Array.isArray(parsed)) return products;
+    // Apply the validation: drop plausible:false, override query_match
+    // when Haiku graded it differently (Haiku has the full price-tier
+    // sanity context; trust it over Pro's grading).
+    const filtered = [];
+    let dropped = 0;
+    for (let i = 0; i < products.length; i++) {
+      const v = parsed.find(x => x.index === i);
+      if (!v) { filtered.push(products[i]); continue; }
+      if (v.plausible === false) {
+        console.log(`[${VERSION}] Sonar Pro sanity: dropping "${products[i].title?.slice(0,60)}" @ £${products[i].price_gbp} (Haiku flagged implausible)`);
+        dropped++;
+        continue;
+      }
+      // Override query_match if Haiku regraded
+      if (v.query_match && v.query_match !== products[i].query_match) {
+        filtered.push({ ...products[i], query_match: v.query_match });
+      } else {
+        filtered.push(products[i]);
+      }
+    }
+    if (dropped > 0) {
+      console.log(`[${VERSION}] Sonar Pro sanity: dropped ${dropped}/${products.length} products`);
+    }
+    return filtered;
+  } catch (e) {
+    console.warn(`[${VERSION}] Sonar Pro validate failed: ${e.message}`);
+    return products;  // fail-open
+  } finally { clearTimeout(timer); }
+}
+
 async function extractPricesViaHaiku(hits, query, anthropicKey) {
   if (!hits || hits.length === 0) return [];
   const numbered = hits.map((h, i) => ({
@@ -1765,7 +1852,14 @@ export default async function handler(req, res) {
   // produced nothing. Sonar Pro often surfaces specialist retailers when
   // Search quad returns zero (Sennheiser HD 660S → 0 from Search, 8 from
   // Sonar Pro). Don't kill those wins with a premature exit.
-  const sonarProItems = sonarProResult ? combineSonarProItems(sonarProResult.products) : [];
+  // Wave 201c — re-grade Sonar Pro products through Haiku price-tier
+  // sanity before converting to items. Drops Sennheiser £166-style
+  // outliers (refurb/finance/wrong-tier prices Pro misgraded).
+  let validatedSonarProducts = sonarProResult?.products || [];
+  if (validatedSonarProducts.length > 0) {
+    validatedSonarProducts = await validateSonarPro(validatedSonarProducts, q, ANTHROPIC_KEY);
+  }
+  const sonarProItems = validatedSonarProducts.length > 0 ? combineSonarProItems(validatedSonarProducts) : [];
   if (hits.length === 0 && sonarProItems.length === 0) {
     return res.status(200).json({
       shopping: [],
