@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.42';
+const VERSION = 'ai-search.js v1.43';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1771,7 +1771,13 @@ function validateReasoningGrounding(text, items) {
     // allow descriptive lines through.
     return { ok: true, reason: 'no-prices-mentioned' };
   }
-  const allowedPrices = items.map(i => Number(i.price)).filter(n => Number.isFinite(n));
+  // Wave 210d — accept either `price` (raw items) or `price_gbp` (the
+  // shape we pass into the Haiku prompt). Earlier renaming broke the
+  // validator silently — every input had price_gbp set, but this read
+  // i.price and got undefined → empty allowed list → rejected everything.
+  const allowedPrices = items
+    .map(i => Number(i.price ?? i.price_gbp))
+    .filter(n => Number.isFinite(n));
   for (const raw of priceMatches) {
     const n = Number(raw.replace(/[£,\s]/g, ''));
     if (!Number.isFinite(n)) continue;
