@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.30';
+const VERSION = 'ai-search.js v1.31';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -739,6 +739,8 @@ async function fetchPerplexitySearch(query, apiKey, anthropicKey) {
     _amazonHitCount: amazonCount,
     _looseHitCount: looseCount,
     _categoryLock: categoryLock?.name || null,
+    _categoryLockSource: categoryLock?.source || (categoryLock ? 'regex' : null),
+    _categoryHosts: categoryLock?.hosts || null,
     _categoryHitCount: categoryCount,
   };
 }
@@ -893,27 +895,70 @@ function isProductLikeUrl(url, retailer) {
   return /\/\d{4,}|[a-z0-9-]{8,}\.(html|aspx|prd)$|\/product\/|\/p\d+/i.test(path);
 }
 
+// Wave 200b — when a query is routed via aiCategoryLock, the AI may
+// suggest specialist hosts NOT in UK_RETAILERS (e.g. wiggle.co.uk for
+// Wahoo Kickr, sevenoakssoundandvision.co.uk for Sennheiser). Without
+// dynamic admission those hits get dropped at gatherRetailerHits even
+// though the category-locked Perplexity call surfaced them.
+//
+// Synthesize a retailer record on the fly for any URL whose host matches
+// the AI-suggested host list AND isn't already in UK_RETAILERS. The
+// synthesised retailer falls back to the generic isProductLikeUrl check
+// since it has no PRODUCT_URL_PATTERNS entry.
+function synthRetailerForHost(host) {
+  if (!host) return null;
+  const cleanHost = host.toLowerCase().replace(/^www\./, '');
+  // Use the brand portion of the host as a display name (rough but fine
+  // for long-tail; user-facing copy still favours title from Perplexity).
+  const namePart = cleanHost.split('.')[0]
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+  return { host: cleanHost, name: namePart, srcTerms: [], synthetic: true };
+}
+
+function matchRetailerWithExtras(url, extraHosts) {
+  const r = matchRetailerByHost(url);
+  if (r) return r;
+  if (!extraHosts || !extraHosts.length || !url) return null;
+  const u = String(url).toLowerCase();
+  for (const h of extraHosts) {
+    if (h && u.includes(h)) return synthRetailerForHost(h);
+  }
+  return null;
+}
+
 function gatherRetailerHits(data, query) {
   const results = rawResultsOf(data);
+  // Wave 200b — dynamically admit AI-suggested hosts. The hosts come
+  // back on the raw data object as `_categoryHosts` when fetchPerplexitySearch
+  // routed via aiCategoryLock.
+  const extraHosts = (data && Array.isArray(data._categoryHosts)) ? data._categoryHosts : null;
   const hits = [];
   let droppedNonProduct = 0;
+  let admittedAiHosts = 0;
   for (const r of results) {
     const url     = r.url || r.link || '';
     const title   = r.title || r.name || query;
     const snippet = r.snippet || r.content || r.description || r.text || '';
-    const retailer = matchRetailerByHost(url);
+    const retailer = matchRetailerWithExtras(url, extraHosts);
     if (!retailer) continue;
+    if (retailer.synthetic) admittedAiHosts++;
     // Tighten Amazon admission — see isAdmissibleAmazonUrl().
     if (retailer.host === 'amazon.co.uk') {
       if (!isAdmissibleAmazonUrl(url)) { droppedNonProduct++; continue; }
     } else {
-      // Other retailers — require URL to look like a product page (v1.6)
+      // Other retailers — require URL to look like a product page (v1.6).
+      // Synthetic retailers have no PRODUCT_URL_PATTERNS entry so they
+      // fall through to the generic numeric-segment / product-id heuristic.
       if (!isProductLikeUrl(url, retailer)) { droppedNonProduct++; continue; }
     }
     hits.push({ url, title, snippet, retailer });
   }
   if (droppedNonProduct > 0) {
     console.log(`[${VERSION}] dropped ${droppedNonProduct} non-product URLs at admission`);
+  }
+  if (admittedAiHosts > 0) {
+    console.log(`[${VERSION}] admitted ${admittedAiHosts} hits from AI-suggested hosts (synthetic retailers)`);
   }
   return hits;
 }
@@ -1701,6 +1746,9 @@ export default async function handler(req, res) {
       amazonTagged:      Boolean(AMAZON_TAG),
       usedFallback,                                         // Wave 98 — true if zero-hit comparison fallback rescued the search
       categoryProducts,                                     // Wave 100 — top-3 product list when query was classified as category, else null
+      categoryLock:       raw?._categoryLock || null,        // Wave 200 — name (regex: 'watch'; AI: 'ai-watch') of the matched category lock
+      categoryLockSource: raw?._categoryLockSource || null,  // Wave 200 — 'regex' | 'ai' | null
+      categoryHosts:      raw?._categoryHosts || null,       // Wave 200 — host list used by category-locked Perplexity call
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
