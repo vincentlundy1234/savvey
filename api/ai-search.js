@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.41';
+const VERSION = 'ai-search.js v1.42';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1744,33 +1744,42 @@ function computeConfidence(items) {
 // any $ / USD / dollar token appears, the function returns null and the
 // frontend falls back to a generic "X retailers compared" header. Better
 // to show no reasoning than wrong reasoning.
+// Wave 210c — tolerance relaxation. v1.41 ±£0.50 was rejecting valid
+// reasoning when Haiku rounded prices ("£381" for an item priced £381.63
+// — 0.63 off, just over 0.50 tolerance). Now: ±£3 absolute OR ±2% relative
+// (whichever is larger). Catches real hallucinations (£30 invented vs £13,
+// £224 invented vs £239) but allows natural rounding.
+function priceMatchesAllowed(n, allowed) {
+  for (const p of allowed) {
+    const diff = Math.abs(p - n);
+    if (diff <= 3) return true;
+    if (diff / Math.max(p, 1) <= 0.02) return true;  // 2% relative
+  }
+  return false;
+}
+
 function validateReasoningGrounding(text, items) {
-  if (!text || !items || items.length === 0) return false;
-  // Reject any non-GBP currency mention
+  if (!text || !items || items.length === 0) return { ok: false, reason: 'no-text-or-items' };
+  // Reject any non-GBP currency mention — catches Rado/Nike USD-leak class
   if (/\$|\bUSD\b|\bdollar|\beuro|€|\bEUR\b/i.test(text)) {
-    console.log(`[${VERSION}] reasoning rejected — non-GBP currency: "${text.slice(0,80)}"`);
-    return false;
+    return { ok: false, reason: 'non-gbp-currency' };
   }
   // Extract every £-amount from the generated line
   const priceMatches = text.match(/£\s*[\d,]+(?:\.\d{1,2})?/g) || [];
   if (priceMatches.length === 0) {
-    // No prices mentioned — can't validate price hallucination, but the
-    // currency gate above caught the worst class. Allow through.
-    return true;
+    // No prices in reasoning — currency gate above caught the worst case;
+    // allow descriptive lines through.
+    return { ok: true, reason: 'no-prices-mentioned' };
   }
-  // Build the set of allowed prices: every items[].price (number).
-  // Tolerate ±£0.50 rounding (Haiku may say "£330" for an item priced "£329.99").
   const allowedPrices = items.map(i => Number(i.price)).filter(n => Number.isFinite(n));
   for (const raw of priceMatches) {
     const n = Number(raw.replace(/[£,\s]/g, ''));
     if (!Number.isFinite(n)) continue;
-    const matched = allowedPrices.some(p => Math.abs(p - n) <= 0.5);
-    if (!matched) {
-      console.log(`[${VERSION}] reasoning rejected — price £${n} not in input items (allowed: ${allowedPrices.map(p => '£'+p).join(', ')}): "${text.slice(0,80)}"`);
-      return false;
+    if (!priceMatchesAllowed(n, allowedPrices)) {
+      return { ok: false, reason: `price-not-in-items:£${n} (allowed: ${allowedPrices.map(p => '£'+p).join(', ')})` };
     }
   }
-  return true;
+  return { ok: true, reason: 'all-prices-match' };
 }
 
 async function generateReasoningLine(query, items, anthropicKey) {
@@ -1834,7 +1843,14 @@ Bad (rejected) examples:
     // Wave 210b — grounding gate. Reject reasoning that invents prices,
     // retailers, or leaks non-GBP currency. Better to show no line than
     // a wrong one.
-    if (!validateReasoningGrounding(text, top)) return null;
+    // Wave 210c — relaxed to ±£3 / ±2% tolerance after v1.41 was over-rejecting.
+    const validation = validateReasoningGrounding(text, top);
+    if (!validation.ok) {
+      console.log(`[${VERSION}] reasoning rejected (${validation.reason}): "${text.slice(0, 100)}"`);
+      // Stash on a globally-accessible spot for debug envelope
+      try { globalThis.__lastRejectedReasoning = { text: text.slice(0, 200), reason: validation.reason }; } catch(_) {}
+      return null;
+    }
     return text;
   } catch (e) {
     return null;
@@ -2238,6 +2254,9 @@ export default async function handler(req, res) {
     },
     rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })),
     priceDataSample: priceData.slice(0, 12),
+    // Wave 210c — surface most recently rejected reasoning so audit can see
+    // why it was dropped. Best-effort, may race across concurrent requests.
+    rejectedReasoning: (typeof globalThis.__lastRejectedReasoning === 'object') ? globalThis.__lastRejectedReasoning : null,
     // Wave 201 — Sonar Pro probe payload (only present when sonar_pro=true)
     sonarPro: sonarProResult ? {
       productCount: sonarProResult.products.length,
