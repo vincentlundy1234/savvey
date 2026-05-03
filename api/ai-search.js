@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.5.0';
+const VERSION = 'ai-search.js v2.6.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -2361,6 +2361,15 @@ export default async function handler(req, res) {
   // Latency: parser kicks off concurrent with sonarProPromise, so its
   // ~1s cost is absorbed inside the existing 8-13s pipeline budget.
   // ─────────────────────────────────────────────────────────────
+  // v2.6 — Eval Loop instrumentation. Stage-by-stage candidate counts.
+  const _attrition = {
+    sonarPro: 0, searchQuad: 0, merged: 0,
+    after_brand_gate: 0, after_model_gate: 0, after_tier_gate: 0,
+    after_ai_judge: 0, after_verifyUrls: 0,
+  };
+  const RELAXED = req.body && (req.body.relaxed === true || req.body.relaxed === 'true');
+  if (RELAXED) console.log(`[${VERSION}] RELAXED MODE — gates bypassed`);
+
   const parsedQueryPromise = parseQueryIntent(q, ANTHROPIC_KEY)
     .catch((e) => { console.warn(`[${VERSION}] parser promise rejected: ${e.message}`); return null; });
 
@@ -2480,12 +2489,13 @@ export default async function handler(req, res) {
   const sonarProItems = sonarProResult?.products?.length > 0
     ? combineSonarProItems(sonarProResult.products)
     : [];
+  _attrition.sonarPro = sonarProItems.length;
   if (hits.length === 0 && sonarProItems.length === 0) {
     const parsedQueryEarly = await parsedQueryPromise.catch(() => null);
     return res.status(200).json({
       shopping: [],
       organic:  [],
-      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts, parsed_query: parsedQueryEarly },
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts, parsed_query: parsedQueryEarly, _attrition: { ..._attrition, final: 0, relaxed: RELAXED } },
       _debug: debug ? { counts: { raw_results: rawResultsOf(raw).length, uk_hits: 0, ai_plausible: 0, url_verified: 0, verified_dropped: 0, final: 0 }, rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })) } : undefined,
     });
   }
@@ -2505,6 +2515,7 @@ export default async function handler(req, res) {
   }
 
   let items = combineHitsWithPrices(hits, priceData);
+  _attrition.searchQuad = items.length;
 
   // Wave 201b — merge Sonar Pro items into the Search-API-derived items
   // list. Dedup by URL first (strictest) then by host (in case the same
@@ -2541,6 +2552,7 @@ export default async function handler(req, res) {
     }
     console.log(`[${VERSION}] Sonar Pro merge: ${beforeMerge} search-quad items + ${sonarProItems.length} sonar-pro items → ${items.length} merged`);
   }
+  _attrition.merged = items.length;
 
   // Wave 97 — thin-coverage top-up. When the broad/amazon/loose calls
   // returned <3 plausible items, fire ONE more Perplexity call at a
@@ -2653,7 +2665,7 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
   // for a Bosch query) can leak in via gatherRetailerHits. Filter merged
   // items by parser brand to stop the £72-Einhell-as-cheapest-Bosch class.
   const parsedForGate = await parsedQueryPromise.catch(() => null);
-  if (parsedForGate && parsedForGate.brand && items.length > 0) {
+  if (!RELAXED && parsedForGate && parsedForGate.brand && items.length > 0) {
     const beforeBrandGate = items.length;
     items = items.filter((it) => titleMatchesBrand(it.title, parsedForGate.brand, parsedForGate.brand_aliases));
     const droppedByBrandGate = beforeBrandGate - items.length;
@@ -2661,9 +2673,10 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       console.log(`[${VERSION}] R2 brand gate dropped ${droppedByBrandGate} wrong-brand items (kept brand="${parsedForGate.brand}", remaining=${items.length})`);
     }
   }
+  _attrition.after_brand_gate = items.length;
   // Savvey v2.4 — model qualifier gate (token-set + upgrade-marker reject).
   // Catches HD 660S vs HD 660S2, Bambino vs Bambino Plus, OptiGrill vs OptiGrill+ XL.
-  if (parsedForGate && parsedForGate.qualifiers && parsedForGate.qualifiers.model && items.length > 0) {
+  if (!RELAXED && parsedForGate && parsedForGate.qualifiers && parsedForGate.qualifiers.model && items.length > 0) {
     const modelStr = String(parsedForGate.qualifiers.model);
     const beforeModelGate = items.length;
     items = items.filter((it) => titleMatchesModel(it.title, modelStr));
@@ -2672,9 +2685,10 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       console.log(`[${VERSION}] v2.4 model gate dropped ${droppedByModelGate} wrong-model items (kept model="${modelStr}", remaining=${items.length})`);
     }
   }
+  _attrition.after_model_gate = items.length;
   // Savvey v2.4 — tier gate (base-tier). For "iPhone 17" (tier=base), reject
   // titles with Pro/Max/Plus/Ultra/Elite markers.
-  if (parsedForGate && parsedForGate.qualifiers && String(parsedForGate.qualifiers.tier || '').toLowerCase() === 'base' && items.length > 0) {
+  if (!RELAXED && parsedForGate && parsedForGate.qualifiers && String(parsedForGate.qualifiers.tier || '').toLowerCase() === 'base' && items.length > 0) {
     const beforeTierGate = items.length;
     items = items.filter((it) => titleMatchesBaseTier(it.title));
     const droppedByTierGate = beforeTierGate - items.length;
@@ -2682,11 +2696,12 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       console.log(`[${VERSION}] v2.4 base-tier gate dropped ${droppedByTierGate} upgrade-tier items (remaining=${items.length})`);
     }
   }
+  _attrition.after_tier_gate = items.length;
 
   // Savvey v2.4 — AI identity check fires in parallel with URL HEAD verify
   // and hero image. Adds ~400-800ms but lives inside the existing parallel
   // block so it doesn't add to total latency. Drops items below 0.6 confidence.
-  const identityPromise = aiIdentityCheck(items, parsedForGate, ANTHROPIC_KEY);
+  const identityPromise = RELAXED ? Promise.resolve(items) : aiIdentityCheck(items, parsedForGate, ANTHROPIC_KEY);
 
   // URL HEAD verification + hero image fetch — fired in parallel so the
   // image API call doesn't add to total latency. Image is optional; null
@@ -2706,6 +2721,8 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
   // Intersect verified-by-URL with kept-by-AI-identity (both filtered subsets of items).
   // Keep only items present in BOTH lists. Match by URL (the stable identifier).
   const identityKeptUrls = new Set((identityKept || items).map((it) => it.link || it.url));
+  _attrition.after_ai_judge = identityKeptUrls.size;
+  _attrition.after_verifyUrls = verifiedItems.length;
   items = verifiedItems.filter((it) => identityKeptUrls.has(it.link || it.url));
   const verifiedDropped = beforeVerify - items.length;
 
@@ -2888,6 +2905,7 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       refine:            refine && refine.refinement_text ? { applied: true, text: String(refine.refinement_text).slice(0, 120) } : null,  // Wave 220 — echo refinement so frontend can render "Refined: 'show cheaper'" badge
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       parsed_query:      parsedQuery,
+      _attrition:        { ..._attrition, final: results.length, relaxed: RELAXED },
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
         verified:   !!priceVerification.verified,
