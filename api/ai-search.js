@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.37';
+const VERSION = 'ai-search.js v1.38';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -515,7 +515,11 @@ function rawResultsOf(data) {
 // returns thin (<3 products with valid prices).
 const SONAR_PRO_ENDPOINT      = 'https://api.perplexity.ai/chat/completions';
 const SONAR_PRO_MODEL         = 'sonar-pro';
-const SONAR_PRO_TIMEOUT_MS    = 13000;  // tight against Vercel 15s ceiling
+// Wave 201d — dropped from 13000 → 9000 after FUNCTION_INVOCATION_TIMEOUT
+// at 15.3s on v1.37. We need ~5s headroom for the rest of the pipeline
+// (Search quad merge, URL verify, response build). 9s is enough for
+// Sonar Pro's typical 7-9s response, fail-open on slower queries.
+const SONAR_PRO_TIMEOUT_MS    = 9000;
 const SONAR_PRODUCT_SCHEMA = {
   type: 'object',
   properties: {
@@ -1748,12 +1752,17 @@ export default async function handler(req, res) {
     }
   }
 
-  // Wave 201 — opt-in Sonar Pro probe. Runs in parallel with existing
-  // Search API quad so we can A/B compare on real queries before betting
-  // the flow on it. Surfaces in _debug.sonarPro for evaluation.
-  // Promote to primary in Wave 201b after observed quality/latency.
+  // Wave 201b — Sonar Pro is the primary discovery call, runs in parallel
+  // with the Search API quad. Wave 201d — chain Haiku price-tier sanity
+  // validation INTO the Sonar Pro promise so it overlaps with Search quad
+  // (instead of running serially after both resolve). This is what kept
+  // total latency under the Vercel 15s ceiling.
   const sonarProPromise = sonar_pro
-    ? fetchSonarPro(q, PERPLEXITY_KEY)
+    ? fetchSonarPro(q, PERPLEXITY_KEY).then(async (r) => {
+        if (!r || !Array.isArray(r.products) || r.products.length === 0) return r;
+        const validated = await validateSonarPro(r.products, q, ANTHROPIC_KEY);
+        return { ...r, products: validated };
+      })
     : Promise.resolve(null);
 
   // Perplexity search via circuit breaker
@@ -1852,14 +1861,13 @@ export default async function handler(req, res) {
   // produced nothing. Sonar Pro often surfaces specialist retailers when
   // Search quad returns zero (Sennheiser HD 660S → 0 from Search, 8 from
   // Sonar Pro). Don't kill those wins with a premature exit.
-  // Wave 201c — re-grade Sonar Pro products through Haiku price-tier
-  // sanity before converting to items. Drops Sennheiser £166-style
-  // outliers (refurb/finance/wrong-tier prices Pro misgraded).
-  let validatedSonarProducts = sonarProResult?.products || [];
-  if (validatedSonarProducts.length > 0) {
-    validatedSonarProducts = await validateSonarPro(validatedSonarProducts, q, ANTHROPIC_KEY);
-  }
-  const sonarProItems = validatedSonarProducts.length > 0 ? combineSonarProItems(validatedSonarProducts) : [];
+  // Wave 201d — Sonar Pro products are already Haiku-validated via the
+  // promise chain (validateSonarPro chained inside sonarProPromise), so
+  // by the time we reach here, sonarProResult.products is the filtered set.
+  // No extra await needed — saves the 2-5s that blew the 15s Vercel ceiling.
+  const sonarProItems = sonarProResult?.products?.length > 0
+    ? combineSonarProItems(sonarProResult.products)
+    : [];
   if (hits.length === 0 && sonarProItems.length === 0) {
     return res.status(200).json({
       shopping: [],
