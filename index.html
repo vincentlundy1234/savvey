@@ -1433,16 +1433,33 @@
        Wave 44: number trimmed 52→44 + label tightened so the pair feels
        balanced not screaming. */
     .hero-amount{display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-bottom:8px;}
-    .hero-num{font-family:"Nunito",sans-serif;font-weight:900;font-size:44px;line-height:1;letter-spacing:-1.6px;}
+    /* Wave 92 — saving block restyle. Vincent's note: "£25" was being
+       misread as the product price. The label needs to be tightly
+       coupled to the number AND colour-matched (green for below typical,
+       red/amber for above) so the meaning is unambiguous. The number +
+       label now share an inline row, and the label is the same colour
+       as the score band. */
+    .hero-num-row{
+      display:flex;
+      align-items:baseline;
+      gap:10px;
+      flex-wrap:wrap;
+      margin-bottom:6px;
+    }
+    .hero-num{font-family:"Nunito",sans-serif;font-weight:900;font-size:48px;line-height:1;letter-spacing:-1.8px;}
     .hero-num.red{color:var(--red);}
     .hero-num.amber{color:var(--amber);}
     .hero-num.green{color:var(--green);}
     .hero-lbl{
-      font:700 11px/1 "Inter",sans-serif;
+      font:800 13px/1.15 "Inter",sans-serif;
       color:var(--ink3);
-      letter-spacing:0.6px;
+      letter-spacing:0.3px;
       text-transform:uppercase;
     }
+    /* Colour-coded label matches the number — green for savings, red/amber for overpaying. */
+    .hero-lbl.green{color:var(--green);}
+    .hero-lbl.amber{color:var(--amber);}
+    .hero-lbl.red  {color:var(--red);}
     .hero-where{font:500 13.5px/1.5 "Inter",sans-serif;color:var(--ink2);margin-bottom:14px;word-wrap:break-word;}
     .hero-where strong{color:var(--ink);font-weight:700;}
     /* Wave 53 — Vague-query hint refined. Subtle gradient + tighter
@@ -3939,8 +3956,10 @@
         <div class="hero-body">
           <div class="hero-wit" id="hero-wit">That's a tank of petrol they just tried to add on.</div>
           <div class="hero-amount">
-            <div class="hero-num red" id="hero-saving-num">£80</div>
-            <div class="hero-lbl" id="hero-saving-label">cheaper elsewhere</div>
+            <div class="hero-num-row">
+              <div class="hero-num red" id="hero-saving-num">£80</div>
+              <div class="hero-lbl red" id="hero-saving-label">cheaper elsewhere</div>
+            </div>
           </div>
           <div class="hero-where" id="hero-where"><strong>Amazon UK</strong> has it for <strong>£249</strong> right now.</div>
 
@@ -6873,7 +6892,14 @@ function viewOnAmazon(){
 // hit one in his first test session. Search URLs land the user on the
 // retailer's own results page where the canonical product is one tap
 // away — much more reliable.
-const PREFER_SEARCH_URL = /argos|ao\.com|currys|wickes|toolstation|home\s*bargains|lidl|aldi|the works|wilko|poundland/i;
+// Wave 92 — added Very, Selfridges, Halfords, Boots, Dunelm, Lakeland,
+// Wayfair, IKEA, Habitat, Waterstones, WHSmith, B&Q, Homebase. Vincent's
+// AirPods Pro 2 case: tapped Buy → landed on Very homepage, not the
+// product page. Perplexity's URLs for these retailers are too volatile;
+// safer to route through the retailer's own search with the product
+// name pre-filled. The user lands on a search results page that always
+// shows the product they wanted, never on a generic homepage.
+const PREFER_SEARCH_URL = /argos|ao\.com|currys|wickes|toolstation|home\s*bargains|lidl|aldi|the works|wilko|poundland|very|selfridges|halfords|boots|dunelm|lakeland|wayfair|ikea|habitat|waterstones|whsmith|wh\s*smith|b&q|diy\.com|homebase|asda|tesco|sainsbury/i;
 function openRetailerRow(retailerName, link){
   haptic(10);
   const name = String(retailerName || '');
@@ -7136,6 +7162,12 @@ function renderResults(sc){
   const savLblEl=document.getElementById('hero-saving-label');
   const where=document.getElementById('hero-where');
   const witEl=document.getElementById('hero-wit');
+  // Wave 92 — helper: keep label colour locked to the score band so the
+  // "you saved / you're paying over" framing reads at-a-glance.
+  const setLbl = (text, lblSpc) => {
+    savLblEl.textContent = text;
+    savLblEl.className = 'hero-lbl ' + (lblSpc || spc);
+  };
 
   if(hasUserPrice){
     // Wave 60 — when the user's anchor price is CHEAPER than every retailer
@@ -7152,15 +7184,15 @@ function renderResults(sc){
       witEl.textContent = sc.witLine;
       savNumEl.textContent = '£' + Math.round(sc.uPrice);
       savNumEl.className = 'hero-num green';
-      savLblEl.textContent = 'best price you\'ve found';
+      setLbl('best price you\'ve found', 'green');
       where.innerHTML = `Cheapest other UK retailer right now: <strong>${sc.bestRetailer}</strong> at <strong>£${sc.bestPrice}</strong>. You\'ve already beaten them.`;
     } else if(spc==='green'){
       savNumEl.textContent='£'+sc.bestPrice;
-      savLblEl.textContent='best price in the UK right now';
+      setLbl('best price in the UK right now', 'green');
       where.innerHTML='You\'re at the best available price. <strong>Buy with confidence.</strong>';
     }else{
       savNumEl.textContent='£'+(sc.saving||0);
-      savLblEl.textContent='cheaper elsewhere';
+      setLbl('cheaper elsewhere', spc);
       where.innerHTML='<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong> right now.';
     }
   }else{
@@ -7187,30 +7219,27 @@ function renderResults(sc){
     if(n >= 2 && savedVsAvg > 0){
       savNumEl.textContent = '£'+savedVsAvg;
       savNumEl.className = 'hero-num '+spc;
-      savLblEl.textContent = isSnapGeneric ? 'below similar products' : 'below typical UK price';
+      setLbl(isSnapGeneric ? 'below similar products' : 'below typical UK price', spc);
       where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+(isSnapGeneric ? 'similar UK products typically' : 'typical UK price')+' <strong>£'+avg+'</strong>.';
     } else if(n >= 2 && avg && sc.bestPrice && sc.bestPrice > avg){
       // Wave 89 — degrade gracefully when cheapest UK retailer is ABOVE
-      // typical UK price (amber / red scores). Don't show "matches"
-      // (green-coded) when in fact the user is paying over the typical.
-      // Audit issue: the £-saved framing was misleadingly green for
-      // score 3 where best > avg by a margin.
+      // typical UK price (amber / red scores).
       const overBy = Math.round(sc.bestPrice - avg);
       savNumEl.textContent = '£'+overBy;
       savNumEl.className = 'hero-num '+spc;
-      savLblEl.textContent = isSnapGeneric ? 'above similar products' : 'above typical UK price';
+      setLbl(isSnapGeneric ? 'above similar products' : 'above typical UK price', spc);
       where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> at <strong>£'+sc.bestPrice+'</strong> · '+(isSnapGeneric ? 'similar UK products typically' : 'typical UK price')+' <strong>£'+avg+'</strong>. Worth shopping around.';
     } else if(n >= 2){
       // Cheapest matches typical UK price exactly — that's still a win.
       savNumEl.textContent = '£'+sc.bestPrice;
       savNumEl.className = 'hero-num green';
-      savLblEl.textContent = isSnapGeneric ? 'matches similar products' : 'matches typical UK price';
+      setLbl(isSnapGeneric ? 'matches similar products' : 'matches typical UK price', 'green');
       where.innerHTML = (isSnapGeneric ? 'Similar UK products typically' : 'Typical UK price') + ' <strong>£'+avg+'</strong>. <strong>'+sc.bestRetailer+'</strong> is cheapest.';
     } else {
       // Single retailer
       savNumEl.textContent = '£'+sc.bestPrice;
       savNumEl.className = 'hero-num';
-      savLblEl.textContent = 'only result found';
+      setLbl('only result found', 'amber');
       where.innerHTML = '<strong>'+sc.bestRetailer+'</strong> has it for <strong>£'+sc.bestPrice+'</strong>. We couldn\'t surface another UK retailer for direct comparison.';
     }
   }
