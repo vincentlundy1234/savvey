@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.35';
+const VERSION = 'ai-search.js v1.36';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1230,6 +1230,38 @@ ${JSON.stringify(numbered, null, 2)}`;
   } finally { clearTimeout(timer); }
 }
 
+// Wave 201b — convert Sonar Pro structured products into the same `items`
+// shape that combineHitsWithPrices produces for the Search API quad path.
+// Skip products with null prices (no price visible in the structured response).
+// query_match=different drops at the same gate as the Haiku path. The whole
+// point of the Sonar Pro path is that Pro already extracted/graded prices,
+// so we don't run extractPricesViaHaiku here — saves the Haiku cost AND
+// is more accurate for the structured-output cases.
+function combineSonarProItems(products) {
+  if (!Array.isArray(products) || products.length === 0) return [];
+  const items = [];
+  for (const p of products) {
+    if (!p || !p.product_url || !p.retailer_host) continue;
+    if (p.query_match === 'different') {
+      console.log(`[${VERSION}] [sonar-pro] dropping query_match=different: "${(p.title||'').slice(0,80)}"`);
+      continue;
+    }
+    if (p.price_gbp === null || p.price_gbp === undefined) continue;
+    const price = admitPrice(p.price_gbp);
+    if (price === null) continue;
+    items.push({
+      source:      p.retailer_name || p.retailer_host.split('.')[0],
+      price,
+      link:        p.product_url,
+      title:       String(p.title || '').slice(0, 200),
+      delivery:    '',
+      query_match: p.query_match || 'exact',
+      _via:        'sonar-pro',  // provenance tag (not surfaced to user)
+    });
+  }
+  return items;
+}
+
 function combineHitsWithPrices(hits, priceData) {
   const items = [];
   for (let i = 0; i < hits.length; i++) {
@@ -1330,6 +1362,11 @@ async function verifyUrls(items) {
   const checks = items.map(async (item) => {
     if (!item.link) return null;
     if (isTrustedProductUrl(item.link)) return item; // bypass — URL is structurally stable
+    // Wave 201b — Sonar Pro already verified the product is on the page
+    // (it extracted price + in_stock from the live page during search).
+    // HEAD-checking again from a cloud IP would fail for many specialist
+    // retailers (Cloudflare-protected). Trust Sonar Pro's verification.
+    if (item._via === 'sonar-pro') return item;
     try {
       const ac = new AbortController();
       const t  = setTimeout(() => ac.abort(), HEAD_VERIFY_TIMEOUT_MS);
@@ -1604,7 +1641,10 @@ export default async function handler(req, res) {
   if (!PERPLEXITY_KEY) return res.status(503).json({ error: 'perplexity_not_configured' });
   if (!ANTHROPIC_KEY)  return res.status(503).json({ error: 'anthropic_not_configured' });
 
-  const { q, region = 'uk', debug = false, verify = true, sonar_pro = false } = req.body || {};
+  // Wave 201b — Sonar Pro is now ON by default (parallel + merge with
+  // Search API quad). Pass sonar_pro:false in body to disable for
+  // emergency fallback.
+  const { q, region = 'uk', debug = false, verify = true, sonar_pro = true } = req.body || {};
   if (!q) return res.status(400).json({ error: 'Missing query' });
   if (region !== 'uk') return res.status(400).json({ error: 'unsupported_region', message: `region "${region}" not yet supported` });
 
@@ -1721,7 +1761,12 @@ export default async function handler(req, res) {
     }
   }
 
-  if (hits.length === 0) {
+  // Wave 201b — only early-return when BOTH Search quad and Sonar Pro
+  // produced nothing. Sonar Pro often surfaces specialist retailers when
+  // Search quad returns zero (Sennheiser HD 660S → 0 from Search, 8 from
+  // Sonar Pro). Don't kill those wins with a premature exit.
+  const sonarProItems = sonarProResult ? combineSonarProItems(sonarProResult.products) : [];
+  if (hits.length === 0 && sonarProItems.length === 0) {
     return res.status(200).json({
       shopping: [],
       organic:  [],
@@ -1745,6 +1790,42 @@ export default async function handler(req, res) {
   }
 
   let items = combineHitsWithPrices(hits, priceData);
+
+  // Wave 201b — merge Sonar Pro items into the Search-API-derived items
+  // list. Dedup by URL first (strictest) then by host (in case the same
+  // retailer surfaced via both paths with slightly different URLs — keep
+  // the lower price). Sonar Pro already extracted prices and graded
+  // query_match, so these items skip the Haiku extraction step entirely.
+  if (sonarProItems.length > 0) {
+    const beforeMerge = items.length;
+    const seenUrls = new Set(items.map(i => i.link));
+    const byHost = new Map();
+    for (const it of items) {
+      const host = (() => { try { return new URL(it.link).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } })();
+      if (!host) continue;
+      const cur = byHost.get(host);
+      if (!cur || it.price < cur.price) byHost.set(host, it);
+    }
+    for (const sp of sonarProItems) {
+      if (seenUrls.has(sp.link)) continue;
+      const host = (() => { try { return new URL(sp.link).hostname.replace(/^www\./, '').toLowerCase(); } catch { return ''; } })();
+      const existing = host ? byHost.get(host) : null;
+      if (existing) {
+        // Same retailer hit by both paths. Keep the lower price.
+        if (sp.price < existing.price) {
+          // Replace existing in items array
+          const idx = items.indexOf(existing);
+          if (idx >= 0) items[idx] = sp;
+          if (host) byHost.set(host, sp);
+        }
+      } else {
+        items.push(sp);
+        seenUrls.add(sp.link);
+        if (host) byHost.set(host, sp);
+      }
+    }
+    console.log(`[${VERSION}] Sonar Pro merge: ${beforeMerge} search-quad items + ${sonarProItems.length} sonar-pro items → ${items.length} merged`);
+  }
 
   // Wave 97 — thin-coverage top-up. When the broad/amazon/loose calls
   // returned <3 plausible items, fire ONE more Perplexity call at a
