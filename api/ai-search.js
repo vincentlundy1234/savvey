@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.45';
+const VERSION = 'ai-search.js v2.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -456,6 +456,191 @@ function aiCacheSet(key, value){
   }
   AI_QUERY_CACHE.set(key, { t: Date.now(), value });
 }
+
+// ─────────────────────────────────────────────────────────────────
+// Savvey v2 — R1 Query Parser
+// ─────────────────────────────────────────────────────────────────
+//
+// The accuracy plan's foundational layer. Runs FIRST in the handler,
+// before any retrieval. Single Haiku structured-output call extracts
+// brand / family / qualifiers / expected_price_band / exact_match_required
+// from raw user query text.
+//
+// Why this matters: v1.45 had no notion of product identity beyond title-
+// string matching. "Bosch leaf blower 18V" returned an Einhell £72 because
+// nothing in the pipeline enforced brand=Bosch. Parser output becomes the
+// constraint object that downstream filters honor.
+//
+// Cost: ~$0.0005/q (small Haiku call). Latency: ~1s but offset by skipping
+// wasteful retrieval downstream once the constraints are tight.
+//
+// Cache: M2 — same query text always parses to same output (deterministic).
+// SHA-256 of normalised lowercase query keys a 1hr TTL Map cache. Skips one
+// LLM call per repeat query. Free win.
+//
+// Output shape (all fields optional except brand/family):
+//   {
+//     brand:                 string | null,
+//     family:                string | null,           // "leaf blower", "headphones"
+//     product_type:          string | null,           // descriptive one-liner
+//     qualifiers:            { [key: string]: string|number|boolean },
+//     expected_price_band_gbp: [number, number],      // sanity range
+//     exact_match_required:  boolean,                 // true when query has hard tier signals
+//     tier_signal_strength:  "strong" | "weak" | "absent"
+//   }
+//
+// ─────────────────────────────────────────────────────────────────
+
+const PARSE_CACHE = new Map();
+const PARSE_CACHE_TTL_MS = 60 * 60 * 1000;
+const PARSE_CACHE_MAX_ENTRIES = 200;
+
+async function sha256Hex(input) {
+  // Vercel functions run on Node 20+ which has crypto.subtle
+  const data = new TextEncoder().encode(String(input || ''));
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function parseCacheGet(key) {
+  const e = PARSE_CACHE.get(key);
+  if (!e) return null;
+  if (Date.now() - e.t > PARSE_CACHE_TTL_MS) { PARSE_CACHE.delete(key); return null; }
+  PARSE_CACHE.delete(key); PARSE_CACHE.set(key, e);  // LRU bump
+  return e.value;
+}
+function parseCacheSet(key, value) {
+  if (PARSE_CACHE.size >= PARSE_CACHE_MAX_ENTRIES) {
+    const firstKey = PARSE_CACHE.keys().next().value;
+    PARSE_CACHE.delete(firstKey);
+  }
+  PARSE_CACHE.set(key, { t: Date.now(), value });
+}
+
+// Static system prompt — large enough to be cache-eligible by Anthropic.
+// Defines schema, examples, and the rules for tier_signal_strength.
+const PARSER_SYSTEM_PROMPT = `You are a UK product-query parser. Given a shopper's search text (or product description from a photo), extract structured intent in JSON.
+
+OUTPUT SCHEMA (return ONLY this JSON, no other text, no markdown fences):
+{
+  "brand":                 string | null,
+  "family":                string | null,
+  "product_type":          string | null,
+  "qualifiers":            object,
+  "expected_price_band_gbp": [number, number],
+  "exact_match_required":  boolean,
+  "tier_signal_strength":  "strong" | "weak" | "absent"
+}
+
+FIELD RULES:
+- brand: lowercase the brand if you're highly confident; null if generic/unknown ("kettle" → null; "Bosch leaf blower" → "Bosch")
+- family: the noun-phrase product family ("leaf blower", "headphones", "espresso machine", "casserole dish")
+- product_type: descriptive variant ("cordless leaf blower", "open-back headphones") — null if redundant with family
+- qualifiers: ONLY tier-discriminating signals the user actually typed. Use normalised keys/values:
+  - voltage: integer (18, 36, 240). Match "18V", "18 V", "18 volt", "18-volt" all to 18.
+  - capacity_l: number (1.7 for "1.7L"); capacity_gb: integer (256 for "256GB"); capacity_ml: integer
+  - cordless: true/false (omit if user didn't say)
+  - screen_size_inches: integer (65 for "65 inch", "65\\""); panel: "OLED"/"QLED"/"LED"
+  - generation: integer ("iPhone 17" → 17); chip: "M3"/"M4"; tier: "base"/"Pro"/"Pro Max"/"Plus"/"Ultra"
+  - diameter_cm: integer ("24cm casserole" → 24); range: brand range name ("Signature")
+  - model: when user named a specific model ("HD 660S", "V15 Detect", "Captain Cook", "Bambino Plus") — KEY rule
+  - colour: only if explicitly named
+- expected_price_band_gbp: realistic UK retail range for THIS specific tier. For "iPhone 17" base: [799, 899]. For "Bosch 18V leaf blower": [80, 200]. For "Sage Bambino Plus": [399, 499]. Be honest — if you don't know, use a wide range but flag tier_signal_strength: "weak"/"absent".
+- exact_match_required: TRUE when the query contains specific qualifiers (numbers, model codes, generation markers, named ranges). FALSE for vague queries ("kettle", "leaf blower", "lawnmower").
+- tier_signal_strength:
+  - "strong" — user typed unambiguous qualifiers (18V, M3, 65 inch, HD 660S, Signature 24cm, Bambino Plus). Hard filtering downstream.
+  - "weak" — user typed family + brand but no tier marker ("Bosch leaf blower", "Sage espresso"). Show variant range.
+  - "absent" — pure category ("kettle", "air fryer", "cordless vacuum"). Show category-spread.
+
+EXAMPLES:
+
+Query: "Bosch Cordless Leaf Blower 18V"
+{"brand":"Bosch","family":"leaf blower","product_type":"cordless leaf blower","qualifiers":{"voltage":18,"cordless":true},"expected_price_band_gbp":[80,200],"exact_match_required":true,"tier_signal_strength":"strong"}
+
+Query: "Sennheiser HD 660S"
+{"brand":"Sennheiser","family":"headphones","product_type":"open-back headphones","qualifiers":{"model":"HD 660S"},"expected_price_band_gbp":[350,550],"exact_match_required":true,"tier_signal_strength":"strong"}
+
+Query: "iPhone 17 Pro"
+{"brand":"Apple","family":"smartphone","product_type":null,"qualifiers":{"generation":17,"tier":"Pro"},"expected_price_band_gbp":[999,1199],"exact_match_required":true,"tier_signal_strength":"strong"}
+
+Query: "Le Creuset Signature 24cm casserole"
+{"brand":"Le Creuset","family":"casserole dish","product_type":"cast-iron casserole","qualifiers":{"range":"Signature","diameter_cm":24},"expected_price_band_gbp":[239,349],"exact_match_required":true,"tier_signal_strength":"strong"}
+
+Query: "Bosch leaf blower"
+{"brand":"Bosch","family":"leaf blower","product_type":null,"qualifiers":{},"expected_price_band_gbp":[50,250],"exact_match_required":false,"tier_signal_strength":"weak"}
+
+Query: "kettle"
+{"brand":null,"family":"kettle","product_type":null,"qualifiers":{},"expected_price_band_gbp":[10,200],"exact_match_required":false,"tier_signal_strength":"absent"}
+
+Query: "Wahoo Kickr Core 2"
+{"brand":"Wahoo","family":"smart trainer","product_type":"indoor cycling trainer","qualifiers":{"model":"Kickr Core 2"},"expected_price_band_gbp":[449,549],"exact_match_required":true,"tier_signal_strength":"strong"}
+
+Return ONLY the JSON object. No prose, no markdown, no commentary.`;
+
+async function parseQueryIntent(query, anthropicKey) {
+  if (!query) return null;
+  if (!anthropicKey) return null;
+
+  // M2 — cache by SHA-256 of normalised lowercase query.
+  const normQuery = String(query).toLowerCase().trim();
+  const cacheKey = await sha256Hex(normQuery);
+  const cached = parseCacheGet(cacheKey);
+  if (cached) {
+    return { ...cached, _cached: true };
+  }
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), HAIKU_TIMEOUT_MS);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 400,
+        system: PARSER_SYSTEM_PROMPT,
+        messages: [{ role: 'user', content: `Query: "${query}"` }],
+      }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) {
+      console.warn(`[${VERSION}] parser non-200: ${r.status}`);
+      return null;
+    }
+    const j = await r.json();
+    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    // Tolerate markdown fences if Haiku ignored the rule
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); }
+    catch (e) {
+      console.warn(`[${VERSION}] parser JSON parse failed: ${e.message}; raw: ${text.slice(0, 200)}`);
+      return null;
+    }
+    // Sanity defaults on missing fields
+    parsed.brand = parsed.brand || null;
+    parsed.family = parsed.family || null;
+    parsed.product_type = parsed.product_type || null;
+    parsed.qualifiers = parsed.qualifiers && typeof parsed.qualifiers === 'object' ? parsed.qualifiers : {};
+    if (!Array.isArray(parsed.expected_price_band_gbp) || parsed.expected_price_band_gbp.length !== 2) {
+      parsed.expected_price_band_gbp = [10, 5000];  // wide default
+    }
+    parsed.exact_match_required = parsed.exact_match_required === true;
+    if (!['strong', 'weak', 'absent'].includes(parsed.tier_signal_strength)) {
+      parsed.tier_signal_strength = 'weak';
+    }
+    parseCacheSet(cacheKey, parsed);
+    console.log(`[${VERSION}] parsed "${query}" → brand=${parsed.brand} family=${parsed.family} qualifiers=${JSON.stringify(parsed.qualifiers)} band=£${parsed.expected_price_band_gbp.join('-')} strength=${parsed.tier_signal_strength}`);
+    return { ...parsed, _cached: false };
+  } catch (e) {
+    console.warn(`[${VERSION}] parser failed: ${e.message}`);
+    return null;
+  } finally { clearTimeout(timer); }
+}
+// ─────────────────────────────────────────────────────────────────
+// End R1 Query Parser
+// ─────────────────────────────────────────────────────────────────
 
 // Wave 103 — retailer-list-drift assertion (Wave 107d-bugfix v1.27).
 //
@@ -2008,6 +2193,22 @@ export default async function handler(req, res) {
     }
   }
 
+  // ─────────────────────────────────────────────────────────────
+  // Savvey v2 — R1 Query Parser fires FIRST, in parallel with retrieval.
+  //
+  // The parser extracts brand/family/qualifiers/expected_price_band as a
+  // structured intent object. Surfaced in _meta.parsed_query so the
+  // accuracy battery can audit parser quality independently of downstream
+  // retrieval. Behaviour-affecting wiring (R2 constrained Sonar Pro, R3
+  // multi-signal verification, R5 NO_EXACT_MATCH state) lands in
+  // subsequent steps once parser quality is verified.
+  //
+  // Latency: parser kicks off concurrent with sonarProPromise, so its
+  // ~1s cost is absorbed inside the existing 8-13s pipeline budget.
+  // ─────────────────────────────────────────────────────────────
+  const parsedQueryPromise = parseQueryIntent(q, ANTHROPIC_KEY)
+    .catch((e) => { console.warn(`[${VERSION}] parser promise rejected: ${e.message}`); return null; });
+
   // Wave 201b — Sonar Pro is the primary discovery call, runs in parallel
   // with the Search API quad. Wave 201d — chain Haiku price-tier sanity
   // validation INTO the Sonar Pro promise so it overlaps with Search quad
@@ -2324,6 +2525,9 @@ export default async function handler(req, res) {
   const reasoning = await reasoningPromise.catch(() => null);
   // Wave 213 — confidence indicator from query_match distribution
   const confidence = computeConfidence(results);
+  // Savvey v2 R1 — resolve parser output. Surfaced in _meta.parsed_query
+  // for battery / observability. Doesn't yet affect retrieval — that's R2.
+  const parsedQuery = await parsedQueryPromise;
 
   console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'} live_verified=${priceVerification.verified} confidence=${confidence}${reasoning ? ` reasoning="${reasoning.slice(0,60)}..."` : ''}`);
 
@@ -2393,6 +2597,7 @@ export default async function handler(req, res) {
       categoryLock:       raw?._categoryLock || null,        // Wave 200 — name (regex: 'watch'; AI: 'ai-watch') of the matched category lock
       categoryLockSource: raw?._categoryLockSource || null,  // Wave 200 — 'regex' | 'ai' | null
       categoryHosts:      raw?._categoryHosts || null,       // Wave 200 — host list used by category-locked Perplexity call
+      parsed_query:      parsedQuery,                        // Savvey v2 R1 — structured intent (brand/family/qualifiers/expected_band/exact_match_required/tier_signal_strength)
       reasoning:         reasoning,                          // Wave 210 — Haiku-generated 1-sentence price-landscape line
       confidence:        confidence,                         // Wave 213 — 'high' | 'medium' | 'low' | 'none' from query_match mix
       refine:            refine && refine.refinement_text ? { applied: true, text: String(refine.refinement_text).slice(0, 120) } : null,  // Wave 220 — echo refinement so frontend can render "Refined: 'show cheaper'" badge
