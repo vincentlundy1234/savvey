@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.1';
+const VERSION = 'ai-search.js v2.1.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -2326,10 +2326,11 @@ export default async function handler(req, res) {
     ? combineSonarProItems(sonarProResult.products)
     : [];
   if (hits.length === 0 && sonarProItems.length === 0) {
+    const parsedQueryEarly = await parsedQueryPromise.catch(() => null);
     return res.status(200).json({
       shopping: [],
       organic:  [],
-      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts },
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts, parsed_query: parsedQueryEarly },
       _debug: debug ? { counts: { raw_results: rawResultsOf(raw).length, uk_hits: 0, ai_plausible: 0, url_verified: 0, verified_dropped: 0, final: 0 }, rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })) } : undefined,
     });
   }
@@ -2525,9 +2526,6 @@ export default async function handler(req, res) {
   const reasoning = await reasoningPromise.catch(() => null);
   // Wave 213 — confidence indicator from query_match distribution
   const confidence = computeConfidence(results);
-  // Savvey v2 R1 — resolve parser output. Surfaced in _meta.parsed_query
-  // for battery / observability. Doesn't yet affect retrieval — that's R2.
-  const parsedQuery = await parsedQueryPromise;
 
   console.log(`[${VERSION}] "${q}" raw=${rawResultsOf(raw).length} hits=${hits.length} plausible=${combineHitsWithPrices(hits, priceData).length} verified=${items.length} final=${results.length} cheapest=£${results[0]?.price ?? 'n/a'} live_verified=${priceVerification.verified} confidence=${confidence}${reasoning ? ` reasoning="${reasoning.slice(0,60)}..."` : ''}`);
 
@@ -2566,6 +2564,9 @@ export default async function handler(req, res) {
     } : null,
   } : undefined;
 
+  // Savvey v2 R1 — resolve parser intent for surfacing (best-effort).
+  const parsedQuery = await parsedQueryPromise.catch(() => null);
+
   const responseBody = {
     shopping: results.map(r => ({
       source:           r.source,
@@ -2597,11 +2598,11 @@ export default async function handler(req, res) {
       categoryLock:       raw?._categoryLock || null,        // Wave 200 — name (regex: 'watch'; AI: 'ai-watch') of the matched category lock
       categoryLockSource: raw?._categoryLockSource || null,  // Wave 200 — 'regex' | 'ai' | null
       categoryHosts:      raw?._categoryHosts || null,       // Wave 200 — host list used by category-locked Perplexity call
-      parsed_query:      parsedQuery,                        // Savvey v2 R1 — structured intent (brand/family/qualifiers/expected_band/exact_match_required/tier_signal_strength)
       reasoning:         reasoning,                          // Wave 210 — Haiku-generated 1-sentence price-landscape line
       confidence:        confidence,                         // Wave 213 — 'high' | 'medium' | 'low' | 'none' from query_match mix
       refine:            refine && refine.refinement_text ? { applied: true, text: String(refine.refinement_text).slice(0, 120) } : null,  // Wave 220 — echo refinement so frontend can render "Refined: 'show cheaper'" badge
       heroImage:         heroImage,  // { url, thumbnail, source } or null
+      parsed_query:      parsedQuery,
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
         verified:   !!priceVerification.verified,

@@ -1,0 +1,570 @@
+{
+  "run_at": "2026-05-03T19:51:14.137Z",
+  "endpoint": "https://savvey.vercel.app",
+  "battery_version": "v2.0 — created 3 May 2026",
+  "pass_rate_pct": 70,
+  "pass_count": 14,
+  "total": 20,
+  "avg_latency_ms": 11127,
+  "p95_latency_ms": 15256,
+  "results": [
+    {
+      "id": "bosch-leaf-blower-18v",
+      "query": "Bosch Cordless Leaf Blower 18V",
+      "category": "tier-specific",
+      "elapsed_ms": 11933,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 2,
+      "cheapest_price": 72,
+      "cheapest_retailer": "Argos",
+      "cheapest_title": "Buy Einhell Cordless Leaf Blower - 18V | Leaf blowers and garden vacuums | Argos",
+      "confidence": "low",
+      "reasoning": null,
+      "pass": false,
+      "pass_reason": "Top title \"Buy Einhell Cordless Leaf Blower - 18V | Leaf blowers and garden vacuums | Argos\" missing brand \"Bosch\"",
+      "expected": {
+        "brand": "Bosch",
+        "family": "leaf blower",
+        "qualifiers": {
+          "voltage": 18,
+          "cordless": true
+        },
+        "price_band": [
+          80,
+          250
+        ],
+        "state": "HIGH or MEDIUM (real product, multiple UK stockists)"
+      }
+    },
+    {
+      "id": "sennheiser-hd-660s",
+      "query": "Sennheiser HD 660S",
+      "category": "tier-specific",
+      "elapsed_ms": 10483,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 329.99,
+      "cheapest_retailer": "HBH Woolacotts",
+      "cheapest_title": "Sennheiser HD660S2 Open Back Audiophile Headphones",
+      "confidence": "low",
+      "reasoning": null,
+      "pass": false,
+      "pass_reason": "Top title \"Sennheiser HD660S2 Open Back Audiophile Headphones\" missing qualifier signals (expected one of: HD 660S)",
+      "expected": {
+        "brand": "Sennheiser",
+        "family": "headphones",
+        "qualifiers": {
+          "model": "HD 660S"
+        },
+        "price_band": [
+          350,
+          550
+        ],
+        "state": "MEDIUM or LOW — original HD 660S is largely discontinued; current is HD 660S2"
+      }
+    },
+    {
+      "id": "sennheiser-hd-660s2",
+      "query": "Sennheiser HD 660S2",
+      "category": "tier-specific",
+      "elapsed_ms": 12023,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 5,
+      "cheapest_price": 385,
+      "cheapest_retailer": "Thomann UK",
+      "cheapest_title": "Sennheiser HD 660S2",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Sennheiser",
+        "family": "headphones",
+        "qualifiers": {
+          "model": "HD 660S2"
+        },
+        "price_band": [
+          329,
+          499
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "wahoo-kickr-core",
+      "query": "Wahoo Kickr Core",
+      "category": "tier-specific",
+      "elapsed_ms": 9315,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 2,
+      "cheapest_price": 359.99,
+      "cheapest_retailer": "Tredz",
+      "cheapest_title": "Wahoo KICKR CORE Smart Trainer",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Wahoo",
+        "family": "smart trainer",
+        "qualifiers": {
+          "model": "Kickr Core"
+        },
+        "price_band": [
+          349,
+          549
+        ],
+        "state": "MEDIUM — Kickr Core (original) and Kickr Core 2 both exist; user query implies original"
+      }
+    },
+    {
+      "id": "dyson-v15-detect",
+      "query": "Dyson V15 Detect",
+      "category": "tier-specific",
+      "elapsed_ms": 8502,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 549.99,
+      "cheapest_retailer": "Argos",
+      "cheapest_title": "Buy Dyson V15 Detect Absolute Pet Cordless Vacuum Cleaner - Argos",
+      "confidence": "medium",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Dyson",
+        "family": "cordless vacuum",
+        "qualifiers": {
+          "model": "V15 Detect"
+        },
+        "price_band": [
+          449,
+          599
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "iphone-17-base",
+      "query": "iPhone 17",
+      "category": "tier-specific",
+      "elapsed_ms": 11979,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 1,
+      "cheapest_price": 799,
+      "cheapest_retailer": "Apple",
+      "cheapest_title": "Buy iPhone 17",
+      "confidence": "high",
+      "reasoning": "The iPhone 17 is available from Apple at £799.",
+      "pass": false,
+      "pass_reason": "Top title \"Buy iPhone 17\" missing brand \"Apple\"",
+      "expected": {
+        "brand": "Apple",
+        "family": "smartphone",
+        "qualifiers": {
+          "generation": 17,
+          "tier": "base"
+        },
+        "price_band": [
+          799,
+          899
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "iphone-17-pro",
+      "query": "iPhone 17 Pro",
+      "category": "tier-specific",
+      "elapsed_ms": 9624,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 1,
+      "cheapest_price": 1399,
+      "cheapest_retailer": "Apple",
+      "cheapest_title": "iPhone 17 Pro",
+      "confidence": "high",
+      "reasoning": "The iPhone 17 Pro is available at Apple for £1099.",
+      "pass": false,
+      "pass_reason": "Top title \"iPhone 17 Pro\" missing brand \"Apple\"",
+      "expected": {
+        "brand": "Apple",
+        "family": "smartphone",
+        "qualifiers": {
+          "generation": 17,
+          "tier": "Pro"
+        },
+        "price_band": [
+          999,
+          1199
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "macbook-air-m3",
+      "query": "MacBook Air M3",
+      "category": "tier-specific",
+      "elapsed_ms": 11205,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 999,
+      "cheapest_retailer": "PriceRunner",
+      "cheapest_title": "Apple MacBook Air 13.6-inch M3 8-Core CPU 8-Core GPU 8GB 256GB",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Apple",
+        "family": "laptop",
+        "qualifiers": {
+          "model": "MacBook Air",
+          "chip": "M3"
+        },
+        "price_band": [
+          999,
+          1499
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "samsung-65-qled",
+      "query": "Samsung 65 inch QLED",
+      "category": "tier-specific",
+      "elapsed_ms": 9993,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 2,
+      "cheapest_price": 579,
+      "cheapest_retailer": "Argos",
+      "cheapest_title": "Buy Samsung 65 Inch QE65QEF1AU Smart 4K UHD HDR QLED TV",
+      "confidence": "medium",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Samsung",
+        "family": "TV",
+        "qualifiers": {
+          "screen_size_inches": 65,
+          "panel": "QLED"
+        },
+        "price_band": [
+          799,
+          1599
+        ],
+        "state": "MEDIUM — many Samsung 65 QLED models, range expected"
+      }
+    },
+    {
+      "id": "le-creuset-24cm",
+      "query": "Le Creuset Signature 24cm casserole",
+      "category": "tier-specific",
+      "elapsed_ms": 11066,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 6,
+      "cheapest_price": 153,
+      "cheapest_retailer": "Cookwarestore",
+      "cheapest_title": "Casserole Le Creuset Signature Matte Black 24 cm",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": false,
+      "pass_reason": "Cheapest £153 outside expected band 239-349 (±30%)",
+      "expected": {
+        "brand": "Le Creuset",
+        "family": "casserole dish",
+        "qualifiers": {
+          "diameter_cm": 24,
+          "range": "Signature"
+        },
+        "price_band": [
+          239,
+          349
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "bosch-leaf-blower-vague",
+      "query": "Bosch leaf blower",
+      "category": "family-no-tier",
+      "elapsed_ms": 8504,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 2,
+      "cheapest_price": 95,
+      "cheapest_retailer": "Argos",
+      "cheapest_title": "Buy Bosch Corded Garden Tidy - 3000W | Leaf blowers and ... - Argos",
+      "confidence": "low",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Cheapest in expected band; variants tolerable",
+      "expected": {
+        "brand": "Bosch",
+        "family": "leaf blower",
+        "qualifiers": {},
+        "price_band": [
+          50,
+          250
+        ],
+        "state": "MEDIUM or category-spread — multiple Bosch leaf blowers exist (corded, 18V, 36V)"
+      }
+    },
+    {
+      "id": "sage-bambino-base",
+      "query": "Sage Bambino",
+      "category": "canonical-clean",
+      "elapsed_ms": 8898,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 6,
+      "cheapest_price": 319.99,
+      "cheapest_retailer": "Coffee Bean Shop",
+      "cheapest_title": "Sage Bambino Coffee Machine | SES500BSS4GUK1",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Sage",
+        "family": "espresso machine",
+        "qualifiers": {
+          "model": "Bambino"
+        },
+        "price_band": [
+          299,
+          359
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "sage-bambino-plus",
+      "query": "Sage Bambino Plus",
+      "category": "tier-specific",
+      "elapsed_ms": 7374,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 3,
+      "cheapest_price": 329,
+      "cheapest_retailer": "John Lewis",
+      "cheapest_title": "Sage SES500BSS Bambino Plus Coffee Machine, Silver - John Lewis",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Sage",
+        "family": "espresso machine",
+        "qualifiers": {
+          "model": "Bambino Plus"
+        },
+        "price_band": [
+          399,
+          499
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "lego-millennium-falcon",
+      "query": "Lego Millennium Falcon",
+      "category": "family-no-tier",
+      "elapsed_ms": 7481,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 734.99,
+      "cheapest_retailer": "LEGO",
+      "cheapest_title": "Millennium Falcon™ 75192",
+      "confidence": "medium",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Variant spread surfaced",
+      "expected": {
+        "brand": "Lego",
+        "family": "Star Wars set — Millennium Falcon",
+        "qualifiers": {},
+        "price_band": [
+          80,
+          800
+        ],
+        "state": "category-spread — multiple sets exist (75192 UCS £779, 75257 £150, 75375 micro £15, etc)"
+      }
+    },
+    {
+      "id": "cordless-vacuum-cleaner",
+      "query": "cordless vacuum cleaner",
+      "category": "vague-category",
+      "elapsed_ms": 15149,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 3,
+      "cheapest_price": 239,
+      "cheapest_retailer": "Appliance City",
+      "cheapest_title": "Miele HX1 CARCARE 12532840 Duoflex HX1 CarCare Cordless Vacuum Cleaner",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Category fan-out fired (Wave 100)",
+      "expected": {
+        "brand": null,
+        "family": "cordless vacuum",
+        "qualifiers": {
+          "cordless": true
+        },
+        "price_band": [
+          40,
+          700
+        ],
+        "state": "category-spread — should show 3 representative SKUs (e.g. Dyson V15, Shark Stratos, Beldray budget)"
+      }
+    },
+    {
+      "id": "kettle",
+      "query": "kettle",
+      "category": "vague-category",
+      "elapsed_ms": 15256,
+      "api_error": "HTTP 504",
+      "api_version": null,
+      "n_results": 0,
+      "cheapest_price": null,
+      "cheapest_retailer": null,
+      "cheapest_title": null,
+      "confidence": null,
+      "reasoning": null,
+      "pass": false,
+      "pass_reason": "API error: HTTP 504",
+      "expected": {
+        "brand": null,
+        "family": "kettle",
+        "qualifiers": {},
+        "price_band": [
+          10,
+          200
+        ],
+        "state": "category-spread — kettles range £13-£199"
+      }
+    },
+    {
+      "id": "air-fryer",
+      "query": "air fryer",
+      "category": "vague-category",
+      "elapsed_ms": 13621,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 55.99,
+      "cheapest_retailer": "Living and Home",
+      "cheapest_title": "11L Large Kitchen Air Fryer with Visible Front Window",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Category fan-out fired (Wave 100)",
+      "expected": {
+        "brand": null,
+        "family": "air fryer",
+        "qualifiers": {},
+        "price_band": [
+          35,
+          250
+        ],
+        "state": "category-spread — Ninja, Tower, Tefal, etc"
+      }
+    },
+    {
+      "id": "rado-captain-cook",
+      "query": "Rado Captain Cook",
+      "category": "luxury-long-tail",
+      "elapsed_ms": 14131,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 5,
+      "cheapest_price": 1820,
+      "cheapest_retailer": "Goldsmiths",
+      "cheapest_title": "Rado Captain Cook 42mm Mens Watch R32505203 | Goldsmiths",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Rado",
+        "family": "watch",
+        "qualifiers": {
+          "model": "Captain Cook"
+        },
+        "price_band": [
+          1500,
+          4000
+        ],
+        "state": "MEDIUM — multiple Captain Cook variants (different sizes, materials)"
+      }
+    },
+    {
+      "id": "brompton-electric",
+      "query": "Brompton Electric",
+      "category": "tier-specific",
+      "elapsed_ms": 14643,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 4,
+      "cheapest_price": 2900,
+      "cheapest_retailer": "John Lewis",
+      "cheapest_title": "BromptonElectric C Line Urban Mid Handlebar Folding Bike",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Brompton",
+        "family": "folding bike",
+        "qualifiers": {
+          "type": "electric"
+        },
+        "price_band": [
+          2400,
+          3700
+        ],
+        "state": "HIGH"
+      }
+    },
+    {
+      "id": "wahoo-kickr-core-2",
+      "query": "Wahoo Kickr Core 2",
+      "category": "tier-specific-variant",
+      "elapsed_ms": 11367,
+      "api_error": null,
+      "api_version": "ai-search.js v1.45",
+      "n_results": 2,
+      "cheapest_price": 399,
+      "cheapest_retailer": "Studio Velo",
+      "cheapest_title": "Wahoo KICKR CORE 2",
+      "confidence": "high",
+      "reasoning": null,
+      "pass": true,
+      "pass_reason": "Brand + qualifier match + price in band",
+      "expected": {
+        "brand": "Wahoo",
+        "family": "smart trainer",
+        "qualifiers": {
+          "model": "Kickr Core 2"
+        },
+        "price_band": [
+          449,
+          549
+        ],
+        "state": "HIGH"
+      }
+    }
+  ]
+}
