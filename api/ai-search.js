@@ -69,7 +69,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.13';
+const VERSION = 'ai-search.js v1.14';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -744,6 +744,40 @@ export default async function handler(req, res) {
   }
 
   let items = combineHitsWithPrices(hits, priceData);
+
+  // Wave 97 — thin-coverage top-up. When the broad/amazon/loose calls
+  // returned <3 plausible items, fire ONE more Perplexity call at a
+  // different angle ("review / comparison / best price") to surface
+  // tech-blog and comparison-site results that often link to specific
+  // retailer products with fresh prices. Costs ~$0.005 per thin search,
+  // worth it because (a) it replaces the Serper Tier 2 fallback that
+  // was burning quota and (b) the additional Perplexity result quality
+  // is materially better than Serper snippets. Only fires when really
+  // needed — common case (3+ items already) is unchanged.
+  if (items.length < 3) {
+    try {
+      const topupQuery = `${q} review price comparison UK 2026 cheapest`;
+      const topupData = await callPerplexity(topupQuery, PERPLEXITY_KEY, 10);
+      const topupHits = gatherRetailerHits(topupData, q);
+      if (topupHits.length > 0) {
+        // Filter out duplicates already present
+        const existingUrls = new Set(items.map(i => i.link));
+        const newHits = topupHits.filter(h => !existingUrls.has(h.url));
+        if (newHits.length > 0) {
+          const topupPrices = await withCircuit('anthropic',
+            () => extractPricesViaHaiku(newHits, q, ANTHROPIC_KEY),
+            { onOpen: () => newHits.map((_, i) => ({ index: i, price: null, plausible: false })) }
+          );
+          const topupItems = combineHitsWithPrices(newHits, topupPrices);
+          const beforeTopup = items.length;
+          items.push(...topupItems);
+          console.log(`[${VERSION}] thin-coverage top-up: ${beforeTopup} → ${items.length} (+${topupItems.length})`);
+        }
+      }
+    } catch (e) {
+      console.warn(`[${VERSION}] top-up call failed: ${e.message}`);
+    }
+  }
 
   // URL HEAD verification + hero image fetch — fired in parallel so the
   // image API call doesn't add to total latency. Image is optional; null

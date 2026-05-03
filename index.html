@@ -5726,13 +5726,16 @@ function fetchPrices(query){
     if(!r.ok)return null;
     const d=await r.json();
     if(searchGeneration!==gen)return null;
-    return d&&d.shopping&&d.shopping.length>=2?d:null; // require 2+ to consider AI useful
+    // Wave 97 — accept Tier 1 with 1+ result (was 2+). With the in-tier
+    // top-up Perplexity call, Tier 1 quality is now reliable enough that
+    // single-retailer is better than falling back to Serper noise.
+    return d&&d.shopping&&d.shopping.length>=1?d:null;
   }).catch(()=>null);
 
   const p=aiPromise.then(async aiResp=>{
     if(searchGeneration!==gen){console.log('[fetchPrices] stale gen discarded');return null;}
     let d1;
-    if(aiResp&&aiResp.shopping&&aiResp.shopping.length>=2){
+    if(aiResp&&aiResp.shopping&&aiResp.shopping.length>=1){
       console.log('[fetchPrices] AI search delivered '+aiResp.shopping.length+' retailers');
       d1=aiResp;
     }else{
