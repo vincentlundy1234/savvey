@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.4.0';
+const VERSION = 'ai-search.js v2.4.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -806,7 +806,16 @@ function titleMatchesModel(title, model) {
   if (!title || typeof title !== 'string') return true;
   // Tokenise: split on whitespace, dashes, underscores, slashes, parens, commas.
   // KEEP "+" attached to its token so "Optigrill+" doesn't equal "optigrill".
-  const tokenize = (str) => String(str).toLowerCase().split(/[\s\-_,()/.]+/).filter((t) => t.length > 0);
+  // Tokenize: split on whitespace, dashes, underscores, slashes, parens, commas.
+  // ALSO split on "+" but emit "plus" as alias so "Body+" matches "Body Plus"
+  // titles. v2.4.1 fix — earlier logic kept "+" attached to token, which
+  // broke matching when a retailer titled the same product without the "+".
+  const tokenize = (str) => {
+    const raw = String(str).toLowerCase().split(/[\s\-_,()/.+]+/).filter((t) => t.length > 0);
+    const out = new Set(raw);
+    if (String(str).includes('+')) out.add('plus'); // also match titles with "Plus"
+    return Array.from(out);
+  };
   const titleTokens = tokenize(title);
   const titleSet = new Set(titleTokens);
   const modelTokens = tokenize(model);
@@ -2606,16 +2615,28 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       if (i > 0 && sc != null) scoreMap.set(i, { score: sc, warning: id.w || null });
     }
     const before = items.length;
-    const kept = items.filter((it, idx) => {
+    const THRESHOLD = 0.4; // v2.4.1 — was 0.6, too aggressive (canonical products dropped)
+    const annotated = items.map((it, idx) => {
       const r = scoreMap.get(idx + 1);
-      if (!r) return true; // missing score → don't drop
-      if (r.score < 0.6) {
-        console.log(`[${VERSION}] aiIdentityCheck dropped item ${idx + 1} score=${r.score} reason="${r.warning}" title="${(it.title || '').slice(0, 60)}"`);
-        return false;
-      }
-      return true;
+      return { it, idx, score: r ? r.score : null, warning: r ? r.warning : null };
     });
-    if (kept.length < before) console.log(`[${VERSION}] aiIdentityCheck dropped ${before - kept.length}/${before} items below 0.6 confidence`);
+    let kept = annotated.filter((a) => a.score === null || a.score >= THRESHOLD).map((a) => a.it);
+    // Safety net: if filtering emptied the list, keep top-2 by AI score so we
+    // never regress to no-results when retrieval succeeded. Better to show
+    // something the user can judge than nothing at all.
+    if (kept.length === 0 && before > 0) {
+      const sorted = annotated
+        .filter((a) => a.score !== null)
+        .sort((x, y) => (y.score || 0) - (x.score || 0));
+      kept = sorted.slice(0, 2).map((a) => a.it);
+      console.log(`[${VERSION}] aiIdentityCheck SAFETY-NET: would have dropped all ${before}, kept top ${kept.length} by score`);
+    } else if (kept.length < before) {
+      const dropped = annotated.filter((a) => a.score !== null && a.score < THRESHOLD);
+      for (const d of dropped) {
+        console.log(`[${VERSION}] aiIdentityCheck dropped item ${d.idx + 1} score=${d.score} reason="${d.warning}" title="${(d.it.title || '').slice(0, 60)}"`);
+      }
+      console.log(`[${VERSION}] aiIdentityCheck dropped ${before - kept.length}/${before} items below ${THRESHOLD} confidence`);
+    }
     return kept;
   } catch (e) {
     clearTimeout(timer);
