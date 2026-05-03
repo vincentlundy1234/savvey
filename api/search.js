@@ -63,7 +63,7 @@ import { createHash, createHmac } from 'node:crypto';
 //     and the frontend retailer-name display. Fix: parse protocol/www off
 //     properly, take just the hostname before the first slash.
 
-const VERSION = 'search.js v6.26';
+const VERSION = 'search.js v6.28';
 
 // Wave 93 — Landing-page price verification. The trust-erosion case:
 // snippet says £349, user clicks through, page shows £379. Cause is
@@ -76,7 +76,12 @@ const VERSION = 'search.js v6.26';
 // snippet by >2%, override snippet with live. Surface verification
 // status in _meta so frontend can flag if needed. Hard 3s timeout so
 // verification doesn't add meaningful latency to the search.
-const VERIFY_TIMEOUT_MS = 3000;
+// Wave 93c — bumped 3s → 5s. Battery test showed John Lewis (the most
+// common cheapest retailer) consistently timing out at 3s — meaning
+// verification wasn't running for the largest retailer in our results.
+// 5s gives JL room to respond. Hard 5s cap so worst case adds bounded
+// latency (Vercel function still has 15s ceiling overall).
+const VERIFY_TIMEOUT_MS = 5000;
 const VERIFY_MAX_DRIFT_PCT = 0.02;     // >2% drift → use live price
 const VERIFY_BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -870,7 +875,15 @@ async function fetchSerperUKSites(query, apiKey) {
 // fan-out, Tier 2 totally misses budget-tier listings on the biggest UK
 // retailer. Amazon is hit early in the array so it joins the parallel
 // fan-out without delaying others.
-const PER_RETAILER_SITES = [
+// Wave 96 — split PER_RETAILER_SITES into CORE (always queried) and
+// EXTENDED (only queried when category detected or shopping endpoint
+// thin). Vincent went over Serper's 2,500 free credits/month because
+// every search was firing 25+ Serper calls. Cutting the always-on
+// fan-out from 25 to 10 saves ~15 credits per search, ~5x more searches
+// per credit before quota burns. Extended retailers still surface for
+// queries that genuinely need them (DIY → Wickes/Lakeland, books →
+// Waterstones, supermarket products → Tesco/ASDA), via category lock.
+const PER_RETAILER_SITES_CORE = [
   { source: 'Amazon UK',    site: 'amazon.co.uk' },
   { source: 'Currys',       site: 'currys.co.uk' },
   { source: 'Argos',        site: 'argos.co.uk' },
@@ -881,6 +894,12 @@ const PER_RETAILER_SITES = [
   { source: 'Boots',        site: 'boots.com' },
   { source: 'Selfridges',   site: 'selfridges.com' },
   { source: 'Richer Sounds',site: 'richersounds.com' },
+];
+
+// Extended set — fired only when shopping endpoint returns thin OR when
+// query category detected (DIY / books / supermarket). Saves Serper
+// credits on the 90% of searches where the core 10 retailers cover it.
+const PER_RETAILER_SITES_EXTENDED = [
   // Wave 77 — Vincent flagged: B&Q, Lakeland, Dunelm should be included
   // for home / kitchen / DIY queries. Especially Dunelm and Lakeland —
   // they carry vacuums, kitchen appliances, and home goods that the
@@ -918,6 +937,60 @@ const PER_RETAILER_SITES = [
   { source: 'Morrisons',     site: 'morrisons.com' },
 ];
 
+// Backwards-compat alias used by older code paths in this file.
+const PER_RETAILER_SITES = [...PER_RETAILER_SITES_CORE, ...PER_RETAILER_SITES_EXTENDED];
+
+// Wave 96 — Serper circuit breaker. Module-scoped state. When 2+ Serper
+// calls within a single search return zero results (likely quota
+// exhausted), trip the breaker for 5 minutes. Stops us hammering Serper
+// when it's clearly not responding usefully — saves credits AND time.
+const SERPER_BREAKER = { trippedUntil: 0, consecutiveZeroes: 0 };
+const SERPER_TRIP_THRESHOLD = 3;
+const SERPER_COOLDOWN_MS = 5 * 60 * 1000;
+function serperCircuitOpen(){
+  return Date.now() < SERPER_BREAKER.trippedUntil;
+}
+function serperRecordZero(){
+  SERPER_BREAKER.consecutiveZeroes++;
+  if(SERPER_BREAKER.consecutiveZeroes >= SERPER_TRIP_THRESHOLD){
+    SERPER_BREAKER.trippedUntil = Date.now() + SERPER_COOLDOWN_MS;
+    console.warn(`[${VERSION}] Serper circuit TRIPPED (${SERPER_TRIP_THRESHOLD} consecutive zero results) — bypassing for ${SERPER_COOLDOWN_MS/1000}s. Likely quota exhausted.`);
+  }
+}
+function serperRecordSuccess(){
+  SERPER_BREAKER.consecutiveZeroes = 0;
+}
+
+// Wave 96 — in-memory query cache. Same query within 1hr returns the
+// cached response — zero Serper calls. Bounded at 100 entries to keep
+// memory bounded; LRU eviction.
+const QUERY_CACHE = new Map();
+const CACHE_TTL_MS = 60 * 60 * 1000;
+const CACHE_MAX_ENTRIES = 100;
+function cacheKey(q, type){
+  return `${type || 'shopping'}|${String(q || '').toLowerCase().trim()}`;
+}
+function cacheGet(key){
+  const entry = QUERY_CACHE.get(key);
+  if(!entry) return null;
+  if(Date.now() - entry.t > CACHE_TTL_MS){
+    QUERY_CACHE.delete(key);
+    return null;
+  }
+  // Move to end for LRU.
+  QUERY_CACHE.delete(key);
+  QUERY_CACHE.set(key, entry);
+  return entry.value;
+}
+function cacheSet(key, value){
+  if(QUERY_CACHE.size >= CACHE_MAX_ENTRIES){
+    // Evict oldest.
+    const firstKey = QUERY_CACHE.keys().next().value;
+    QUERY_CACHE.delete(firstKey);
+  }
+  QUERY_CACHE.set(key, { t: Date.now(), value });
+}
+
 async function fetchSerperOneRetailer(query, retailer, apiKey) {
   const q  = `${query} site:${retailer.site}`;
   const ac = new AbortController();
@@ -945,15 +1018,14 @@ async function fetchSerperOneRetailer(query, retailer, apiKey) {
   }
 }
 
-async function fetchSerperPerRetailer(query, apiKey) {
-  // Wave 89 — wall-clock cap on per-retailer fan-out. With 25+ retailers
-  // each having a 5s timeout, worst-case wall-clock could exceed Vercel's
-  // 15s function limit. Race the entire batch against a hard 6s cap so
-  // slow/dead retailers don't drag the whole search down. Whatever
-  // resolved by then wins; the rest are abandoned.
+async function fetchSerperPerRetailer(query, apiKey, retailers = PER_RETAILER_SITES_CORE) {
+  // Wave 89 — wall-clock cap on per-retailer fan-out. 6s race cap.
+  // Wave 96 — defaults to CORE 10 retailers (was 25). Caller can pass
+  // PER_RETAILER_SITES (full set) or a category-specific subset when
+  // genuinely needed.
   const FAN_OUT_WALL_CLOCK_MS = 6000;
   const fanOut = Promise.allSettled(
-    PER_RETAILER_SITES.map(r => fetchSerperOneRetailer(query, r, apiKey))
+    retailers.map(r => fetchSerperOneRetailer(query, r, apiKey))
   );
   const wallClock = new Promise(resolve => setTimeout(() => resolve('TIMEOUT'), FAN_OUT_WALL_CLOCK_MS));
   const winner = await Promise.race([fanOut, wallClock]);
@@ -1202,6 +1274,15 @@ export default async function handler(req, res) {
 
   if (!q) return res.status(400).json({ error: 'Missing query' });
 
+  // Wave 96 — query cache check. 1hr TTL. Skips ALL Serper + verification
+  // for repeated queries. Saves ~3-30 Serper calls per cache hit.
+  const ck = cacheKey(q, type);
+  const cached = cacheGet(ck);
+  if (cached) {
+    console.log(`[${VERSION}] cache HIT for "${q}" — returning cached response`);
+    return res.status(200).json({ ...cached, _meta: { ...cached._meta, cached: true } });
+  }
+
   let rawItems = [];
 
   // 1. Tier 1 sources — Amazon PAAPI + Awin in parallel.
@@ -1234,38 +1315,71 @@ export default async function handler(req, res) {
     }
   }
 
-  // 2. Serper — three sources in parallel:
-  //      a) shopping endpoint (Google Shopping aggregator)
-  //      b) UK-sites OR'd query (one search across all UK retailers)
-  //      c) per-retailer fan-out (one search per retailer — max coverage)
-  //    Total wall clock bounded by the per-call timeout (~5s).
-  const [shoppingResult, ukSitesResult, perRetailerItems] = await Promise.allSettled([
-    fetchSerper(q, type, SERPER_KEY),
-    fetchSerperUKSites(q, SERPER_KEY),
-    fetchSerperPerRetailer(q, SERPER_KEY),
-  ]);
-
-  if (shoppingResult.status === 'fulfilled') {
-    const shopping = normaliseSerperShopping(shoppingResult.value, q);
-    const organic  = normaliseSerperOrganic(shoppingResult.value, q);
-    rawItems.push(...shopping, ...organic);
-    console.log(`[${VERSION}] Serper shopping: ${shopping.length} shopping + ${organic.length} organic`);
+  // 2. Serper — Wave 96 cheap-first ordering. Was firing 3 calls + 25
+  //    per-retailer fan-out (~28 Serper calls per search) which burned
+  //    Vincent's 2,500/month free quota in a single test session.
+  //    New flow:
+  //    - Skip ALL Serper calls if circuit breaker is open
+  //    - Fire shopping endpoint FIRST (cheapest, often best-quality)
+  //    - If shopping returns 5+ items, SKIP UK-sites + fan-out (save 26 calls)
+  //    - If 2-4, fire UK-sites only (1 extra call)
+  //    - If 0-1, fire UK-sites + slim fan-out (CORE 10 only, not all 25)
+  //    - Track zero-result responses → trip Serper circuit breaker after 3
+  //    Net effect: ~3-5 Serper calls per typical search vs ~28 before.
+  if (serperCircuitOpen()) {
+    console.warn(`[${VERSION}] Serper circuit OPEN — skipping ALL Serper calls. Tier 1 only.`);
   } else {
-    console.error(`[${VERSION}] Serper shopping failed:`, shoppingResult.reason?.message);
-  }
+    let shoppingCount = 0;
+    let needFurther = true;
 
-  if (ukSitesResult.status === 'fulfilled') {
-    const ukOrganic = normaliseSerperOrganic(ukSitesResult.value, q);
-    rawItems.push(...ukOrganic);
-    console.log(`[${VERSION}] Serper UK-sites: ${ukOrganic.length} organic`);
-  } else {
-    console.error(`[${VERSION}] Serper UK-sites failed:`, ukSitesResult.reason?.message);
-  }
+    // Step 1 — shopping endpoint
+    try {
+      const shoppingData = await fetchSerper(q, type, SERPER_KEY);
+      const shopping = normaliseSerperShopping(shoppingData, q);
+      const organic  = normaliseSerperOrganic(shoppingData, q);
+      shoppingCount = shopping.length + organic.length;
+      rawItems.push(...shopping, ...organic);
+      console.log(`[${VERSION}] Serper shopping: ${shopping.length} shopping + ${organic.length} organic`);
+      if (shoppingCount === 0) serperRecordZero(); else serperRecordSuccess();
+      if (shoppingCount >= 5) {
+        needFurther = false;
+        console.log(`[${VERSION}] Cheap-first short-circuit: shopping returned ${shoppingCount}, skipping UK-sites + fan-out`);
+      }
+    } catch (e) {
+      console.error(`[${VERSION}] Serper shopping failed:`, e.message);
+      serperRecordZero();
+    }
 
-  if (perRetailerItems.status === 'fulfilled') {
-    rawItems.push(...perRetailerItems.value);
-  } else {
-    console.error(`[${VERSION}] Per-retailer fan-out failed:`, perRetailerItems.reason?.message);
+    // Step 2 — UK-sites (if shopping was thin)
+    if (needFurther && !serperCircuitOpen()) {
+      try {
+        const ukSitesData = await fetchSerperUKSites(q, SERPER_KEY);
+        const ukOrganic = normaliseSerperOrganic(ukSitesData, q);
+        rawItems.push(...ukOrganic);
+        console.log(`[${VERSION}] Serper UK-sites: ${ukOrganic.length} organic`);
+        if (ukOrganic.length === 0) serperRecordZero(); else serperRecordSuccess();
+        if (shoppingCount + ukOrganic.length >= 5) {
+          needFurther = false;
+          console.log(`[${VERSION}] Cheap-first: UK-sites brought us to ${shoppingCount + ukOrganic.length}, skipping fan-out`);
+        }
+      } catch (e) {
+        console.error(`[${VERSION}] Serper UK-sites failed:`, e.message);
+        serperRecordZero();
+      }
+    }
+
+    // Step 3 — per-retailer fan-out (only if still thin after 1 + 2)
+    // Slim default = CORE 10 retailers (not 25). Saves 15 Serper calls per search.
+    if (needFurther && !serperCircuitOpen()) {
+      try {
+        const fanOutItems = await fetchSerperPerRetailer(q, SERPER_KEY, PER_RETAILER_SITES_CORE);
+        rawItems.push(...fanOutItems);
+        if (fanOutItems.length === 0) serperRecordZero(); else serperRecordSuccess();
+      } catch (e) {
+        console.error(`[${VERSION}] Per-retailer fan-out failed:`, e.message);
+        serperRecordZero();
+      }
+    }
   }
 
   // 3. CSE top-up
@@ -1384,16 +1498,19 @@ export default async function handler(req, res) {
     haikuGradedSample: haikuGraded.slice(0, 12).map(i => ({ source: i.source, title: (i.title||'').slice(0,80), price: i.price, query_match: i.query_match })),
   } : undefined;
 
-  return res.status(200).json({
+  // Wave 96 — build response then cache before returning. Cache
+  // populated on EVERY successful search (even thin/empty) so we don't
+  // re-hammer Serper for the same query within the hour.
+  const response = {
     shopping: results.map((r, i) => ({
       source:           r.source,
       price:            `£${r.price.toFixed(2)}`,
       link:             hardenEbayUrl(r.link),
       title:            r.title,
       delivery:         r.delivery,
-      query_match:      r.query_match || 'similar',  // Wave 82 — Haiku grade
-      price_verified:   !!r.priceVerified,            // Wave 93 — live verification ran and matched (or overrode)
-      price_was_overridden: !!r.priceWasOverridden,   // Wave 93 — true if snippet was wrong and we replaced with live
+      query_match:      r.query_match || 'similar',
+      price_verified:   !!r.priceVerified,
+      price_was_overridden: !!r.priceWasOverridden,
     })),
     organic: [],
     _meta: {
@@ -1422,5 +1539,11 @@ export default async function handler(req, res) {
               : 'good',
     },
     _debug: debugEnvelope,
-  });
+  };
+  // Wave 96 — cache the response. Cache only successful (non-debug)
+  // responses to avoid contaminating the cache with debug envelopes.
+  if (!debug && response.shopping.length > 0) {
+    cacheSet(ck, response);
+  }
+  return res.status(200).json(response);
 }

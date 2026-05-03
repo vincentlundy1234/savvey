@@ -69,14 +69,15 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v1.12';
+const VERSION = 'ai-search.js v1.13';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
 // the live price. If snippet differs from live by >2%, override snippet
 // with live so the user sees the price they'll actually find when they
 // tap through. 3s timeout, graceful failure.
-const VERIFY_TIMEOUT_MS = 3000;
+// Wave 93c — bumped 3s → 5s. JL was timing out for most cheapest results.
+const VERIFY_TIMEOUT_MS = 5000;
 const VERIFY_MAX_DRIFT_PCT = 0.02;
 const VERIFY_BROWSER_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
