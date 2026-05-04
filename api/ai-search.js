@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.7.1';
+const VERSION = 'ai-search.js v2.7.2';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1473,23 +1473,63 @@ function gatherRetailerHitsPermissive(data, query) {
 // product_page found) with relevance_score > 0.7. Keeps top-N by score.
 // Cost: 1 Haiku call (~$0.0003); latency target <1200ms with hard timeout
 // fallback to top-3 raw URLs by search rank.
+// Savvey v2.7.2 — Few-shot structured-output Triage (panel [AI] call).
+// LLM confidence-on-a-0-to-1-scale isn't calibrated; switch to boolean +
+// 3-bucket confidence_category. 3 few-shot examples in system prompt
+// stabilise classification across runs. Drops 0.7 threshold; passes any
+// is_retailer_product_page:true with confidence:high|medium.
 async function aiTriage(items, parsedQuery, anthropicKey) {
   if (!items || items.length === 0) return [];
-  if (!anthropicKey) return items.slice(0, 3); // fail-safe: keep top-3 by rank
+  if (!anthropicKey) return items.slice(0, 3); // fail-safe
   const numbered = items.slice(0, 15).map((it, i) => {
-    const sn = String(it.snippet || '').slice(0, 200); // Gemini veto: max 200 char snippet
+    const sn = String(it.snippet || '').slice(0, 200);
     return `${i + 1}. ${(it.title || '').slice(0, 100)} | ${it.url} | ${sn}`;
   }).join('\n');
-  const intent = parsedQuery ? `Brand: ${parsedQuery.brand || 'any'} | Family: ${parsedQuery.family || 'any'} | Qualifiers: ${JSON.stringify(parsedQuery.qualifiers || {})} | Expected price band GBP: ${(parsedQuery.expected_price_band_gbp || []).join('-')}` : `Query: ${items[0]?.title || ''}`;
-  const sys = `You are a UK retail URL triage classifier. For each listing, decide what kind of page it is and how relevant it is to the user's query.\n\nReturn ONLY this JSON: {"items":[{"i":1,"label":"product_page","score":0.95},...]}\n\nLabels:\n- product_page: a SPECIFIC UK retailer product page for the queried entity (the canonical "buy this" page)\n- category_page: a UK retailer category/listing page (e.g. /headphones, /laptops) — useful as fallback\n- review_article: a blog/magazine review (TechRadar, Which?, Wired) — NOT a retailer page\n- comparison_list: a "best 10 X for Y" listicle — NOT a retailer page\n- irrelevant: anything else (forums, non-UK, broken)\n\nScore 0.0-1.0 — how relevant is this to the user's intent (brand/model match)? 1.0 = exact match, 0.7 = same family right brand, 0.5 = related, <0.3 = wrong product. Be strict on score: a Bose headphones page for a Sennheiser query is score 0.2 (right page TYPE, wrong product).`;
-  const user = `User intent: ${intent}\n\nCandidates:\n${numbered}\n\nReturn only the JSON.`;
+  const intent = parsedQuery ? `Brand: ${parsedQuery.brand || 'any'} | Family: ${parsedQuery.family || 'any'} | Qualifiers: ${JSON.stringify(parsedQuery.qualifiers || {})}` : `Query: ${items[0]?.title || ''}`;
+  const sys = `You triage UK retailer URLs. For each candidate decide whether it is a SPECIFIC retailer product page that a UK shopper can buy from right now.
+
+Return ONLY this JSON shape — no prose, no markdown:
+{"items":[{"i":1,"is_retailer_product_page":true,"confidence":"high","page_type":"product_page","reasoning":"short explanation"},...]}
+
+Field rules:
+- is_retailer_product_page: true ONLY if URL points to a single canonical product page on a UK retailer's own site (price + buy button context). false for category pages, comparison articles, blog reviews, forums, manufacturer-only pages without buy CTA, non-UK domains.
+- confidence: "high" if you are sure (URL pattern + retailer reputation + brand/model match in title); "medium" if title and URL look right but you have minor doubt; "low" if anything ambiguous.
+- page_type: "product_page" | "category_page" | "review_article" | "comparison_list" | "manufacturer_info" | "irrelevant".
+- reasoning: ONE short clause (max 12 words).
+
+3 few-shot examples — calibrate against these:
+
+EXAMPLE A (clear product page → TRUE, high):
+Input: "Buy Bose QuietComfort Ultra Headphones - White | argos.co.uk/product/8723542 | Bose QC Ultra Over Ear Wireless Headphones..."
+Output: {"i":1,"is_retailer_product_page":true,"confidence":"high","page_type":"product_page","reasoning":"Argos product URL with brand and model in title"}
+
+EXAMPLE B (category page → FALSE, medium for fallback):
+Input: "Headphones | Currys | currys.co.uk/headphones | Browse our range of headphones from Sony, Bose, Sennheiser..."
+Output: {"i":1,"is_retailer_product_page":false,"confidence":"medium","page_type":"category_page","reasoning":"Currys headphones category list, not a single SKU"}
+
+EXAMPLE C (blog review → FALSE, high for rejection):
+Input: "Best wireless headphones 2024 | TechRadar | techradar.com/best/best-wireless-headphones | Our pick of the best..."
+Output: {"i":1,"is_retailer_product_page":false,"confidence":"high","page_type":"review_article","reasoning":"TechRadar editorial roundup, not a retailer"}
+
+Calibration notes:
+- amazon.co.uk /dp/ASIN, argos.co.uk /product/N, johnlewis.com /-pN, currys.co.uk /products/N → near-certainly product_page
+- /category/, /c/, /shop/, /browse/ paths → category_page
+- techradar/wired/which/expert/trustedreviews/cnet → review_article
+- Any non-UK retailer (.de, .fr, .com without UK signal) → irrelevant unless brand-direct (apple.com/uk, dyson.com, etc)`;
+
+  const user = `User intent: ${intent}
+
+Candidates to triage:
+${numbered}
+
+Return ONLY the JSON.`;
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 1200); // Gemini decision rule
+  const timer = setTimeout(() => ac.abort(), 1500);
   try {
     const r = await fetch(ANTHROPIC_ENDPOINT, {
       method: 'POST',
       headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 600, system: sys, messages: [{ role: 'user', content: user }] }),
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 1200, system: sys, messages: [{ role: 'user', content: user }] }),
       signal: ac.signal,
     });
     clearTimeout(timer);
@@ -1498,26 +1538,34 @@ async function aiTriage(items, parsedQuery, anthropicKey) {
     const text = ((j.content || []).filter((b) => b && b.type === 'text').map((b) => b.text || '').join(' ')).trim();
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
     let parsed;
-    try { parsed = JSON.parse(cleaned); } catch { return items.slice(0, 3); }
+    try { parsed = JSON.parse(cleaned); } catch { console.warn(`[${VERSION}] aiTriage JSON parse failed`); return items.slice(0, 3); }
     const labels = Array.isArray(parsed.items) ? parsed.items : [];
     if (labels.length === 0) return items.slice(0, 3);
-    // Annotate every item with its label + score; preserve order by score
     const enriched = items.slice(0, 15).map((it, idx) => {
       const lab = labels.find((l) => parseInt(l.i, 10) === idx + 1);
-      return { ...it, _triageLabel: lab?.label || 'irrelevant', _triageScore: typeof lab?.score === 'number' ? lab.score : 0 };
+      return {
+        ...it,
+        _triageProductPage: lab?.is_retailer_product_page === true,
+        _triageConfidence: lab?.confidence || 'low',
+        _triagePageType: lab?.page_type || 'irrelevant',
+        _triageReasoning: lab?.reasoning || null,
+      };
     });
-    // Per Gemini: keep product_page with score>0.7. If none, fall back to category_page (still useful for browse).
-    const products = enriched.filter((it) => it._triageLabel === 'product_page' && it._triageScore > 0.7);
+    // Pass: is_retailer_product_page:true AND confidence in {high, medium}.
+    const products = enriched.filter((it) => it._triageProductPage && (it._triageConfidence === 'high' || it._triageConfidence === 'medium'));
     if (products.length > 0) {
-      console.log(`[${VERSION}] aiTriage: ${enriched.length} candidates → ${products.length} product_pages above 0.7 score`);
-      return products.sort((a, b) => b._triageScore - a._triageScore).slice(0, 8);
+      // Rank: high before medium, then preserve original retailer order
+      products.sort((a, b) => (a._triageConfidence === 'high' ? 0 : 1) - (b._triageConfidence === 'high' ? 0 : 1));
+      console.log(`[${VERSION}] aiTriage v2.7.2: ${enriched.length} candidates → ${products.length} product_pages (high|medium confidence)`);
+      return products.slice(0, 8);
     }
-    const categories = enriched.filter((it) => it._triageLabel === 'category_page' && it._triageScore > 0.5);
+    // Soft fallback: any category_page with high or medium confidence
+    const categories = enriched.filter((it) => it._triagePageType === 'category_page' && (it._triageConfidence === 'high' || it._triageConfidence === 'medium'));
     if (categories.length > 0) {
-      console.log(`[${VERSION}] aiTriage: 0 product_pages, falling back to ${categories.length} category_pages`);
-      return categories.sort((a, b) => b._triageScore - a._triageScore).slice(0, 4).map((it) => ({ ...it, _matchConfidence: 'related' }));
+      console.log(`[${VERSION}] aiTriage v2.7.2: 0 product_pages, fallback ${categories.length} category_pages`);
+      return categories.slice(0, 4).map((it) => ({ ...it, _matchConfidence: 'related' }));
     }
-    console.log(`[${VERSION}] aiTriage: 0 product_pages, 0 category_pages — returning empty`);
+    console.log(`[${VERSION}] aiTriage v2.7.2: 0 admitted of ${enriched.length}`);
     return [];
   } catch (e) {
     clearTimeout(timer);
