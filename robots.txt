@@ -1,0 +1,15 @@
+# Savvey — UK price-router PWA
+# Index the public landing; keep crawlers off the API + service worker assets.
+
+User-agent: *
+Allow: /
+Allow: /index.html
+Allow: /manifest.json
+Disallow: /api/
+Disallow: /sw.js
+Disallow: /_archive/
+
+# Be polite — we run on a small Vercel function budget.
+Crawl-delay: 5
+
+Sitemap: https://savvey.app/sitemap.xml

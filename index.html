@@ -157,6 +157,11 @@
   .ghost-btn { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--ink-soft); border-radius: var(--r-sm); padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; }
   .ghost-btn:active { background: var(--card); }
   .small-print { font-size: 12px; color: var(--ink-mute); text-align: center; margin: 18px 0 8px; line-height: 1.5; }
+  .trust-footer { margin: 22px 0 6px; padding: 14px 4px 4px; border-top: 1px solid var(--border); }
+  .trust-line { font-size: 12px; color: var(--ink-mute); line-height: 1.55; margin: 0 0 8px; }
+  .trust-line strong { color: var(--ink-soft); font-weight: 700; }
+  .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
+  .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
   .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
   .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
   .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
@@ -229,7 +234,10 @@
     <div class="recent-chips" id="recent-chips"></div>
   </div>
 
-  <p class="small-print">We don't fetch live prices. We identify your product, give Savvey-Says context, then route you straight to each retailer's own search.</p>
+  <footer class="trust-footer">
+    <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag">Beta · v3.1</span></p>
+  </footer>
 </div>
 
 <!-- ════════ BARCODE SCAN ════════ -->
@@ -596,7 +604,23 @@ function renderConfirm(a, b) {
 function renderResult(displayName, payload) {
   document.getElementById('result-title').textContent = displayName;
   const cat = (payload && payload.category) || 'generic';
-  document.getElementById('result-badge').textContent = 'Identified · ' + cat.toUpperCase();
+  // Honest badge — "Identified" implies certainty; downgrade for medium/low so
+  // users know to double-check at the retailer rather than trust the framing.
+  const conf = payload && payload.confidence;
+  const badgeEl = document.getElementById('result-badge');
+  let badgeText;
+  if (conf === 'high') badgeText = 'Identified · ' + cat.toUpperCase();
+  else if (conf === 'medium') badgeText = 'Best guess · ' + cat.toUpperCase();
+  else badgeText = 'Best guess · check retailer';
+  badgeEl.textContent = badgeText;
+  badgeEl.classList.toggle('amber', conf !== 'high');
+  // Tweak sub-line to match the badge honesty for non-high confidence.
+  const subEl = document.getElementById('result-sub');
+  if (subEl) {
+    subEl.textContent = conf === 'high'
+      ? 'Tap a retailer below to check the live price.'
+      : 'Not 100% sure — confirm on the retailer page below.';
+  }
   const list = CATEGORY_MAP[cat] || CATEGORY_MAP.generic;
   const ctaWrap = document.getElementById('cta-list');
   ctaWrap.innerHTML = '';
@@ -682,18 +706,24 @@ function reportWrongIdentification() {
 async function shareResult() {
   if (!lastResult) return;
   const product = lastResult.canonical_search_string || 'a product';
-  const txt = `${product} — quick UK price check on Savvey. https://savvey.me`;
+  // Include ?q= so the recipient lands on the same product page, not the
+  // empty home screen. handleInbound() picks this up and re-routes.
+  const url = `https://savvey.me/?q=${encodeURIComponent(product)}`;
+  const title = `${product} — Savvey`;
+  const text  = `Quick UK price check on Savvey: ${product}`;
   if (navigator.share) {
-    try { await navigator.share({ text: txt }); track('shared', { method: 'native' }); return; }
+    try { await navigator.share({ title, text, url }); track('shared', { method: 'native' }); return; }
     catch (err) { if (err && err.name === 'AbortError') return; }
   }
+  // Clipboard fallback: combine text + url so both Android and desktop paste cleanly.
+  const combined = `${text} ${url}`;
   try {
-    await navigator.clipboard.writeText(txt);
+    await navigator.clipboard.writeText(combined);
     const h = document.getElementById('hint');
     h.textContent = '✓ Copied to clipboard';
     setTimeout(() => h.textContent = '', 1800);
     track('shared', { method: 'clipboard' });
-  } catch { alert(txt); track('shared', { method: 'alert_fallback' }); }
+  } catch { alert(combined); track('shared', { method: 'alert_fallback' }); }
 }
 
 // ═══ ERROR ═══
@@ -777,6 +807,26 @@ async function showInstall() {
   document.getElementById('hint').textContent = '';
 }
 window.addEventListener('appinstalled', () => track('pwa_installed'));
+
+// iOS Safari doesn't fire beforeinstallprompt — surface a one-time hint
+// so Vincent's soft-launch iPhone users actually find Add-to-Home-Screen.
+// Suppressed on subsequent visits via localStorage; suppressed if standalone.
+(function showIosInstallHintOnce() {
+  try {
+    const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (!isIos || isStandalone) return;
+    if (localStorage.getItem('savvey_v3_ios_hint_shown') === '1') return;
+    setTimeout(() => {
+      const h = document.getElementById('hint');
+      if (!h || h.textContent || h.innerHTML.trim()) return;
+      h.innerHTML = '<span style="color:var(--green);font-weight:700;">Add to Home Screen</span> via <span aria-hidden="true">⎘</span>';
+      track('pwa_ios_hint_shown');
+      localStorage.setItem('savvey_v3_ios_hint_shown', '1');
+      setTimeout(() => { if (h) h.textContent = ''; }, 8000);
+    }, 4000);
+  } catch {}
+})();
 
 // ═══ INBOUND ?q= ═══
 function handleInbound() {

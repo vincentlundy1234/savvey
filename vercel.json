@@ -27,6 +27,10 @@
     "api/track.js": {
       "memory": 128,
       "maxDuration": 3
+    },
+    "api/_health.js": {
+      "memory": 128,
+      "maxDuration": 3
     }
   },
   "headers": [

@@ -1,18 +1,20 @@
 name: Live smoke test
 
 # Triggers after every push to master. Vercel auto-deploys ~30-90s after
-# push; we wait 90s then hit the live API. If basic search 500s (e.g.
-# another TDZ class bug) this fails loudly within ~2 min.
+# push; we wait 90s then hit the live API.
 #
-# Why this exists: 3 May 2026 had a 4-hour latent crash where every
-# /api/ai-search request returned 500 because Wave 103 added an IIFE
-# referencing later-declared `const _HOSTS` arrays — temporal dead zone.
+# Updated 4 May 2026 for v3.1 Smart Router architecture:
+# - /api/_health is a free, sub-50ms liveness probe (no Haiku call)
+# - /api/normalize is the real code-path check (cached on most pushes)
+# - Frontend is single-file index.html v3.1 (no component modules)
+# - v2 endpoints (/api/ai-search, /api/search) deprecated; not exercised
 #
-# Smoke philosophy: fail fast, fail clearly, no flaky retries. If a
-# real outage happens, this test SHOULD fail. If it fails on something
-# that's not actually broken (e.g. Perplexity flake), the right fix is
-# to make the assertion stricter or rely on a known-stable-product
-# query.
+# Smoke philosophy: fail fast, fail clearly, no flaky retries. We deliberately
+# only burn one Haiku token per push (cached after first push of the day, so
+# usually free). If real outage happens, this SHOULD fail. If it fails on
+# something that isn't actually broken (e.g. Anthropic latency on the one
+# uncached path), the right fix is to widen the assertion — not lower the
+# bar so far that real regressions slip through.
 
 on:
   push:
@@ -29,48 +31,59 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: ai-search returns 200
+      - name: /api/_health (free liveness probe)
         run: |
           set -e
-          # Curl: write body to file, only status to stdout. No fragile
-          # head/tail parsing of stitched output.
+          status=$(curl -sS -o /tmp/h -w "%{http_code}" \
+            https://savvey.vercel.app/api/_health)
+          echo "Status: $status"
+          cat /tmp/h
+          echo ""
+          if [ "$status" != "200" ]; then
+            echo "::error::/api/_health returned $status (expected 200)"
+            exit 1
+          fi
+          ok=$(jq -r '.ok // false' /tmp/h 2>/dev/null)
+          anth=$(jq -r '.env.anthropic // false' /tmp/h 2>/dev/null)
+          deploy=$(jq -r '.deploy // "unknown"' /tmp/h 2>/dev/null)
+          if [ "$ok" != "true" ]; then
+            echo "::error::/api/_health returned ok=$ok"
+            exit 1
+          fi
+          if [ "$anth" != "true" ]; then
+            echo "::error::ANTHROPIC_API_KEY missing on deploy $deploy"
+            exit 1
+          fi
+          echo "✓ /api/_health OK (deploy=$deploy, anthropic=$anth)"
+
+      - name: /api/normalize (text door — real code-path check)
+        run: |
+          set -e
           status=$(curl -sS -o /tmp/body -w "%{http_code}" \
-            -X POST https://savvey.vercel.app/api/ai-search \
+            -X POST https://savvey.vercel.app/api/normalize \
             -H "Content-Type: application/json" \
-            -d '{"q":"iphone 17"}')
+            -d '{"input_type":"text","text":"bose qc45"}')
           echo "Status: $status"
           echo "Body (first 400 chars):"
           head -c 400 /tmp/body
           echo ""
           if [ "$status" != "200" ]; then
-            echo "::error::ai-search returned $status (expected 200)"
+            echo "::error::normalize text door returned $status (expected 200)"
             exit 1
           fi
-          # Parse with jq — robust against weird response shapes.
-          n=$(jq '.shopping | length' /tmp/body 2>/dev/null || echo 0)
+          # Must include canonical_search_string. Other fields (savvey_says,
+          # MPN, alternative) can be null on low-confidence answers — that's
+          # not a regression. We only fail on hard 5xx or schema breakage.
+          canonical=$(jq -r '.canonical_search_string // empty' /tmp/body 2>/dev/null)
+          if [ -z "$canonical" ]; then
+            echo "::error::normalize text door 200 but missing canonical_search_string"
+            exit 1
+          fi
           version=$(jq -r '._meta.version // "unknown"' /tmp/body 2>/dev/null || echo "unknown")
-          echo "Version: $version"
-          echo "Items: $n"
-          # Don't fail on n=0 — Perplexity coverage is intermittent for
-          # some queries. Only fail on 5xx (already handled) or non-JSON
-          # response (jq returns null, becomes 0, but we tolerate).
-          # The point is to catch crashes, not coverage variance.
-          echo "✓ ai-search 200 OK (v=$version, n=$n)"
+          cache=$(jq -r '._meta.cache // "unknown"' /tmp/body 2>/dev/null || echo "unknown")
+          echo "✓ normalize text 200 OK (v=$version, cache=$cache, canonical=\"$canonical\")"
 
-      - name: search.js (Tier 2) returns 200
-        run: |
-          set -e
-          status=$(curl -sS -o /dev/null -w "%{http_code}" \
-            -X POST https://savvey.vercel.app/api/search \
-            -H "Content-Type: application/json" \
-            -d '{"q":"test","type":"shopping"}')
-          if [ "$status" != "200" ]; then
-            echo "::error::search.js returned $status"
-            exit 1
-          fi
-          echo "✓ search.js 200 OK"
-
-      - name: Frontend HTML intact
+      - name: Frontend HTML intact (v3.1)
         run: |
           set -e
           html=$(curl -sS https://savvey.vercel.app/)
@@ -78,23 +91,25 @@ jobs:
             echo "::error::frontend HTML missing </html> close tag (truncated?)"
             exit 1
           fi
-          # SW version marker lives in sw.js, not index.html (corrected 2026-05-04).
+          # v3.1 sanity marker — confirms / serves Smart Router not a stale build.
+          if ! echo "$html" | grep -q "/api/normalize"; then
+            echo "::error::frontend HTML does not reference /api/normalize — stale deploy?"
+            exit 1
+          fi
+          echo "✓ frontend HTML intact + references /api/normalize"
+
+      - name: Service worker + manifest reachable
+        run: |
+          set -e
           sw=$(curl -sS https://savvey.vercel.app/sw.js)
           if ! echo "$sw" | grep -q "savvey-static-v"; then
             echo "::error::sw.js missing savvey-static-v version marker"
             exit 1
           fi
-          echo "✓ frontend HTML + sw.js intact"
-
-      - name: Component modules served correctly
-        run: |
-          set -e
-          for module in loading-screen result-banners share-canvas result-rows; do
-            status=$(curl -sS -o /dev/null -w "%{http_code}" \
-              "https://savvey.vercel.app/components/$module.js")
-            if [ "$status" != "200" ]; then
-              echo "::error::/components/$module.js returned $status"
-              exit 1
-            fi
-            echo "✓ /components/$module.js OK"
-          done
+          status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "https://savvey.vercel.app/manifest.json")
+          if [ "$status" != "200" ]; then
+            echo "::error::/manifest.json returned $status"
+            exit 1
+          fi
+          echo "✓ sw.js + manifest.json OK"
