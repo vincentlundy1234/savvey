@@ -245,7 +245,7 @@ async function _getKv() {
   return _kv || null;
 }
 
-const VERSION = 'ai-search.js v2.9.1';
+const VERSION = 'ai-search.js v2.9.2';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -993,7 +993,19 @@ async function fetchSonarPro(query, apiKey, refine = null, parsedQueryPromise = 
   }
   const hardConstraints = constraintsFromParsedQuery(parsedQuery);
 
-  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17"). For each result include retailer_host as lowercase domain only.${refineSection}${hardConstraints}`;
+  const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17").
+
+CRITICAL — product_url MUST be a direct PRODUCT-PAGE URL (the page where you buy a single SKU), never a search results page, category listing, or homepage. Required URL formats per retailer:
+- Amazon: https://www.amazon.co.uk/dp/[10-char ASIN]   — e.g. https://www.amazon.co.uk/dp/B0BXVJ4P7K. Reject /s?k=, /b?node=, /gp/search, /stores/, /search/.
+- John Lewis: https://www.johnlewis.com/[product-slug]/p[6+ digit ID]   — e.g. /p111525915
+- Argos: https://www.argos.co.uk/product/[7+ digit ID]   — e.g. /product/8447423
+- Currys: https://www.currys.co.uk/products/[product-slug-with-id]   — e.g. /products/sony-bravia-...-12345678
+- AO: https://ao.com/product/[slug]/[code].aspx
+- Very: https://www.very.co.uk/[product-slug].prd
+- John Lewis / Argos / Currys: never return /search?q=, /browse, or category listing URLs.
+- For ANY retailer: if you can only find a search-results URL, OMIT that retailer from the response — do not include it with a search URL.
+
+For each result include retailer_host as lowercase domain only.${refineSection}${hardConstraints}`;
 
   try {
     const r = await fetch(SONAR_PRO_ENDPOINT, {
