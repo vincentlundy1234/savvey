@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.7.0';
+const VERSION = 'ai-search.js v2.7.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -2491,6 +2491,21 @@ export default async function handler(req, res) {
   // v2.6.1 — measure pre-admission Search Quad raw URL count.
   const _searchQuadRawCount = Array.isArray(raw?.results) ? raw.results.length : 0;
   _attrition.searchQuad_raw = _searchQuadRawCount;
+  // v2.7.1 — front-of-handler short-circuit (Gemini panel decision rule).
+  // If BOTH retrieval sources returned zero, no amount of downstream filtering
+  // produces results. Skip Triage + 4-5 Haiku calls + verifyUrls + reasoning,
+  // return immediately with error_type:NOT_FOUND. Saves ~3-4s + ~$0.001/query
+  // on truly empty queries.
+  const _sonarProCount = sonarProResult?.products?.length || 0;
+  if (_sonarProCount === 0 && _searchQuadRawCount === 0) {
+    const parsedQueryEarly = await parsedQueryPromise.catch(() => null);
+    console.log(`[${VERSION}] SHORT-CIRCUIT: both retrieval sources empty for "${q}" — fast NOT_FOUND`);
+    return res.status(200).json({
+      shopping: [],
+      organic:  [],
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback: false, categoryProducts: null, parsed_query: parsedQueryEarly, error_type: 'NOT_FOUND', _attrition: { ..._attrition, final: 0, relaxed: RELAXED } },
+    });
+  }
   // v2.7 — permissive gather + Haiku Triage (replaces host-pattern whitelist).
   // Per Gemini: "Delete the whitelist. Let the LLM's world-knowledge of
   // what a shop looks like do the work." Loss Analysis showed old whitelist
@@ -2694,6 +2709,8 @@ export default async function handler(req, res) {
 // Quencher), and judgment cases (Tefal Optigrill+ XL vs Optigrill Elite).
 async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
   if (!items || items.length === 0) return items;
+  // v2.7.1 [CODE] veto: cap to top-3 by existing rank to save latency/cost.
+  if (items.length > 3) items = items.slice(0, 3);
   if (!parsedQuery || !parsedQuery.brand) return items;
   if (parsedQuery.tier_signal_strength === 'absent') return items;
   if (!anthropicKey) return items;
@@ -3004,6 +3021,7 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
       refine:            refine && refine.refinement_text ? { applied: true, text: String(refine.refinement_text).slice(0, 120) } : null,  // Wave 220 — echo refinement so frontend can render "Refined: 'show cheaper'" badge
       heroImage:         heroImage,  // { url, thumbnail, source } or null
       parsed_query:      parsedQuery,
+      error_type:        results.length === 0 ? (_attrition.searchQuad_raw === 0 && _attrition.sonarPro === 0 ? 'NOT_FOUND' : 'NO_MATCH') : null,
       _attrition:        { ..._attrition, final: results.length, relaxed: RELAXED },
       // Wave 93 — live price verification telemetry
       cheapestVerification: {
