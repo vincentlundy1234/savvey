@@ -1,6 +1,12 @@
 _archive/
 *.archive
 *.backup-*
+_v3_sync_test.txt
+_v3_force_flush.txt
 eval-runner.mjs
 eval-results-*.csv
 eval-summary-*.json
+eval-v2.9.2-baseline.csv
+eval-v2.9.2-baseline.html
+v3-smoke-test.md
+v3-RECOVERY-needed.md

@@ -1,33 +1,21 @@
 // ─────────────────────────────────────────────────────────────
-//  Savvey — Service Worker v6
+//  Savvey — Service Worker v3.1
 //
 //  Cache strategies:
-//    FONT_CACHE    — Stale-While-Revalidate for Google Fonts CSS + woff2
-//                    Serves cached fonts instantly, refreshes in background.
-//    STATIC_CACHE  — Cache-First for manifest.json and icons.
-//                    Network-first on navigate so fresh HTML is always tried.
-//    /api/*        — Network-Only. Price data must never be stale.
-//
-//  Offline support:
-//    SW posts an 'OFFLINE' message to all clients when navigator.onLine
-//    would be false (i.e. a fetch fails and we fell back to cache).
-//    The frontend listens via navigator.serviceWorker.addEventListener('message').
-//
-//  Bump STATIC_VER on every index.html deploy.
-//  Bump FONT_VER only if font families or weights change.
+//    FONT_CACHE    — Stale-While-Revalidate for Google Fonts
+//    STATIC_CACHE  — Cache-First for manifest.json + icons
+//                    Network-first on navigate so fresh HTML is always tried
+//    /api/*        — Network-Only. Never cache identification calls.
 // ─────────────────────────────────────────────────────────────
 
-// v3.0 (4 May 2026): bumped STATIC_VER to invalidate v2 caches when v3.html
-// becomes the default. Adds /v3.html to precache so the new app loads offline.
-// Old v2 components still listed so a partial-rollback (rename v3.html back) works.
-const STATIC_VER    = 'savvey-static-v300';
+// v3.1 (4 May 2026): bumped STATIC_VER to v310. Previous v300 cached
+// /v3.html alongside the old v2 / index.html. Now / IS v3 (Smart Router),
+// so we need v300 caches purged + clean fetch of /index.html.
+const STATIC_VER    = 'savvey-static-v310';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
   '/', '/index.html', '/v3.html', '/manifest.json',
-  // v2 component modules — kept in precache during transition
-  '/components/loading-screen.js', '/components/result-banners.js',
-  '/components/share-canvas.js', '/components/result-rows.js',
 ];
 const FONT_ORIGINS  = [
   'https://fonts.googleapis.com',
@@ -43,10 +31,6 @@ self.addEventListener('install', event => {
   );
 });
 
-// Wave 74 — accept SKIP_WAITING from the page so the in-app "Refresh"
-// toast can promote the new SW immediately rather than waiting for all
-// tabs to close. Pairs with the controllerchange handler in index.html
-// which reloads the page once the new SW takes control.
 self.addEventListener('message', event => {
   if(event.data && event.data.type === 'SKIP_WAITING'){
     self.skipWaiting();
@@ -59,7 +43,7 @@ self.addEventListener('activate', event => {
     caches.keys()
       .then(keys => Promise.all(
         keys.filter(k => !KEEP.includes(k)).map(k => {
-          console.log('[SW v6] Purging stale cache:', k);
+          console.log('[SW v3.1] Purging stale cache:', k);
           return caches.delete(k);
         })
       ))
@@ -72,21 +56,18 @@ self.addEventListener('fetch', event => {
   const { request } = event;
   const url = new URL(request.url);
 
-  // 1. API / Supabase — always network-only, never cache
+  // 1. API — always network-only, never cache
   if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase.co')) {
     return;
   }
 
   // 2. Google Fonts — Stale-While-Revalidate
-  //    Serve the cached copy immediately (zero render-blocking), then
-  //    fetch fresh in the background for the next visit.
   if (FONT_ORIGINS.some(o => request.url.startsWith(o))) {
     event.respondWith(staleWhileRevalidate(request, FONT_VER));
     return;
   }
 
-  // 3. Navigation — network-first, fallback to cached shell.
-  // v3.0: nav to /v3.html falls back to /v3.html cache; everything else to /.
+  // 3. Navigation — network-first, fallback to cached shell
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -99,7 +80,6 @@ self.addEventListener('fetch', event => {
         })
         .catch(async () => {
           notifyClients({ type: 'OFFLINE' });
-          // Match the target — /v3.html falls back to /v3.html, otherwise /index.html
           if (url.pathname === '/v3.html' || url.pathname === '/v3') {
             return (await caches.match('/v3.html')) || caches.match('/index.html');
           }
@@ -109,7 +89,7 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 4. Manifest, icons, other static assets — cache-first
+  // 4. Static assets — cache-first
   event.respondWith(
     caches.match(request).then(cached => {
       if (cached) return cached;
@@ -124,22 +104,16 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// ── Stale-While-Revalidate helper ────────────────────────────
 async function staleWhileRevalidate(request, cacheName) {
   const cache  = await caches.open(cacheName);
   const cached = await cache.match(request);
-
-  // Always fetch fresh in background — update cache silently
   const networkFetch = fetch(request).then(res => {
     if (res && res.status === 200) cache.put(request, res.clone());
     return res;
   }).catch(() => null);
-
-  // Return stale immediately if we have it; else wait for network
   return cached || networkFetch;
 }
 
-// ── Broadcast to all clients ──────────────────────────────────
 async function notifyClients(data) {
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
   clients.forEach(c => c.postMessage(data));

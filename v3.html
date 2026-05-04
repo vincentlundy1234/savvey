@@ -143,6 +143,19 @@
   .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 8px; opacity: 0; transition: opacity .25s ease; }
   .hero-img-wrap img.loaded { opacity: 1; }
   .hero-img-wrap.empty { display: none; }
+  /* ────────── Savvey Says block ────────── */
+  .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; margin: 0 0 18px; box-shadow: var(--shadow-sm); }
+  .savvey-says.empty { display: none; }
+  .savvey-says-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+  .savvey-says-spark { width: 24px; height: 24px; border-radius: 8px; background: var(--green-soft); color: var(--green-dark); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
+  .savvey-says-label { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--green-dark); }
+  .savvey-row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); align-items: flex-start; }
+  .savvey-row:first-of-type { border-top: none; padding-top: 0; }
+  .savvey-row .em { flex-shrink: 0; font-size: 17px; line-height: 1.4; }
+  .savvey-row .body { flex: 1; min-width: 0; line-height: 1.4; }
+  .savvey-row .ttl { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 2px; }
+  .savvey-row .val { font-size: 14px; color: var(--ink); margin: 0; font-weight: 600; }
+  .savvey-says-footer { font-size: 11px; color: var(--ink-mute); margin: 10px 0 0; line-height: 1.4; }
   /* ────────── disambiguation ────────── */
   .confirm-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; margin-bottom: 18px; }
   .confirm-q { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
@@ -156,14 +169,23 @@
   .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 24px; }
   .cta {
     display: flex; align-items: center; gap: 14px;
-    padding: 18px 18px; background: var(--card); border: 1px solid var(--border);
+    padding: 16px 18px; background: var(--card); border: 1px solid var(--border);
     border-radius: var(--r-md); text-decoration: none; color: var(--ink);
     box-shadow: var(--shadow-sm); transition: transform .15s ease;
   }
   .cta:active { transform: scale(.985); }
-  .cta.primary { background: var(--green); color: white; border-color: var(--green-dark); }
+  /* Amazon (primary) — visually dominant per Gemini panel call. Bigger pad,
+     bigger type, more weight. The non-primary buttons are deliberately less
+     prominent so the eye lands on Amazon (affiliate path) first. */
+  .cta.primary {
+    background: var(--green); color: white; border: none;
+    padding: 22px 20px; box-shadow: 0 4px 14px rgba(42,107,34,.28), 0 1px 2px rgba(0,0,0,.06);
+    margin-bottom: 4px;
+  }
+  .cta.primary .cta-name { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+  .cta.primary .cta-arrow { font-size: 24px; font-weight: 700; }
   .cta-mark { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--bg); flex-shrink: 0; font-weight: 800; font-size: 12px; color: var(--ink); letter-spacing: -0.02em; line-height: 1; text-align: center; }
-  .cta.primary .cta-mark { background: white; color: #ff9900; }
+  .cta.primary .cta-mark { background: white; color: #ff9900; width: 52px; height: 52px; font-size: 14px; }
   /* Brand-coloured marks. Recognisable at small size without needing real
      logo files (which Vercel can't reliably bundle from local svg refs). */
   .cta-mark.amzn { background: #232f3e; color: #ff9900; }
@@ -257,12 +279,32 @@
     </div>
   </div>
 
+  <button class="door" onclick="goBarcode()" style="display:flex;align-items:center;gap:14px;text-align:left;">
+    <div class="door-icon" style="margin-bottom:0;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/></svg></div>
+    <div style="flex:1;">
+      <h2 class="door-title" style="font-size:18px;">Scan a barcode</h2>
+      <p class="door-sub">Point at the EAN/UPC stripes. Decoded on your phone — 0ms server.</p>
+    </div>
+    <span style="color:var(--ink-mute);font-size:18px;flex-shrink:0;">→</span>
+  </button>
+
   <div class="recent-row" id="recent-row" hidden>
     <p class="recent-label"><span>Recent</span><button class="recent-clear" onclick="clearRecents()">Clear</button></p>
     <div class="recent-chips" id="recent-chips"></div>
   </div>
 
   <p class="small-print">We don't fetch live prices. We identify your product, then send you straight to each retailer's own search. Your tap is the price check.</p>
+</div>
+
+<!-- ════════ BARCODE SCAN (Door 3, client-side decode) ════════ -->
+<div class="screen" id="screen-barcode">
+  <h1 class="tagline">Scan barcode</h1>
+  <p class="tagsub">Point camera at the EAN/UPC stripes. We decode on your device — no upload, no server hit.</p>
+  <div id="barcode-reader" style="background:#000;border-radius:var(--r-md);overflow:hidden;aspect-ratio:3/4;margin:12px 0;"></div>
+  <p style="text-align:center;color:var(--ink-mute);font-size:13px;">Hold steady. Decode triggers automatically.</p>
+  <div class="actions-row">
+    <button class="ghost-btn" onclick="cancelBarcode()">Cancel</button>
+  </div>
 </div>
 
 <!-- ════════ CAMERA ════════ -->
@@ -306,6 +348,16 @@
   <h1 class="identify-title" id="result-title">—</h1>
   <p class="identify-sub" id="result-sub">Tap a retailer to check the live price now.</p>
   <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
+
+  <div class="savvey-says empty" id="savvey-says">
+    <div class="savvey-says-head">
+      <div class="savvey-says-spark">✦</div>
+      <div class="savvey-says-label">Savvey says</div>
+    </div>
+    <div id="savvey-says-rows"></div>
+    <p class="savvey-says-footer" id="savvey-says-footer">General context — typical UK retail. Tap a retailer below for live price.</p>
+  </div>
+
   <div class="cta-list" id="cta-list"></div>
   <p style="text-align:center;margin:8px 0 18px;font-size:13px;">
     <a href="#" onclick="event.preventDefault();reportWrongIdentification();" style="color:var(--ink-mute);text-decoration:underline;font-weight:600;">Wrong product? Try again →</a>
@@ -395,8 +447,12 @@ function goHome(opts) {
 // Browser/iOS back gesture — gracefully step backwards through screens.
 window.addEventListener('popstate', (e) => {
   const target = (e.state && e.state.screen) || 'home';
-  // Stop camera if leaving camera screen via back
+  // Stop camera + barcode scanner if leaving those screens via back
   if (target !== 'camera' && camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  if (target !== 'barcode' && _barcodeScanner) {
+    try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {}
+    _barcodeScanner = null;
+  }
   show(target, { fromPop: true });
 });
 // Seed initial history state on first load so back from #result lands on home not the previous tab.
@@ -478,6 +534,59 @@ async function captureFrame() {
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   track('snap_captured');
   await callNormalize({ input_type: 'image', image_base64: base64, media_type: 'image/jpeg' });
+}
+
+// ════════════ DOOR 3: BARCODE (client-side decode) ════════════
+// Lazy-load html5-qrcode CDN only when user taps Door 3 — keeps home
+// screen cold-load lean. Decode happens in browser; only the raw EAN
+// (13 digits) is sent to /api/normalize.
+let _barcodeScanner = null;
+let _html5QrcodeLoaded = null;
+
+function loadHtml5Qrcode() {
+  if (_html5QrcodeLoaded) return _html5QrcodeLoaded;
+  _html5QrcodeLoaded = new Promise((resolve, reject) => {
+    if (window.Html5Qrcode) return resolve(window.Html5Qrcode);
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js';
+    s.onload = () => window.Html5Qrcode ? resolve(window.Html5Qrcode) : reject(new Error('html5-qrcode loaded but global missing'));
+    s.onerror = () => reject(new Error('html5-qrcode CDN load failed'));
+    document.head.appendChild(s);
+  });
+  return _html5QrcodeLoaded;
+}
+
+async function goBarcode() {
+  show('barcode');
+  track('barcode_started');
+  try {
+    const Html5Qrcode = await loadHtml5Qrcode();
+    _barcodeScanner = new Html5Qrcode('barcode-reader');
+    await _barcodeScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 260, height: 120 }, aspectRatio: 1.7777 },
+      async (decodedText) => {
+        // Decoded — stop scanner immediately, send to backend.
+        const ean = String(decodedText || '').trim().replace(/\D/g, '');
+        if (!ean || ean.length < 8 || ean.length > 14) return;
+        track('barcode_decoded', { len: ean.length });
+        try { await _barcodeScanner.stop(); _barcodeScanner.clear(); _barcodeScanner = null; } catch {}
+        callNormalize({ input_type: 'barcode', ean });
+      },
+      (errMsg) => { /* per-frame decode failures are normal — silent */ }
+    );
+  } catch (err) {
+    track('barcode_camera_failed', { err: String(err && err.message || err).slice(0, 80) });
+    showError('Couldn\'t start the barcode scanner.', 'Try the Snap door (camera) or Type a search instead.');
+  }
+}
+
+function cancelBarcode() {
+  if (_barcodeScanner) {
+    try { _barcodeScanner.stop().then(() => _barcodeScanner.clear()).catch(() => {}); } catch {}
+    _barcodeScanner = null;
+  }
+  goHome();
 }
 
 // ════════════ DOOR 2: URL ════════════
@@ -642,9 +751,39 @@ function renderResult(displayName, payload) {
   heroWrap.classList.add('empty');
   heroImg.classList.remove('loaded');
   heroImg.removeAttribute('src');
+  // Render Savvey Says — confidence-gated. Only render the block if Haiku
+  // claims high confidence on the savvey_says fields. Low/medium = hide
+  // entirely (no "approximate" banner — protects brand from hallucinations).
+  renderSavveySays(payload && payload.savvey_says);
   show('result');
   // Lazy fetch hero image — non-blocking; render result first, image fades in.
   fetchHeroImage(displayName);
+}
+
+function renderSavveySays(ss) {
+  const wrap = document.getElementById('savvey-says');
+  const rows = document.getElementById('savvey-says-rows');
+  rows.innerHTML = '';
+  // Confidence gate: hide block at medium/low. Also hide if all 3 fields null.
+  const hasContent = ss && ss.confidence === 'high' && (ss.typical_price_range || ss.timing_advice || ss.consensus);
+  if (!hasContent) { wrap.classList.add('empty'); return; }
+  const rowsData = [
+    { em: '📊', ttl: 'Typical UK price', val: ss.typical_price_range },
+    { em: '⏱️', ttl: 'Timing',           val: ss.timing_advice },
+    { em: '⭐', ttl: 'Consensus',        val: ss.consensus },
+  ].filter(r => r.val);
+  for (const r of rowsData) {
+    const div = document.createElement('div');
+    div.className = 'savvey-row';
+    div.innerHTML = `<span class="em">${r.em}</span><div class="body"><p class="ttl">${r.ttl}</p><p class="val">${escapeHtml(r.val)}</p></div>`;
+    rows.appendChild(div);
+  }
+  wrap.classList.remove('empty');
+  track('savvey_says_shown', { rows: rowsData.length });
+}
+
+function escapeHtml(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function fetchHeroImage(query) {
