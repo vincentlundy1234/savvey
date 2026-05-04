@@ -1,0 +1,9 @@
+{
+  "name": "savvey",
+  "version": "2.9.0",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/kv": "^3.0.0"
+  }
+}

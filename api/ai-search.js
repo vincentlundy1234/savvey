@@ -229,6 +229,22 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
+// v2.9 panel-locked — Vercel KV semantic cache.
+// Lazy-loaded so the function still boots if @vercel/kv isn't installed
+// or KV env vars aren't set. All KV ops are best-effort; failures fall
+// through to the live pipeline.
+let _kv = null;
+async function _getKv() {
+  if (_kv !== null) return _kv;
+  try {
+    const mod = await import('@vercel/kv');
+    _kv = mod.kv || null;
+  } catch (e) {
+    _kv = false;  // sentinel: tried and failed
+  }
+  return _kv || null;
+}
+
 const VERSION = 'ai-search.js v2.7.2';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
@@ -455,6 +471,68 @@ function aiCacheSet(key, value){
     AI_QUERY_CACHE.delete(firstKey);
   }
   AI_QUERY_CACHE.set(key, { t: Date.now(), value });
+}
+
+// v2.9 panel-locked — canonical cache key from PARSER output.
+// Cache hits on product identity regardless of which store the user is
+// in. Ignores in_store_price + in_store_retailer per panel adjustment.
+// Power law: top-500 UK products = ~80% of scans. Those drop to 400ms.
+function kvCanonicalKey(parsed, region){
+  if (!parsed) return null;
+  const brand = (parsed.brand || '').toLowerCase().trim();
+  const model = (parsed.model || parsed.family || '').toLowerCase().trim();
+  if (!brand || !model) return null;
+  const qual = Array.isArray(parsed.qualifiers)
+    ? parsed.qualifiers.map(s => String(s).toLowerCase().trim()).filter(Boolean).sort().join(',')
+    : (parsed.qualifiers && typeof parsed.qualifiers === 'object'
+        ? Object.values(parsed.qualifiers).map(v => String(v).toLowerCase().trim()).filter(Boolean).sort().join(',')
+        : '');
+  return `q:${region || 'uk'}|${brand}|${model}|${qual}`;
+}
+async function kvGet(key){
+  if (!key) return null;
+  try {
+    const kv = await _getKv();
+    if (!kv) return null;
+    const v = await kv.get(key);
+    return v || null;
+  } catch (e) {
+    console.warn(`[ai-search] kvGet failed: ${e.message}`);
+    return null;
+  }
+}
+async function kvSet(key, value, ttlSeconds = 21600){
+  if (!key || !value) return;
+  try {
+    const kv = await _getKv();
+    if (!kv) return;
+    await kv.set(key, value, { ex: ttlSeconds });
+  } catch (e) {
+    console.warn(`[ai-search] kvSet failed: ${e.message}`);
+  }
+}
+// v2.9 — Triage_Rejected log for v2.10 retailer mining.
+// Each Triage rejection appended to a per-domain Vercel KV list (capped
+// at 1000 per domain). Weekly Haiku script (v2.10) groups + cross-refs
+// user_flagged_error to auto-discover missing high-signal retailers.
+async function kvLogTriageRejection(rejection){
+  try {
+    const kv = await _getKv();
+    if (!kv) return;
+    const host = rejection && rejection.host ? rejection.host.toLowerCase() : 'unknown';
+    const listKey = `rejected:${host}`;
+    const payload = JSON.stringify({
+      url: rejection.url || '',
+      rejected_at: new Date().toISOString(),
+      parsed_query: rejection.parsed_query || null,
+      triage_confidence: rejection.confidence || null,
+      page_type: rejection.page_type || null,
+    });
+    await kv.lpush(listKey, payload);
+    await kv.ltrim(listKey, 0, 999);
+  } catch (e) {
+    // Best-effort; don't block on KV failure
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -1551,6 +1629,27 @@ Return ONLY the JSON.`;
         _triageReasoning: lab?.reasoning || null,
       };
     });
+    // v2.9 — log every Triage-rejected URL to Vercel KV for v2.10 retailer mining.
+    // Best-effort; fire-and-forget. Includes rejection reason so weekly Haiku
+    // script can group by domain + cross-ref user_flagged_error events.
+    try {
+      const _rejected = enriched.filter((it) => !(it._triageProductPage && (it._triageConfidence === 'high' || it._triageConfidence === 'medium')));
+      const _cacheParsed = (parsedQuery && typeof parsedQuery === 'object')
+        ? `${(parsedQuery.brand || '').toLowerCase()}|${(parsedQuery.model || parsedQuery.family || '').toLowerCase()}`
+        : null;
+      for (const it of _rejected) {
+        try {
+          const host = (() => { try { return new URL(it.url || it.link || '').hostname.replace(/^www\./, ''); } catch { return 'unknown'; } })();
+          kvLogTriageRejection({
+            url: it.url || it.link || '',
+            host,
+            parsed_query: _cacheParsed,
+            confidence: it._triageConfidence || 'low',
+            page_type: it._triagePageType || 'unknown',
+          });
+        } catch(_) {}
+      }
+    } catch(_) {}
     // Pass: is_retailer_product_page:true AND confidence in {high, medium}.
     const products = enriched.filter((it) => it._triageProductPage && (it._triageConfidence === 'high' || it._triageConfidence === 'medium'));
     if (products.length > 0) {
@@ -2509,6 +2608,37 @@ export default async function handler(req, res) {
   const parsedQueryPromise = parseQueryIntent(q, ANTHROPIC_KEY)
     .catch((e) => { console.warn(`[${VERSION}] parser promise rejected: ${e.message}`); return null; });
 
+  // v2.9 panel-locked — Vercel KV semantic cache layer.
+  // L1 (in-memory aiCache) already missed above. Now check L2 (Vercel KV)
+  // on the canonical cache key derived from parser output. Skipped when
+  // debug=true (we always want fresh debug envelopes).
+  if (!debug) {
+    try {
+      const _earlyParsed = await Promise.race([
+        parsedQueryPromise,
+        new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+      ]);
+      const _kvKey = kvCanonicalKey(_earlyParsed, region);
+      if (_kvKey) {
+        const _kvHit = await kvGet(_kvKey);
+        if (_kvHit) {
+          console.log(`[${VERSION}] KV cache HIT: ${_kvKey}`);
+          return res.status(200).json({
+            ..._kvHit,
+            _meta: {
+              ...(_kvHit._meta || {}),
+              kvCacheHit: true,
+              kvCacheKey: _kvKey,
+              served_from_kv_at: new Date().toISOString(),
+            },
+          });
+        }
+      }
+    } catch (e) {
+      console.warn(`[${VERSION}] KV cache check failed (non-fatal): ${e.message}`);
+    }
+  }
+
   // Wave 201b — Sonar Pro is the primary discovery call, runs in parallel
   // with the Search API quad. Wave 201d — chain Haiku price-tier sanity
   // validation INTO the Sonar Pro promise so it overlaps with Search quad
@@ -3088,6 +3218,12 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
   // when debug requested.
   if (!debug && results.length >= 1) {
     aiCacheSet(cacheK, responseBody);
+    // v2.9 — also store under the canonical (parser-derived) key in
+    // Vercel KV so cross-instance / cold-start reads hit. 6h TTL.
+    try {
+      const _kvKey = kvCanonicalKey(parsedQuery, region);
+      if (_kvKey) { kvSet(_kvKey, responseBody, 21600).catch(() => {}); }
+    } catch(_) {}
   }
   return res.status(200).json(responseBody);
 }

@@ -2399,6 +2399,21 @@
     .ret-feedback-btn:hover{color:var(--ink2);}
     .ret-feedback-btn.thanks{color:var(--green);text-decoration:none;font-weight:600;cursor:default;}
     .ret-feedback-btn[disabled]{opacity:0.7;}
+    /* v2.9 — Identification confirm modal (panel-locked safeguard against silent vision misidentification) */
+    .vc-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:none;align-items:flex-end;justify-content:center;z-index:9000;animation:share-fade 240ms ease;}
+    .vc-overlay.open{display:flex;}
+    .vc-sheet{width:100%;max-width:480px;background:#fff;color:var(--ink,#0e0e0e);border-radius:24px 24px 0 0;padding:24px 22px calc(28px + env(safe-area-inset-bottom));box-shadow:0 -20px 50px rgba(0,0,0,0.3);animation:share-sheet-in 320ms var(--ease-pop, cubic-bezier(.2,.7,.2,1)) both;}
+    .vc-eyebrow{font:700 10px/1 "Inter",sans-serif;letter-spacing:0.14em;text-transform:uppercase;color:var(--green,#2a6b22);margin-bottom:8px;}
+    .vc-title{font:800 20px/1.2 "Nunito",sans-serif;letter-spacing:-0.4px;margin-bottom:14px;}
+    .vc-meta{font:500 13px/1.4 "Inter",sans-serif;color:var(--ink2,#3a3a3a);margin-bottom:6px;}
+    .vc-conf{display:inline-flex;align-items:center;gap:5px;font:700 10px/1 "Inter",sans-serif;letter-spacing:0.06em;text-transform:uppercase;padding:4px 9px;border-radius:20px;background:rgba(42,107,34,0.12);color:var(--green,#2a6b22);margin-bottom:14px;}
+    .vc-conf.medium{background:rgba(196,122,28,0.14);color:#c47a1c;}
+    .vc-conf.low{background:rgba(122,122,122,0.14);color:#7a7a7a;}
+    .vc-actions{display:flex;gap:10px;margin-top:18px;}
+    .vc-btn{flex:1;padding:14px;border-radius:12px;font:700 14px/1 "Inter",sans-serif;font-family:inherit;cursor:pointer;border:1.5px solid transparent;}
+    .vc-btn.primary{background:var(--green,#2a6b22);color:#fff;border-color:var(--green,#2a6b22);}
+    .vc-btn.secondary{background:#fff;color:var(--ink,#0e0e0e);border-color:var(--line,#e6e4dc);}
+    .vc-btn:active{transform:scale(0.98);}
 
     /* Affiliate disclosure footer. Wave 89 — bumped 11→12px and ink4→ink3
        so it's actually readable. ASA disclosure that nobody finds isn't
@@ -4492,6 +4507,21 @@
 </div>
 
 <!-- SHARE CARD -->
+<!-- v2.9 panel-locked — Identification confirm modal. Fires between vision result and search.
+     Skipped when image_type=="unclear" or confidence=="low" (R5 fires instead). -->
+<div class="vc-overlay" id="vc-overlay" role="dialog" aria-modal="true" aria-label="Confirm product" aria-hidden="true">
+  <div class="vc-sheet" role="document">
+    <div class="vc-eyebrow">I think I see…</div>
+    <div class="vc-title" id="vc-title">Product</div>
+    <div class="vc-meta" id="vc-meta"></div>
+    <div class="vc-conf" id="vc-conf">● High confidence</div>
+    <div class="vc-actions">
+      <button class="vc-btn secondary" id="vc-btn-retake" type="button">Retake</button>
+      <button class="vc-btn primary" id="vc-btn-confirm" type="button">Find best price</button>
+    </div>
+  </div>
+</div>
+
 <div class="share-overlay" id="share-overlay" role="dialog" aria-modal="true" aria-label="Share" aria-hidden="true">
   <div class="share-sheet" role="document">
     <div class="share-handle" aria-hidden="true"></div>
@@ -7581,6 +7611,43 @@ function renderResults(sc){
     }
   }
 
+  // ── v2.9 — Factual Rip-Off Delta strip ──
+  // Renders ONLY when Vision captured an in-store price AND a cheaper
+  // retailer is present. STRICTLY FACTUAL phrasing per panel [LEGAL] —
+  // never accuse a retailer of overcharging (UK defamation risk).
+  // Calculated entirely on the frontend using cached pipeline price +
+  // fresh OCR shelf price.
+  try {
+    const ripWrap = document.getElementById('rip-off-strip') || (function(){
+      const heroCardEl = document.getElementById('hero-card');
+      if (!heroCardEl || !heroCardEl.parentNode) return null;
+      const d = document.createElement('div');
+      d.id = 'rip-off-strip';
+      d.style.cssText = 'margin:0 0 12px;padding:14px 16px;border-radius:14px;border:1px solid var(--green-bd,rgba(42,107,34,0.2));background:rgba(42,107,34,0.06);font:600 13px/1.4 "Inter",sans-serif;color:var(--ink,#0e0e0e);letter-spacing:-0.1px;display:none;';
+      heroCardEl.parentNode.insertBefore(d, heroCardEl);
+      return d;
+    })();
+    if (ripWrap) {
+      const v = window._lastVisionResult || {};
+      const shelfPrice = (typeof v.in_store_price === 'number' && v.in_store_price > 0) ? v.in_store_price : null;
+      const shelfRet = v.in_store_retailer || null;
+      const cheapestRow = (sc.rets || []).filter(r => typeof r.price === 'number' || typeof r.priceNumeric === 'number')
+        .map(r => ({ name: r.n || r.name, price: typeof r.priceNumeric === 'number' ? r.priceNumeric : r.price }))
+        .sort((a, b) => (a.price || 0) - (b.price || 0))[0];
+      if (shelfPrice && cheapestRow && cheapestRow.price && cheapestRow.price < shelfPrice) {
+        const saving = (shelfPrice - cheapestRow.price);
+        const pct = Math.round((saving / shelfPrice) * 100);
+        ripWrap.textContent = `Shelf price: £${shelfPrice.toFixed(2)}. ${cheapestRow.name}: £${cheapestRow.price.toFixed(2)}. You save £${saving.toFixed(2)} (${pct}%).`;
+        ripWrap.style.display = 'block';
+      } else if (shelfPrice && cheapestRow && cheapestRow.price >= shelfPrice) {
+        ripWrap.textContent = `${shelfRet || 'In store'}: £${shelfPrice.toFixed(2)}. Best UK price found: £${cheapestRow.price.toFixed(2)} at ${cheapestRow.name}.`;
+        ripWrap.style.display = 'block';
+      } else {
+        ripWrap.style.display = 'none';
+      }
+    }
+  } catch(_) { /* never block render */ }
+
   // ── Hero product image (Wave 24) ──
   // sc._heroImage is set by showResults() after the ai-search response
   // arrives. Hidden if no image; shown with fade-in spring if present.
@@ -8731,17 +8798,72 @@ async function captureSnap(){
     // Tear down the stream cleanly before navigating off the screen.
     stopSnapper();
 
-    // Reset all per-search state before kicking off the new fetch — without
-    // this, the prior query's wit/refine-input lingers across the new render.
-    // CRITICAL: globalReset() clears window._snapMatchMeta, so we must
-    // re-assign it AFTER reset, before fetchPrices runs.
-    globalReset();
-    window._snapMatchMeta = snapMeta;
-    liveQuery    = productName;
-    inputMethod  = 'snap';
-    bestPriceOnly = true; // snap is Discovery mode — no shelf reference price
-    goTo('searching');
-    showResults(fetchPrices(productName));
+    // v2.9 panel-locked — Identification confirm modal between vision and
+    // search. Skipped when image_type="unclear"/"generic" (R5 path) or
+    // confidence is too low to trust. The modal is the safeguard against
+    // silent vision misidentification cascading into a confident-wrong result.
+    const _shouldSkipConfirm = (
+      d.image_type === 'unclear' ||
+      d.image_type === 'generic' ||
+      conf === 'low' ||
+      conf === 'unknown'
+    );
+    const startSearchNow = () => {
+      globalReset();
+      window._snapMatchMeta = snapMeta;
+      liveQuery    = productName;
+      inputMethod  = 'snap';
+      bestPriceOnly = true; // snap is Discovery mode — no shelf reference price
+      goTo('searching');
+      showResults(fetchPrices(productName));
+    };
+    if (_shouldSkipConfirm) {
+      startSearchNow();
+      return;
+    }
+    // Show confirm modal
+    try {
+      const ovl = document.getElementById('vc-overlay');
+      const titleEl = document.getElementById('vc-title');
+      const metaEl  = document.getElementById('vc-meta');
+      const confEl  = document.getElementById('vc-conf');
+      const btnConf = document.getElementById('vc-btn-confirm');
+      const btnRet  = document.getElementById('vc-btn-retake');
+      const titleTxt = [d.brand, d.family, d.model].filter(Boolean).join(' ').trim() || productName;
+      const qList = (Array.isArray(d.qualifiers) ? d.qualifiers : []).filter(Boolean);
+      titleEl.textContent = titleTxt;
+      metaEl.textContent = qList.join(' · ') || (d.in_store_price ? `Shelf: £${d.in_store_price.toFixed(2)} at ${d.in_store_retailer || 'in store'}` : '');
+      confEl.className = 'vc-conf ' + (conf === 'medium' ? 'medium' : conf === 'low' ? 'low' : '');
+      confEl.textContent = '● ' + (conf === 'high' ? 'High' : conf === 'medium' ? 'Medium' : 'Low') + ' confidence';
+      ovl.classList.add('open');
+      ovl.setAttribute('aria-hidden', 'false');
+      const closeAndConfirm = () => {
+        ovl.classList.remove('open');
+        ovl.setAttribute('aria-hidden', 'true');
+        btnConf.removeEventListener('click', onConfirm);
+        btnRet.removeEventListener('click', onRetake);
+        startSearchNow();
+      };
+      const closeAndRetake = () => {
+        ovl.classList.remove('open');
+        ovl.setAttribute('aria-hidden', 'true');
+        btnConf.removeEventListener('click', onConfirm);
+        btnRet.removeEventListener('click', onRetake);
+        // Restart camera viewfinder
+        snapBusy = false;
+        if (busy) busy.classList.remove('show');
+        if (captureBtn) captureBtn.disabled = false;
+        try { startSnapper(); } catch(_) {}
+      };
+      const onConfirm = closeAndConfirm;
+      const onRetake = closeAndRetake;
+      btnConf.addEventListener('click', onConfirm);
+      btnRet.addEventListener('click', onRetake);
+    } catch (e) {
+      console.warn('[Snapper] confirm modal failed, falling through:', e);
+      startSearchNow();
+    }
+    return;
   }catch(e){
     console.error('[Snapper] /api/ai-vision request failed:', e);
     snapBusy = false;
@@ -9416,9 +9538,60 @@ function buildShareSheetHtml(mode){
 // Stops the blank-canvas race when the user opens, closes, and reopens
 // the share sheet faster than fonts.ready resolves.
 let _shareDrawToken = 0;
+// v2.9 panel-locked — native share text builder.
+// Format: "Currys wants £199 for the Ninja AF400UK. Savvey found it on
+// Amazon for £169. https://savvey.app". 5 minutes to code, converts as
+// well as a dynamic HTML-to-image card per panel [GTM] adjustment.
+function buildNativeShareText(sc){
+  if(!sc) return null;
+  const product = sc.query || liveQuery || 'this product';
+  const v = window._lastVisionResult || {};
+  const shelfPrice = (typeof v.in_store_price === 'number' && v.in_store_price > 0) ? v.in_store_price : (sc.uPrice || null);
+  const shelfRet = v.in_store_retailer || null;
+  const bestRet = sc.bestRetailer || (sc.rets && sc.rets[0] && sc.rets[0].n) || 'Amazon';
+  const bestPrice = sc.bestPrice || (sc.rets && sc.rets[0] && sc.rets[0].price) || null;
+  const url = location.origin || 'https://savvey.app';
+  if (shelfPrice && bestPrice && bestPrice < shelfPrice) {
+    const saving = (shelfPrice - bestPrice).toFixed(2);
+    const front = shelfRet ? `${shelfRet} wants £${shelfPrice.toFixed(2)} for the ${product}` : `In store: £${shelfPrice.toFixed(2)} for the ${product}`;
+    return `${front}. Savvey found it on ${bestRet} for £${bestPrice.toFixed(2)} — saving £${saving}. ${url}`;
+  }
+  if (bestPrice) {
+    return `${product} — best UK price found on ${bestRet}: £${bestPrice.toFixed(2)}. Found via Savvey: ${url}`;
+  }
+  return `Checked ${product} on Savvey. Try it: ${url}`;
+}
+async function shareResultNativeFirst(sc){
+  // Try native share text first. If unsupported or cancelled, fall through
+  // to the canvas overlay (existing behaviour).
+  const text = buildNativeShareText(sc);
+  if (!text) return false;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Savvey — spend smart', text });
+      try { track('share_native_text', { kind: 'result', spc: sc.spc, has_shelf: !!(window._lastVisionResult && window._lastVisionResult.in_store_price) }); } catch(_) {}
+      return true;
+    }
+  } catch (e) {
+    // AbortError = user cancelled — don't fall back, just bail.
+    if (e && e.name === 'AbortError') return true;
+    // Anything else, fall through to overlay.
+  }
+  return false;
+}
 function openShareCard(){
   haptic(12); // confirms share-button tap before the card animates in
   if(!liveScen)return; // empty state — nothing to share
+  // v2.9 — native share text path takes priority. If it succeeds (or user
+  // cancels the OS sheet), we never open the canvas overlay. Falls back
+  // only if navigator.share is unavailable or throws non-AbortError.
+  shareResultNativeFirst(liveScen).then((handled) => {
+    if (handled) return;
+    openShareCardOverlay();
+  }).catch(() => openShareCardOverlay());
+}
+function openShareCardOverlay(){
+  if(!liveScen)return;
   track('share_opened', { kind: 'result', spc: liveScen.spc, saving: liveScen.saving || 0 });
   // Wave 63 — restore the share-sheet markup (in case savings-mode was
   // showing previously) before drawing.
