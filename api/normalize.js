@@ -292,11 +292,11 @@ function parseAndDefault(rawText) {
 // ─────────────────────────────────────────────────────────────────────────
 
 export default async function handler(req, res) {
-  applySecurityHeaders(req, res, ORIGIN);
+  applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
 
-  if (await rejectIfRateLimited(req, res, RATE_LIMIT_PER_HOUR, 'normalize')) return;
+  if (rejectIfRateLimited(req, res, 'normalize', RATE_LIMIT_PER_HOUR)) return;
 
   const t0 = Date.now();
   const body = req.body || {};
