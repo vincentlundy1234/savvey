@@ -9550,7 +9550,8 @@ function buildNativeShareText(sc){
   const shelfRet = v.in_store_retailer || null;
   const bestRet = sc.bestRetailer || (sc.rets && sc.rets[0] && sc.rets[0].n) || 'Amazon';
   const bestPrice = sc.bestPrice || (sc.rets && sc.rets[0] && sc.rets[0].price) || null;
-  const url = location.origin || 'https://savvey.app';
+  // v2.9.3 — savvey.me is the short shareable domain; savvey.app is the brand surface.
+  const url = 'https://savvey.me';
   if (shelfPrice && bestPrice && bestPrice < shelfPrice) {
     const saving = (shelfPrice - bestPrice).toFixed(2);
     const front = shelfRet ? `${shelfRet} wants £${shelfPrice.toFixed(2)} for the ${product}` : `In store: £${shelfPrice.toFixed(2)} for the ${product}`;
@@ -9987,7 +9988,8 @@ function roundRect(ctx,x,y,w,h,r){
 function savingsShareText(){
   const total = getTotalSavings();
   const count = getSavingsCount();
-  const url = `${location.origin}`;
+  // v2.9.3 — savvey.me is the short shareable domain (brand: savvey.app).
+  const url = 'https://savvey.me';
   const totalLabel = total < 0.5 ? '£0' : '£'+fmtSavingsTotal(total);
   if(total < 0.5){
     return `Just started using Savvey to check UK retailer prices before I buy. Try it: ${url}`;
@@ -10105,13 +10107,16 @@ function saveCard(){
 // ─────────────────────────────────────────────────────────────
 // Share helpers
 //
-// Every share carries a deep-link URL — savvey.vercel.app/?q=Sony+WH-1000XM5
+// Every share carries a deep-link URL — savvey.me/?q=Sony+WH-1000XM5
 // The recipient taps it, lands on Savvey, and the search auto-runs.
 // That's the viral mechanic: share → recipient gets value → installs.
+//
+// v2.9.3 — short domain is savvey.me (recipient-friendly), brand is
+// savvey.app. savvey.me redirects to savvey.app in production via DNS.
 // ─────────────────────────────────────────────────────────────
 function shareDeepLink(){
   const q=encodeURIComponent(liveScen?.query||liveQuery||'');
-  return `${location.origin}/?q=${q}`;
+  return `https://savvey.me/?q=${q}`;
 }
 
 // Builds the share text. Leans on the wit line (the social object) plus
