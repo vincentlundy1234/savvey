@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.6.1';
+const VERSION = 'ai-search.js v2.7.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1438,6 +1438,94 @@ function matchRetailerWithExtras(url, extraHosts) {
   return null;
 }
 
+// Savvey v2.7 — PERMISSIVE candidate gather (Gemini panel call).
+// REPLACES the host-pattern whitelist that was culling 93% of valid retrieval
+// data. Returns ALL UK-ish URLs from raw Perplexity Search results.
+// Downstream aiTriage handles classification + filtering with LLM judgment.
+// Per Gemini: "Delete the whitelist. Let the LLM's world-knowledge of what
+// a shop looks like do the work."
+function gatherRetailerHitsPermissive(data, query) {
+  const results = rawResultsOf(data);
+  const extraHosts = (data && Array.isArray(data._categoryHosts)) ? data._categoryHosts : null;
+  const hits = [];
+  for (const r of results) {
+    const url     = r.url || r.link || '';
+    const title   = r.title || r.name || query;
+    const snippet = r.snippet || r.content || r.description || r.text || '';
+    if (!url) continue;
+    // Permissive: keep anything plausibly UK retail (any .co.uk/.uk OR
+    // explicit UK retailer host). Triage will judge from there.
+    let h;
+    try { h = new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch { continue; }
+    const ukLike = h.endsWith('.co.uk') || h.endsWith('.uk') || matchRetailerWithExtras(url, extraHosts);
+    if (!ukLike) continue;
+    // Extra-aggressive Amazon: must be /dp/ASIN form (Wave 21 rule).
+    if (h === 'amazon.co.uk' && !isAdmissibleAmazonUrl(url)) continue;
+    hits.push({ url, title, snippet, retailer: matchRetailerWithExtras(url, extraHosts) || { host: h, name: h, synthetic: true } });
+  }
+  return hits;
+}
+
+// Savvey v2.7 — Haiku Triage (Gemini panel One Thing).
+// Classifies each candidate URL by SNIPPET ONLY (not full HTML — Gemini veto)
+// as one of: product_page, category_page, review_article, comparison_list,
+// irrelevant. Returns items labelled product_page or category_page (when no
+// product_page found) with relevance_score > 0.7. Keeps top-N by score.
+// Cost: 1 Haiku call (~$0.0003); latency target <1200ms with hard timeout
+// fallback to top-3 raw URLs by search rank.
+async function aiTriage(items, parsedQuery, anthropicKey) {
+  if (!items || items.length === 0) return [];
+  if (!anthropicKey) return items.slice(0, 3); // fail-safe: keep top-3 by rank
+  const numbered = items.slice(0, 15).map((it, i) => {
+    const sn = String(it.snippet || '').slice(0, 200); // Gemini veto: max 200 char snippet
+    return `${i + 1}. ${(it.title || '').slice(0, 100)} | ${it.url} | ${sn}`;
+  }).join('\n');
+  const intent = parsedQuery ? `Brand: ${parsedQuery.brand || 'any'} | Family: ${parsedQuery.family || 'any'} | Qualifiers: ${JSON.stringify(parsedQuery.qualifiers || {})} | Expected price band GBP: ${(parsedQuery.expected_price_band_gbp || []).join('-')}` : `Query: ${items[0]?.title || ''}`;
+  const sys = `You are a UK retail URL triage classifier. For each listing, decide what kind of page it is and how relevant it is to the user's query.\n\nReturn ONLY this JSON: {"items":[{"i":1,"label":"product_page","score":0.95},...]}\n\nLabels:\n- product_page: a SPECIFIC UK retailer product page for the queried entity (the canonical "buy this" page)\n- category_page: a UK retailer category/listing page (e.g. /headphones, /laptops) — useful as fallback\n- review_article: a blog/magazine review (TechRadar, Which?, Wired) — NOT a retailer page\n- comparison_list: a "best 10 X for Y" listicle — NOT a retailer page\n- irrelevant: anything else (forums, non-UK, broken)\n\nScore 0.0-1.0 — how relevant is this to the user's intent (brand/model match)? 1.0 = exact match, 0.7 = same family right brand, 0.5 = related, <0.3 = wrong product. Be strict on score: a Bose headphones page for a Sennheiser query is score 0.2 (right page TYPE, wrong product).`;
+  const user = `User intent: ${intent}\n\nCandidates:\n${numbered}\n\nReturn only the JSON.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 1200); // Gemini decision rule
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({ model: HAIKU_MODEL, max_tokens: 600, system: sys, messages: [{ role: 'user', content: user }] }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) { console.warn(`[${VERSION}] aiTriage non-200: ${r.status}`); return items.slice(0, 3); }
+    const j = await r.json();
+    const text = ((j.content || []).filter((b) => b && b.type === 'text').map((b) => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch { return items.slice(0, 3); }
+    const labels = Array.isArray(parsed.items) ? parsed.items : [];
+    if (labels.length === 0) return items.slice(0, 3);
+    // Annotate every item with its label + score; preserve order by score
+    const enriched = items.slice(0, 15).map((it, idx) => {
+      const lab = labels.find((l) => parseInt(l.i, 10) === idx + 1);
+      return { ...it, _triageLabel: lab?.label || 'irrelevant', _triageScore: typeof lab?.score === 'number' ? lab.score : 0 };
+    });
+    // Per Gemini: keep product_page with score>0.7. If none, fall back to category_page (still useful for browse).
+    const products = enriched.filter((it) => it._triageLabel === 'product_page' && it._triageScore > 0.7);
+    if (products.length > 0) {
+      console.log(`[${VERSION}] aiTriage: ${enriched.length} candidates → ${products.length} product_pages above 0.7 score`);
+      return products.sort((a, b) => b._triageScore - a._triageScore).slice(0, 8);
+    }
+    const categories = enriched.filter((it) => it._triageLabel === 'category_page' && it._triageScore > 0.5);
+    if (categories.length > 0) {
+      console.log(`[${VERSION}] aiTriage: 0 product_pages, falling back to ${categories.length} category_pages`);
+      return categories.sort((a, b) => b._triageScore - a._triageScore).slice(0, 4).map((it) => ({ ...it, _matchConfidence: 'related' }));
+    }
+    console.log(`[${VERSION}] aiTriage: 0 product_pages, 0 category_pages — returning empty`);
+    return [];
+  } catch (e) {
+    clearTimeout(timer);
+    console.warn(`[${VERSION}] aiTriage failed (${e.message}) — fallback to top-3 by rank`);
+    return items.slice(0, 3);
+  }
+}
+
 function gatherRetailerHits(data, query) {
   const results = rawResultsOf(data);
   // Wave 200b — dynamically admit AI-suggested hosts. The hosts come
@@ -2401,12 +2489,16 @@ export default async function handler(req, res) {
   }
 
   // v2.6.1 — measure pre-admission Search Quad raw URL count.
-  // raw.results is the dedup'd combined set of URLs from all 4 Search API
-  // calls BEFORE my host-pattern admission filter culls. Gemini panel:
-  // "instrument this — is the Quad returning gold or lead?"
   const _searchQuadRawCount = Array.isArray(raw?.results) ? raw.results.length : 0;
   _attrition.searchQuad_raw = _searchQuadRawCount;
-  let hits = gatherRetailerHits(raw, q);
+  // v2.7 — permissive gather + Haiku Triage (replaces host-pattern whitelist).
+  // Per Gemini: "Delete the whitelist. Let the LLM's world-knowledge of
+  // what a shop looks like do the work." Loss Analysis showed old whitelist
+  // culled 93% of raw retrieval. Triage classifies snippets only (max 200
+  // chars per URL, 1200ms timeout, fallback to top-3 by rank on failure).
+  const permissiveHits = gatherRetailerHitsPermissive(raw, q);
+  const _parsedForTriage = await parsedQueryPromise.catch(() => null);
+  let hits = RELAXED ? permissiveHits.slice(0, 8) : await aiTriage(permissiveHits, _parsedForTriage, ANTHROPIC_KEY);
 
   // Wave 98 — when the broad call returns ZERO retailer URLs (common for
   // generic categories like "cordless vacuum cleaner" or "kettle" where
@@ -2498,10 +2590,11 @@ export default async function handler(req, res) {
   _attrition.sonarPro = sonarProItems.length;
   if (hits.length === 0 && sonarProItems.length === 0) {
     const parsedQueryEarly = await parsedQueryPromise.catch(() => null);
+    const isShortCircuit = _attrition.sonarPro === 0 && _attrition.searchQuad_raw === 0;
     return res.status(200).json({
       shopping: [],
       organic:  [],
-      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts, parsed_query: parsedQueryEarly, _attrition: { ..._attrition, final: 0, relaxed: RELAXED } },
+      _meta: { version: VERSION, itemCount: 0, cheapest: null, coverage: 'none', onlyEbay: false, source: 'perplexity', region, usedFallback, categoryProducts, parsed_query: parsedQueryEarly, error_type: isShortCircuit ? 'NOT_FOUND' : 'NO_MATCH', _attrition: { ..._attrition, final: 0, relaxed: RELAXED } },
       _debug: debug ? { counts: { raw_results: rawResultsOf(raw).length, uk_hits: 0, ai_plausible: 0, url_verified: 0, verified_dropped: 0, final: 0 }, rawSample: rawResultsOf(raw).slice(0, 12).map(r => ({ url: r.url || r.link, title: (r.title || r.name || '').slice(0, 80) })) } : undefined,
     });
   }
