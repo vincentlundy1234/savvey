@@ -1,0 +1,53 @@
+STAGE-DELETE.txt — files to remove from source control on next clean-up commit
+==============================================================================
+Created 4 May 2026 in response to Strategic Review Board ARCHITECTURE PURGE
+mandate. The Cowork sandbox is delete-restricted, so these have to be removed
+from your end via `git rm`.
+
+The files have been added to `.vercelignore` already, so they will NOT deploy
+to Vercel production. They are inert in v3.1 — but should be removed from git
+to keep the repo honest. Run this when convenient:
+
+----- BEGIN POWERSHELL BLOCK -----
+cd "C:\Users\vince\OneDrive\Desktop\files for live"
+
+# Item 1: Architecture Purge — zero-scraping mandate
+git rm api/scrape.js
+git rm api/probe-retailers.js
+
+# Item 2 cleanup: dead v2 component modules (v3.1 doesn't import them)
+git rm components/COMPONENT-SPEC.md
+git rm components/loading-screen.js
+git rm components/result-banners.js
+git rm components/result-rows.js
+git rm components/share-canvas.js
+
+# Probe / staging files
+git rm index.html.new
+git rm index.html.recovered
+git rm "index.html.backup-pre-107d-resultrow"
+git rm "index.html.backup-pre-107d-resultrow.kept"
+git rm api/ai-search.js.backup-pre-107d
+git rm _v3_sync_test.txt
+git rm _v3_force_flush.txt
+
+# Optional — if you also want to retire ai-search.js / search.js / ai-vision.js
+# (the entire v2 backend pipeline that v3.1's normalize.js replaced):
+# git rm api/ai-search.js
+# git rm api/search.js
+# git rm api/ai-vision.js
+# git rm api/ai-estimate.js
+# git rm api/ai-wit.js
+# Note: GitHub Action smoke test still references /api/ai-search; if you delete
+# it, also update .github/workflows/smoke-test.yml (already aligned to /api/normalize
+# in this commit so this should be safe).
+
+git status
+git commit -m "purge: remove v2 dead code per Strategic Review Board mandate"
+git push origin master
+----- END POWERSHELL BLOCK -----
+
+After this runs, the repo will reflect the v3.1 Smart Router architecture
+cleanly. No scraping endpoints, no dead component modules, no orphaned probe
+files. Source of truth = `api/normalize.js` + `api/_health.js` + `api/image.js`
+(hero product image fetch) + the static frontend.

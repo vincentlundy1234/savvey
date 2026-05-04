@@ -64,7 +64,7 @@
   .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
   .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.02em; color: var(--green); }
   .logo .y { color: var(--amber); }
-  .logo .dot { color: var(--red); }
+  .logo .dot { color: var(--green-dark); }   /* was red — retired per brand pack 4 May 2026 */
   .hint { font-size: 12px; color: var(--ink-mute); font-weight: 600; }
   .screen { display: none; }
   .screen.active { display: block; animation: fadeIn .22s ease; }
@@ -112,7 +112,6 @@
   .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 8px; opacity: 0; transition: opacity .25s ease; }
   .hero-img-wrap img.loaded { opacity: 1; }
   .hero-img-wrap.empty { display: none; }
-  /* Savvey Says block */
   .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; margin: 0 0 18px; box-shadow: var(--shadow-sm); }
   .savvey-says.empty { display: none; }
   .savvey-says-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
@@ -129,7 +128,6 @@
   .confirm-q { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
   .confirm-btn { width: 100%; padding: 14px 16px; background: white; border: 2px solid var(--border); border-radius: var(--r-sm); font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 8px; cursor: pointer; text-align: left; }
   .confirm-btn:active { background: var(--green-soft); border-color: var(--green); }
-  /* CTAs — Amazon (primary) is visually dominant */
   .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 24px; }
   .cta { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); text-decoration: none; color: var(--ink); box-shadow: var(--shadow-sm); transition: transform .15s ease; }
   .cta:active { transform: scale(.985); }
@@ -185,7 +183,6 @@
   <div class="hint" id="hint" aria-live="polite"></div>
 </div>
 
-<!-- ════════ HOME (4 doors) ════════ -->
 <div class="screen active" id="screen-home">
   <h1 class="tagline">Find the best UK price.</h1>
   <p class="tagsub">Snap, scan, paste, or type. We identify your product and route you to the cheapest UK retailer.</p>
@@ -240,7 +237,6 @@
   </footer>
 </div>
 
-<!-- ════════ BARCODE SCAN ════════ -->
 <div class="screen" id="screen-barcode">
   <h1 class="tagline">Scan barcode</h1>
   <p class="tagsub">Point camera at the EAN/UPC stripes. Decoded on your device — no upload.</p>
@@ -249,7 +245,6 @@
   <div class="actions-row"><button class="ghost-btn" onclick="cancelBarcode()">Cancel</button></div>
 </div>
 
-<!-- ════════ CAMERA (Snap) ════════ -->
 <div class="screen" id="screen-camera">
   <h1 class="tagline">Snap the box</h1>
   <p class="tagsub">Hold steady and frame the front of the product. Model number = best.</p>
@@ -261,7 +256,6 @@
   </div>
 </div>
 
-<!-- ════════ LOADING ════════ -->
 <div class="screen" id="screen-loading">
   <div class="loading-wrap">
     <div class="spinner"></div>
@@ -270,7 +264,6 @@
   </div>
 </div>
 
-<!-- ════════ CONFIRM (disambiguation) ════════ -->
 <div class="screen" id="screen-confirm">
   <div class="badge-row"><span class="badge amber">Quick check</span></div>
   <h1 class="identify-title">Which one did you mean?</h1>
@@ -282,22 +275,17 @@
   <div class="actions-row"><button class="ghost-btn" onclick="goHome()">← Start over</button></div>
 </div>
 
-<!-- ════════ RESULT (Smart Router) ════════ -->
 <div class="screen" id="screen-result">
   <div class="badge-row"><span class="badge" id="result-badge">Identified</span></div>
   <h1 class="identify-title" id="result-title">—</h1>
   <p class="identify-sub" id="result-sub">Tap a retailer below to check the live price.</p>
-
   <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
-
   <div class="savvey-says empty" id="savvey-says">
     <div class="savvey-says-head"><div class="savvey-says-spark">✦</div><div class="savvey-says-label">Savvey says</div></div>
     <div id="savvey-says-rows"></div>
     <p class="savvey-says-footer">General context — typical UK retail. Tap a retailer below for live price.</p>
   </div>
-
   <div class="cta-list" id="cta-list"></div>
-
   <p style="text-align:center;margin:8px 0 18px;font-size:13px;">
     <a href="#" onclick="event.preventDefault();reportWrongIdentification();" style="color:var(--ink-mute);text-decoration:underline;font-weight:600;">Wrong product? Try again →</a>
   </p>
@@ -308,7 +296,6 @@
   <p class="small-print">Prices are live on each retailer's own page. Amazon links contain our affiliate tag — same price for you.</p>
 </div>
 
-<!-- ════════ ERROR ════════ -->
 <div class="screen" id="screen-error">
   <div class="badge-row"><span class="badge amber">Couldn't identify</span></div>
   <div class="error-card">
@@ -351,8 +338,8 @@ let camStream = null;
 let lastResult = null;
 let _barcodeScanner = null;
 let _html5QrcodeLoaded = null;
+let _barcodeDetectorEvt = null;
 
-// ═══ NAV (history API) ═══
 let _navInternal = false;
 function show(id, opts) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -363,19 +350,31 @@ function show(id, opts) {
     try { history.pushState({ screen: id }, '', '#' + id); } catch {}
   }
 }
+function stopAllScanners() {
+  if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch {} camStream = null; }
+  if (_barcodeScanner) {
+    try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {}
+    _barcodeScanner = null;
+  }
+  if (_barcodeDetectorEvt) { try { _barcodeDetectorEvt.stop(); } catch {} _barcodeDetectorEvt = null; }
+}
 function goHome(opts) {
-  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  if (_barcodeScanner) { try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {} _barcodeScanner = null; }
+  stopAllScanners();
   document.getElementById('url-input').value = '';
   document.getElementById('text-input').value = '';
   show('home', opts);
 }
 window.addEventListener('popstate', (e) => {
   const target = (e.state && e.state.screen) || 'home';
-  if (target !== 'camera' && camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  if (target !== 'barcode' && _barcodeScanner) {
-    try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {}
-    _barcodeScanner = null;
+  if (target !== 'camera') {
+    if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch {} camStream = null; }
+  }
+  if (target !== 'barcode') {
+    if (_barcodeScanner) {
+      try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {}
+      _barcodeScanner = null;
+    }
+    if (_barcodeDetectorEvt) { try { _barcodeDetectorEvt.stop(); } catch {} _barcodeDetectorEvt = null; }
   }
   show(target, { fromPop: true });
 });
@@ -384,7 +383,29 @@ try {
   history.replaceState({ screen: initialHash || 'home' }, '', '#' + (initialHash || 'home'));
 } catch {}
 
-// ═══ DOOR 1: SNAP (camera) ═══
+const SNAP_TARGET_BYTES = 200 * 1024;
+const SNAP_MAX_WIDTH = 1024;
+const SNAP_QUALITY_STEPS = [0.85, 0.7, 0.55, 0.4];
+
+function downscaleImageToBase64(source, sourceWidth, sourceHeight) {
+  const sw = sourceWidth || SNAP_MAX_WIDTH;
+  const sh = sourceHeight || SNAP_MAX_WIDTH;
+  const cw = Math.min(sw, SNAP_MAX_WIDTH);
+  const ch = Math.round(cw * (sh / sw));
+  const c = document.createElement('canvas');
+  c.width = cw; c.height = ch;
+  c.getContext('2d').drawImage(source, 0, 0, cw, ch);
+  let dataUrl = '', bytes = Infinity, q = SNAP_QUALITY_STEPS[0];
+  for (const quality of SNAP_QUALITY_STEPS) {
+    dataUrl = c.toDataURL('image/jpeg', quality);
+    const prefix = 'data:image/jpeg;base64,'.length;
+    bytes = Math.max(0, Math.floor((dataUrl.length - prefix) * 0.75));
+    q = quality;
+    if (bytes <= SNAP_TARGET_BYTES) break;
+  }
+  return { base64: dataUrl.split(',')[1], bytes, quality: q, width: cw, height: ch };
+}
+
 async function goSnap() {
   show('camera');
   try {
@@ -407,24 +428,17 @@ function cancelCamera() {
 async function captureFrame() {
   const v = document.getElementById('cam-video');
   if (!v || !v.videoWidth) return;
-  const cw = Math.min(v.videoWidth, 1280);
-  const ch = Math.round(cw * (v.videoHeight / v.videoWidth));
-  const c = document.createElement('canvas');
-  c.width = cw; c.height = ch;
-  c.getContext('2d').drawImage(v, 0, 0, cw, ch);
-  const dataUrl = c.toDataURL('image/jpeg', 0.85);
-  const base64 = dataUrl.split(',')[1];
+  const out = downscaleImageToBase64(v, v.videoWidth, v.videoHeight);
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  track('snap_captured');
-  await callNormalize({ input_type: 'image', image_base64: base64, media_type: 'image/jpeg' });
+  track('snap_captured', { bytes: out.bytes, quality: out.quality, w: out.width });
+  await callNormalize({ input_type: 'image', image_base64: out.base64, media_type: 'image/jpeg' });
 }
 
-// Photo file uploaded
 async function handlePhotoUpload(event) {
   const file = event.target.files && event.target.files[0];
   if (!file) return;
   event.target.value = '';
-  if (file.size > 4 * 1024 * 1024) { showError('Photo too large.', 'Choose a photo under 4MB.'); return; }
+  if (file.size > 8 * 1024 * 1024) { showError('Photo too large.', 'Choose a photo under 8MB.'); return; }
   track('photo_uploaded', { size: file.size, type: file.type });
   const dataUrl = await new Promise((res, rej) => {
     const fr = new FileReader();
@@ -433,16 +447,11 @@ async function handlePhotoUpload(event) {
   const img = await new Promise((res, rej) => {
     const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
   });
-  const cw = Math.min(img.naturalWidth || 1280, 1280);
-  const ch = Math.round(cw * ((img.naturalHeight || 1) / (img.naturalWidth || 1)));
-  const c = document.createElement('canvas');
-  c.width = cw; c.height = ch;
-  c.getContext('2d').drawImage(img, 0, 0, cw, ch);
-  const out = c.toDataURL('image/jpeg', 0.85);
-  await callNormalize({ input_type: 'image', image_base64: out.split(',')[1], media_type: 'image/jpeg' });
+  const out = downscaleImageToBase64(img, img.naturalWidth, img.naturalHeight);
+  track('photo_downscaled', { bytes: out.bytes, quality: out.quality, w: out.width });
+  await callNormalize({ input_type: 'image', image_base64: out.base64, media_type: 'image/jpeg' });
 }
 
-// ═══ DOOR 2: URL ═══
 async function goUrl() {
   const url = document.getElementById('url-input').value.trim();
   if (!url) { document.getElementById('url-input').focus(); return; }
@@ -452,7 +461,6 @@ async function goUrl() {
 }
 function tryHost(u) { try { return new URL(u).hostname; } catch { return null; } }
 
-// ═══ DOOR 3: TEXT ═══
 async function goText() {
   const text = document.getElementById('text-input').value.trim();
   if (!text) { document.getElementById('text-input').focus(); return; }
@@ -461,7 +469,6 @@ async function goText() {
 }
 document.getElementById('text-input').addEventListener('keydown', e => { if (e.key === 'Enter') goText(); });
 document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') goUrl(); });
-// Smart paste — URL into text box auto-routes to URL flow
 document.getElementById('text-input').addEventListener('input', (e) => {
   const v = e.target.value.trim();
   if (/^https?:\/\/\S+$/i.test(v)) {
@@ -472,7 +479,6 @@ document.getElementById('text-input').addEventListener('input', (e) => {
   }
 });
 
-// ═══ DOOR 4: BARCODE (client-side) ═══
 function loadHtml5Qrcode() {
   if (_html5QrcodeLoaded) return _html5QrcodeLoaded;
   _html5QrcodeLoaded = new Promise((resolve, reject) => {
@@ -485,11 +491,25 @@ function loadHtml5Qrcode() {
   });
   return _html5QrcodeLoaded;
 }
+
 async function goBarcode() {
   show('barcode');
   track('barcode_started');
+  if ('BarcodeDetector' in window) {
+    try {
+      const supported = await BarcodeDetector.getSupportedFormats();
+      const formats = ['ean_13', 'ean_8', 'upc_a', 'upc_e'].filter(f => supported.includes(f));
+      if (formats.length) {
+        await goBarcodeNative(formats);
+        return;
+      }
+    } catch (err) {
+      track('barcode_native_init_failed', { err: String(err && err.message || err).slice(0, 80) });
+    }
+  }
   try {
     const Html5Qrcode = await loadHtml5Qrcode();
+    document.getElementById('barcode-reader').innerHTML = '';
     _barcodeScanner = new Html5Qrcode('barcode-reader');
     await _barcodeScanner.start(
       { facingMode: 'environment' },
@@ -497,7 +517,7 @@ async function goBarcode() {
       async (decodedText) => {
         const ean = String(decodedText || '').trim().replace(/\D/g, '');
         if (!ean || ean.length < 8 || ean.length > 14) return;
-        track('barcode_decoded', { len: ean.length });
+        track('barcode_decoded', { len: ean.length, via: 'html5qrcode' });
         try { await _barcodeScanner.stop(); _barcodeScanner.clear(); _barcodeScanner = null; } catch {}
         callNormalize({ input_type: 'barcode', ean });
       },
@@ -508,15 +528,57 @@ async function goBarcode() {
     showError("Couldn't start the barcode scanner.", 'Try Snap (camera) or type a search instead.');
   }
 }
-function cancelBarcode() {
-  if (_barcodeScanner) {
-    try { _barcodeScanner.stop().then(() => _barcodeScanner.clear()).catch(() => {}); } catch {}
-    _barcodeScanner = null;
+
+async function goBarcodeNative(formats) {
+  const detector = new BarcodeDetector({ formats });
+  const wrap = document.getElementById('barcode-reader');
+  wrap.innerHTML = '<video autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>';
+  const video = wrap.querySelector('video');
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: 'environment' } }, audio: false
+    });
+  } catch (err) {
+    track('barcode_native_camera_denied', { reason: String(err && err.name || err).slice(0, 40) });
+    showError("Camera permission denied.", 'Allow camera access or type the product name instead.');
+    return;
   }
+  video.srcObject = stream;
+  await video.play().catch(() => {});
+  let stopped = false;
+  _barcodeDetectorEvt = {
+    stop: () => {
+      if (stopped) return;
+      stopped = true;
+      try { stream.getTracks().forEach(t => t.stop()); } catch {}
+    }
+  };
+  const tick = async () => {
+    if (stopped) return;
+    try {
+      const codes = await detector.detect(video);
+      if (codes && codes.length) {
+        const ean = String(codes[0].rawValue || '').trim().replace(/\D/g, '');
+        if (ean && ean.length >= 8 && ean.length <= 14) {
+          track('barcode_decoded', { len: ean.length, via: 'native' });
+          if (_barcodeDetectorEvt) _barcodeDetectorEvt.stop();
+          _barcodeDetectorEvt = null;
+          callNormalize({ input_type: 'barcode', ean });
+          return;
+        }
+      }
+    } catch {}
+    if (!stopped) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+function cancelBarcode() {
+  stopAllScanners();
   goHome();
 }
 
-// ═══ NORMALIZE ═══
 async function callNormalize(body) {
   show('loading');
   const phases = body.input_type === 'image'
@@ -565,7 +627,6 @@ async function callNormalize(body) {
   }
 }
 
-// ═══ DISAMBIGUATION ═══
 function renderConfirm(a, b) {
   document.getElementById('confirm-a').textContent = a;
   document.getElementById('confirm-b').textContent = b;
@@ -600,12 +661,9 @@ function renderConfirm(a, b) {
   show('confirm');
 }
 
-// ═══ RESULT ═══
 function renderResult(displayName, payload) {
   document.getElementById('result-title').textContent = displayName;
   const cat = (payload && payload.category) || 'generic';
-  // Honest badge — "Identified" implies certainty; downgrade for medium/low so
-  // users know to double-check at the retailer rather than trust the framing.
   const conf = payload && payload.confidence;
   const badgeEl = document.getElementById('result-badge');
   let badgeText;
@@ -614,7 +672,6 @@ function renderResult(displayName, payload) {
   else badgeText = 'Best guess · check retailer';
   badgeEl.textContent = badgeText;
   badgeEl.classList.toggle('amber', conf !== 'high');
-  // Tweak sub-line to match the badge honesty for non-high confidence.
   const subEl = document.getElementById('result-sub');
   if (subEl) {
     subEl.textContent = conf === 'high'
@@ -624,6 +681,11 @@ function renderResult(displayName, payload) {
   const list = CATEGORY_MAP[cat] || CATEGORY_MAP.generic;
   const ctaWrap = document.getElementById('cta-list');
   ctaWrap.innerHTML = '';
+  // AFFILIATE HANDOFF INVARIANT — every retailer CTA below MUST be a native
+  // <a> with target="_top" and rel="external noopener". target="_top" breaks
+  // the user out of in-app browser frames (Instagram/Facebook/TikTok) so the
+  // Amazon Associates cookie drops correctly. NEVER replace with location.href
+  // or window.open() — those trap the click inside the in-app browser.
   for (const r of list) {
     const q = (r.name === 'Amazon UK' && payload.amazon_search_query) ? payload.amazon_search_query : displayName;
     const a = document.createElement('a');
@@ -649,7 +711,6 @@ function renderSavveySays(ss) {
   const wrap = document.getElementById('savvey-says');
   const rows = document.getElementById('savvey-says-rows');
   rows.innerHTML = '';
-  // Confidence gate: only render at high confidence with at least one populated field.
   const hasContent = ss && ss.confidence === 'high' && (ss.typical_price_range || ss.timing_advice || ss.consensus);
   if (!hasContent) { wrap.classList.add('empty'); return; }
   const rowsData = [
@@ -685,7 +746,6 @@ async function fetchHeroImage(query) {
   } catch {}
 }
 
-// ═══ WRONG PRODUCT ═══
 function reportWrongIdentification() {
   if (lastResult) {
     track('wrong_product_reported', {
@@ -702,12 +762,9 @@ function reportWrongIdentification() {
   }, 200);
 }
 
-// ═══ SHARE ═══
 async function shareResult() {
   if (!lastResult) return;
   const product = lastResult.canonical_search_string || 'a product';
-  // Include ?q= so the recipient lands on the same product page, not the
-  // empty home screen. handleInbound() picks this up and re-routes.
   const url = `https://savvey.me/?q=${encodeURIComponent(product)}`;
   const title = `${product} — Savvey`;
   const text  = `Quick UK price check on Savvey: ${product}`;
@@ -715,7 +772,6 @@ async function shareResult() {
     try { await navigator.share({ title, text, url }); track('shared', { method: 'native' }); return; }
     catch (err) { if (err && err.name === 'AbortError') return; }
   }
-  // Clipboard fallback: combine text + url so both Android and desktop paste cleanly.
   const combined = `${text} ${url}`;
   try {
     await navigator.clipboard.writeText(combined);
@@ -726,20 +782,17 @@ async function shareResult() {
   } catch { alert(combined); track('shared', { method: 'alert_fallback' }); }
 }
 
-// ═══ ERROR ═══
 function showError(title, sub) {
   document.getElementById('error-title').textContent = title;
   document.getElementById('error-sub').textContent = sub;
   show('error');
 }
 
-// ═══ POSTHOG (lightweight wrapper) ═══
 function track(event, props) {
   try { if (window.posthog) window.posthog.capture(event, props || {}); } catch {}
   console.log('[savvey]', event, props || {});
 }
 
-// ═══ RECENT SEARCHES ═══
 const RECENTS_KEY = 'savvey_v3_recents';
 const RECENTS_MAX = 5;
 function loadRecents() {
@@ -789,7 +842,6 @@ function renderRecents() {
   }
 }
 
-// ═══ PWA INSTALL PROMPT ═══
 let _installPromptEvt = null;
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
@@ -808,9 +860,6 @@ async function showInstall() {
 }
 window.addEventListener('appinstalled', () => track('pwa_installed'));
 
-// iOS Safari doesn't fire beforeinstallprompt — surface a one-time hint
-// so Vincent's soft-launch iPhone users actually find Add-to-Home-Screen.
-// Suppressed on subsequent visits via localStorage; suppressed if standalone.
 (function showIosInstallHintOnce() {
   try {
     const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
@@ -828,7 +877,6 @@ window.addEventListener('appinstalled', () => track('pwa_installed'));
   } catch {}
 })();
 
-// ═══ INBOUND ?q= ═══
 function handleInbound() {
   try {
     const params = new URLSearchParams(window.location.search);
@@ -846,7 +894,6 @@ function handleInbound() {
   } catch {}
 }
 
-// ═══ SERVICE WORKER ═══
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js').catch(() => {});
@@ -859,11 +906,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// ═══ COUNTER (social proof — Vincent: "counter stays") ═══
-// Per-device localStorage increment + a friendly base offset so brand-new
-// users see a number that looks established. Bumps on every successful
-// normalize_ok. Not a global count — just a personal-and-rising indicator.
-// When we have real telemetry (PostHog), swap this for the true global count.
 const COUNTER_KEY = 'savvey_v3_counter';
 const COUNTER_BASE = 12847;
 function getCounter() {
