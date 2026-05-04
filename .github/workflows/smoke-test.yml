@@ -78,11 +78,13 @@ jobs:
             echo "::error::frontend HTML missing </html> close tag (truncated?)"
             exit 1
           fi
-          if ! echo "$html" | grep -q "savvey-static-v"; then
-            echo "::error::frontend HTML missing SW version marker"
+          # SW version marker lives in sw.js, not index.html (corrected 2026-05-04).
+          sw=$(curl -sS https://savvey.vercel.app/sw.js)
+          if ! echo "$sw" | grep -q "savvey-static-v"; then
+            echo "::error::sw.js missing savvey-static-v version marker"
             exit 1
           fi
-          echo "✓ frontend HTML intact"
+          echo "✓ frontend HTML + sw.js intact"
 
       - name: Component modules served correctly
         run: |
