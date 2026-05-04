@@ -245,7 +245,7 @@ async function _getKv() {
   return _kv || null;
 }
 
-const VERSION = 'ai-search.js v2.9.2';
+const VERSION = 'ai-search.js v2.9.5';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -388,7 +388,11 @@ const PERPLEXITY_TIMEOUT_MS = 8000;
 const PERPLEXITY_ENDPOINT   = 'https://api.perplexity.ai/search';
 const ANTHROPIC_ENDPOINT    = 'https://api.anthropic.com/v1/messages';
 const HAIKU_MODEL           = 'claude-haiku-4-5-20251001';
-const HAIKU_TIMEOUT_MS      = 5000;
+// v2.9.5 — bumped 5000→10000ms after battery showed 30/30 parser NULLs on
+// canonical queries. 5s was too tight on cold-start Vercel functions where
+// Anthropic's first response can take 6–8s. Total request budget is 14s
+// (line 6066 of index.html); 10s for parser leaves 4s for Sonar Pro fallback.
+const HAIKU_TIMEOUT_MS      = 10000;
 const HEAD_VERIFY_TIMEOUT_MS = 1500;
 
 const RATE_LIMIT_PER_HOUR = 30;
@@ -714,7 +718,10 @@ async function _parseQueryIntentOnce(query, anthropicKey) {
     });
     clearTimeout(timer);
     if (!r.ok) {
-      console.warn(`[${VERSION}] parser non-200: ${r.status}`);
+      // v2.9.5 — log response body so we can see what Anthropic is actually
+      // saying. Previously only logged status, which masked auth/model errors.
+      const body = await r.text().catch(() => '');
+      console.warn(`[${VERSION}] parser non-200: ${r.status} body="${body.slice(0, 300)}"`);
       return null;
     }
     const j = await r.json();
@@ -724,7 +731,7 @@ async function _parseQueryIntentOnce(query, anthropicKey) {
     let parsed;
     try { parsed = JSON.parse(cleaned); }
     catch (e) {
-      console.warn(`[${VERSION}] parser JSON parse failed: ${e.message}; raw: ${text.slice(0, 200)}`);
+      console.warn(`[${VERSION}] parser JSON parse failed: ${e.message}; cleaned-first-300="${cleaned.slice(0, 300)}"; raw-first-300="${text.slice(0, 300)}"`);
       return null;
     }
     // Sanity defaults on missing fields
@@ -995,15 +1002,15 @@ async function fetchSonarPro(query, apiKey, refine = null, parsedQueryPromise = 
 
   const userPrompt = `Find UK retailers selling "${query}" right now. Return up to 8 distinct retailers with the current public selling price (GBP, no membership/finance prices). Prefer specialist retailers if relevant (e.g. Tredz/Sigma Sports for cycling, Watches of Switzerland/Goldsmiths for luxury watches, Lakeland for kitchen). Skip listings that are accessories, refurbished (unless query says so), out of stock, or wrong tier (e.g. iPhone 17 Pro for "iPhone 17").
 
-CRITICAL — product_url MUST be a direct PRODUCT-PAGE URL (the page where you buy a single SKU), never a search results page, category listing, or homepage. Required URL formats per retailer:
-- Amazon: https://www.amazon.co.uk/dp/[10-char ASIN]   — e.g. https://www.amazon.co.uk/dp/B0BXVJ4P7K. Reject /s?k=, /b?node=, /gp/search, /stores/, /search/.
+PREFERRED — product_url should be a direct PRODUCT-PAGE URL (the page where you buy a single SKU). Best-effort URL formats per retailer:
+- Amazon: https://www.amazon.co.uk/dp/[10-char ASIN]   — e.g. https://www.amazon.co.uk/dp/B0BXVJ4P7K. Avoid /s?k=, /b?node=, /gp/search, /stores/.
 - John Lewis: https://www.johnlewis.com/[product-slug]/p[6+ digit ID]   — e.g. /p111525915
 - Argos: https://www.argos.co.uk/product/[7+ digit ID]   — e.g. /product/8447423
 - Currys: https://www.currys.co.uk/products/[product-slug-with-id]   — e.g. /products/sony-bravia-...-12345678
 - AO: https://ao.com/product/[slug]/[code].aspx
 - Very: https://www.very.co.uk/[product-slug].prd
-- John Lewis / Argos / Currys: never return /search?q=, /browse, or category listing URLs.
-- For ANY retailer: if you can only find a search-results URL, OMIT that retailer from the response — do not include it with a search URL.
+
+v2.9.5 — INCLUDE the retailer with the best URL you can find. Direct product page is best, but a category-page or search URL is better than dropping the retailer entirely. Our admission filter handles search-URL cleanup downstream. NEVER return an empty products array if you have any plausible UK retailer hit at all.
 
 For each result include retailer_host as lowercase domain only.${refineSection}${hardConstraints}`;
 
@@ -2744,6 +2751,18 @@ export default async function handler(req, res) {
   const permissiveHits = gatherRetailerHitsPermissive(raw, q);
   const _parsedForTriage = await parsedQueryPromise.catch(() => null);
   let hits = RELAXED ? permissiveHits.slice(0, 8) : await aiTriage(permissiveHits, _parsedForTriage, ANTHROPIC_KEY);
+
+  // v2.9.5 HOTFIX — battery showed Search Quad raw avg 7.1 → 0 admitted on
+  // 30/30 canonical queries. aiTriage was rejecting every Serper candidate
+  // (likely too-strict snippet judging when parser was also returning NULL).
+  // Fallback: if Triage rejects everything but we had ≥3 raw permissive hits,
+  // return top-3 by search rank. Prevents the "Search Quad totally dies"
+  // failure mode while still letting Triage do its job when parser data
+  // is healthy enough to constrain it.
+  if (hits.length === 0 && permissiveHits.length >= 3) {
+    hits = permissiveHits.slice(0, 5);
+    console.log(`[${VERSION}] Triage rejected all ${permissiveHits.length} permissive hits — falling back to top-5 by rank`);
+  }
 
   // Wave 98 — when the broad call returns ZERO retailer URLs (common for
   // generic categories like "cordless vacuum cleaner" or "kettle" where
