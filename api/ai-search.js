@@ -245,7 +245,7 @@ async function _getKv() {
   return _kv || null;
 }
 
-const VERSION = 'ai-search.js v2.9.0';
+const VERSION = 'ai-search.js v2.9.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -1942,6 +1942,32 @@ function combineSonarProItems(products) {
     if (p.price_gbp === null || p.price_gbp === undefined) continue;
     const price = admitPrice(p.price_gbp);
     if (price === null) continue;
+    // v2.9.1 — enforce real product-page URLs (Vincent's iPhone test: Dyson V15
+    // → Amazon row opened a SEARCH URL not a /dp/ASIN, weakening affiliate
+    // attribution). Sonar Pro is more permissive about returning category /
+    // search URLs than the Search API quad which is gated by gatherRetailerHits.
+    // Drop search-style URLs (?k=, ?q=, /s?, /search/) and Amazon non-product paths.
+    let _u;
+    try { _u = new URL(p.product_url); } catch { continue; }
+    const _path = (_u.pathname || '').toLowerCase();
+    const _qstr = (_u.search || '').toLowerCase();
+    const _isAmazon = /(?:^|\.)amazon\.co\.uk$/i.test(_u.hostname);
+    if (_isAmazon) {
+      if (!isAdmissibleAmazonUrl(p.product_url)) {
+        console.log(`[${VERSION}] [sonar-pro] dropping non-/dp/ Amazon URL: ${p.product_url.slice(0, 120)}`);
+        continue;
+      }
+    } else {
+      // Generic search-URL rejection for non-Amazon retailers
+      if (_path === '/' || _path === '' || /\/(?:s|search|browse|category)\/?$/i.test(_path)) {
+        console.log(`[${VERSION}] [sonar-pro] dropping listing/search URL: ${p.product_url.slice(0, 120)}`);
+        continue;
+      }
+      if (/[?&](?:k|q|query|search)=/i.test(_qstr)) {
+        console.log(`[${VERSION}] [sonar-pro] dropping query-string search URL: ${p.product_url.slice(0, 120)}`);
+        continue;
+      }
+    }
     items.push({
       source:      p.retailer_name || p.retailer_host.split('.')[0],
       price,
