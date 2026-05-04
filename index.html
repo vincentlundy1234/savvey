@@ -6031,6 +6031,16 @@ function fetchPrices(query){
     }
     const d=await r.json();
     if(searchGeneration!==gen)return null;
+    // v2.8 — capture R5 empty-state metadata when API returned 0 items.
+    // Lets renderNoResults distinguish NOT_FOUND (retrieval empty) vs
+    // NO_MATCH (filters culled) and echo parsed_query in the honest copy.
+    if(d && d._meta && (!d.shopping || d.shopping.length === 0)) {
+      window._lastEmptyMeta = {
+        error_type: d._meta.error_type || null,
+        parsed_query: d._meta.parsed_query || null,
+        attrition: d._meta._attrition || null,
+      };
+    }
     // Wave 97 — accept Tier 1 with 1+ result (was 2+). With the in-tier
     // top-up Perplexity call, Tier 1 quality is now reliable enough that
     // single-retailer is better than falling back to Serper noise.
@@ -6041,6 +6051,7 @@ function fetchPrices(query){
   // the promise chain completes. Window-scoped because the no-results
   // render call sites span multiple paths in the codebase.
   window._lastUpstreamError = null;
+  window._lastEmptyMeta = null;
 
   const p=aiPromise.then(async aiResp=>{
     if(searchGeneration!==gen){console.log('[fetchPrices] stale gen discarded');return null;}
@@ -6734,8 +6745,16 @@ function renderNoResults(query, upstreamError){
   // name while the body referenced a different one — Vincent's screenshots
   // (IMG_1637/1638/1651) showed "iPhone 15 Pro" up top with "Cartera push
   // bike" in the body. Now the same string drives both.
+  // v2.8 — when parser provides a clean brand+family, pre-fill refine
+  // input with the simplified version so user can re-search without typing
+  // (panel: "if user searched 'Dyson V15 Detect 2024', pre-fill 'Dyson V15'").
   const refineInput=document.getElementById('results-refine-input');
-  if(refineInput)refineInput.value=safeQ;
+  if(refineInput) {
+    const emptyMetaForPre = window._lastEmptyMeta || {};
+    const pq = emptyMetaForPre.parsed_query || {};
+    const simplified = (pq.brand && pq.family) ? `${pq.brand} ${pq.family}` : '';
+    refineInput.value = (simplified && simplified.length < safeQ.length) ? simplified : safeQ;
+  }
   const rp=document.getElementById('results-product');
   if(rp)rp.textContent=safeQ;
   // Mode pill — show what the search was so users orient
@@ -6778,6 +6797,13 @@ function renderNoResults(query, upstreamError){
   // direct retailer-search shortcuts so they always have a path forward.
   // Wave 40 — when the query looks like an unreleased product, frame it
   // honestly so the user understands WHY the comparison came up empty.
+  // v2.8 — R5 NO_EXACT_MATCH: use API's error_type + parsed_query for honest copy.
+  const emptyMeta = window._lastEmptyMeta || {};
+  const errType = emptyMeta.error_type;          // 'NOT_FOUND' | 'NO_MATCH' | null
+  const parsed = emptyMeta.parsed_query || {};
+  const parsedLabel = (parsed.brand && parsed.family) ? `${parsed.brand} ${parsed.family}`
+                     : (parsed.brand ? parsed.brand : (parsed.family ? parsed.family : safeQ));
+
   if(hadUpstream){
     // Wave 104 — server hiccup, distinct from "product not found"
     if(ttl){ttl.textContent='Couldn\'t reach prices just now.';}
@@ -6788,6 +6814,16 @@ function renderNoResults(query, upstreamError){
   } else if(future){
     if(ttl){ttl.textContent=future.label+' may not be out yet.';}
     setText('hero-wit', `${future.label} doesn't have widespread UK retailer pricing yet — likely because it's not released or just landed. We've added direct retailer searches in case it has dropped.`);
+  } else if(errType === 'NOT_FOUND'){
+    // v2.8 — UK retailers genuinely returned nothing for this query.
+    // Per [CONSUMER] panel call: never admit parser failed; use original query.
+    if(ttl){ttl.textContent=`We couldn't find a verified match for "${safeQ}".`;}
+    setText('hero-wit', `Our verification is strict to prevent wrong prices. Try a simpler search (just brand + model) — direct retailer searches below.`);
+  } else if(errType === 'NO_MATCH'){
+    // v2.8 — retrieval succeeded but Triage/judge culled to zero.
+    // Echo parsed_query for honesty, lead with verification framing.
+    if(ttl){ttl.textContent=`No verified match for ${parsedLabel}.`;}
+    setText('hero-wit', `Our verification engine is strict to prevent wrong prices. We found these related items instead.`);
   } else {
     setText('hero-wit', `We couldn't pull a fresh comparison for "${safeQ}" — but here are direct retailer searches you can tap.`);
   }
