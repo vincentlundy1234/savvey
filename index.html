@@ -14,6 +14,37 @@
   <script>
     !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){function g(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(p=t.createElement("script")).type="text/javascript",p.crossOrigin="anonymous",p.async=!0,p.src=s.api_host.replace(".i.posthog.com","-assets.i.posthog.com")+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(p,r);var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},u.people.toString=function(){return u.toString(1)+".people (stub)"},o="init capture register register_once register_for_session unregister unregister_for_session getFeatureFlag getFeatureFlagPayload isFeatureEnabled reloadFeatureFlags updateEarlyAccessFeatureEnrollment getEarlyAccessFeatures on onFeatureFlags onSessionId getSurveys getActiveMatchingSurveys renderSurvey canRenderSurvey getNextSurveyStep identify setPersonProperties group resetGroups setPersonPropertiesForFlags resetPersonPropertiesForFlags setGroupPropertiesForFlags resetGroupPropertiesForFlags reset opt_in_capturing opt_out_capturing has_opted_in_capturing has_opted_out_capturing clear_opt_in_out_capturing debug getPageViewId captureTraceFeedback captureTraceMetric".split(" "),n=0;n<o.length;n++)g(u,o[n]);e._i.push([i,s,a])},e.__SV=1)}(document,window.posthog||[]);
     posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv', { api_host:'https://eu.i.posthog.com', defaults:'2025-05-24', person_profiles:'identified_only' });
+    // v2.9 panel-locked PostHog event taxonomy — fire app_opened on every load.
+    try {
+      posthog.capture('app_opened', {
+        is_pwa: window.matchMedia && window.matchMedia('(display-mode: standalone)').matches,
+        is_returning: !!localStorage.getItem('savvey_returning'),
+      });
+      try { localStorage.setItem('savvey_returning', '1'); } catch(_) {}
+    } catch(_) {}
+    // v2.9 — global passive outbound_click capture. The retailer rows
+    // render as <a target="_top" rel="external"> so the OS intercepts
+    // amazon.co.uk / ebay.co.uk to open the native app. We fire the
+    // PostHog event as a passive listener — never preventDefault, never
+    // navigate via JS. The OS handles the rest.
+    document.addEventListener('click', function(e) {
+      try {
+        const a = e.target && e.target.closest && e.target.closest('a[data-retailer]');
+        if (!a) return;
+        const href = a.getAttribute('href') || '';
+        const isAffiliate = /[?&](tag|campid)=/.test(href);
+        if (typeof posthog !== 'undefined' && posthog.capture) {
+          posthog.capture('outbound_click', {
+            retailer_name: a.getAttribute('data-retailer') || 'unknown',
+            price_shown: parseFloat(a.getAttribute('data-price')) || null,
+            is_best: a.getAttribute('data-best') === '1',
+            is_affiliate_tagged: isAffiliate,
+            asin: a.getAttribute('data-asin') || null,
+            href_host: (function(){ try { return new URL(href).hostname; } catch(_) { return null; } })(),
+          });
+        }
+      } catch(_) {}
+    }, true);
   </script>
   <!-- Wave 107 — first ES module extracted. Loading screen logic now lives
        in /components/loading-screen.js. Bridge: module assigns
@@ -2357,6 +2388,17 @@
     .ret-price.high{color:var(--ink3);}
     .ret-diff{font-size:11px;color:var(--ink4);text-align:right;margin-top:3px;font-weight:600;}
     .ret-diff.over{color:var(--red);}
+    /* v2.9 panel-locked — verification badges (static 3-word, no tooltip) */
+    .ret-verify-badge{font:700 10px/1.2 "Inter",sans-serif;padding:3px 8px;border-radius:20px;display:inline-block;margin-top:6px;margin-right:4px;letter-spacing:0.2px;}
+    .ret-verify-badge.badge-exact{background:rgba(42,107,34,0.12);color:#2a6b22;}
+    .ret-verify-badge.badge-variant{background:rgba(196,122,28,0.12);color:#c47a1c;}
+    .ret-verify-badge.badge-unconfirmed{background:rgba(122,122,122,0.12);color:#7a7a7a;}
+    /* v2.9 — "Wrong product?" feedback link, drives Hallucination Gauge */
+    .ret-feedback{padding:0 12px 6px;margin-top:-4px;}
+    .ret-feedback-btn{background:none;border:none;font:500 11px/1.3 "Inter",sans-serif;color:var(--ink4);text-decoration:underline;cursor:pointer;padding:3px 0;}
+    .ret-feedback-btn:hover{color:var(--ink2);}
+    .ret-feedback-btn.thanks{color:var(--green);text-decoration:none;font-weight:600;cursor:default;}
+    .ret-feedback-btn[disabled]{opacity:0.7;}
 
     /* Affiliate disclosure footer. Wave 89 — bumped 11→12px and ink4→ink3
        so it's actually readable. ASA disclosure that nobody finds isn't
@@ -7963,10 +8005,26 @@ function renderResults(sc){
       brandKey: retailerBrandKey(r.n || ''),
       sub:      retailerSubLine(r),
       price:    r.p || '',
+      // v2.9 — numeric price for PostHog outbound_click event payload.
+      priceNumeric: (typeof r.priceNumeric === 'number') ? r.priceNumeric
+                  : (typeof r.price_value === 'number') ? r.price_value
+                  : (function(){ const m = String(r.p||'').replace(/[£,\s]/g,'').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; })(),
       diff:     r.diff || '',
       isBest:   !!r.best,
       isHigh:   !!r.bad,
       link:     r.link || '',
+      // v2.9 — verification badge (static 3-word, no tooltip).
+      // Maps server-supplied confidence chain → exact / variant / unconfirmed.
+      badgeKind: (function(){
+        if (r.priceUnconfirmed === true || r.price_unconfirmed === true) return 'unconfirmed';
+        if (r.variantReason || r.variant_reason || r.variant === true) return 'variant';
+        const v = r.verification || r.confidence || null;
+        if (v === 'high' || r.exactMatch === true) return 'exact';
+        if (v === 'medium') return 'variant';
+        return null;
+      })(),
+      variantReason: r.variantReason || r.variant_reason || null,
+      asin: r.asin || (function(){ const m = String(r.link||'').match(/\/dp\/([A-Z0-9]{10})/i); return m ? m[1] : null; })(),
       // Wave 211 — pass through Sonar Pro in_stock signal so the row
       // renders a stock badge. true | false | null (null = no badge).
       inStock:  (typeof r.in_stock === 'boolean') ? r.in_stock : null,
@@ -8573,6 +8631,23 @@ async function captureSnap(){
     return;
   }
 
+  // v2.9 — fire camera_shutter_tapped PostHog event (intent signal)
+  try {
+    if (window.posthog && typeof window.posthog.capture === 'function') {
+      let permGranted = true;
+      try {
+        if (navigator.permissions && navigator.permissions.query) {
+          const p = await navigator.permissions.query({ name: 'camera' });
+          permGranted = p && p.state === 'granted';
+        }
+      } catch(_) {}
+      window.posthog.capture('camera_shutter_tapped', {
+        camera_permission_granted: permGranted,
+      });
+    }
+  } catch(_) {}
+  const _visionStartedAt = Date.now();
+
   try{
     console.log('[Snapper] POST /api/ai-vision (' + Math.round(dataUrl.length/1024) + 'KB)');
     const r = await fetch('/api/ai-vision', {
@@ -8581,6 +8656,8 @@ async function captureSnap(){
       body: JSON.stringify({ image: dataUrl }),
     });
     const d = await r.json();
+    // v2.9 — store full vision result for downstream Rip-Off Delta + feedback events
+    window._lastVisionResult = d || null;
     if(!r.ok || !d.product){
       console.warn('[Snapper] vision call returned no product:', d);
       snapBusy = false;
@@ -8601,6 +8678,21 @@ async function captureSnap(){
     const category    = d.category   || 'other';
     const notes       = d.notes      || '';
     console.log('[Snapper] identified: "' + productName + '" (raw="' + d.product + '", ' + conf + ', ' + category + ')');
+
+    // v2.9 — fire vision_result_rendered PostHog event (success signal)
+    try {
+      if (window.posthog && typeof window.posthog.capture === 'function') {
+        window.posthog.capture('vision_result_rendered', {
+          parsed_brand: d.brand || null,
+          parsed_product: ((d.family || '') + ' ' + (d.model || '')).trim() || productName,
+          confidence: conf,
+          image_type: d.image_type || null,
+          in_store_price_captured: d.in_store_price != null,
+          in_store_retailer: d.in_store_retailer || null,
+          latency_ms: Date.now() - _visionStartedAt,
+        });
+      }
+    } catch(_) {}
 
     // Bail if cleanup left us with nothing useful (very short, all symbols)
     if(!productName || productName.length < 3){

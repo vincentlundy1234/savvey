@@ -1,49 +1,77 @@
-// components/result-rows.js — Savvey result-rows module v1.0
-//
-// Wave 107d — fourth extracted ES module. Owns per-retailer row
-// rendering on the results screen. Replaces the previous
-// `list.innerHTML = items.map(...)` template-string approach with a
-// safer pattern recommended by external review:
-//
-//   • createElement + textContent for retailer name + sub-line
-//     (zero string-injection surface — works even if a retailer name
-//      contains an apostrophe, e.g. "Sainsbury's")
-//   • addEventListener instead of inline onclick (no global handler
-//     dependency, listener scope is the module)
-//   • DocumentFragment so all rows are appended in a single layout
-//     pass instead of N reflows
-//
-// Caller provides the callback for click. The module never reaches
-// into window for handlers. Brand-rail colour is still data-driven by
-// the data-brand attribute (CSS owns the colour, the module just sets
-// the attribute). Callers compute brandKey + subLine and pass the
-// pre-resolved item objects so the module is data-shape agnostic.
+// components/result-rows.js — Savvey result-rows module v2.0
+// v2.9 panel-locked deep-link upgrade:
+//  - Renders <a target="_top" rel="external"> for HTTPS links so iOS/Android
+//    intercept Amazon/eBay native-app deep links cleanly.
+//  - Static 3-word verification badges (no tooltip — panel cut).
+//  - "Wrong product?" link → user_flagged_error PostHog event.
 
-const escAttr = (s) => String(s == null ? '' : s).replace(/"/g, '&quot;');
+const RETAILER_KEY = (n = '') => {
+  const s = String(n).toLowerCase();
+  if (/amazon/.test(s)) return 'amazon';
+  if (/argos/.test(s)) return 'argos';
+  if (/john\s*lewis/.test(s)) return 'johnlewis';
+  if (/currys/.test(s)) return 'currys';
+  if (/tesco/.test(s)) return 'tesco';
+  if (/sainsbury/.test(s)) return 'sainsburys';
+  if (/very/.test(s)) return 'very';
+  if (/^ao\b|appliances\s*direct/.test(s)) return 'ao';
+  if (/screwfix/.test(s)) return 'screwfix';
+  if (/toolstation/.test(s)) return 'toolstation';
+  if (/b\s*&\s*q|diy\.com/.test(s)) return 'bq';
+  if (/wickes/.test(s)) return 'wickes';
+  if (/lakeland/.test(s)) return 'lakeland';
+  if (/ebay/.test(s)) return 'ebay';
+  return s.split(/\s+/)[0] || 'unknown';
+};
 
-// items: [{ name, brandKey, sub, price, diff, isBest, isHigh, link }]
-// onRowClick(name, link): callback fired on row tap.
-// Returns a DocumentFragment ready to appendChild.
+const isHttpsLink = (link) => typeof link === 'string' && /^https:\/\//i.test(link.trim());
+
+function badgeForItem(item) {
+  if (!item.badgeKind) return null;
+  if (item.badgeKind === 'unconfirmed') return { label: '⟳ Price Unconfirmed', cls: 'badge-unconfirmed' };
+  if (item.badgeKind === 'variant') {
+    const r = item.variantReason;
+    if (r === 'kit')  return { label: '⚠ Kit Variant',     cls: 'badge-variant' };
+    if (r === 'tier') return { label: '⚠ Different Tier', cls: 'badge-variant' };
+    if (r === 'year') return { label: '⚠ Older Model',    cls: 'badge-variant' };
+    return                  { label: '⚠ Variant Match',    cls: 'badge-variant' };
+  }
+  if (item.badgeKind === 'exact') return { label: '✓ Exact Match', cls: 'badge-exact' };
+  return null;
+}
+
 export function renderRetailerList(items, onRowClick) {
   const fragment = document.createDocumentFragment();
   if (!Array.isArray(items)) return fragment;
 
   items.forEach((item, idx) => {
-    const row = document.createElement('div');
+    const link = item.link || '';
+    const useAnchor = isHttpsLink(link);
+    const row = document.createElement(useAnchor ? 'a' : 'div');
     row.className = 'ret-row' + (item.isBest ? ' best' : '');
     if (item.brandKey) row.setAttribute('data-brand', item.brandKey);
-    // Wave 75 — staggered animation. Cap delay at 280ms so late rows
-    // don't feel laggy.
-    const delay = Math.min(idx * 40, 280);
-    row.style.animationDelay = delay + 'ms';
 
-    // ── Left side: name + sub + best-price badge ──
+    if (useAnchor) {
+      row.setAttribute('href', link);
+      row.setAttribute('target', '_top');
+      row.setAttribute('rel', 'external noopener');
+      row.setAttribute('data-retailer', RETAILER_KEY(item.name || ''));
+      row.setAttribute('data-price', String(item.priceNumeric != null ? item.priceNumeric : ''));
+      row.setAttribute('data-best',  item.isBest ? '1' : '0');
+      row.setAttribute('data-asin',  item.asin || '');
+      row.style.textDecoration = 'none';
+      row.style.color = 'inherit';
+      row.style.display = 'flex';
+    }
+
+    row.style.animationDelay = Math.min(idx * 40, 280) + 'ms';
+
     const nameWrap = document.createElement('div');
     nameWrap.className = 'ret-name-wrap';
 
     const nameEl = document.createElement('div');
     nameEl.className = 'ret-name';
-    nameEl.textContent = item.name || '';   // safe — no innerHTML
+    nameEl.textContent = item.name || '';
     nameWrap.appendChild(nameEl);
 
     const subEl = document.createElement('div');
@@ -58,24 +86,28 @@ export function renderRetailerList(items, onRowClick) {
       nameWrap.appendChild(badge);
     }
 
-    // Wave 211 — stock badge from Sonar Pro structured output.
-    // item.inStock is true (in stock), false (out of stock), or null
-    // (no signal — Search-quad-derived item; render no badge).
+    const vbadge = badgeForItem(item);
+    if (vbadge) {
+      const b = document.createElement('span');
+      b.className = 'ret-verify-badge ' + vbadge.cls;
+      b.textContent = vbadge.label;
+      nameWrap.appendChild(b);
+    }
+
     if (item.inStock === true) {
-      const badge = document.createElement('span');
-      badge.className = 'stock-badge in';
-      badge.textContent = 'In stock';
-      nameWrap.appendChild(badge);
+      const sb = document.createElement('span');
+      sb.className = 'stock-badge in';
+      sb.textContent = 'In stock';
+      nameWrap.appendChild(sb);
     } else if (item.inStock === false) {
-      const badge = document.createElement('span');
-      badge.className = 'stock-badge out';
-      badge.textContent = 'Out of stock';
-      nameWrap.appendChild(badge);
+      const sb = document.createElement('span');
+      sb.className = 'stock-badge out';
+      sb.textContent = 'Out of stock';
+      nameWrap.appendChild(sb);
     }
 
     row.appendChild(nameWrap);
 
-    // ── Right side: price + diff ──
     const right = document.createElement('div');
     right.style.textAlign = 'right';
 
@@ -93,18 +125,47 @@ export function renderRetailerList(items, onRowClick) {
 
     row.appendChild(right);
 
-    // ── Click handler — module-scoped, no inline JS ──
-    row.addEventListener('click', () => {
-      if (typeof onRowClick === 'function') onRowClick(item.name, item.link);
-    });
+    if (!useAnchor) {
+      row.addEventListener('click', () => {
+        if (typeof onRowClick === 'function') onRowClick(item.name, item.link);
+      });
+    }
 
     fragment.appendChild(row);
+
+    const fbWrap = document.createElement('div');
+    fbWrap.className = 'ret-feedback';
+    const fbBtn = document.createElement('button');
+    fbBtn.type = 'button';
+    fbBtn.className = 'ret-feedback-btn';
+    fbBtn.textContent = 'Wrong product?';
+    fbBtn.setAttribute('data-feedback-row', RETAILER_KEY(item.name || ''));
+    fbBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        if (window.posthog && typeof window.posthog.capture === 'function') {
+          const v = window._lastVisionResult || {};
+          window.posthog.capture('user_flagged_error', {
+            reason: 'wrong_product',
+            retailer: RETAILER_KEY(item.name || ''),
+            price_shown: item.priceNumeric != null ? item.priceNumeric : null,
+            parsed_brand: v.brand || null,
+            parsed_product: ((v.family || '') + ' ' + (v.model || '')).trim() || null,
+          });
+        }
+      } catch (_) { /* never block UI */ }
+      fbBtn.textContent = 'Thanks — noted';
+      fbBtn.disabled = true;
+      fbBtn.classList.add('thanks');
+    });
+    fbWrap.appendChild(fbBtn);
+    fragment.appendChild(fbWrap);
   });
 
   return fragment;
 }
 
-// Bridge for legacy classic-script callers.
 if (typeof window !== 'undefined') {
   window.SavveyResultRows = { renderRetailerList };
 }
