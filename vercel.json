@@ -12,6 +12,10 @@
       "memory": 256,
       "maxDuration": 15
     },
+    "api/normalize.js": {
+      "memory": 256,
+      "maxDuration": 12
+    },
     "api/ai-wit.js": {
       "memory": 256,
       "maxDuration": 8
@@ -46,6 +50,16 @@
       "source": "/manifest.json",
       "headers": [
         { "key": "Cache-Control", "value": "no-cache, no-store, must-revalidate" }
+      ]
+    },
+    {
+      "source": "/v3.html",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-cache, must-revalidate" },
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
+        { "key": "Permissions-Policy", "value": "camera=(self), geolocation=(), microphone=()" },
+        { "key": "Strict-Transport-Security", "value": "max-age=31536000; includeSubDomains" }
       ]
     },
     {

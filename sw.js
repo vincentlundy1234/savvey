@@ -17,12 +17,18 @@
 //  Bump FONT_VER only if font families or weights change.
 // ─────────────────────────────────────────────────────────────
 
-const STATIC_VER    = 'savvey-static-v200';
+// v3.0 (4 May 2026): bumped STATIC_VER to invalidate v2 caches when v3.html
+// becomes the default. Adds /v3.html to precache so the new app loads offline.
+// Old v2 components still listed so a partial-rollback (rename v3.html back) works.
+const STATIC_VER    = 'savvey-static-v300';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
-// Wave 107 — added /components/loading-screen.js as an extracted ES module.
-// Pre-caching it means first offline visit doesn't 404 the import.
-const STATIC_ASSETS = ['/', '/index.html', '/manifest.json', '/components/loading-screen.js', '/components/result-banners.js', '/components/share-canvas.js', '/components/result-rows.js'];
+const STATIC_ASSETS = [
+  '/', '/index.html', '/v3.html', '/manifest.json',
+  // v2 component modules — kept in precache during transition
+  '/components/loading-screen.js', '/components/result-banners.js',
+  '/components/share-canvas.js', '/components/result-rows.js',
+];
 const FONT_ORIGINS  = [
   'https://fonts.googleapis.com',
   'https://fonts.gstatic.com',
@@ -79,7 +85,8 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // 3. Navigation — network-first, fallback to cached shell
+  // 3. Navigation — network-first, fallback to cached shell.
+  // v3.0: nav to /v3.html falls back to /v3.html cache; everything else to /.
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
@@ -91,8 +98,11 @@ self.addEventListener('fetch', event => {
           return res;
         })
         .catch(async () => {
-          // Notify all open clients that we are offline
           notifyClients({ type: 'OFFLINE' });
+          // Match the target — /v3.html falls back to /v3.html, otherwise /index.html
+          if (url.pathname === '/v3.html' || url.pathname === '/v3') {
+            return (await caches.match('/v3.html')) || caches.match('/index.html');
+          }
           return caches.match('/index.html');
         })
     );

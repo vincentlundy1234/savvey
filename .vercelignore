@@ -1,0 +1,6 @@
+_archive/
+*.archive
+*.backup-*
+eval-runner.mjs
+eval-results-*.csv
+eval-summary-*.json
