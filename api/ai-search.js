@@ -245,7 +245,7 @@ async function _getKv() {
   return _kv || null;
 }
 
-const VERSION = 'ai-search.js v2.7.2';
+const VERSION = 'ai-search.js v2.9.0';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -473,21 +473,35 @@ function aiCacheSet(key, value){
   AI_QUERY_CACHE.set(key, { t: Date.now(), value });
 }
 
-// v2.9 panel-locked — canonical cache key from PARSER output.
-// Cache hits on product identity regardless of which store the user is
-// in. Ignores in_store_price + in_store_retailer per panel adjustment.
+// v2.9 panel-locked — canonical cache key.
+// Primary: derive from PARSER output (brand|model|qualifiers).
+// Fallback: when parser returns null, derive a permissive key from the
+// raw query string (lowercased, whitespace-collapsed, no punctuation).
+// This means even when the parser fails, popular verbatim queries still
+// hit the L2 cache cross-instance.
+// Always ignores in_store_price + in_store_retailer per panel adjustment.
 // Power law: top-500 UK products = ~80% of scans. Those drop to 400ms.
-function kvCanonicalKey(parsed, region){
-  if (!parsed) return null;
-  const brand = (parsed.brand || '').toLowerCase().trim();
-  const model = (parsed.model || parsed.family || '').toLowerCase().trim();
-  if (!brand || !model) return null;
-  const qual = Array.isArray(parsed.qualifiers)
-    ? parsed.qualifiers.map(s => String(s).toLowerCase().trim()).filter(Boolean).sort().join(',')
-    : (parsed.qualifiers && typeof parsed.qualifiers === 'object'
-        ? Object.values(parsed.qualifiers).map(v => String(v).toLowerCase().trim()).filter(Boolean).sort().join(',')
-        : '');
-  return `q:${region || 'uk'}|${brand}|${model}|${qual}`;
+function kvCanonicalKey(parsed, region, rawQuery){
+  if (parsed && typeof parsed === 'object') {
+    const brand = (parsed.brand || '').toLowerCase().trim();
+    const model = (parsed.model || parsed.family || '').toLowerCase().trim();
+    if (brand && model) {
+      const qual = Array.isArray(parsed.qualifiers)
+        ? parsed.qualifiers.map(s => String(s).toLowerCase().trim()).filter(Boolean).sort().join(',')
+        : (parsed.qualifiers && typeof parsed.qualifiers === 'object'
+            ? Object.values(parsed.qualifiers).map(v => String(v).toLowerCase().trim()).filter(Boolean).sort().join(',')
+            : '');
+      return `q:${region || 'uk'}|${brand}|${model}|${qual}`;
+    }
+  }
+  // Fallback to raw-query key when parser failed
+  if (rawQuery && typeof rawQuery === 'string') {
+    const norm = rawQuery.toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, ' ').trim();
+    if (norm.length >= 4 && norm.length <= 120) {
+      return `q:${region || 'uk'}|raw|${norm}`;
+    }
+  }
+  return null;
 }
 async function kvGet(key){
   if (!key) return null;
@@ -2616,9 +2630,9 @@ export default async function handler(req, res) {
     try {
       const _earlyParsed = await Promise.race([
         parsedQueryPromise,
-        new Promise((resolve) => setTimeout(() => resolve(null), 1200)),
+        new Promise((resolve) => setTimeout(() => resolve(null), 2500)),
       ]);
-      const _kvKey = kvCanonicalKey(_earlyParsed, region);
+      const _kvKey = kvCanonicalKey(_earlyParsed, region, q);
       if (_kvKey) {
         const _kvHit = await kvGet(_kvKey);
         if (_kvHit) {
@@ -3221,7 +3235,7 @@ async function aiIdentityCheck(items, parsedQuery, anthropicKey) {
     // v2.9 — also store under the canonical (parser-derived) key in
     // Vercel KV so cross-instance / cold-start reads hit. 6h TTL.
     try {
-      const _kvKey = kvCanonicalKey(parsedQuery, region);
+      const _kvKey = kvCanonicalKey(parsedQuery, region, q);
       if (_kvKey) { kvSet(_kvKey, responseBody, 21600).catch(() => {}); }
     } catch(_) {}
   }
