@@ -1,20 +1,21 @@
 name: Live smoke test
 
 # Triggers after every push to master. Vercel auto-deploys ~30-90s after
-# push; we wait 90s then hit the live API.
+# push. We poll /api/health for the deploy SHA to wait exactly as long as
+# needed (no dumb sleep), then check the function + frontend are alive.
 #
-# Updated 4 May 2026 for v3.1 Smart Router architecture:
+# v3.1 architecture:
 # - /api/health is a free, sub-50ms liveness probe (no Haiku call)
 # - /api/normalize is the real code-path check (cached on most pushes)
-# - Frontend is single-file index.html v3.1 (no component modules)
+# - Frontend is single-file index.html (no component modules)
 # - v2 endpoints (/api/ai-search, /api/search) deprecated; not exercised
 #
-# Smoke philosophy: fail fast, fail clearly, no flaky retries. We deliberately
-# only burn one Haiku token per push (cached after first push of the day, so
-# usually free). If real outage happens, this SHOULD fail. If it fails on
-# something that isn't actually broken (e.g. Anthropic latency on the one
-# uncached path), the right fix is to widen the assertion — not lower the
-# bar so far that real regressions slip through.
+# Smoke philosophy: fail fast, fail clearly, no flaky retries.
+# - Strict v3.1 markers in HTML grep are removed: Vercel CDN edge propagation
+#   varies by region, so GitHub Actions Azure runners sometimes hit a stale
+#   edge node for several minutes after deploy even when /api/health already
+#   reports the new SHA. Deploy-SHA poll proves code is live; HTML check
+#   only catches gross truncation / error pages now.
 
 on:
   push:
@@ -40,9 +41,9 @@ jobs:
             got=$(curl -sS https://savvey.vercel.app/api/health 2>/dev/null | jq -r '.deploy // empty' 2>/dev/null || echo "")
             echo "  attempt $i: deploy=$got"
             if [ "$got" = "$expected" ]; then
-              echo "✓ deploy $expected is live after $((i*5))s"
-              # Static asset edge propagation buffer (sw.js, manifest, index.html)
-              sleep 10
+              echo "deploy $expected is live after $((i*5))s"
+              # Static asset edge propagation buffer
+              sleep 15
               exit 0
             fi
           done
@@ -72,7 +73,7 @@ jobs:
             echo "::error::ANTHROPIC_API_KEY missing on deploy $deploy"
             exit 1
           fi
-          echo "✓ /api/health OK (deploy=$deploy, anthropic=$anth)"
+          echo "/api/health OK (deploy=$deploy, anthropic=$anth)"
 
       - name: /api/normalize (text door — real code-path check)
         run: |
@@ -89,9 +90,6 @@ jobs:
             echo "::error::normalize text door returned $status (expected 200)"
             exit 1
           fi
-          # Must include canonical_search_string. Other fields (savvey_says,
-          # MPN, alternative) can be null on low-confidence answers — that's
-          # not a regression. We only fail on hard 5xx or schema breakage.
           canonical=$(jq -r '.canonical_search_string // empty' /tmp/body 2>/dev/null)
           if [ -z "$canonical" ]; then
             echo "::error::normalize text door 200 but missing canonical_search_string"
@@ -99,12 +97,37 @@ jobs:
           fi
           version=$(jq -r '._meta.version // "unknown"' /tmp/body 2>/dev/null || echo "unknown")
           cache=$(jq -r '._meta.cache // "unknown"' /tmp/body 2>/dev/null || echo "unknown")
-          echo "✓ normalize text 200 OK (v=$version, cache=$cache, canonical=\"$canonical\")"
+          echo "normalize text 200 OK (v=$version, cache=$cache, canonical=\"$canonical\")"
 
-      - name: Frontend HTML intact (v3.1)
+      - name: Frontend HTML intact (truncation + size only)
         run: |
           set -e
           html=$(curl -sS https://savvey.vercel.app/)
+          bytes=$(printf "%s" "$html" | wc -c)
+          echo "Frontend HTML size: $bytes bytes"
           if ! echo "$html" | grep -q "</html>"; then
             echo "::error::frontend HTML missing </html> close tag (truncated?)"
-   
+            exit 1
+          fi
+          if [ "$bytes" -lt 20000 ]; then
+            echo "::error::frontend HTML suspiciously small ($bytes < 20000) — error page?"
+            exit 1
+          fi
+          echo "frontend HTML intact ($bytes bytes, closes with /html)"
+
+      - name: Service worker + manifest reachable
+        run: |
+          set -e
+          sw_status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "https://savvey.vercel.app/sw.js")
+          if [ "$sw_status" != "200" ]; then
+            echo "::error::/sw.js returned $sw_status"
+            exit 1
+          fi
+          mf_status=$(curl -sS -o /dev/null -w "%{http_code}" \
+            "https://savvey.vercel.app/manifest.json")
+          if [ "$mf_status" != "200" ]; then
+            echo "::error::/manifest.json returned $mf_status"
+            exit 1
+          fi
+          echo "sw.js + manifest.json both 200"
