@@ -25,11 +25,29 @@ jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for Vercel deploy (90s)
-        run: sleep 90
-
       - name: Install jq
         run: sudo apt-get install -y jq
+
+      - name: Wait for this commit to be live (poll /api/health for deploy SHA)
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          set -e
+          expected="${EXPECTED_SHA:0:7}"
+          echo "Waiting for /api/health to report deploy=$expected ..."
+          for i in $(seq 1 36); do
+            sleep 5
+            got=$(curl -sS https://savvey.vercel.app/api/health 2>/dev/null | jq -r '.deploy // empty' 2>/dev/null || echo "")
+            echo "  attempt $i: deploy=$got"
+            if [ "$got" = "$expected" ]; then
+              echo "✓ deploy $expected is live after $((i*5))s"
+              # Static asset edge propagation buffer (sw.js, manifest, index.html)
+              sleep 10
+              exit 0
+            fi
+          done
+          echo "::error::deploy $expected didn't appear within 180s"
+          exit 1
 
       - name: /api/health (free liveness probe)
         run: |
