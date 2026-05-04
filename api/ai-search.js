@@ -229,7 +229,7 @@ import {
 import { rejectIfRateLimited } from './_rateLimit.js';
 import { withCircuit }         from './_circuitBreaker.js';
 
-const VERSION = 'ai-search.js v2.6.0';
+const VERSION = 'ai-search.js v2.6.1';
 
 // Wave 93 — landing-page price verification (mirrors search.js v6.25).
 // For the cheapest result only, fetch the actual product page and parse
@@ -2363,7 +2363,7 @@ export default async function handler(req, res) {
   // ─────────────────────────────────────────────────────────────
   // v2.6 — Eval Loop instrumentation. Stage-by-stage candidate counts.
   const _attrition = {
-    sonarPro: 0, searchQuad: 0, merged: 0,
+    sonarPro: 0, searchQuad_raw: 0, searchQuad: 0, merged: 0,
     after_brand_gate: 0, after_model_gate: 0, after_tier_gate: 0,
     after_ai_judge: 0, after_verifyUrls: 0,
   };
@@ -2400,6 +2400,12 @@ export default async function handler(req, res) {
     console.log(`[${VERSION}] Sonar Pro probe: ${sonarProResult.products.length} products, ${sonarProResult._sonarProCitations} citations`);
   }
 
+  // v2.6.1 — measure pre-admission Search Quad raw URL count.
+  // raw.results is the dedup'd combined set of URLs from all 4 Search API
+  // calls BEFORE my host-pattern admission filter culls. Gemini panel:
+  // "instrument this — is the Quad returning gold or lead?"
+  const _searchQuadRawCount = Array.isArray(raw?.results) ? raw.results.length : 0;
+  _attrition.searchQuad_raw = _searchQuadRawCount;
   let hits = gatherRetailerHits(raw, q);
 
   // Wave 98 — when the broad call returns ZERO retailer URLs (common for
