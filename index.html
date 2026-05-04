@@ -3910,8 +3910,13 @@
       <div class="bento-actions" data-no-swipe hidden></div>
 
       <!-- Search input — moved below the action row. Still the most
-           common action; just no longer the visual hero. -->
-      <div class="bento-search-card">
+           common action; just no longer the visual hero.
+           data-no-swipe: touch gestures inside the search card MUST NOT
+           trigger swipe-nav. iOS Safari's keyboard pop can produce stray
+           touch events that the swipe handler used to misread as swipe-left
+           → snap → camera (Vincent reported 4 May 2026). Belt-and-braces:
+           also touch-action:pan-y so vertical scroll still works. -->
+      <div class="bento-search-card" data-no-swipe style="touch-action:pan-y;">
         <div class="bento-search">
           <svg class="bento-search-ico" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
             <circle cx="11" cy="11" r="7"/>
