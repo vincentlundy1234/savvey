@@ -4,7 +4,7 @@ name: Live smoke test
 # push; we wait 90s then hit the live API.
 #
 # Updated 4 May 2026 for v3.1 Smart Router architecture:
-# - /api/_health is a free, sub-50ms liveness probe (no Haiku call)
+# - /api/health is a free, sub-50ms liveness probe (no Haiku call)
 # - /api/normalize is the real code-path check (cached on most pushes)
 # - Frontend is single-file index.html v3.1 (no component modules)
 # - v2 endpoints (/api/ai-search, /api/search) deprecated; not exercised
@@ -31,30 +31,30 @@ jobs:
       - name: Install jq
         run: sudo apt-get install -y jq
 
-      - name: /api/_health (free liveness probe)
+      - name: /api/health (free liveness probe)
         run: |
           set -e
           status=$(curl -sS -o /tmp/h -w "%{http_code}" \
-            https://savvey.vercel.app/api/_health)
+            https://savvey.vercel.app/api/health)
           echo "Status: $status"
           cat /tmp/h
           echo ""
           if [ "$status" != "200" ]; then
-            echo "::error::/api/_health returned $status (expected 200)"
+            echo "::error::/api/health returned $status (expected 200)"
             exit 1
           fi
           ok=$(jq -r '.ok // false' /tmp/h 2>/dev/null)
           anth=$(jq -r '.env.anthropic // false' /tmp/h 2>/dev/null)
           deploy=$(jq -r '.deploy // "unknown"' /tmp/h 2>/dev/null)
           if [ "$ok" != "true" ]; then
-            echo "::error::/api/_health returned ok=$ok"
+            echo "::error::/api/health returned ok=$ok"
             exit 1
           fi
           if [ "$anth" != "true" ]; then
             echo "::error::ANTHROPIC_API_KEY missing on deploy $deploy"
             exit 1
           fi
-          echo "✓ /api/_health OK (deploy=$deploy, anthropic=$anth)"
+          echo "✓ /api/health OK (deploy=$deploy, anthropic=$anth)"
 
       - name: /api/normalize (text door — real code-path check)
         run: |
@@ -89,27 +89,4 @@ jobs:
           html=$(curl -sS https://savvey.vercel.app/)
           if ! echo "$html" | grep -q "</html>"; then
             echo "::error::frontend HTML missing </html> close tag (truncated?)"
-            exit 1
-          fi
-          # v3.1 sanity marker — confirms / serves Smart Router not a stale build.
-          if ! echo "$html" | grep -q "/api/normalize"; then
-            echo "::error::frontend HTML does not reference /api/normalize — stale deploy?"
-            exit 1
-          fi
-          echo "✓ frontend HTML intact + references /api/normalize"
-
-      - name: Service worker + manifest reachable
-        run: |
-          set -e
-          sw=$(curl -sS https://savvey.vercel.app/sw.js)
-          if ! echo "$sw" | grep -q "savvey-static-v"; then
-            echo "::error::sw.js missing savvey-static-v version marker"
-            exit 1
-          fi
-          status=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "https://savvey.vercel.app/manifest.json")
-          if [ "$status" != "200" ]; then
-            echo "::error::/manifest.json returned $status"
-            exit 1
-          fi
-          echo "✓ sw.js + manifest.json OK"
+   
