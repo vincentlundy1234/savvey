@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5d';
+const VERSION             = 'normalize.js v3.4.5e';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_7:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_8:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -615,6 +615,26 @@ export default async function handler(req, res) {
         parsed.savvey_says.price_take = "Couldn't fully verify this listing matches the product — confirm details before buying.";
       }
     }
+  }
+
+  // v3.4.5e — server-side word cap on Savvey Says copy (panel-mandated 5 May
+  // 2026 PM, Product Owner ruling). Haiku occasionally returns 25-40 word
+  // ramble that breaks the result-card layout on phones and undermines the
+  // "brutal honesty in 10 words" brand commitment. Hard cap at 10 words with
+  // ellipsis fallback. Applies after all upstream Haiku writes + deterministic
+  // fallback so the cap is the final word.
+  const _capWords = (s, n = 10) => {
+    if (typeof s !== 'string') return s;
+    const t = s.trim();
+    if (!t) return s;
+    const words = t.split(/\s+/);
+    if (words.length <= n) return t;
+    return words.slice(0, n).join(' ').replace(/[.,;:!?]+$/, '') + '…';
+  };
+  if (parsed.savvey_says && typeof parsed.savvey_says === 'object') {
+    if (parsed.savvey_says.price_take)       parsed.savvey_says.price_take       = _capWords(parsed.savvey_says.price_take);
+    if (parsed.savvey_says.timing_advice)    parsed.savvey_says.timing_advice    = _capWords(parsed.savvey_says.timing_advice);
+    if (parsed.savvey_says.review_consensus) parsed.savvey_says.review_consensus = _capWords(parsed.savvey_says.review_consensus);
   }
 
   const responseBody = {

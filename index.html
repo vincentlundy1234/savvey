@@ -248,7 +248,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5d</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5e</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -357,6 +357,10 @@ let _html5QrcodeLoaded = null;
 let _barcodeDetectorEvt = null;
 
 let _navInternal = false;
+// v3.4.5e — door tracking for PostHog segmentation (panel-mandated). Captures
+// which input door fired the most recent /api/normalize call so verdict_shown
+// and cta_tapped events can be sliced by door. Set inside callNormalize().
+let _lastDoor = null;
 function show(id, opts) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
@@ -597,6 +601,14 @@ function cancelBarcode() {
 
 async function callNormalize(body) {
   show('loading');
+  // v3.4.5e — capture which door fired this query for PostHog segmentation
+  // (panel-mandated). Maps backend input_type -> user-facing door label so
+  // verdict_shown + cta_tapped events carry door='snap'|'paste'|'type'|'scan'.
+  _lastDoor = body.input_type === 'image'   ? 'snap'
+            : body.input_type === 'url'     ? 'paste'
+            : body.input_type === 'text'    ? 'type'
+            : body.input_type === 'barcode' ? 'scan'
+            : null;
   // v3.4.3 — flag in-flight fetch so the SW controllerchange-reload defers
   // until the request completes, instead of killing it mid-flight and losing
   // the user's query (Gemini Tech Team flag, HIGH severity).
@@ -698,7 +710,10 @@ function renderResult(displayName, payload) {
     const label = { good_buy: 'Good buy', fair: 'Fair price', wait: 'Wait — sale likely', check_elsewhere: 'Check listing carefully' }[v];
     pillTxt.textContent = label;
     pillEl.classList.add('show', v);
-    track('verdict_shown', { verdict: v });
+    // v3.4.5e — verdict_shown is now fired AFTER show('result') below (in
+    // a requestAnimationFrame) to ensure it tracks the moment the user
+    // actually SEES the verdict, not the moment the DOM mutation happens
+    // while the result section is still hidden (panel mandate, 5 May 2026).
   }
   const cat = (payload && payload.category) || 'generic';
   const conf = payload && payload.confidence;
@@ -779,7 +794,7 @@ function renderResult(displayName, payload) {
         : 'Verified just now · tap to find this on Amazon';
     }
     a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
-    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, verified: r.name === 'Amazon UK' && !!verifiedPriceStr, verified_link: r.name === 'Amazon UK' && !!verifiedAmazonLink }));
+    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, door: _lastDoor, verified: r.name === 'Amazon UK' && !!verifiedPriceStr, verified_link: r.name === 'Amazon UK' && !!verifiedAmazonLink }));
     ctaWrap.appendChild(a);
   }
   const heroWrap = document.getElementById('hero-img-wrap');
@@ -789,6 +804,12 @@ function renderResult(displayName, payload) {
   heroImg.removeAttribute('src');
   renderSavveySays(payload && payload.savvey_says);
   show('result');
+  // v3.4.5e — fire verdict_shown AFTER the result screen is revealed (panel
+  // mandate). requestAnimationFrame ensures the next paint has happened, so
+  // we're measuring "user actually saw the pill" not "DOM was mutated".
+  if (v && ['good_buy','fair','wait','check_elsewhere'].includes(v)) {
+    requestAnimationFrame(() => track('verdict_shown', { verdict: v, door: _lastDoor }));
+  }
   // v3.3.3 — prefer the SerpAPI-returned product thumbnail (verified from the
   // exact Amazon listing) over the /api/image lookup which sometimes returns
   // mismatched/stale images. Falls back to the existing hero search if absent.
