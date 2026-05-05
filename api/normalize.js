@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5b';
+const VERSION             = 'normalize.js v3.4.5c';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_5:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_6:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -337,12 +337,15 @@ async function fetchVerifiedAmazonPrice(query) {
     // skip any organic result whose title doesn't share enough tokens with
     // the canonical product. Stops accessory listings (e.g. "Dyson V15 Brush
     // Head") from reaching Haiku/CTA when the user searched "Dyson V15 Detect".
-    // Tokens of length >= 3 only (filters out 'a', 'is', 'the', etc.).
-    // Threshold: at least 50% of canonical tokens must appear in the title.
+    // v3.4.5c — both tokens and title are normalised by stripping ALL
+    // non-alphanumeric chars (including spaces), so "24cm" matches "24 cm"
+    // in real Amazon titles. Threshold unchanged at 50% per panel verdict.
+    const _norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
     const canonicalTokens = String(query).toLowerCase()
       .replace(/[^a-z0-9\s]/g, ' ')
       .split(/\s+/)
-      .filter(t => t.length >= 3);
+      .filter(t => t.length >= 3)
+      .map(t => _norm(t));
     const minTokensRequired = canonicalTokens.length >= 2
       ? Math.ceil(canonicalTokens.length * 0.5)
       : 0;
@@ -362,7 +365,8 @@ async function fetchVerifiedAmazonPrice(query) {
       if (item.sponsored) continue; // skip top-of-list sponsored slots
       // Lexical guard — only applies to candidates for `primary`.
       if (minTokensRequired > 0) {
-        const matched = canonicalTokens.filter(t => title.includes(t)).length;
+        const titleNorm = _norm(title);
+        const matched = canonicalTokens.filter(t => titleNorm.includes(t)).length;
         if (matched < minTokensRequired) {
           _skippedLexical++;
           continue;
