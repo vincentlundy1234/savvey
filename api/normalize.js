@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.3.3';
+const VERSION             = 'normalize.js v3.3.4';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_3:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_4:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -213,6 +213,60 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
 const SERPAPI_TIMEOUT_MS = 4000;
 const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
+
+// v3.3.4 — Haiku price_take. ONE short sentence framing the verified price.
+// Grounded: Haiku is reasoning over a real number we just fetched from SerpAPI,
+// not freelancing a price from training data. Hallucination risk is much lower
+// because the anchor is provided as input, not generated.
+async function callHaikuPriceTake({ canonical, price_str, used_price_str, category, rating, reviews }) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  if (!canonical || !price_str) return null;
+
+  const sys = `You are Savvey, a UK retail price assistant. The user is looking at a verified live Amazon UK price for a product. Your job: produce ONE short sentence (max 14 words) that frames whether this price is a good deal, in UK voice. Be factual — only frame the verified price; do NOT invent comparisons or competing retailer prices. Output JSON ONLY, no preamble:
+{"price_take": "Solid baseline — Echo Dot prices typically swing 30 percent on Prime Day." | "Good buy — close to the historical UK floor for this model." | null}
+
+Rules:
+- ONE sentence, max 14 words. Plain prose, no emojis.
+- Anchor the take in the verified price you were given. Do NOT quote a different price.
+- Talk about price patterns (typical range, sale cycles, discontinued status, end-of-cycle) — NOT today's competing retailers.
+- For generic/no-name/grocery items where you have nothing meaningful to say, return null.
+- For products you don't recognise, return null. Do not bluff.`;
+
+  const userMsg = `Product: ${canonical}
+Verified Amazon UK price: ${price_str}` +
+    (used_price_str ? `\nAlso seen used at ${used_price_str}` : '') +
+    (rating ? `\nAmazon rating: ${rating}/5 from ${reviews || '?'} reviews` : '') +
+    (category ? `\nCategory: ${category}` : '') +
+    `\n\nWrite the price_take.`;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000); // tighter timeout — secondary
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 120,
+        system: sys,
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch { return null; }
+    const take = (parsed && typeof parsed.price_take === 'string' && parsed.price_take.trim())
+      ? parsed.price_take.trim().slice(0, 200) : null;
+    return take;
+  } catch (e) {
+    return null;
+  } finally { clearTimeout(timer); }
+}
 
 // SerpAPI Amazon engine (v3.3.2 — 5 May 2026).
 // Switched from engine=google_shopping (returned Google `aclk` redirect URLs
@@ -356,6 +410,7 @@ function parseAndDefault(rawText) {
     live_amazon_price:   null, // populated by handler from verified_amazon_price
     used_amazon_price:   null, // populated by handler from verified_amazon_price.used_price_str
     amazon_rating:       null, // v3.3.3 — populated by handler from verified rating + reviews
+    price_take:          null, // v3.3.4 — populated by handler from second Haiku call grounded by verified price
     timing_advice:       ssStr(ss.timing_advice),
     consensus:           ssStr(ss.consensus),
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
@@ -473,6 +528,19 @@ export default async function handler(req, res) {
     } else if (verified_amazon_price.rating) {
       parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★`;
     }
+    // v3.3.4 — Haiku price_take grounded by the verified anchor we just got.
+    // Fire-and-forget if it errors; not critical to the response.
+    try {
+      const priceTake = await callHaikuPriceTake({
+        canonical:      parsed.canonical_search_string,
+        price_str:      verified_amazon_price.price_str,
+        used_price_str: verified_amazon_price.used_price_str,
+        category:       parsed.category,
+        rating:         verified_amazon_price.rating,
+        reviews:        verified_amazon_price.reviews,
+      });
+      if (priceTake) parsed.savvey_says.price_take = priceTake;
+    } catch (e) { /* non-critical */ }
   }
 
   const responseBody = {
