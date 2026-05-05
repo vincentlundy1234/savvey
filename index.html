@@ -241,7 +241,7 @@
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.4</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -739,6 +739,15 @@ function renderResult(displayName, payload) {
     try {
       const u = new URL(rawUrl);
       if (!/(^|\.)amazon\.co\.uk$/i.test(u.hostname)) return null; // not direct Amazon UK — skip
+      // v3.4.5 — affiliate tag scrub (panel-mandated, GTM-Hacker call). Strip
+      // any pre-existing Amazon Associates / tracking params before setting
+      // ours. Otherwise legacy 'ascsubtag' / 'linkCode' / 'smid' / 'creativeASIN'
+      // could leak attribution to a different account when SerpAPI returns a
+      // /dp/ URL with an existing affiliate's tag baked in. Protects every
+      // verified click toward our 10-sale Associates qualification target.
+      ['ascsubtag','linkCode','smid','creativeASIN','linkId','tag','ref','ref_'].forEach(k => {
+        u.searchParams.delete(k);
+      });
       u.searchParams.set('tag', AMAZON_TAG);
       return u.toString();
     } catch (e) { return null; }

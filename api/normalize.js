@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.0';
+const VERSION             = 'normalize.js v3.4.5';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -242,7 +242,8 @@ Verdict semantics:
 - "good_buy"        — verified price is at or below typical UK retail floor for this product. Tell the user to buy.
 - "fair"            — verified price is within typical UK retail band. Reasonable purchase.
 - "wait"            — price is normal but a known sale event is imminent (Prime Day, Black Friday, end-of-product-cycle).
-- "check_elsewhere" — verified price is implausibly LOW for this product family (likely an accessory, replacement part, or wrong-SKU surfacing as the top organic listing) OR implausibly HIGH (3rd-party seller markup). The user should NOT trust this listing as the canonical product — recommend checking the listing carefully or another retailer.
+- "check_elsewhere" — verified price is implausibly LOW for this product family (likely an accessory, replacement part, or wrong-SKU surfacing as the top organic listing) OR implausibly HIGH (3rd-party seller markup) OR the verified listing's TITLE doesn't clearly match the canonical product (e.g. canonical "Dyson V15 Detect" but title is just "Dyson V15" or "Dyson Replacement Wand"). The user should NOT trust this listing as the canonical product — recommend checking the listing carefully or another retailer.
+- BIAS toward check_elsewhere when ANY of these signal: price <50% of typical retail floor, title missing key product identifiers, rating low (<4.0) and reviews <50. Better to warn unnecessarily than to miss a wrong-SKU.
 
 CRITICAL — accessory/wrong-SKU detection:
 - If the canonical product family is "Dyson V15 Detect" and verified price is £170, that is implausibly low for V15 Detect (real range £449-£599). Verdict = "check_elsewhere", price_take = "This price suggests a replacement part or accessory, not the V15 Detect itself — verify the listing before buying."
@@ -332,8 +333,22 @@ async function fetchVerifiedAmazonPrice(query) {
 
     // Find first organic (non-sponsored) listing with a valid price.
     // Used / refurbished items are surfaced separately for savvey_says.
+    // v3.4.5 — lexical accessory guard. Tokenise the canonical query and
+    // skip any organic result whose title doesn't share enough tokens with
+    // the canonical product. Stops accessory listings (e.g. "Dyson V15 Brush
+    // Head") from reaching Haiku/CTA when the user searched "Dyson V15 Detect".
+    // Tokens of length >= 3 only (filters out 'a', 'is', 'the', etc.).
+    // Threshold: at least 50% of canonical tokens must appear in the title.
+    const canonicalTokens = String(query).toLowerCase()
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .split(/\s+/)
+      .filter(t => t.length >= 3);
+    const minTokensRequired = canonicalTokens.length >= 2
+      ? Math.ceil(canonicalTokens.length * 0.5)
+      : 0;
     let primary = null;
     let used    = null;
+    let _skippedLexical = 0;
     for (const item of results) {
       const price = Number(item.extracted_price);
       if (!(price > 0)) continue;
@@ -345,8 +360,19 @@ async function fetchVerifiedAmazonPrice(query) {
         continue;
       }
       if (item.sponsored) continue; // skip top-of-list sponsored slots
+      // Lexical guard — only applies to candidates for `primary`.
+      if (minTokensRequired > 0) {
+        const matched = canonicalTokens.filter(t => title.includes(t)).length;
+        if (matched < minTokensRequired) {
+          _skippedLexical++;
+          continue;
+        }
+      }
       if (!primary) primary = item;
       if (primary && used) break;
+    }
+    if (_skippedLexical > 0) {
+      console.log(`[${VERSION}] lexical guard skipped ${_skippedLexical} items for "${query.slice(0,60)}"`);
     }
 
     if (!primary) {
