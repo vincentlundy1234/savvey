@@ -36,7 +36,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.1.1';
+const VERSION             = 'normalize.js v3.2.0';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -242,6 +242,70 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
 // PARSE + SANITY-DEFAULT
 // ─────────────────────────────────────────────────────────────────────────
 
+
+// ── SerpAPI: verified Amazon UK price (Move 2 — Panel-approved 4 May 2026) ──
+//
+// Fetches Google Shopping results for the canonical product, filters to Amazon
+// UK, and returns the first matching listing's extracted_price. Defensive: if
+// SERPAPI_KEY is not set or any step fails, returns null so the response gracefully
+// falls back to the existing CTA behaviour.
+//
+// Latency budget: 4s timeout via AbortController. Real cost ~£0.001 per fresh
+// call (free trial: 100/mo). KV cache wraps the whole normalize response so this
+// only fires for unique products within the 24h cache window.
+const SERPAPI_TIMEOUT_MS = 4000;
+async function fetchVerifiedAmazonPrice(query) {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) {
+    return null; // env not set — feature simply off, no error
+  }
+  if (!query || typeof query !== 'string' || query.length < 2) return null;
+
+  const url = new URL('https://serpapi.com/search.json');
+  url.searchParams.set('engine', 'google_shopping');
+  url.searchParams.set('q',      query.slice(0, 150));
+  url.searchParams.set('gl',     'uk');
+  url.searchParams.set('hl',     'en');
+  url.searchParams.set('api_key', apiKey);
+
+  const controller = new AbortController();
+  const timeout    = setTimeout(() => controller.abort(), SERPAPI_TIMEOUT_MS);
+  try {
+    const r = await fetch(url.toString(), { signal: controller.signal });
+    clearTimeout(timeout);
+    if (!r.ok) {
+      console.warn(`[${VERSION}] SerpAPI HTTP ${r.status} for "${query.slice(0, 60)}"`);
+      return null;
+    }
+    const j = await r.json();
+    const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
+    // Find first Amazon UK match. SerpAPI's "source" field is the merchant name
+    // ("Amazon.co.uk", "Amazon UK", sometimes just "Amazon"); the link contains
+    // amazon.co.uk for UK results. Both checked for safety.
+    const match = results.find(item => {
+      const src  = String(item.source || '').toLowerCase();
+      const link = String(item.link   || '').toLowerCase();
+      return (src.includes('amazon') || link.includes('amazon.co.uk'))
+             && (Number(item.extracted_price) > 0);
+    });
+    if (!match) return null;
+
+    return {
+      price:        Number(match.extracted_price),
+      price_str:    String(match.price || `£${match.extracted_price}`).slice(0, 30),
+      currency:     'GBP',
+      source:       'amazon.co.uk',
+      title:        match.title ? String(match.title).slice(0, 200) : null,
+      link:         match.link  ? String(match.link).slice(0, 500)  : null,
+      fetched_at:   new Date().toISOString(),
+    };
+  } catch (err) {
+    clearTimeout(timeout);
+    console.warn(`[${VERSION}] SerpAPI fetch error for "${query.slice(0, 60)}":`, err.message);
+    return null;
+  }
+}
+
 function parseAndDefault(rawText) {
   if (!rawText) return null;
   const cleaned = rawText.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
@@ -376,8 +440,18 @@ export default async function handler(req, res) {
     });
   }
 
+  // Move 2 — fetch verified Amazon UK price for the canonical product.
+  // Adds ~500ms-1s latency on cache miss; null-safe if SerpAPI fails or key
+  // is missing. Only fires for high-confidence canonicals (skip on low to
+  // avoid wasted credits on hallucinated names).
+  let verified_amazon_price = null;
+  if (parsed.canonical_search_string && parsed.confidence !== 'low') {
+    verified_amazon_price = await fetchVerifiedAmazonPrice(parsed.canonical_search_string);
+  }
+
   const responseBody = {
     ...parsed,
+    verified_amazon_price,
     _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0, cache: 'miss' }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});

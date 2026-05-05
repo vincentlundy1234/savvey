@@ -686,6 +686,14 @@ function renderResult(displayName, payload) {
   // the user out of in-app browser frames (Instagram/Facebook/TikTok) so the
   // Amazon Associates cookie drops correctly. NEVER replace with location.href
   // or window.open() — those trap the click inside the in-app browser.
+  // Move 3 — Trust Hook: surface SerpAPI-verified Amazon UK price next to
+  // the Amazon CTA when present. The price is the v3.2 conversion lever
+  // (panel-approved 4 May 2026) — turns the Amazon button from "ad" into
+  // "verified offer the user can see before tapping".
+  const verified = payload && payload.verified_amazon_price;
+  const verifiedPriceStr = (verified && Number(verified.price) > 0)
+    ? (verified.price_str || `£${Number(verified.price).toFixed(2)}`)
+    : null;
   for (const r of list) {
     const q = (r.name === 'Amazon UK' && payload.amazon_search_query) ? payload.amazon_search_query : displayName;
     const a = document.createElement('a');
@@ -693,8 +701,15 @@ function renderResult(displayName, payload) {
     a.target = '_top';
     a.rel = 'external noopener';
     a.className = 'cta' + (r.primary ? ' primary' : '');
-    a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${r.name}</p><p class="cta-sub">${r.sub}</p></div><div class="cta-arrow">→</div>`;
-    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q }));
+    let nameStr = r.name;
+    let subStr  = r.sub;
+    if (r.name === 'Amazon UK' && verifiedPriceStr) {
+      // Amazon CTA gets price baked into the name + provenance into the sub.
+      nameStr = `${r.name} · ${verifiedPriceStr}`;
+      subStr  = 'Verified just now · tap to confirm at Amazon';
+    }
+    a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
+    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, verified: r.name === 'Amazon UK' && !!verifiedPriceStr }));
     ctaWrap.appendChild(a);
   }
   const heroWrap = document.getElementById('hero-img-wrap');
