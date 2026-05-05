@@ -981,14 +981,44 @@ function handleInbound() {
   } catch {}
 }
 
+// v3.4.1 — service-worker registration with explicit update handshake.
+// Pre-v3.4.1 the SW cache key (v310) was never bumped across 5 deploys,
+// so installed PWAs served stale shell. This block now:
+//   1. Registers /sw.js
+//   2. If there's a waiting worker at register time (old SW is still active),
+//      explicitly tells it to SKIP_WAITING so the new shell can take over.
+//   3. If a new worker is found mid-session, same SKIP_WAITING pattern.
+//   4. Soft-reloads on controllerchange OR on SW_UPDATED message — covers
+//      both the standard browser handover and our explicit-postMessage path.
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  window.addEventListener('load', async () => {
+    let reg;
+    try { reg = await navigator.serviceWorker.register('/sw.js'); }
+    catch (e) { return; }
+
+    // Force any already-waiting worker to take over immediately.
+    if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+
+    // If an update appears mid-session, take over once it's installed.
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          nw.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+    });
+
     let _swReloadGuard = false;
-    navigator.serviceWorker.addEventListener('controllerchange', () => {
+    const reload = () => {
       if (_swReloadGuard) return;
       _swReloadGuard = true;
       window.location.reload();
+    };
+    navigator.serviceWorker.addEventListener('controllerchange', reload);
+    navigator.serviceWorker.addEventListener('message', (e) => {
+      if (e.data && e.data.type === 'SW_UPDATED') reload();
     });
   });
 }

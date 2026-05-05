@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  Savvey — Service Worker v3.1
+//  Savvey — Service Worker v3.4.1
 //
 //  Cache strategies:
 //    FONT_CACHE    — Stale-While-Revalidate for Google Fonts
@@ -8,10 +8,13 @@
 //    /api/*        — Network-Only. Never cache identification calls.
 // ─────────────────────────────────────────────────────────────
 
-// v3.1 (4 May 2026): bumped STATIC_VER to v310. Previous v300 cached
-// /v3.html alongside the old v2 / index.html. Now / IS v3 (Smart Router),
-// so we need v300 caches purged + clean fetch of /index.html.
-const STATIC_VER    = 'savvey-static-v310';
+// v3.4.1 (5 May 2026): STATIC_VER bumped v310 -> v341. Five deploys shipped
+// between v3.1 and v3.4.1 (verdict pill, deep-link, smart loader, etc.) and
+// the SW cache was never bumped. Installed PWAs were serving v3.1 cached
+// shell. This bump invalidates the old cache, forces clients.claim(), and
+// posts SW_UPDATED to controlled clients so the frontend can soft-reload
+// to pick up the new shell.
+const STATIC_VER    = 'savvey-static-v341';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
@@ -37,17 +40,18 @@ self.addEventListener('message', event => {
   }
 });
 
-// ── Activate: purge old caches ────────────────────────────────
+// ── Activate: purge old caches + notify clients to reload ────
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
       .then(keys => Promise.all(
         keys.filter(k => !KEEP.includes(k)).map(k => {
-          console.log('[SW v3.1] Purging stale cache:', k);
+          console.log('[SW v3.4.1] Purging stale cache:', k);
           return caches.delete(k);
         })
       ))
       .then(() => self.clients.claim())
+      .then(() => notifyClients({ type: 'SW_UPDATED', version: STATIC_VER }))
   );
 });
 
