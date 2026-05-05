@@ -36,7 +36,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.2.0';
+const VERSION             = 'normalize.js v3.2.1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -254,9 +254,14 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
 // call (free trial: 100/mo). KV cache wraps the whole normalize response so this
 // only fires for unique products within the 24h cache window.
 const SERPAPI_TIMEOUT_MS = 4000;
+// Diagnostic: last SerpAPI call's HTTP status (or 'no_key', 'timeout', 'no_match', 'fetch_error').
+// Module-scoped so /api/normalize can include it in _meta. Each request overwrites.
+let _lastSerpStatus = null;
 async function fetchVerifiedAmazonPrice(query) {
+  _lastSerpStatus = null;
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
+    _lastSerpStatus = 'no_key';
     return null; // env not set — feature simply off, no error
   }
   if (!query || typeof query !== 'string' || query.length < 2) return null;
@@ -273,6 +278,7 @@ async function fetchVerifiedAmazonPrice(query) {
   try {
     const r = await fetch(url.toString(), { signal: controller.signal });
     clearTimeout(timeout);
+    _lastSerpStatus = r.status;
     if (!r.ok) {
       console.warn(`[${VERSION}] SerpAPI HTTP ${r.status} for "${query.slice(0, 60)}"`);
       return null;
@@ -288,7 +294,7 @@ async function fetchVerifiedAmazonPrice(query) {
       return (src.includes('amazon') || link.includes('amazon.co.uk'))
              && (Number(item.extracted_price) > 0);
     });
-    if (!match) return null;
+    if (!match) { _lastSerpStatus = 'no_amazon_match'; return null; }
 
     return {
       price:        Number(match.extracted_price),
@@ -301,6 +307,7 @@ async function fetchVerifiedAmazonPrice(query) {
     };
   } catch (err) {
     clearTimeout(timeout);
+    _lastSerpStatus = 'fetch_error';
     console.warn(`[${VERSION}] SerpAPI fetch error for "${query.slice(0, 60)}":`, err.message);
     return null;
   }
@@ -449,10 +456,26 @@ export default async function handler(req, res) {
     verified_amazon_price = await fetchVerifiedAmazonPrice(parsed.canonical_search_string);
   }
 
+  // Diagnostic _meta: helps debug SerpAPI auth issues without log-grep.
+  // verified_amazon_status: HTTP code from SerpAPI (200/401/403) or string code
+  //   ('no_key', 'no_amazon_match', 'fetch_error', null if SerpAPI was skipped).
+  // verified_amazon_key_prefix: first 8 chars of SERPAPI_KEY env var (or 'unset').
+  //   Safe to display — proves which key Vercel is actually sending. Compare
+  //   against the start of the key shown on serpapi.com/manage-api-key.
+  const _serpKeyPrefix = process.env.SERPAPI_KEY
+    ? String(process.env.SERPAPI_KEY).slice(0, 8) + '…'
+    : 'unset';
   const responseBody = {
     ...parsed,
     verified_amazon_price,
-    _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0, cache: 'miss' }
+    _meta: {
+      version: VERSION,
+      input_type: inputType,
+      latency_ms: Date.now() - t0,
+      cache: 'miss',
+      verified_amazon_status: _lastSerpStatus,
+      verified_amazon_key_prefix: _serpKeyPrefix,
+    }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
   return res.status(200).json(responseBody);
