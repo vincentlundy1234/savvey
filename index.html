@@ -590,14 +590,13 @@ function cancelBarcode() {
 
 async function callNormalize(body) {
   show('loading');
-  // v3.4.1 Smart Loader (panel-mandated, 5 May 2026 PM):
-  // The cache-miss path takes 4-6s end-to-end (Haiku canonical -> SerpAPI Amazon
-  // -> Haiku verdict). A generic spinner reads as "broken app". Instead, the
-  // loader progresses through messages that communicate ACTIVE consumer
-  // advocacy — "Verifying live UK pricing", "Checking listing details" — so
-  // the user feels Savvey is working FOR them, not lagging.
-  // Sub-text drops the dishonest "~1-2 seconds" claim in favour of the brand
-  // voice line "Working for you, not the retailer".
+  // v3.4.3 — flag in-flight fetch so the SW controllerchange-reload defers
+  // until the request completes, instead of killing it mid-flight and losing
+  // the user's query (Gemini Tech Team flag, HIGH severity).
+  window._savveyFetching = true;
+  // v3.4.1 Smart Loader (panel-mandated, 5 May 2026 PM): cache-miss path takes
+  // 4-6s end-to-end. Generic spinner reads as broken; progressive phases that
+  // communicate active consumer advocacy read as Savvey working FOR the user.
   const phases = body.input_type === 'image'
     ? ['Reading the box…', 'Identifying brand & model…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
     : body.input_type === 'url'
@@ -641,6 +640,8 @@ async function callNormalize(body) {
     clearInterval(phaseTimer);
     track('normalize_throw', { input_type: body.input_type, error: String(err).slice(0, 100) });
     showError('Network error.', 'Check your connection and try again.');
+  } finally {
+    window._savveyFetching = false;
   }
 }
 
@@ -1010,9 +1011,24 @@ if ('serviceWorker' in navigator) {
       });
     });
 
+    // v3.4.3 — race-condition fix: defer the SW reload while a /api/normalize
+    // call is in flight, so the user's search isn't lost when the new SW
+    // activates mid-session. Hard 10s timeout fallback so a stuck flag
+    // doesn't permanently block the upgrade.
     let _swReloadGuard = false;
     const reload = () => {
       if (_swReloadGuard) return;
+      if (window._savveyFetching) {
+        const startedAt = Date.now();
+        const poll = setInterval(() => {
+          const stuck = Date.now() - startedAt > 10000;
+          if (!window._savveyFetching || stuck) {
+            clearInterval(poll);
+            if (!_swReloadGuard) { _swReloadGuard = true; window.location.reload(); }
+          }
+        }, 400);
+        return;
+      }
       _swReloadGuard = true;
       window.location.reload();
     };
