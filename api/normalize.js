@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.3.2';
+const VERSION             = 'normalize.js v3.3.3';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_1:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_3:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -289,6 +289,18 @@ async function fetchVerifiedAmazonPrice(query) {
       } catch (e) { /* skip */ }
     }
 
+    // v3.3.3 — pass through rating, reviews count, prime eligibility, and the
+    // SerpAPI-returned product thumbnail. All defensive (nullable). These build
+    // trust without adding any extra API call cost — they're already in the
+    // organic_results we just fetched.
+    const ratingVal = (typeof primary.rating === 'number' && primary.rating > 0 && primary.rating <= 5)
+      ? Number(primary.rating.toFixed(1)) : null;
+    const reviewsVal = (typeof primary.reviews === 'number' && primary.reviews > 0)
+      ? Math.floor(primary.reviews) : null;
+    const isPrime = primary.is_prime === true || primary.prime === true;
+    const thumb   = (typeof primary.thumbnail === 'string' && /^https?:\/\//i.test(primary.thumbnail))
+      ? primary.thumbnail.slice(0, 500) : null;
+
     return {
       price:           Number(primary.extracted_price),
       price_str:       String(primary.price || `£${primary.extracted_price}`).slice(0, 30),
@@ -298,6 +310,10 @@ async function fetchVerifiedAmazonPrice(query) {
       asin,
       title:           primary.title ? String(primary.title).slice(0, 200) : null,
       link:            directLink,
+      thumbnail:       thumb,
+      rating:          ratingVal,
+      reviews:         reviewsVal,
+      is_prime:        isPrime,
       used_price:      used ? Number(used.extracted_price) : null,
       used_price_str:  used ? String(used.price || `£${used.extracted_price}`).slice(0, 30) : null,
       fetched_at:      new Date().toISOString(),
@@ -336,9 +352,10 @@ function parseAndDefault(rawText) {
   const ss = parsed.savvey_says && typeof parsed.savvey_says === 'object' ? parsed.savvey_says : {};
   const ssStr = (v) => (typeof v === 'string' && v.trim()) ? v.trim().slice(0, 200) : null;
   const savvey_says = {
-    typical_price_range: null,
-    live_amazon_price:   null,
-    used_amazon_price:   null,
+    typical_price_range: null, // PANEL KILL 4 May 2026 — superseded by live_amazon_price
+    live_amazon_price:   null, // populated by handler from verified_amazon_price
+    used_amazon_price:   null, // populated by handler from verified_amazon_price.used_price_str
+    amazon_rating:       null, // v3.3.3 — populated by handler from verified rating + reviews
     timing_advice:       ssStr(ss.timing_advice),
     consensus:           ssStr(ss.consensus),
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
@@ -445,6 +462,16 @@ export default async function handler(req, res) {
     }
     if (verified_amazon_price.used_price_str) {
       parsed.savvey_says.used_amazon_price = verified_amazon_price.used_price_str;
+    }
+    // v3.3.3 — surface rating + reviews so savvey_says block carries
+    // social-proof context, not just price.
+    if (verified_amazon_price.rating && verified_amazon_price.reviews) {
+      const reviewsFmt = verified_amazon_price.reviews >= 1000
+        ? (verified_amazon_price.reviews / 1000).toFixed(verified_amazon_price.reviews >= 10000 ? 0 : 1) + 'k'
+        : String(verified_amazon_price.reviews);
+      parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★ · ${reviewsFmt} reviews`;
+    } else if (verified_amazon_price.rating) {
+      parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★`;
     }
   }
 

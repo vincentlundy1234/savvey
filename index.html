@@ -743,7 +743,17 @@ function renderResult(displayName, payload) {
   heroImg.removeAttribute('src');
   renderSavveySays(payload && payload.savvey_says);
   show('result');
-  fetchHeroImage(displayName);
+  // v3.3.3 — prefer the SerpAPI-returned product thumbnail (verified from the
+  // exact Amazon listing) over the /api/image lookup which sometimes returns
+  // mismatched/stale images. Falls back to the existing hero search if absent.
+  const verifiedThumb = verified && typeof verified.thumbnail === 'string' && /^https?:\/\//i.test(verified.thumbnail) ? verified.thumbnail : null;
+  if (verifiedThumb) {
+    heroImg.onload  = () => { heroWrap.classList.remove('empty'); heroImg.classList.add('loaded'); };
+    heroImg.onerror = () => { fetchHeroImage(displayName); };
+    heroImg.src = verifiedThumb;
+  } else {
+    fetchHeroImage(displayName);
+  }
 }
 
 function renderSavveySays(ss) {
@@ -754,13 +764,14 @@ function renderSavveySays(ss) {
   // field is present. Verified-price fields (live_amazon_price,
   // used_amazon_price) are populated by the backend from SerpAPI and are
   // factual - they are NOT gated by Haiku's qualitative confidence score.
-  const hasVerified = ss && (ss.live_amazon_price || ss.used_amazon_price);
+  const hasVerified = ss && (ss.live_amazon_price || ss.used_amazon_price || ss.amazon_rating);
   const hasQual     = ss && ss.confidence === 'high' && (ss.timing_advice || ss.consensus);
   const hasContent  = hasVerified || hasQual;
   if (!hasContent) { wrap.classList.add('empty'); return; }
   const rowsData = [
     { em: '💷', ttl: 'Live at Amazon UK', val: ss.live_amazon_price },
     { em: '🔁', ttl: 'Also seen used',    val: ss.used_amazon_price },
+    { em: '🌟', ttl: 'Amazon rating',     val: ss.amazon_rating },
     { em: '⏱️', ttl: 'Timing',          val: hasQual ? ss.timing_advice : null },
     { em: '⭐', ttl: 'Consensus',       val: hasQual ? ss.consensus : null },
   ].filter(r => r.val);
