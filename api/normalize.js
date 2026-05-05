@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5c';
+const VERSION             = 'normalize.js v3.4.5d';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_6:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_7:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -603,6 +603,18 @@ export default async function handler(req, res) {
         if (ai.verdict)    parsed.savvey_says.verdict    = ai.verdict;
       }
     } catch (e) { /* non-critical */ }
+    // v3.4.5d — deterministic fallback. If Haiku didn't recognise the canonical
+    // (returned null verdict despite a verified Amazon match), the worst-case
+    // is a confident-looking green CTA on a wrong-SKU listing (e.g. Bosch
+    // canonical 'UniversalGardenTidy' surfacing a £27.99 Bosch battery as if
+    // it were the leaf blower). Force check_elsewhere so the user is warned.
+    // Pure stateless guardrail — no prompt tinkering, no extra API call.
+    if (!parsed.savvey_says.verdict && verified_amazon_price && Number(verified_amazon_price.price) > 0) {
+      parsed.savvey_says.verdict = 'check_elsewhere';
+      if (!parsed.savvey_says.price_take) {
+        parsed.savvey_says.price_take = "Couldn't fully verify this listing matches the product — confirm details before buying.";
+      }
+    }
   }
 
   const responseBody = {
