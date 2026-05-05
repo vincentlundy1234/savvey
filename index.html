@@ -726,12 +726,19 @@ function renderSavveySays(ss) {
   const wrap = document.getElementById('savvey-says');
   const rows = document.getElementById('savvey-says-rows');
   rows.innerHTML = '';
-  const hasContent = ss && ss.confidence === 'high' && (ss.typical_price_range || ss.timing_advice || ss.consensus);
+  // v3.3 (5 May 2026) - gate is now permissive: render whenever ANY useful
+  // field is present. Verified-price fields (live_amazon_price,
+  // used_amazon_price) are populated by the backend from SerpAPI and are
+  // factual - they are NOT gated by Haiku's qualitative confidence score.
+  const hasVerified = ss && (ss.live_amazon_price || ss.used_amazon_price);
+  const hasQual     = ss && ss.confidence === 'high' && (ss.timing_advice || ss.consensus);
+  const hasContent  = hasVerified || hasQual;
   if (!hasContent) { wrap.classList.add('empty'); return; }
   const rowsData = [
-    { em: '📊', ttl: 'Typical UK price', val: ss.typical_price_range },
-    { em: '⏱️', ttl: 'Timing',           val: ss.timing_advice },
-    { em: '⭐', ttl: 'Consensus',        val: ss.consensus },
+    { em: '💷', ttl: 'Live at Amazon UK', val: ss.live_amazon_price },
+    { em: '🔁', ttl: 'Also seen used',    val: ss.used_amazon_price },
+    { em: '⏱️', ttl: 'Timing',          val: hasQual ? ss.timing_advice : null },
+    { em: '⭐', ttl: 'Consensus',       val: hasQual ? ss.consensus : null },
   ].filter(r => r.val);
   for (const r of rowsData) {
     const div = document.createElement('div');

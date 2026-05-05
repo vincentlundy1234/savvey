@@ -1,4 +1,4 @@
-// api/normalize.js — Savvey v3.1 Smart Router backend
+// api/normalize.js — Savvey v3.3 Smart Router backend
 //
 // THE PIVOT (4 May 2026):
 // v2.x ran a 5-stage probabilistic pipeline (Sonar + Triage + validate +
@@ -7,50 +7,39 @@
 // v3.0 architecture: 4 input "doors" → ONE normalization call → smart
 // deep-link CTAs. No scraping, no Sonar, no Serper, no validate, no extract.
 //
-// All four doors return ONE shape:
-//   {
-//     canonical_search_string,   // "Ninja AF400UK" — what the user is looking for
-//     confidence,                // high | medium | low
-//     alternative_string | null, // second-best guess for confidence-confirm UI
-//     category,                  // tech | home | toys | diy | generic
-//     mpn | null,                // raw model number if cleanly extracted
-//     amazon_search_query,       // strict MPN-only string for Amazon A9 deep-link
-//     savvey_says: {             // v3.1 — knowledge-derived advisory block
-//       typical_price_range,     //   "£180–£220" — TYPICAL UK retail, NOT today's price
-//       timing_advice,           //   "Wait for Prime Day" / "Buy now, price stable"
-//       consensus,               //   one-line review summary
-//       confidence               //   high|medium|low — frontend gates the block
-//     }
-//   }
+// v3.2 (4 May 2026 PM): SerpAPI-verified Amazon UK price baked into the
+// Amazon CTA (Trust Hook). Diagnostic _meta surfaces SerpAPI status.
 //
-// Frontend renders 3 retailer CTAs from a hardcoded category map.
-// Amazon ALWAYS first (affiliate path).
-//
-// Door 1 (image):   Haiku Vision reads box, extracts MPN
-// Door 2 (url):     Haiku Text reads URL slug. NO fetch.
-// Door 3 (text):    Haiku Text fixes typos, normalizes
-// Door 4 (barcode): client-side Html5-Qrcode decodes EAN locally → Haiku Text matches UK SKU
+// v3.3 (5 May 2026): Panel Move 1 + Move 2 + savvey_says enrichment.
+//   - Move 1 (Filter Optimization): Amazon listing classifier
+//     (official | marketplace | warehouse). Primary CTA = official storefront
+//     price; warehouse/used captured separately as used_amazon_price for
+//     savvey_says. Marketplace only as fallback when no official listing.
+//   - Move 2 (Diagnostic Sunset): verified_amazon_key_prefix removed from
+//     _meta. verified_amazon_status retained for one more sprint while we
+//     monitor SerpAPI quota / failure modes.
+//   - savvey_says enrichment: when verified_amazon_price is present, attach
+//     live_amazon_price (factual, anchored) and used_amazon_price (when
+//     warehouse listing found). Frontend gating loosens to render the block
+//     whenever ANY savvey_says field is present, including the verified anchors.
 
 import { applySecurityHeaders } from './_shared.js';
 import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.2.1';
+const VERSION             = 'normalize.js v3.3.0';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
 const TIMEOUT_MS          = 8000;
-const MAX_TOKENS_VISION   = 600;   // bumped for savvey_says output
-const MAX_TOKENS_TEXT     = 500;   // bumped for savvey_says output
+const MAX_TOKENS_VISION   = 600;
+const MAX_TOKENS_TEXT     = 500;
 const RATE_LIMIT_PER_HOUR = 60;
 const MAX_IMAGE_BYTES     = 4 * 1024 * 1024;
-const KV_TTL_SECONDS      = 86400; // 24h — savvey_says is knowledge-derived
+const KV_TTL_SECONDS      = 86400;
 const KV_TIMEOUT_MS       = 1500;
 
-// ─────────────────────────────────────────────────────────────────────────
-// VERCEL KV — best-effort cache. Lazily-loaded; fails graceful if unset.
-// ─────────────────────────────────────────────────────────────────────────
 let _kv = null;
 let _kvFailed = false;
 async function _getKv() {
@@ -94,12 +83,9 @@ function cacheKey(inputType, payload) {
   } else {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
-  return 'savvey:normalize:' + h.digest('hex').slice(0, 24);
+  // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
+  return 'savvey:normalize:v3:' + h.digest('hex').slice(0, 24);
 }
-
-// ─────────────────────────────────────────────────────────────────────────
-// SYSTEM PROMPTS — four doors, one schema out.
-// ─────────────────────────────────────────────────────────────────────────
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
 {
@@ -110,7 +96,6 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "mpn": "AF400UK" | "QC45" | null,
   "amazon_search_query": "AF400UK" | "Bose QuietComfort 45",
   "savvey_says": {
-    "typical_price_range": "£180–£220" | null,
     "timing_advice": "Buy now, price is stable" | "Wait — Prime Day deals likely" | null,
     "consensus": "Excellent air fryer, but huge footprint." | null,
     "confidence": "high" | "medium" | "low"
@@ -118,42 +103,34 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 }
 
 Field rules:
-- canonical_search_string: cleanest brand + family + model. e.g. "Ninja AF400UK", "Bose QuietComfort 45".
+- canonical_search_string: cleanest brand + family + model.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
-- alternative_string: ONLY when confidence < high. Second-most-likely interpretation. NULL when high.
-- category — STRICT enum:
-  - "tech": phones, laptops, headphones, audio, TVs, cameras, gaming, wearables
-  - "home": kitchen appliances (air fryer, vacuum, kettle), homeware, white goods
-  - "toys": Lego, board games, kids' toys
-  - "diy": power tools, hand tools, paint, hardware, garden tools
-  - "generic": anything else (groceries, beauty, books, niche items)
+- alternative_string: ONLY when confidence < high. NULL when high.
+- category — STRICT enum: tech | home | toys | diy | generic.
 - mpn: raw manufacturer part number. NULL if not extractable.
-- amazon_search_query: STRICTEST search string for Amazon A9. Prefer MPN over descriptive words. e.g. "AF400UK" not "Ninja Dual Air Fryer".
-- savvey_says: 'BS-Filter' summary. ALL fields nullable. Only populate fields you're genuinely confident about — null > hallucination.
-  - typical_price_range: TYPICAL UK retail range (NOT today's price — your training data isn't real-time). Use "£X–£Y". NULL if unsure or fast-moving market.
-  - timing_advice: one short clause. ONLY suggest waiting if you have a real reason. NULL if you genuinely don't know.
+- amazon_search_query: STRICTEST search string for Amazon A9. Prefer MPN.
+- savvey_says: 'BS-Filter' qualitative summary. ALL fields nullable. null > hallucination.
+  - timing_advice: ONLY suggest waiting if you have a real reason (Prime Day, end-of-cycle). NULL otherwise.
   - consensus: ONE short sentence summarising mainstream review consensus. NULL if niche/unreviewed.
-  - confidence: "high" only if all three fields populated AND product well-known. "low" if guessing — frontend HIDES the block at low confidence.
-  - CRITICAL: for generic/no-name/grocery items, return all savvey_says fields null + confidence: "low".
-  - CRITICAL: NEVER quote a "current price". Always frame as "typical UK retail" — training cutoff is months/years stale.
+  - confidence: "high" only if both fields populated AND product well-known.
+  - DO NOT emit a typical_price_range field — pricing comes from a verified live source downstream.
+  - DO NOT quote "current price" or any specific GBP figures. Pricing is handled outside this call.
+  - For generic/no-name/grocery items, return all savvey_says fields null + confidence: "low".
 `;
 
-const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product (in a UK shop or at home — Currys, Tesco, Argos, John Lewis, B&Q, Lakeland, Boots etc.). Identify the product and produce a clean search string for Amazon UK.
+const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
 
-Look for:
-1. The MPN / Model Number / EAN printed on the box (most reliable).
-2. Brand + family in marketing text.
-3. Shelf-edge label if visible.
+Look for: 1) MPN/Model on box. 2) Brand + family. 3) Shelf-edge label.
 
 ${COMMON_SCHEMA_DOC}`;
 
-const URL_SYSTEM_PROMPT = `You are a UK retail URL parser. The user pasted a UK retailer product URL. Extract product identity from the URL string ALONE — do NOT fetch the page. UK e-commerce URLs typically include the product name in the slug: amazon.co.uk/Ninja-AF400UK-Dual-Zone-Air-Fryer/dp/B09BMC68FV → "Ninja AF400UK Dual Zone Air Fryer".
+const URL_SYSTEM_PROMPT = `You are a UK retail URL parser. Extract product identity from the URL string ALONE — do NOT fetch the page. UK e-commerce URLs typically include the product name in the slug.
 
-Also infer category from URL's domain (currys.co.uk → tech/home; smythstoys.com → toys; screwfix.com → diy).
+Infer category from the URL's domain.
 
 ${COMMON_SCHEMA_DOC}`;
 
-const TEXT_SYSTEM_PROMPT = `You are a UK retail query normaliser. The user typed a search string. May have typos, be incomplete, or use informal product names. Clean it up.
+const TEXT_SYSTEM_PROMPT = `You are a UK retail query normaliser. The user typed a search string. May have typos. Clean it up.
 
 Examples:
 - "nija air frier dual" → canonical="Ninja Dual Air Fryer", confidence="medium", alternative="Ninja Foodi Dual Air Fryer"
@@ -163,22 +140,17 @@ Examples:
 
 ${COMMON_SCHEMA_DOC}`;
 
-const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier. The user scanned a 12-13 digit barcode. Map it to the exact UK product if you recognise it.
+const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier.
 
-Common UK EAN prefixes: 50/502 = UK; 5060... = many UK food/grocery brands; 5012... = UK consumer goods; 0/1/9 = US/global imports.
+UK EAN prefixes: 50/502 = UK; 5060... = UK food/grocery; 5012... = UK consumer goods; 0/1/9 = US/global imports.
 
-Be honest about confidence:
-- "high" only if you genuinely recognise this exact EAN as a specific UK product
-- "medium" if you can guess from prefix + general knowledge
-- "low" if you don't know — return canonical_search_string="Unknown product", confidence="low"
+- "high" only if you genuinely recognise this exact EAN
+- "medium" if you can guess from prefix
+- "low" if unknown — return canonical_search_string="Unknown product", confidence="low"
 
-Do NOT hallucinate. If unsure, say so.
+Do NOT hallucinate.
 
 ${COMMON_SCHEMA_DOC}`;
-
-// ─────────────────────────────────────────────────────────────────────────
-// CALL ANTHROPIC
-// ─────────────────────────────────────────────────────────────────────────
 
 async function callHaikuText(systemPrompt, userText) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -238,31 +210,43 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
   } finally { clearTimeout(timer); }
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// PARSE + SANITY-DEFAULT
-// ─────────────────────────────────────────────────────────────────────────
-
-
-// ── SerpAPI: verified Amazon UK price (Move 2 — Panel-approved 4 May 2026) ──
-//
-// Fetches Google Shopping results for the canonical product, filters to Amazon
-// UK, and returns the first matching listing's extracted_price. Defensive: if
-// SERPAPI_KEY is not set or any step fails, returns null so the response gracefully
-// falls back to the existing CTA behaviour.
-//
-// Latency budget: 4s timeout via AbortController. Real cost ~£0.001 per fresh
-// call (free trial: 100/mo). KV cache wraps the whole normalize response so this
-// only fires for unique products within the 24h cache window.
 const SERPAPI_TIMEOUT_MS = 4000;
-// Diagnostic: last SerpAPI call's HTTP status (or 'no_key', 'timeout', 'no_match', 'fetch_error').
-// Module-scoped so /api/normalize can include it in _meta. Each request overwrites.
 let _lastSerpStatus = null;
+
+function _classifyAmazonListing(item) {
+  const src   = String(item.source    || '').toLowerCase();
+  const link  = String(item.link      || '').toLowerCase();
+  const title = String(item.title     || '').toLowerCase();
+  const cond  = String(item.condition || '').toLowerCase();
+
+  const isAmazon = src.includes('amazon') || link.includes('amazon.co.uk') || link.includes('amazon.com');
+  if (!isAmazon) return null;
+
+  if (src.includes('warehouse')
+      || link.includes('amazon-warehouse')
+      || link.includes('warehousedeals')
+      || /(used|refurb|renewed|open[\s-]?box|pre[\s-]?owned)/i.test(cond + ' ' + title)) {
+    return 'warehouse';
+  }
+  if (src.includes('marketplace') || src.includes('seller')) {
+    return 'marketplace';
+  }
+  if (src.includes('amazon.co.uk')
+      || src === 'amazon uk'
+      || src === 'amazon'
+      || src.startsWith('amazon ')
+      || link.includes('amazon.co.uk')) {
+    return 'official';
+  }
+  return 'unknown';
+}
+
 async function fetchVerifiedAmazonPrice(query) {
   _lastSerpStatus = null;
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
     _lastSerpStatus = 'no_key';
-    return null; // env not set — feature simply off, no error
+    return null;
   }
   if (!query || typeof query !== 'string' || query.length < 2) return null;
 
@@ -285,25 +269,39 @@ async function fetchVerifiedAmazonPrice(query) {
     }
     const j = await r.json();
     const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
-    // Find first Amazon UK match. SerpAPI's "source" field is the merchant name
-    // ("Amazon.co.uk", "Amazon UK", sometimes just "Amazon"); the link contains
-    // amazon.co.uk for UK results. Both checked for safety.
-    const match = results.find(item => {
-      const src  = String(item.source || '').toLowerCase();
-      const link = String(item.link   || '').toLowerCase();
-      return (src.includes('amazon') || link.includes('amazon.co.uk'))
-             && (Number(item.extracted_price) > 0);
-    });
-    if (!match) { _lastSerpStatus = 'no_amazon_match'; return null; }
+
+    let officialMatch = null;
+    let marketplaceMatch = null;
+    let unknownMatch = null;
+    let warehouseMatch = null;
+    for (const item of results) {
+      if (!(Number(item.extracted_price) > 0)) continue;
+      const cls = _classifyAmazonListing(item);
+      if      (cls === 'official'    && !officialMatch)    officialMatch    = item;
+      else if (cls === 'marketplace' && !marketplaceMatch) marketplaceMatch = item;
+      else if (cls === 'unknown'     && !unknownMatch)     unknownMatch     = item;
+      else if (cls === 'warehouse'   && !warehouseMatch)   warehouseMatch   = item;
+    }
+
+    const primary = officialMatch || unknownMatch || marketplaceMatch;
+    if (!primary) {
+      _lastSerpStatus = 'no_amazon_match';
+      return null;
+    }
+
+    const sourceType = officialMatch ? 'official' : unknownMatch ? 'unknown' : 'marketplace';
 
     return {
-      price:        Number(match.extracted_price),
-      price_str:    String(match.price || `£${match.extracted_price}`).slice(0, 30),
-      currency:     'GBP',
-      source:       'amazon.co.uk',
-      title:        match.title ? String(match.title).slice(0, 200) : null,
-      link:         match.link  ? String(match.link).slice(0, 500)  : null,
-      fetched_at:   new Date().toISOString(),
+      price:           Number(primary.extracted_price),
+      price_str:       String(primary.price || `£${primary.extracted_price}`).slice(0, 30),
+      currency:        'GBP',
+      source:          'amazon.co.uk',
+      source_type:     sourceType,
+      title:           primary.title ? String(primary.title).slice(0, 200) : null,
+      link:            primary.link  ? String(primary.link).slice(0, 500)  : null,
+      used_price:      warehouseMatch ? Number(warehouseMatch.extracted_price) : null,
+      used_price_str:  warehouseMatch ? String(warehouseMatch.price || `£${warehouseMatch.extracted_price}`).slice(0, 30) : null,
+      fetched_at:      new Date().toISOString(),
     };
   } catch (err) {
     clearTimeout(timeout);
@@ -336,12 +334,12 @@ function parseAndDefault(rawText) {
   const amazonQ = (typeof parsed.amazon_search_query === 'string' && parsed.amazon_search_query.trim())
     ? parsed.amazon_search_query.trim().slice(0, 200) : (mpn || canonical);
 
-  // v3.1 — Savvey Says block. All fields nullable. Frontend uses
-  // savvey_says.confidence as gate: if !== 'high', hide the entire block.
   const ss = parsed.savvey_says && typeof parsed.savvey_says === 'object' ? parsed.savvey_says : {};
   const ssStr = (v) => (typeof v === 'string' && v.trim()) ? v.trim().slice(0, 200) : null;
   const savvey_says = {
-    typical_price_range: null, // PANEL KILL 4 May 2026 — hallucination liability; SerpAPI-verified price will populate in v3.2 (Move 2)
+    typical_price_range: null,
+    live_amazon_price:   null,
+    used_amazon_price:   null,
     timing_advice:       ssStr(ss.timing_advice),
     consensus:           ssStr(ss.consensus),
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
@@ -358,10 +356,6 @@ function parseAndDefault(rawText) {
   };
 }
 
-// ─────────────────────────────────────────────────────────────────────────
-// HANDLER
-// ─────────────────────────────────────────────────────────────────────────
-
 export default async function handler(req, res) {
   applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -377,20 +371,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'input_type must be image|url|text|barcode' });
   }
 
-  // KV cache check
   const cKey = cacheKey(inputType, body);
   const cached = await kvGet(cKey);
   if (cached && typeof cached === 'object' && cached.canonical_search_string) {
     console.log(`[${VERSION}] cache HIT ${cKey.slice(-12)} (${inputType})`);
-    // Sanitize legacy cache: v3.1.0 entries may have hallucinated typical_price_range.
-    // Strip it on the way out so old cache hits respect the v3.1.1 panel kill.
-    const sanitized = { ...cached };
-    if (sanitized.savvey_says) {
-      sanitized.savvey_says = { ...sanitized.savvey_says, typical_price_range: null };
-    }
     return res.status(200).json({
-      ...sanitized,
-      _meta: { ...(sanitized._meta || {}), cache: 'hit', latency_ms: Date.now() - t0 }
+      ...cached,
+      _meta: { ...(cached._meta || {}), cache: 'hit', latency_ms: Date.now() - t0 }
     });
   }
 
@@ -407,10 +394,10 @@ export default async function handler(req, res) {
         { onOpen: () => null }
       );
     } else if (inputType === 'url') {
-      const url = String(body.url || '').trim();
-      if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'valid url required' });
+      const u = String(body.url || '').trim();
+      if (!u || !/^https?:\/\//i.test(u)) return res.status(400).json({ error: 'valid url required' });
       rawText = await withCircuit('anthropic',
-        () => callHaikuText(URL_SYSTEM_PROMPT, `URL: ${url}`),
+        () => callHaikuText(URL_SYSTEM_PROMPT, `URL: ${u}`),
         { onOpen: () => null }
       );
     } else if (inputType === 'barcode') {
@@ -447,24 +434,21 @@ export default async function handler(req, res) {
     });
   }
 
-  // Move 2 — fetch verified Amazon UK price for the canonical product.
-  // Adds ~500ms-1s latency on cache miss; null-safe if SerpAPI fails or key
-  // is missing. Only fires for high-confidence canonicals (skip on low to
-  // avoid wasted credits on hallucinated names).
   let verified_amazon_price = null;
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
     verified_amazon_price = await fetchVerifiedAmazonPrice(parsed.canonical_search_string);
   }
 
-  // Diagnostic _meta: helps debug SerpAPI auth issues without log-grep.
-  // verified_amazon_status: HTTP code from SerpAPI (200/401/403) or string code
-  //   ('no_key', 'no_amazon_match', 'fetch_error', null if SerpAPI was skipped).
-  // verified_amazon_key_prefix: first 8 chars of SERPAPI_KEY env var (or 'unset').
-  //   Safe to display — proves which key Vercel is actually sending. Compare
-  //   against the start of the key shown on serpapi.com/manage-api-key.
-  const _serpKeyPrefix = process.env.SERPAPI_KEY
-    ? String(process.env.SERPAPI_KEY).slice(0, 8) + '…'
-    : 'unset';
+  if (verified_amazon_price && parsed.savvey_says) {
+    if (Number(verified_amazon_price.price) > 0) {
+      parsed.savvey_says.live_amazon_price = verified_amazon_price.price_str
+        || `£${Number(verified_amazon_price.price).toFixed(2)}`;
+    }
+    if (verified_amazon_price.used_price_str) {
+      parsed.savvey_says.used_amazon_price = verified_amazon_price.used_price_str;
+    }
+  }
+
   const responseBody = {
     ...parsed,
     verified_amazon_price,
@@ -474,7 +458,6 @@ export default async function handler(req, res) {
       latency_ms: Date.now() - t0,
       cache: 'miss',
       verified_amazon_status: _lastSerpStatus,
-      verified_amazon_key_prefix: _serpKeyPrefix,
     }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});

@@ -30,3 +30,8 @@ index.html.backup-pre-107d-resultrow
 index.html.backup-pre-107d-resultrow.kept
 api/ai-search.js.backup-pre-107d
 api/_health.js
+# v3.3 build staging — never deploy these (Cowork .new + cp pattern artifacts)
+api/normalize.js.new
+api/normalize_v33_build.js
+api/*.tmp_rewrite
+*.tmp_rewrite
