@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
 <meta name="theme-color" content="#2a6b22" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1410" media="(prefers-color-scheme: dark)">
-<meta name="description" content="Snap a product, paste a link, type a name, or scan a barcode — Savvey identifies it instantly and routes you to the cheapest UK retailer.">
+<meta name="description" content="Snap a product, paste a link, type a name, or scan a barcode — Savvey identifies it instantly and shows the verified Amazon UK price plus alternative retailers to check.">
 <!-- iOS PWA meta -->
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -18,7 +18,7 @@
 <link rel="manifest" href="/manifest.json">
 <!-- Open Graph -->
 <meta property="og:title" content="Savvey — shop smart.">
-<meta property="og:description" content="Snap, paste, type, or scan. Savvey routes you to the cheapest UK retailer.">
+<meta property="og:description" content="Snap, paste, type, or scan. Savvey shows the verified Amazon UK price plus alternatives to check.">
 <meta property="og:image" content="/icon-512.png">
 <meta property="og:url" content="https://savvey.app">
 <meta property="og:type" content="website">
@@ -185,7 +185,7 @@
 
 <div class="screen active" id="screen-home">
   <h1 class="tagline">Find the best UK price.</h1>
-  <p class="tagsub">Snap, scan, paste, or type. We identify your product and route you to the cheapest UK retailer.</p>
+  <p class="tagsub">Snap, scan, paste, or type. We identify your product and show the verified Amazon UK price.</p>
   <p id="counter" style="margin:0 0 18px;font-size:12px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;">✦ <span id="counter-num">—</span> products identified by Savvey shoppers</p>
 
   <button class="door primary" onclick="goSnap()">
@@ -278,7 +278,7 @@
 <div class="screen" id="screen-result">
   <div class="badge-row"><span class="badge" id="result-badge">Identified</span></div>
   <h1 class="identify-title" id="result-title">—</h1>
-  <p class="identify-sub" id="result-sub">Tap a retailer below to check the live price.</p>
+  <p class="identify-sub" id="result-sub">Verified Amazon UK price below. Other retailers shown to check alternatives.</p>
   <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
   <div class="savvey-says empty" id="savvey-says">
     <div class="savvey-says-head"><div class="savvey-says-spark">✦</div><div class="savvey-says-label">Savvey says</div></div>
@@ -327,11 +327,11 @@ const RETAILERS = {
           url: q => `https://www.ebay.co.uk/sch/i.html?_nkw=${encodeURIComponent(q)}` },
 };
 const CATEGORY_MAP = {
-  tech:    [ {...RETAILERS.amzn, sub: 'Often cheapest, Prime delivery'}, {...RETAILERS.curr, sub: 'High street tech specialist'}, {...RETAILERS.argo, sub: 'Same-day collection'} ],
-  home:    [ {...RETAILERS.amzn, sub: 'Often cheapest, Prime delivery'}, {...RETAILERS.curr, sub: 'Appliances + home tech'}, {...RETAILERS.jl,   sub: '2-yr guarantee on appliances'} ],
-  toys:    [ {...RETAILERS.amzn, sub: 'Often cheapest on toys'}, {...RETAILERS.smyt, sub: 'UK toy specialist'}, {...RETAILERS.argo, sub: 'Same-day collection'} ],
+  tech:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.curr, sub: 'Tech specialist — check alternative'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'} ],
+  home:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.curr, sub: 'Appliances + home — check alternative'}, {...RETAILERS.jl,   sub: '2-yr guarantee — check alternative'} ],
+  toys:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.smyt, sub: 'UK toy specialist — check alternative'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'} ],
   diy:     [ {...RETAILERS.amzn, sub: 'Most listings'}, {...RETAILERS.scre, sub: 'Trade prices, click & collect'}, {...RETAILERS.bq,   sub: 'High street DIY chain'} ],
-  generic: [ {...RETAILERS.amzn, sub: 'Often cheapest, Prime delivery'}, {...RETAILERS.argo, sub: 'Same-day collection'}, {...RETAILERS.ebay, sub: 'New, used, auctions'} ],
+  generic: [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'}, {...RETAILERS.ebay, sub: 'New, used, auctions — check alternative'} ],
 };
 
 let camStream = null;
@@ -675,7 +675,7 @@ function renderResult(displayName, payload) {
   const subEl = document.getElementById('result-sub');
   if (subEl) {
     subEl.textContent = conf === 'high'
-      ? 'Tap a retailer below to check the live price.'
+      ? 'Verified Amazon UK price below. Other retailers shown to check alternatives.'
       : 'Not 100% sure — confirm on the retailer page below.';
   }
   const list = CATEGORY_MAP[cat] || CATEGORY_MAP.generic;
