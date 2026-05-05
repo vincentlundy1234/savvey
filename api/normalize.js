@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.3.1';
+const VERSION             = 'normalize.js v3.3.2';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -211,36 +211,16 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
 }
 
 const SERPAPI_TIMEOUT_MS = 4000;
+const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
 
-function _classifyAmazonListing(item) {
-  const src   = String(item.source    || '').toLowerCase();
-  const link  = String(item.link      || '').toLowerCase();
-  const title = String(item.title     || '').toLowerCase();
-  const cond  = String(item.condition || '').toLowerCase();
-
-  const isAmazon = src.includes('amazon') || link.includes('amazon.co.uk') || link.includes('amazon.com');
-  if (!isAmazon) return null;
-
-  if (src.includes('warehouse')
-      || link.includes('amazon-warehouse')
-      || link.includes('warehousedeals')
-      || /(used|refurb|renewed|open[\s-]?box|pre[\s-]?owned)/i.test(cond + ' ' + title)) {
-    return 'warehouse';
-  }
-  if (src.includes('marketplace') || src.includes('seller')) {
-    return 'marketplace';
-  }
-  if (src.includes('amazon.co.uk')
-      || src === 'amazon uk'
-      || src === 'amazon'
-      || src.startsWith('amazon ')
-      || link.includes('amazon.co.uk')) {
-    return 'official';
-  }
-  return 'unknown';
-}
-
+// SerpAPI Amazon engine (v3.3.2 — 5 May 2026).
+// Switched from engine=google_shopping (returned Google `aclk` redirect URLs
+// that broke affiliate-tag propagation and didn't deep-link to actual
+// listings) to engine=amazon with amazon_domain=amazon.co.uk.
+// Native Amazon search returns ASIN + price + rating directly, so we can
+// build canonical /dp/ASIN URLs with the affiliate tag baked in — no
+// redirect-chasing, no Google middleware.
 async function fetchVerifiedAmazonPrice(query) {
   _lastSerpStatus = null;
   const apiKey = process.env.SERPAPI_KEY;
@@ -251,11 +231,10 @@ async function fetchVerifiedAmazonPrice(query) {
   if (!query || typeof query !== 'string' || query.length < 2) return null;
 
   const url = new URL('https://serpapi.com/search.json');
-  url.searchParams.set('engine', 'google_shopping');
-  url.searchParams.set('q',      query.slice(0, 150));
-  url.searchParams.set('gl',     'uk');
-  url.searchParams.set('hl',     'en');
-  url.searchParams.set('api_key', apiKey);
+  url.searchParams.set('engine',         'amazon');
+  url.searchParams.set('amazon_domain',  'amazon.co.uk');
+  url.searchParams.set('k',              query.slice(0, 150));
+  url.searchParams.set('api_key',        apiKey);
 
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), SERPAPI_TIMEOUT_MS);
@@ -268,44 +247,59 @@ async function fetchVerifiedAmazonPrice(query) {
       return null;
     }
     const j = await r.json();
-    const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
+    const results = Array.isArray(j.organic_results) ? j.organic_results : [];
 
-    let officialMatch = null;
-    let marketplaceMatch = null;
-    let warehouseMatch = null;
+    // Find first organic (non-sponsored) listing with a valid price.
+    // Used / refurbished items are surfaced separately for savvey_says.
+    let primary = null;
+    let used    = null;
     for (const item of results) {
-      if (!(Number(item.extracted_price) > 0)) continue;
-      const cls = _classifyAmazonListing(item);
-      if      (cls === 'official'    && !officialMatch)    officialMatch    = item;
-      else if (cls === 'marketplace' && !marketplaceMatch) marketplaceMatch = item;
-      else if (cls === 'warehouse'   && !warehouseMatch)   warehouseMatch   = item;
+      const price = Number(item.extracted_price);
+      if (!(price > 0)) continue;
+      const cond  = String(item.condition || '').toLowerCase();
+      const title = String(item.title     || '').toLowerCase();
+      const isUsed = /(used|refurb|renewed|open[\s-]?box|pre[\s-]?owned)/i.test(cond + ' ' + title);
+      if (isUsed) {
+        if (!used) used = item;
+        continue;
+      }
+      if (item.sponsored) continue; // skip top-of-list sponsored slots
+      if (!primary) primary = item;
+      if (primary && used) break;
     }
 
-    const primary = officialMatch || marketplaceMatch;
     if (!primary) {
       _lastSerpStatus = 'no_amazon_match';
       return null;
     }
 
-    const sourceType = officialMatch ? 'official' : 'marketplace';
+    const asin = (typeof primary.asin === 'string' && /^[A-Z0-9]{8,12}$/i.test(primary.asin)) ? primary.asin : null;
+
+    // Build the deep link. ASIN-based /dp/ URL is the canonical Amazon
+    // Associates pattern — it's stable, indexable, and the affiliate tag
+    // is the FIRST query param so attribution is unambiguous.
+    let directLink = null;
+    if (asin) {
+      directLink = `https://www.amazon.co.uk/dp/${asin}?tag=${encodeURIComponent(AMAZON_TAG)}`;
+    } else if (primary.link && /^https?:\/\/(www\.)?amazon\.co\.uk\//i.test(primary.link)) {
+      try {
+        const u = new URL(primary.link);
+        u.searchParams.set('tag', AMAZON_TAG);
+        directLink = u.toString().slice(0, 500);
+      } catch (e) { /* skip */ }
+    }
 
     return {
       price:           Number(primary.extracted_price),
       price_str:       String(primary.price || `£${primary.extracted_price}`).slice(0, 30),
       currency:        'GBP',
       source:          'amazon.co.uk',
-      source_type:     sourceType,
+      source_type:     'organic',
+      asin,
       title:           primary.title ? String(primary.title).slice(0, 200) : null,
-      // v3.3.1 — prefer product_link (direct merchant URL) over link
-      // (Google Shopping redirect, often null). Falls back to link if absent.
-      // This is the URL the Amazon CTA opens when verified_amazon_price is set,
-      // so it MUST go to the actual listing the £X price comes from — otherwise
-      // tapping the verified-price button lands on a search page and trust dies.
-      link:            (primary.product_link && String(primary.product_link).startsWith('http'))
-                         ? String(primary.product_link).slice(0, 500)
-                         : (primary.link ? String(primary.link).slice(0, 500) : null),
-      used_price:      warehouseMatch ? Number(warehouseMatch.extracted_price) : null,
-      used_price_str:  warehouseMatch ? String(warehouseMatch.price || `£${warehouseMatch.extracted_price}`).slice(0, 30) : null,
+      link:            directLink,
+      used_price:      used ? Number(used.extracted_price) : null,
+      used_price_str:  used ? String(used.price || `£${used.extracted_price}`).slice(0, 30) : null,
       fetched_at:      new Date().toISOString(),
     };
   } catch (err) {
