@@ -241,7 +241,7 @@
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag">Beta · v3.1</span></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.4</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -1059,6 +1059,48 @@ function renderCounter() {
 
 renderCounter();
 renderRecents();
+// v3.4.4 force-refresh affordance — testing-phase escape hatch for stuck PWA caches.
+// Activated either via ?fresh=1 URL param (auto-runs on load) OR by tapping the
+// 'Reset' link in the home-screen footer. Unregisters all service workers,
+// deletes all caches, then reloads the page with the param stripped to avoid
+// loop. Single drawback: a confused tap clears local state — mitigated by a
+// confirm() dialog on the visible link, and the URL param is opt-in.
+async function _savveyNukeAndReload(opts) {
+  try {
+    if (navigator.serviceWorker) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if (window.caches) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch (e) { console.warn('[reset] partial:', e.message); }
+  // Strip ?fresh=... from URL before reload to prevent loop
+  const u = new URL(window.location.href);
+  u.searchParams.delete('fresh');
+  u.hash = '';
+  window.location.replace(u.toString());
+}
+
+// URL param: ?fresh=1 (or any value) auto-fires the nuke on load
+if (new URLSearchParams(window.location.search).has('fresh')) {
+  console.log('[reset] ?fresh detected — nuking SW + caches');
+  _savveyNukeAndReload({ source: 'url-param' });
+}
+
+// Footer Reset link (home screen)
+const _resetLink = document.getElementById('reset-link');
+if (_resetLink) {
+  _resetLink.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (confirm('Reset Savvey? Clears local cache + service worker, then reloads. Use this only if the app is stuck on an old version.')) {
+      track('reset_invoked', { source: 'footer-link' });
+      _savveyNukeAndReload({ source: 'footer-link' });
+    }
+  });
+}
+
 track('app_loaded', { ua_mobile: /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent), standalone: window.matchMedia('(display-mode: standalone)').matches });
 handleInbound();
 </script>
