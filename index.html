@@ -590,20 +590,28 @@ function cancelBarcode() {
 
 async function callNormalize(body) {
   show('loading');
+  // v3.4.1 Smart Loader (panel-mandated, 5 May 2026 PM):
+  // The cache-miss path takes 4-6s end-to-end (Haiku canonical -> SerpAPI Amazon
+  // -> Haiku verdict). A generic spinner reads as "broken app". Instead, the
+  // loader progresses through messages that communicate ACTIVE consumer
+  // advocacy — "Verifying live UK pricing", "Checking listing details" — so
+  // the user feels Savvey is working FOR them, not lagging.
+  // Sub-text drops the dishonest "~1-2 seconds" claim in favour of the brand
+  // voice line "Working for you, not the retailer".
   const phases = body.input_type === 'image'
-    ? ['Reading the box…', 'Identifying brand & model…', 'Routing to UK retailers…']
+    ? ['Reading the box…', 'Identifying brand & model…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
     : body.input_type === 'url'
-      ? ['Reading the link…', 'Extracting the product…', 'Routing to UK retailers…']
+      ? ['Reading the link…', 'Extracting the product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
       : body.input_type === 'barcode'
-        ? ['Decoding barcode…', 'Matching to UK product…', 'Routing to UK retailers…']
-        : ['Cleaning up your search…', 'Identifying the product…', 'Routing to UK retailers…'];
+        ? ['Decoding barcode…', 'Matching to UK product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
+        : ['Cleaning up your search…', 'Identifying the product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…'];
   document.getElementById('loading-text').textContent = phases[0];
-  document.getElementById('loading-sub').textContent = '~1–2 seconds';
+  document.getElementById('loading-sub').textContent = 'Working for you, not the retailer';
   let phaseIdx = 0;
   const phaseTimer = setInterval(() => {
     phaseIdx = Math.min(phaseIdx + 1, phases.length - 1);
     document.getElementById('loading-text').textContent = phases[phaseIdx];
-  }, 1100);
+  }, 1200);
   const t0 = Date.now();
   try {
     const r = await fetch('/api/normalize', {
