@@ -36,7 +36,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.1.0';
+const VERSION             = 'normalize.js v3.1.1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -270,7 +270,7 @@ function parseAndDefault(rawText) {
   const ss = parsed.savvey_says && typeof parsed.savvey_says === 'object' ? parsed.savvey_says : {};
   const ssStr = (v) => (typeof v === 'string' && v.trim()) ? v.trim().slice(0, 200) : null;
   const savvey_says = {
-    typical_price_range: ssStr(ss.typical_price_range),
+    typical_price_range: null, // PANEL KILL 4 May 2026 — hallucination liability; SerpAPI-verified price will populate in v3.2 (Move 2)
     timing_advice:       ssStr(ss.timing_advice),
     consensus:           ssStr(ss.consensus),
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
@@ -311,9 +311,15 @@ export default async function handler(req, res) {
   const cached = await kvGet(cKey);
   if (cached && typeof cached === 'object' && cached.canonical_search_string) {
     console.log(`[${VERSION}] cache HIT ${cKey.slice(-12)} (${inputType})`);
+    // Sanitize legacy cache: v3.1.0 entries may have hallucinated typical_price_range.
+    // Strip it on the way out so old cache hits respect the v3.1.1 panel kill.
+    const sanitized = { ...cached };
+    if (sanitized.savvey_says) {
+      sanitized.savvey_says = { ...sanitized.savvey_says, typical_price_range: null };
+    }
     return res.status(200).json({
-      ...cached,
-      _meta: { ...(cached._meta || {}), cache: 'hit', latency_ms: Date.now() - t0 }
+      ...sanitized,
+      _meta: { ...(sanitized._meta || {}), cache: 'hit', latency_ms: Date.now() - t0 }
     });
   }
 
