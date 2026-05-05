@@ -694,22 +694,46 @@ function renderResult(displayName, payload) {
   const verifiedPriceStr = (verified && Number(verified.price) > 0)
     ? (verified.price_str || `£${Number(verified.price).toFixed(2)}`)
     : null;
+  // v3.3.1 — when SerpAPI returned a verified product link, the Amazon CTA
+  // opens THAT specific listing rather than an A9 search URL. Otherwise the
+  // price the user sees on the button (£X verified) doesn't match what they
+  // see on Amazon when they tap through, and trust dies on first click.
+  //
+  // CRITICAL — affiliate tag (Amazon Associates) MUST be preserved on the
+  // deep link so we still earn commission on the purchase. We:
+  //   1. Only deep-link if the URL is amazon.co.uk directly (NOT a Google
+  //      Shopping aclk redirect, where appending tag wouldn't propagate).
+  //   2. Inject ?tag=savvey-21 (or replace any existing tag param) onto
+  //      the URL before assigning it to the CTA href.
+  function _injectAmazonTag(rawUrl) {
+    try {
+      const u = new URL(rawUrl);
+      if (!/(^|\.)amazon\.co\.uk$/i.test(u.hostname)) return null; // not direct Amazon UK — skip
+      u.searchParams.set('tag', AMAZON_TAG);
+      return u.toString();
+    } catch (e) { return null; }
+  }
+  const verifiedAmazonLink = (verified && typeof verified.link === 'string' && /^https?:\/\//i.test(verified.link))
+    ? _injectAmazonTag(verified.link)
+    : null;
   for (const r of list) {
     const q = (r.name === 'Amazon UK' && payload.amazon_search_query) ? payload.amazon_search_query : displayName;
     const a = document.createElement('a');
-    a.href = r.url(q);
+    // Prefer the verified deep link for Amazon when we have one.
+    a.href = (r.name === 'Amazon UK' && verifiedAmazonLink) ? verifiedAmazonLink : r.url(q);
     a.target = '_top';
     a.rel = 'external noopener';
     a.className = 'cta' + (r.primary ? ' primary' : '');
     let nameStr = r.name;
     let subStr  = r.sub;
     if (r.name === 'Amazon UK' && verifiedPriceStr) {
-      // Amazon CTA gets price baked into the name + provenance into the sub.
       nameStr = `${r.name} · ${verifiedPriceStr}`;
-      subStr  = 'Verified just now · tap to confirm at Amazon';
+      subStr  = verifiedAmazonLink
+        ? 'Verified just now · tap to open this listing'
+        : 'Verified just now · tap to find this on Amazon';
     }
     a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
-    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, verified: r.name === 'Amazon UK' && !!verifiedPriceStr }));
+    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, verified: r.name === 'Amazon UK' && !!verifiedPriceStr, verified_link: r.name === 'Amazon UK' && !!verifiedAmazonLink }));
     ctaWrap.appendChild(a);
   }
   const heroWrap = document.getElementById('hero-img-wrap');

@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.3.0';
+const VERSION             = 'normalize.js v3.3.1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_1:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -272,24 +272,22 @@ async function fetchVerifiedAmazonPrice(query) {
 
     let officialMatch = null;
     let marketplaceMatch = null;
-    let unknownMatch = null;
     let warehouseMatch = null;
     for (const item of results) {
       if (!(Number(item.extracted_price) > 0)) continue;
       const cls = _classifyAmazonListing(item);
       if      (cls === 'official'    && !officialMatch)    officialMatch    = item;
       else if (cls === 'marketplace' && !marketplaceMatch) marketplaceMatch = item;
-      else if (cls === 'unknown'     && !unknownMatch)     unknownMatch     = item;
       else if (cls === 'warehouse'   && !warehouseMatch)   warehouseMatch   = item;
     }
 
-    const primary = officialMatch || unknownMatch || marketplaceMatch;
+    const primary = officialMatch || marketplaceMatch;
     if (!primary) {
       _lastSerpStatus = 'no_amazon_match';
       return null;
     }
 
-    const sourceType = officialMatch ? 'official' : unknownMatch ? 'unknown' : 'marketplace';
+    const sourceType = officialMatch ? 'official' : 'marketplace';
 
     return {
       price:           Number(primary.extracted_price),
@@ -298,7 +296,14 @@ async function fetchVerifiedAmazonPrice(query) {
       source:          'amazon.co.uk',
       source_type:     sourceType,
       title:           primary.title ? String(primary.title).slice(0, 200) : null,
-      link:            primary.link  ? String(primary.link).slice(0, 500)  : null,
+      // v3.3.1 — prefer product_link (direct merchant URL) over link
+      // (Google Shopping redirect, often null). Falls back to link if absent.
+      // This is the URL the Amazon CTA opens when verified_amazon_price is set,
+      // so it MUST go to the actual listing the £X price comes from — otherwise
+      // tapping the verified-price button lands on a search page and trust dies.
+      link:            (primary.product_link && String(primary.product_link).startsWith('http'))
+                         ? String(primary.product_link).slice(0, 500)
+                         : (primary.link ? String(primary.link).slice(0, 500) : null),
       used_price:      warehouseMatch ? Number(warehouseMatch.extracted_price) : null,
       used_price_str:  warehouseMatch ? String(warehouseMatch.price || `£${warehouseMatch.extracted_price}`).slice(0, 30) : null,
       fetched_at:      new Date().toISOString(),
