@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5e';
+const VERSION             = 'normalize.js v3.4.5f';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_8:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_9:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -236,7 +236,7 @@ async function callHaikuPriceTake({ canonical, price_str, used_price_str, catego
   const sys = `You are Savvey, a UK retail price assistant. The user is looking at a verified live Amazon UK listing for a product. Your job: produce a structured assessment with TWO fields.
 
 Output JSON ONLY, no preamble:
-{"verdict": "good_buy" | "fair" | "wait" | "check_elsewhere", "price_take": "Solid baseline — Echo Dot prices typically swing 30 percent on Prime Day." | null}
+{"verdict": "good_buy" | "fair" | "wait" | "check_elsewhere", "price_take": "Solid baseline — typical Echo Dot UK retail price." | null}
 
 Verdict semantics:
 - "good_buy"        — verified price is at or below typical UK retail floor for this product. Tell the user to buy.
@@ -251,7 +251,7 @@ CRITICAL — accessory/wrong-SKU detection:
 - Use UK retail knowledge for the product family to judge plausibility. Be cautious — false-positive on a legit sale is less damaging than false-negative on a wrong-SKU.
 
 price_take rules:
-- ONE sentence, max 14 words. Plain prose, no emojis.
+- ONE sentence, max 10 words (HARD limit — server-side cap will truncate mid-clause if exceeded). Plain prose, no emojis. End with a full stop, not a dangling clause.
 - Anchor in the verified price you were given. Do NOT quote a different price.
 - For "check_elsewhere", the take MUST explain why (accessory suspicion, 3P markup).
 - For "good_buy" / "fair" / "wait", the take frames the price in market context.
