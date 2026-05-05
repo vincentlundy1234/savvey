@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.3.4';
+const VERSION             = 'normalize.js v3.4.0';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_4:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_5:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -214,41 +214,66 @@ const SERPAPI_TIMEOUT_MS = 4000;
 const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
 
-// v3.3.4 — Haiku price_take. ONE short sentence framing the verified price.
-// Grounded: Haiku is reasoning over a real number we just fetched from SerpAPI,
-// not freelancing a price from training data. Hallucination risk is much lower
-// because the anchor is provided as input, not generated.
+// v3.4.0 — Haiku price_take + structured verdict. ONE Haiku call after SerpAPI
+// returns. Inputs: canonical + verified price + used price + category + rating
+// + reviews. Outputs: short price_take sentence AND a structured verdict enum
+// (good_buy | fair | wait | check_elsewhere). The verdict is the panel-mandated
+// "permission to buy" closure moment — rendered as a coloured pill at the top
+// of the result screen.
+//
+// SAFETY: when the verified price looks implausibly low for the canonical
+// product family, Haiku is instructed to return verdict='check_elsewhere'
+// with a price_take that warns the user the listing may be an accessory or
+// related item, NOT the canonical product. This catches the failure mode
+// surfaced by the v3.3.4 battery (Dyson V15 Detect verified at £170.99
+// when actual is £449-£599 — likely a Dyson V15 accessory hijacking the
+// top organic slot).
 async function callHaikuPriceTake({ canonical, price_str, used_price_str, category, rating, reviews }) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) return null;
   if (!canonical || !price_str) return null;
 
-  const sys = `You are Savvey, a UK retail price assistant. The user is looking at a verified live Amazon UK price for a product. Your job: produce ONE short sentence (max 14 words) that frames whether this price is a good deal, in UK voice. Be factual — only frame the verified price; do NOT invent comparisons or competing retailer prices. Output JSON ONLY, no preamble:
-{"price_take": "Solid baseline — Echo Dot prices typically swing 30 percent on Prime Day." | "Good buy — close to the historical UK floor for this model." | null}
+  const sys = `You are Savvey, a UK retail price assistant. The user is looking at a verified live Amazon UK listing for a product. Your job: produce a structured assessment with TWO fields.
 
-Rules:
+Output JSON ONLY, no preamble:
+{"verdict": "good_buy" | "fair" | "wait" | "check_elsewhere", "price_take": "Solid baseline — Echo Dot prices typically swing 30 percent on Prime Day." | null}
+
+Verdict semantics:
+- "good_buy"        — verified price is at or below typical UK retail floor for this product. Tell the user to buy.
+- "fair"            — verified price is within typical UK retail band. Reasonable purchase.
+- "wait"            — price is normal but a known sale event is imminent (Prime Day, Black Friday, end-of-product-cycle).
+- "check_elsewhere" — verified price is implausibly LOW for this product family (likely an accessory, replacement part, or wrong-SKU surfacing as the top organic listing) OR implausibly HIGH (3rd-party seller markup). The user should NOT trust this listing as the canonical product — recommend checking the listing carefully or another retailer.
+
+CRITICAL — accessory/wrong-SKU detection:
+- If the canonical product family is "Dyson V15 Detect" and verified price is £170, that is implausibly low for V15 Detect (real range £449-£599). Verdict = "check_elsewhere", price_take = "This price suggests a replacement part or accessory, not the V15 Detect itself — verify the listing before buying."
+- If canonical is a current iPhone Pro and verified is £200, that is implausibly low. Verdict = "check_elsewhere".
+- Use UK retail knowledge for the product family to judge plausibility. Be cautious — false-positive on a legit sale is less damaging than false-negative on a wrong-SKU.
+
+price_take rules:
 - ONE sentence, max 14 words. Plain prose, no emojis.
-- Anchor the take in the verified price you were given. Do NOT quote a different price.
-- Talk about price patterns (typical range, sale cycles, discontinued status, end-of-cycle) — NOT today's competing retailers.
-- For generic/no-name/grocery items where you have nothing meaningful to say, return null.
-- For products you don't recognise, return null. Do not bluff.`;
+- Anchor in the verified price you were given. Do NOT quote a different price.
+- For "check_elsewhere", the take MUST explain why (accessory suspicion, 3P markup).
+- For "good_buy" / "fair" / "wait", the take frames the price in market context.
+- For products you genuinely don't recognise, return verdict="fair" + price_take=null. Don't bluff.
+
+NEVER hallucinate a competing retailer price. NEVER cite a specific GBP figure other than the verified price you were given.`;
 
   const userMsg = `Product: ${canonical}
 Verified Amazon UK price: ${price_str}` +
     (used_price_str ? `\nAlso seen used at ${used_price_str}` : '') +
     (rating ? `\nAmazon rating: ${rating}/5 from ${reviews || '?'} reviews` : '') +
     (category ? `\nCategory: ${category}` : '') +
-    `\n\nWrite the price_take.`;
+    `\n\nProduce the JSON.`;
 
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 4000); // tighter timeout — secondary
+  const timer = setTimeout(() => ac.abort(), 4000);
   try {
     const r = await fetch(ANTHROPIC_ENDPOINT, {
       method: 'POST',
       headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 120,
+        max_tokens: 180,
         system: sys,
         messages: [{ role: 'user', content: userMsg }],
       }),
@@ -260,9 +285,11 @@ Verified Amazon UK price: ${price_str}` +
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
     let parsed;
     try { parsed = JSON.parse(cleaned); } catch { return null; }
+    const allowedVerdicts = ['good_buy', 'fair', 'wait', 'check_elsewhere'];
+    const verdict = (parsed && allowedVerdicts.includes(parsed.verdict)) ? parsed.verdict : null;
     const take = (parsed && typeof parsed.price_take === 'string' && parsed.price_take.trim())
       ? parsed.price_take.trim().slice(0, 200) : null;
-    return take;
+    return { verdict, price_take: take };
   } catch (e) {
     return null;
   } finally { clearTimeout(timer); }
@@ -411,6 +438,7 @@ function parseAndDefault(rawText) {
     used_amazon_price:   null, // populated by handler from verified_amazon_price.used_price_str
     amazon_rating:       null, // v3.3.3 — populated by handler from verified rating + reviews
     price_take:          null, // v3.3.4 — populated by handler from second Haiku call grounded by verified price
+    verdict:             null, // v3.4.0 — populated by handler: good_buy | fair | wait | check_elsewhere
     timing_advice:       ssStr(ss.timing_advice),
     consensus:           ssStr(ss.consensus),
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
@@ -528,10 +556,11 @@ export default async function handler(req, res) {
     } else if (verified_amazon_price.rating) {
       parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★`;
     }
-    // v3.3.4 — Haiku price_take grounded by the verified anchor we just got.
-    // Fire-and-forget if it errors; not critical to the response.
+    // v3.4.0 — Haiku price_take + verdict grounded by the verified anchor.
+    // Returns { verdict, price_take } structured object. Both nullable.
+    // Verdict drives the result-screen pill; price_take is the explanatory line.
     try {
-      const priceTake = await callHaikuPriceTake({
+      const ai = await callHaikuPriceTake({
         canonical:      parsed.canonical_search_string,
         price_str:      verified_amazon_price.price_str,
         used_price_str: verified_amazon_price.used_price_str,
@@ -539,7 +568,10 @@ export default async function handler(req, res) {
         rating:         verified_amazon_price.rating,
         reviews:        verified_amazon_price.reviews,
       });
-      if (priceTake) parsed.savvey_says.price_take = priceTake;
+      if (ai) {
+        if (ai.price_take) parsed.savvey_says.price_take = ai.price_take;
+        if (ai.verdict)    parsed.savvey_says.verdict    = ai.verdict;
+      }
     } catch (e) { /* non-critical */ }
   }
 
