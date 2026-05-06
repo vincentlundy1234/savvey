@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5l';
+const VERSION             = 'normalize.js v3.4.5n';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_11:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_12:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -497,6 +497,35 @@ function parseAndDefault(rawText) {
   };
 }
 
+// v3.4.5n — Open Food Facts lookup. Pre-resolves UK/EU grocery + toiletry
+// barcodes to a product name BEFORE Haiku sees them. Lifts Door 3 (Scan)
+// accuracy on the in-store-shopping use case. Free, no API key, generous
+// rate limit. Returns null on miss / network fail / timeout — caller falls
+// through to existing Haiku-from-digits behaviour. Panel-approved 6 May 2026.
+async function lookupOpenFoodFacts(ean) {
+  if (!ean || typeof ean !== 'string' || !/^\d{8,14}$/.test(ean)) return null;
+  const url = `https://world.openfoodfacts.org/api/v3/product/${encodeURIComponent(ean)}.json`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const r = await fetch(url, { signal: controller.signal, headers: { 'User-Agent': `Savvey/${VERSION}` } });
+    clearTimeout(timeout);
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || j.status !== 'success' || !j.product) return null;
+    const p = j.product;
+    const brand = (typeof p.brands === 'string' && p.brands.trim()) ? p.brands.split(',')[0].trim() : '';
+    const name  = (typeof p.product_name === 'string' && p.product_name.trim()) ? p.product_name.trim() :
+                  (typeof p.product_name_en === 'string' && p.product_name_en.trim()) ? p.product_name_en.trim() : '';
+    const qty   = (typeof p.quantity === 'string' && p.quantity.trim()) ? p.quantity.trim() : '';
+    const composed = [brand, name, qty].filter(Boolean).join(' ').slice(0, 200);
+    return composed || null;
+  } catch (err) {
+    clearTimeout(timeout);
+    return null;
+  }
+}
+
 export default async function handler(req, res) {
   applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -545,10 +574,24 @@ export default async function handler(req, res) {
       const ean = String(body.ean || '').trim().replace(/\D/g, '');
       if (!ean) return res.status(400).json({ error: 'ean required' });
       if (ean.length < 8 || ean.length > 14) return res.status(400).json({ error: 'invalid ean length' });
-      rawText = await withCircuit('anthropic',
-        () => callHaikuText(BARCODE_SYSTEM_PROMPT, `EAN/UPC: ${ean}`),
-        { onOpen: () => null }
-      );
+      // v3.4.5n — Open Food Facts pre-resolution. UK/EU groceries + toiletries
+      // are reliably mapped from EAN -> product name BEFORE Haiku sees them.
+      // On hit: feed the resolved string through TEXT_SYSTEM_PROMPT so Door 3
+      // inherits the higher-accuracy Type-door pipeline. On miss: fall through
+      // to the existing barcode-via-Haiku behaviour.
+      const resolvedName = await lookupOpenFoodFacts(ean);
+      if (resolvedName) {
+        console.log(`[${VERSION}] OpenFoodFacts hit for ${ean}: "${resolvedName.slice(0, 80)}"`);
+        rawText = await withCircuit('anthropic',
+          () => callHaikuText(TEXT_SYSTEM_PROMPT, `Query: "${resolvedName}"`),
+          { onOpen: () => null }
+        );
+      } else {
+        rawText = await withCircuit('anthropic',
+          () => callHaikuText(BARCODE_SYSTEM_PROMPT, `EAN/UPC: ${ean}`),
+          { onOpen: () => null }
+        );
+      }
     } else {
       const text = String(body.text || '').trim();
       if (!text) return res.status(400).json({ error: 'text required' });
@@ -588,6 +631,7 @@ export default async function handler(req, res) {
   if (parsed.alternative_string && parsed.confidence === 'medium') {
     alternative_amazon_price = await fetchVerifiedAmazonPrice(parsed.alternative_string);
   }
+
 
   if (verified_amazon_price && parsed.savvey_says) {
     if (Number(verified_amazon_price.price) > 0) {
@@ -634,6 +678,23 @@ export default async function handler(req, res) {
       parsed.savvey_says.verdict = 'check_elsewhere';
       if (!parsed.savvey_says.price_take) {
         parsed.savvey_says.price_take = "Couldn't fully verify this listing matches the product — confirm details before buying.";
+      }
+    }
+  }
+
+  // v3.4.5n SA panel veto guard (6 May 2026): if no verified Amazon anchor
+  // was returned by SerpAPI for this query, NULL any £/$/GBP/€ patterns that
+  // may have leaked into savvey_says fields. Defense-in-depth — the existing
+  // flow already gates price_take behind verified_amazon_price, but this
+  // catches future regressions (a Haiku field accidentally introducing a
+  // price claim, a future schema field forgetting to gate). 'Product
+  // Identified' state without an invented price band is the panel-mandated
+  // pivot until Keepa lands — accuracy over UI completeness.
+  if (!verified_amazon_price && parsed.savvey_says && typeof parsed.savvey_says === 'object') {
+    const _hasGbp = (s) => typeof s === 'string' && /(?:£|GBP|€|\$)\s*\d/i.test(s);
+    for (const k of ['price_take', 'consensus', 'timing_advice', 'review_consensus']) {
+      if (_hasGbp(parsed.savvey_says[k])) {
+        parsed.savvey_says[k] = null;
       }
     }
   }
