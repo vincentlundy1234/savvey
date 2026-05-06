@@ -251,7 +251,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5i</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5j</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -676,7 +676,11 @@ function renderConfirm(a, b, payload) {
     if (url && /^https?:\/\//i.test(url)) {
       const img = document.createElement('img');
       img.className = 'confirm-thumb';
-      img.loading = 'lazy';
+      // v3.4.5j — removed loading="lazy". The disambig screen lives behind a
+      // display:none CSS toggle until activated; the lazy IntersectionObserver
+      // initialises against the hidden parent and never re-fires when the
+      // screen becomes visible, so thumbnails got stuck at naturalWidth=0.
+      // Both images are tiny (56x56), above-the-fold, and cached by Amazon CDN.
       img.alt = '';
       img.onerror = () => { /* fall back to empty placeholder */ slot.replaceWith(Object.assign(document.createElement('span'), { className: 'confirm-thumb-empty', id: slotId })); };
       img.src = url;
@@ -1161,15 +1165,4 @@ const _resetLink = document.getElementById('reset-link');
 if (_resetLink) {
   _resetLink.addEventListener('click', (e) => {
     e.preventDefault();
-    if (confirm('Reset Savvey? Clears local cache + service worker, then reloads. Use this only if the app is stuck on an old version.')) {
-      track('reset_invoked', { source: 'footer-link' });
-      _savveyNukeAndReload({ source: 'footer-link' });
-    }
-  });
-}
-
-track('app_loaded', { ua_mobile: /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent), standalone: window.matchMedia('(display-mode: standalone)').matches });
-handleInbound();
-</script>
-</body>
-</html>
+    if (confirm('Reset Savvey? Clears local cache + service worker, then reloads. Use this only if the app i
