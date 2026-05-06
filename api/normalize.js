@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5i';
+const VERSION             = 'normalize.js v3.4.5l';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_10:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_11:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -92,7 +92,7 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "confidence": "high" | "medium" | "low",
   "alternative_string": "Ninja AF300UK" | null,
-  "category": "tech" | "home" | "toys" | "diy" | "generic",
+  "category": "tech" | "home" | "toys" | "diy" | "beauty" | "grocery" | "health" | "generic",
   "mpn": "AF400UK" | "QC45" | null,
   "amazon_search_query": "AF400UK" | "Bose QuietComfort 45",
   "savvey_says": {
@@ -106,7 +106,15 @@ Field rules:
 - canonical_search_string: cleanest brand + family + model.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
 - alternative_string: ONLY when confidence < high. NULL when high.
-- category — STRICT enum: tech | home | toys | diy | generic.
+- category — STRICT enum: tech | home | toys | diy | beauty | grocery | health | generic.
+  - tech: phones, laptops, headphones, gaming, computer accessories, smart-home electronics.
+  - home: kitchen appliances, furniture, bedding, larger household items.
+  - toys: toys, board games, kids' products.
+  - diy: tools, garden, hardware, building materials.
+  - beauty: cosmetics, skincare, haircare, makeup, fragrance, hair tools.
+  - grocery: food, drink, household consumables (cleaning sprays, dishwasher tabs, etc.).
+  - health: OTC medicine, oral care (mouthwash/toothpaste), vitamins, supplements, wellness.
+  - generic: only when nothing above clearly fits.
 - mpn: raw manufacturer part number. NULL if not extractable.
 - amazon_search_query: STRICTEST search string for Amazon A9. Prefer MPN.
 - savvey_says: 'BS-Filter' qualitative summary. ALL fields nullable. null > hallucination.
@@ -137,6 +145,9 @@ Examples:
 - "bose qc45" → canonical="Bose QuietComfort 45", confidence="high", mpn="QC45"
 - "iphone 15" → canonical="Apple iPhone 15 128GB", confidence="medium", alternative="Apple iPhone 15 Plus"
 - "kettle" → canonical="Kettle", confidence="low", category="home", savvey_says all null
+- "Listerine" → canonical="Listerine Mouthwash", category="health" (mouthwash is oral-care/health, NOT generic)
+- "L'Oreal shampoo" → canonical="L'Oreal Elvive Shampoo", category="beauty"
+- "Heinz beans" → canonical="Heinz Baked Beans 415g", category="grocery" 
 
 ${COMMON_SCHEMA_DOC}`;
 
@@ -456,7 +467,7 @@ function parseAndDefault(rawText) {
   const confidence = ['high','medium','low'].includes(parsed.confidence) ? parsed.confidence : 'low';
   const alternative = (confidence !== 'high' && typeof parsed.alternative_string === 'string' && parsed.alternative_string.trim())
     ? parsed.alternative_string.trim().slice(0, 200) : null;
-  const category = ['tech','home','toys','diy','generic'].includes(parsed.category) ? parsed.category : 'generic';
+  const category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
   const mpn = (typeof parsed.mpn === 'string' && parsed.mpn.trim()) ? parsed.mpn.trim().slice(0, 100) : null;
   const amazonQ = (typeof parsed.amazon_search_query === 'string' && parsed.amazon_search_query.trim())
     ? parsed.amazon_search_query.trim().slice(0, 200) : (mpn || canonical);

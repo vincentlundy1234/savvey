@@ -251,7 +251,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5k</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5l</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -344,12 +344,29 @@ const RETAILERS = {
           url: q => `https://www.diy.com/search?term=${encodeURIComponent(q)}` },
   ebay: { name: 'eBay UK',    mark: 'ebay', label: 'eb.',
           url: q => `https://www.ebay.co.uk/sch/i.html?_nkw=${encodeURIComponent(q)}` },
+  // v3.4.5l — non-tech retailers wired in for category-routing fix
+  // (panel-mandated 6 May 2026 beta finding: Listerine routing to Currys).
+  boot: { name: 'Boots',           mark: 'boot', label: 'B.',
+          url: q => `https://www.boots.com/sitesearch?searchTerm=${encodeURIComponent(q)}` },
+  supe: { name: 'Superdrug',       mark: 'supe', label: 'SD',
+          url: q => `https://www.superdrug.com/search?text=${encodeURIComponent(q)}` },
+  lf:   { name: 'Lookfantastic',   mark: 'lf',   label: 'LF',
+          url: q => `https://www.lookfantastic.com/elysium.search?search=${encodeURIComponent(q)}` },
+  tesc: { name: 'Tesco',           mark: 'tesc', label: 'T.',
+          url: q => `https://www.tesco.com/groceries/en-GB/search?query=${encodeURIComponent(q)}` },
+  sain: { name: "Sainsbury's",     mark: 'sain', label: 'S.',
+          url: q => `https://www.sainsburys.co.uk/gol-ui/SearchResults/${encodeURIComponent(q)}` },
+  hb:   { name: 'Holland & Barrett', mark: 'hb', label: 'H&B',
+          url: q => `https://www.hollandandbarrett.com/shop/search?searchTerm=${encodeURIComponent(q)}` },
 };
 const CATEGORY_MAP = {
   tech:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.curr, sub: 'Tech specialist — check alternative'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'} ],
   home:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.curr, sub: 'Appliances + home — check alternative'}, {...RETAILERS.jl,   sub: '2-yr guarantee — check alternative'} ],
   toys:    [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.smyt, sub: 'UK toy specialist — check alternative'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'} ],
   diy:     [ {...RETAILERS.amzn, sub: 'Most listings'}, {...RETAILERS.scre, sub: 'Trade prices, click & collect'}, {...RETAILERS.bq,   sub: 'High street DIY chain'} ],
+  beauty:  [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.boot, sub: 'UK beauty + health staple — check alternative'}, {...RETAILERS.lf,   sub: 'Premium beauty specialist — check alternative'} ],
+  grocery: [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.tesc, sub: 'UK grocery — likely cheaper here'}, {...RETAILERS.sain, sub: 'UK grocery alternative'} ],
+  health:  [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.boot, sub: 'UK pharmacy + health staple'}, {...RETAILERS.hb,   sub: 'Vitamins + supplements specialist'} ],
   generic: [ {...RETAILERS.amzn, sub: 'Verified live price'}, {...RETAILERS.argo, sub: 'Same-day collection — check alternative'}, {...RETAILERS.ebay, sub: 'New, used, auctions — check alternative'} ],
 };
 
