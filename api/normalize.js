@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5f';
+const VERSION             = 'normalize.js v3.4.5i';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -84,7 +84,7 @@ function cacheKey(inputType, payload) {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
   // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_9:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_10:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -236,7 +236,7 @@ async function callHaikuPriceTake({ canonical, price_str, used_price_str, catego
   const sys = `You are Savvey, a UK retail price assistant. The user is looking at a verified live Amazon UK listing for a product. Your job: produce a structured assessment with TWO fields.
 
 Output JSON ONLY, no preamble:
-{"verdict": "good_buy" | "fair" | "wait" | "check_elsewhere", "price_take": "Solid baseline — typical Echo Dot UK retail price." | null}
+{"verdict": "good_buy" | "fair" | "wait" | "check_elsewhere", "price_take": "Solid baseline — Echo Dot typical UK £45-£60." | null}
 
 Verdict semantics:
 - "good_buy"        — verified price is at or below typical UK retail floor for this product. Tell the user to buy.
@@ -252,6 +252,7 @@ CRITICAL — accessory/wrong-SKU detection:
 
 price_take rules:
 - ONE sentence, max 10 words (HARD limit — server-side cap will truncate mid-clause if exceeded). Plain prose, no emojis. End with a full stop, not a dangling clause.
+- ALWAYS anchor the verdict in a visible UK price reference where you know the band — formats: "typical £45-£60", "averages £279", "retails £449-£599", "high street £550-£600". The user must see WHY this verdict was given, not just the verdict itself. Only omit the reference if you genuinely don't know the typical UK band — in that case return price_take=null instead of guessing.
 - Anchor in the verified price you were given. Do NOT quote a different price.
 - For "check_elsewhere", the take MUST explain why (accessory suspicion, 3P markup).
 - For "good_buy" / "fair" / "wait", the take frames the price in market context.
@@ -567,6 +568,15 @@ export default async function handler(req, res) {
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
     verified_amazon_price = await fetchVerifiedAmazonPrice(parsed.canonical_search_string);
   }
+  // v3.4.5i — fetch alternative's verified Amazon listing too when confidence
+  // is medium and an alternative was produced. Powers disambig-screen
+  // thumbnails so users compare visually instead of recalling model numbers
+  // (panel-mandated 6 May 2026 beta finding — Logitech M235 vs M185 case).
+  // Cost: ONE extra SerpAPI call per disambig case (~30% of queries).
+  let alternative_amazon_price = null;
+  if (parsed.alternative_string && parsed.confidence === 'medium') {
+    alternative_amazon_price = await fetchVerifiedAmazonPrice(parsed.alternative_string);
+  }
 
   if (verified_amazon_price && parsed.savvey_says) {
     if (Number(verified_amazon_price.price) > 0) {
@@ -640,6 +650,7 @@ export default async function handler(req, res) {
   const responseBody = {
     ...parsed,
     verified_amazon_price,
+    alternative_amazon_price,
     _meta: {
       version: VERSION,
       input_type: inputType,
