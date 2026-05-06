@@ -8,13 +8,16 @@
 //    /api/*        — Network-Only. Never cache identification calls.
 // ─────────────────────────────────────────────────────────────
 
-// v3.4.1 (5 May 2026): STATIC_VER bumped v310 -> v341. Five deploys shipped
+// v3.4.5o (6 May 2026): STATIC_VER bumped v345n -> v345o for Wave E
+// (swipe-between-screens + Snap pinch-to-zoom + copy tweaks + Snap-another
+// CTA on result screen). Frontend-only wave; backend unchanged.
+ STATIC_VER bumped v310 -> v341. Five deploys shipped
 // between v3.1 and v3.4.1 (verdict pill, deep-link, smart loader, etc.) and
 // the SW cache was never bumped. Installed PWAs were serving v3.1 cached
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345n';
+const STATIC_VER    = 'savvey-static-v345o';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [

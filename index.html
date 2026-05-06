@@ -201,6 +201,18 @@
   .cam-shutter { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 64px; height: 64px; border-radius: 50%; background: white; border: 4px solid rgba(255,255,255,.4); cursor: pointer; }
   .cam-shutter:active { transform: translateX(-50%) scale(.92); }
   .cam-cancel { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,.4); color: white; border: none; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  .zoom-indicator { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55); color: white; border-radius: 999px; padding: 5px 11px; font-weight: 700; font-size: 13px; pointer-events: none; min-width: 40px; text-align: center; backdrop-filter: blur(6px); transition: opacity .2s ease; }
+  .zoom-controls { position: absolute; bottom: 18px; right: 12px; display: flex; flex-direction: column; gap: 6px; }
+  .zoom-btn { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,.45); color: white; border: 1px solid rgba(255,255,255,.18); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .15s ease, transform .12s ease; backdrop-filter: blur(6px); }
+  .zoom-btn:active { transform: scale(.92); }
+  .zoom-btn.active { background: white; color: #000; border-color: white; }
+  /* v3.4.5o Wave E: swipe gesture micro-affordance */
+  .swipe-hint { position: fixed; top: 50%; transform: translateY(-50%); background: rgba(42,107,34,.86); color: white; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; z-index: 8; pointer-events: none; opacity: 0; transition: opacity .35s ease; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
+  .swipe-hint.left { right: 10px; }
+  .swipe-hint.right { left: 10px; }
+  .swipe-hint.show { opacity: 1; }
+  .screen.swiping { transition: none !important; }
+  @media (prefers-reduced-motion: reduce) { .screen.swiping { transition: none; transform: none !important; } }
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -227,7 +239,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <button class="door primary" onclick="goSnap()">
     <div class="door-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
     <h2 class="door-title">Snap a product</h2>
-    <p class="door-sub">In-store? Snap the product or its box — we'll identify it instantly.</p>
+    <p class="door-sub">In-store? Snap the box or the product — we'll identify it instantly.</p>
     <p class="door-sub" style="margin-top:8px;font-size:13px;opacity:.85;">Or <a href="#" onclick="event.preventDefault();event.stopPropagation();document.getElementById('photo-upload').click();" style="color:white;text-decoration:underline;font-weight:700;">upload a photo</a></p>
   </button>
   <input id="photo-upload" type="file" accept="image/*" hidden onchange="handlePhotoUpload(event)">
@@ -269,7 +281,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5n</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5o</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -282,13 +294,19 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen" id="screen-camera">
-  <h1 class="tagline">Snap the product or its box</h1>
+  <h1 class="tagline">Snap the box or the product</h1>
   <p class="tagsub">Hold steady and frame the front of the product. Model number = best.</p>
   <div class="cam-wrap">
     <video id="cam-video" autoplay playsinline muted></video>
     <div class="cam-cutout"></div>
     <button class="cam-cancel" onclick="cancelCamera()">Cancel</button>
     <button class="cam-shutter" onclick="captureFrame()" aria-label="Capture"></button>
+    <div class="zoom-indicator" id="zoom-indicator" hidden>1×</div>
+    <div class="zoom-controls" id="zoom-controls" hidden>
+      <button class="zoom-btn" data-zoom="1" aria-label="1× zoom">1×</button>
+      <button class="zoom-btn" data-zoom="2" aria-label="2× zoom">2×</button>
+      <button class="zoom-btn" data-zoom="3" aria-label="3× zoom">3×</button>
+    </div>
   </div>
 </div>
 
@@ -328,7 +346,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </p>
   <div class="actions-row">
     <button class="ghost-btn" onclick="shareResult()">Share</button>
-    <button class="ghost-btn" onclick="goHome()">New search</button>
+    <button class="ghost-btn" onclick="navSnap()" aria-label="Snap another product">Snap another</button>
+    <button class="ghost-btn" onclick="goHome()">Home</button>
   </div>
   <p class="small-print">Prices are live on each retailer's own page. Amazon links contain our affiliate tag — same price for you.</p>
 </div>
@@ -420,6 +439,7 @@ function goHome(opts) {
   stopAllScanners();
   document.getElementById('url-input').value = '';
   document.getElementById('text-input').value = '';
+  setActiveNav('home');
   show('home', opts);
 }
 // v3.4.5m — Wave C bottom-nav handlers. Each guarantees state-reset back
@@ -441,8 +461,27 @@ function navType() {
   lastResult = null;
   setActiveNav('type');
   show('home');
-  setTimeout(() => { const inp = document.getElementById('text-input'); if (inp) inp.focus(); }, 80);
+  // v3.4.5o Wave E: Type tab scrolls the Type door into view so the tab
+  // actually has a visible destination instead of silently focusing
+  // something off-screen.
+  setTimeout(() => {
+    const inp = document.getElementById('text-input');
+    if (!inp) return;
+    try { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { inp.scrollIntoView(); }
+    inp.focus();
+  }, 80);
   track('nav_tap', { tab: 'type' });
+}
+// v3.4.5o Wave E: Scan tab — beta finding "A bottom menu is essential"
+// extends to 4 doors. State-reset matches Wave C panel mandate.
+function navScan() {
+  stopAllScanners();
+  document.getElementById('text-input').value = '';
+  document.getElementById('url-input').value = '';
+  lastResult = null;
+  setActiveNav('scan');
+  goBarcode();
+  track('nav_tap', { tab: 'scan' });
 }
 function navHome() {
   setActiveNav('home');
@@ -468,6 +507,207 @@ window.addEventListener('popstate', (e) => {
   }
   show(target, { fromPop: true });
 });
+// v3.4.5o Wave E — Snap zoom (pinch + tap-to-cycle).
+// Uses MediaStreamTrack.applyConstraints({ advanced: [{ zoom }] }) with a
+// graceful no-op fallback when the device's video track lacks zoom support.
+let _zoomCap = null;
+let _zoomCurrent = 1;
+let _zoomPinchStart = null;
+let _zoomLastTap = 0;
+
+async function setupCameraZoom(stream) {
+  _zoomCap = null;
+  _zoomCurrent = 1;
+  const ind = document.getElementById('zoom-indicator');
+  const ctl = document.getElementById('zoom-controls');
+  if (ind) ind.hidden = true;
+  if (ctl) ctl.hidden = true;
+  if (!stream) return;
+  try {
+    const track = stream.getVideoTracks && stream.getVideoTracks()[0];
+    if (!track || !track.getCapabilities) return;
+    const caps = track.getCapabilities();
+    if (!caps || typeof caps.zoom !== 'object' || typeof caps.zoom.min !== 'number') return;
+    _zoomCap = { min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step || 0.1 };
+    _zoomCurrent = caps.zoom.min || 1;
+    if (ind) { ind.hidden = false; ind.textContent = (_zoomCurrent).toFixed(_zoomCurrent < 10 ? 1 : 0).replace(/\.0$/,'') + '×'; }
+    if (ctl) {
+      ctl.hidden = false;
+      ctl.querySelectorAll('.zoom-btn').forEach(btn => {
+        const z = Number(btn.getAttribute('data-zoom'));
+        btn.classList.toggle('active', Math.abs(z - _zoomCurrent) < 0.05);
+        btn.disabled = z > _zoomCap.max;
+        btn.style.opacity = btn.disabled ? '0.35' : '1';
+      });
+    }
+    track('snap_zoom_supported', { min: _zoomCap.min, max: _zoomCap.max });
+  } catch (err) {
+    /* zoom unsupported — leave UI hidden */
+  }
+}
+
+async function applyCameraZoom(value) {
+  if (!_zoomCap || !camStream) return;
+  const v = Math.max(_zoomCap.min, Math.min(_zoomCap.max, value));
+  try {
+    const track = camStream.getVideoTracks && camStream.getVideoTracks()[0];
+    if (!track) return;
+    await track.applyConstraints({ advanced: [{ zoom: v }] });
+    _zoomCurrent = v;
+    const ind = document.getElementById('zoom-indicator');
+    if (ind) ind.textContent = v.toFixed(v < 10 ? 1 : 0).replace(/\.0$/,'') + '×';
+    const ctl = document.getElementById('zoom-controls');
+    if (ctl) ctl.querySelectorAll('.zoom-btn').forEach(btn => {
+      const z = Number(btn.getAttribute('data-zoom'));
+      btn.classList.toggle('active', Math.abs(z - v) < 0.15);
+    });
+  } catch (err) { /* ignore */ }
+}
+
+document.addEventListener('click', (e) => {
+  const btn = e.target && e.target.closest && e.target.closest('.zoom-btn');
+  if (!btn || btn.disabled) return;
+  e.preventDefault();
+  const z = Number(btn.getAttribute('data-zoom'));
+  if (z) applyCameraZoom(z);
+  track('snap_zoom_set', { method: 'tap', value: z });
+});
+
+(function attachPinch() {
+  const cam = document.getElementById('screen-camera');
+  if (!cam) return;
+  cam.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2 && _zoomCap) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      _zoomPinchStart = { dist: Math.hypot(dx, dy), zoom: _zoomCurrent };
+    }
+  }, { passive: true });
+  cam.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2 || !_zoomPinchStart || !_zoomCap) return;
+    const dx = e.touches[0].clientX - e.touches[1].clientX;
+    const dy = e.touches[0].clientY - e.touches[1].clientY;
+    const d = Math.hypot(dx, dy);
+    const ratio = d / _zoomPinchStart.dist;
+    const target = _zoomPinchStart.zoom * ratio;
+    applyCameraZoom(target);
+  }, { passive: true });
+  cam.addEventListener('touchend', (e) => {
+    if (e.touches.length < 2) {
+      if (_zoomPinchStart) track('snap_zoom_set', { method: 'pinch', value: _zoomCurrent });
+      _zoomPinchStart = null;
+    }
+    // double-tap on the video → cycle 1× → 2× → 3× → 1×
+    if (e.target && e.target.id === 'cam-video' && _zoomCap) {
+      const now = Date.now();
+      if (now - _zoomLastTap < 320) {
+        const next = _zoomCurrent < 1.5 ? 2 : (_zoomCurrent < 2.5 ? 3 : 1);
+        applyCameraZoom(next);
+        track('snap_zoom_set', { method: 'doubletap', value: next });
+        _zoomLastTap = 0;
+      } else {
+        _zoomLastTap = now;
+      }
+    }
+  }, { passive: true });
+})();
+
+// v3.4.5o Wave E — swipe-between-screens gesture handler (v2 feature
+// re-introduced per beta feedback 6 May 2026: 'navigating app difficult,
+// swipe between screen feature from v2 is missed'). Acts as horizontal
+// back/forward across the primary screens. Disabled on text/url inputs
+// and on the camera screen (which uses pinch + double-tap instead).
+(function attachScreenSwipe() {
+  let startX = null, startY = null, startT = 0, captured = false;
+  const SWIPE_MIN_PX = 80, SWIPE_MAX_OFF_AXIS = 50, SWIPE_MAX_MS = 600;
+
+  function isInteractive(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) return true;
+    if (el.closest && el.closest('.cam-wrap, .door-input-wrap, [data-no-swipe]')) return true;
+    return false;
+  }
+
+  function activeScreenId() {
+    const el = document.querySelector('.screen.active');
+    return el ? el.id : null;
+  }
+
+  document.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { startX = null; return; }
+    if (isInteractive(e.target)) { startX = null; return; }
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    startT = Date.now();
+    captured = false;
+  }, { passive: true });
+
+  document.addEventListener('touchend', (e) => {
+    if (startX === null) return;
+    const t = e.changedTouches && e.changedTouches[0];
+    if (!t) { startX = null; return; }
+    const dx = t.clientX - startX;
+    const dy = Math.abs(t.clientY - startY);
+    const dt = Date.now() - startT;
+    startX = null;
+    if (dt > SWIPE_MAX_MS) return;
+    if (dy > SWIPE_MAX_OFF_AXIS) return;
+    if (Math.abs(dx) < SWIPE_MIN_PX) return;
+    const dir = dx > 0 ? 'right' : 'left';
+    const screen = activeScreenId();
+    handleSwipe(dir, screen);
+  }, { passive: true });
+
+  function handleSwipe(dir, screen) {
+    // Right-swipe = back/exit (canonical mobile pattern)
+    if (dir === 'right') {
+      if (screen === 'screen-result' || screen === 'screen-error') {
+        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
+        navHome();
+        return;
+      }
+      if (screen === 'screen-confirm') {
+        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
+        goHome();
+        return;
+      }
+      if (screen === 'screen-barcode') {
+        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
+        navHome();
+        return;
+      }
+    }
+    // Left-swipe on home = quick-launch Snap
+    if (dir === 'left' && screen === 'screen-home') {
+      track('swipe_nav', { from: 'home', dir: 'left', to: 'snap' });
+      navSnap();
+      return;
+    }
+  }
+
+  // First-visit hint affordance (one-shot, localStorage-gated)
+  try {
+    if (!localStorage.getItem('savvey_swipe_hint_shown')) {
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          if (activeScreenId() !== 'screen-home') return;
+          const hint = document.createElement('div');
+          hint.className = 'swipe-hint left';
+          hint.textContent = '← swipe to Snap';
+          document.body.appendChild(hint);
+          requestAnimationFrame(() => hint.classList.add('show'));
+          setTimeout(() => {
+            hint.classList.remove('show');
+            setTimeout(() => hint.remove(), 400);
+          }, 2400);
+          localStorage.setItem('savvey_swipe_hint_shown', '1');
+        }, 1400);
+      });
+    }
+  } catch {}
+})();
+
 try {
   const initialHash = (location.hash || '#home').replace('#','');
   history.replaceState({ screen: initialHash || 'home' }, '', '#' + (initialHash || 'home'));
@@ -504,6 +744,7 @@ async function goSnap() {
       audio: false
     });
     document.getElementById('cam-video').srcObject = camStream;
+    setupCameraZoom(camStream);
     track('snap_started');
   } catch (err) {
     track('snap_camera_denied', { reason: String(err && err.name || err).slice(0, 40) });
@@ -1248,6 +1489,10 @@ handleInbound();
   <button class="nav-tab" id="nav-snap" onclick="navSnap()" aria-label="Snap a product">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
     <span>Snap</span>
+  </button>
+  <button class="nav-tab" id="nav-scan" onclick="navScan()" aria-label="Scan a barcode">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="2" height="12"></rect><rect x="6" y="6" width="1" height="12"></rect><rect x="9" y="6" width="3" height="12"></rect><rect x="14" y="6" width="1" height="12"></rect><rect x="17" y="6" width="2" height="12"></rect><rect x="21" y="6" width="1" height="12"></rect></svg>
+    <span>Scan</span>
   </button>
   <button class="nav-tab" id="nav-type" onclick="navType()" aria-label="Type to search">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
