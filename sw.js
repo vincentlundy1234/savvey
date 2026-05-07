@@ -8,6 +8,8 @@
 //    /api/*        — Network-Only. Never cache identification calls.
 // ─────────────────────────────────────────────────────────────
 
+// v3.4.5p (7 May 2026): STATIC_VER bumped v345o -> v345p for Wave F
+// (verdict-pill basis micro-copy + your-snap on disambig + neutral-state pill)
 // v3.4.5o (6 May 2026): STATIC_VER bumped v345n -> v345o for Wave E
 // (swipe-between-screens + Snap pinch-to-zoom + copy tweaks + Snap-another
 // CTA on result screen). Frontend-only wave; backend unchanged.
@@ -17,7 +19,7 @@
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345o';
+const STATIC_VER    = 'savvey-static-v345p';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [

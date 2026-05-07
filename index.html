@@ -113,6 +113,13 @@
   .verdict-pill.fair           { background: #fbeed4; color: #95650a; border: 1px solid #d68910; }
   .verdict-pill.wait           { background: #fbeed4; color: #95650a; border: 1px solid #d68910; }
   .verdict-pill.check_elsewhere{ background: #fde0e0; color: #8b1a1a; border: 1px solid #cc4444; }
+  .verdict-pill.neutral        { background: #f0f0f0; color: #555; border: 1px solid #d4d4d4; }
+  .verdict-basis { display: none; font-size: 12px; color: var(--ink-mute); margin: -8px 0 12px; line-height: 1.4; }
+  .verdict-basis.show { display: block; }
+  .your-snap-strip { display: none; align-items: center; gap: 10px; padding: 8px 12px; background: #f6f6f4; border-radius: 12px; margin: 0 0 14px; font-size: 13px; color: var(--ink-mute); }
+  .your-snap-strip.show { display: flex; }
+  .your-snap-strip img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: 0 0 44px; background: var(--bg); }
+  .your-snap-strip span { font-weight: 600; }
   .verdict-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
   .identify-title { font-weight: 800; font-size: 28px; line-height: 1.18; margin: 4px 0 4px; letter-spacing: -0.01em; }
   .identify-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
@@ -281,7 +288,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5o</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5p</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -321,7 +328,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 <div class="screen" id="screen-confirm">
   <div class="badge-row"><span class="badge amber">Quick check</span></div>
   <h1 class="identify-title">Which one did you mean?</h1>
-  <p class="identify-sub">We saw two possibilities. Tap the right one.</p>
+  <p class="identify-sub" id="confirm-sub">We saw two possibilities. Tap the right one.</p>
+  <div class="your-snap-strip" id="your-snap-strip"><img id="your-snap-img" alt="Your snap"><span>Your snap</span></div>
   <div class="confirm-card">
     <button class="confirm-btn" id="confirm-a"><span class="confirm-thumb-empty" id="confirm-a-thumb"></span><span class="confirm-text" id="confirm-a-text"></span></button>
     <button class="confirm-btn" id="confirm-b"><span class="confirm-thumb-empty" id="confirm-b-thumb"></span><span class="confirm-text" id="confirm-b-text"></span></button>
@@ -332,6 +340,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 <div class="screen" id="screen-result">
   <div class="badge-row"><span class="badge" id="result-badge">Identified</span></div>
   <div class="verdict-pill" id="verdict-pill"><span class="verdict-dot"></span><span id="verdict-pill-text">—</span></div>
+  <p class="verdict-basis" id="verdict-basis"></p>
   <h1 class="identify-title" id="result-title">—</h1>
   <p class="identify-sub" id="result-sub">Verified Amazon UK price below. Other retailers shown to check alternatives.</p>
   <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
@@ -408,6 +417,7 @@ const CATEGORY_MAP = {
 };
 
 let camStream = null;
+let _lastSnapDataUrl = null;
 let lastResult = null;
 let _barcodeScanner = null;
 let _html5QrcodeLoaded = null;
@@ -761,6 +771,7 @@ async function captureFrame() {
   if (!v || !v.videoWidth) return;
   const out = downscaleImageToBase64(v, v.videoWidth, v.videoHeight);
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  _lastSnapDataUrl = 'data:image/jpeg;base64,' + out.base64;
   track('snap_captured', { bytes: out.bytes, quality: out.quality, w: out.width });
   await callNormalize({ input_type: 'image', image_base64: out.base64, media_type: 'image/jpeg' });
 }
@@ -1002,6 +1013,21 @@ function renderConfirm(a, b, payload) {
   document.getElementById('confirm-b-text').textContent = b;
   setThumb('confirm-a-thumb', aThumb);
   setThumb('confirm-b-thumb', bThumb);
+  // Wave F: show user's snap as reference when this disambig came from the camera
+  const snapStrip = document.getElementById('your-snap-strip');
+  const snapImg = document.getElementById('your-snap-img');
+  if (_lastDoor === 'snap' && _lastSnapDataUrl && snapStrip && snapImg) {
+    snapImg.src = _lastSnapDataUrl;
+    snapStrip.classList.add('show');
+  } else if (snapStrip) {
+    snapStrip.classList.remove('show');
+  }
+  // Wave F: when no thumbnails came back from SerpAPI, swap the sub-copy to be intentional, not broken
+  const subEl = document.getElementById('confirm-sub');
+  if (subEl) {
+    if (!aThumb && !bThumb) subEl.textContent = 'Tap the closer match. We could not pull product images for these.';
+    else subEl.textContent = 'We saw two possibilities. Tap the right one.';
+  }
   document.getElementById('confirm-a').onclick = () => {
     track('disambig_resolved', { picked: 'canonical' });
     pushRecent(lastResult);
@@ -1039,12 +1065,28 @@ function renderResult(displayName, payload) {
   // returned a verdict. Maps enum -> CSS class -> label.
   const pillEl = document.getElementById('verdict-pill');
   const pillTxt = document.getElementById('verdict-pill-text');
-  pillEl.classList.remove('show', 'good_buy', 'fair', 'wait', 'check_elsewhere');
+  pillEl.classList.remove('show', 'good_buy', 'fair', 'wait', 'check_elsewhere', 'neutral');
+  // Wave F: verdict basis micro-copy explains WHY (panel + beta finding 'good buy based on what?').
+  // Built dynamically from what data is present so it's always honest about the basis.
+  const basisEl = document.getElementById('verdict-basis');
+  if (basisEl) basisEl.classList.remove('show');
   const v = payload && payload.savvey_says && payload.savvey_says.verdict;
+  const ss = payload && payload.savvey_says;
+  const basisParts = [];
+  if (ss && ss.live_amazon_price) basisParts.push('Amazon UK live price');
+  if (ss && ss.amazon_rating) basisParts.push('reviews');
+  if (ss && ss.price_take && /\d/.test(ss.price_take)) basisParts.push('typical UK band');
+  const basisLine = basisParts.length ? 'Based on ' + basisParts.join(' + ') + '.' : null;
   if (v && ['good_buy','fair','wait','check_elsewhere'].includes(v)) {
     const label = { good_buy: 'Good buy', fair: 'Fair price', wait: 'Wait — sale likely', check_elsewhere: 'Check listing carefully' }[v];
     pillTxt.textContent = label;
     pillEl.classList.add('show', v);
+    if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
+  } else if (ss && ss.live_amazon_price) {
+    // Wave F: neutral pill when verdict is null but we have a verified price
+    pillTxt.textContent = 'Identified — see retailer';
+    pillEl.classList.add('show', 'neutral');
+    if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
     // v3.4.5e — verdict_shown is now fired AFTER show('result') below (in
     // a requestAnimationFrame) to ensure it tracks the moment the user
     // actually SEES the verdict, not the moment the DOM mutation happens
