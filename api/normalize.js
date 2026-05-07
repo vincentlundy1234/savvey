@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5ii';
+const VERSION             = 'normalize.js v3.4.5ii2';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_ii:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_ii2:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -611,7 +611,7 @@ function assessSpecificity(canonical, mpn, confidence) {
   if (/\d/.test(stripped)) return 'specific';
   const tokens = stripped.split(/\s+/).filter(t => t.length > 1);
   if (tokens.length >= 4) return 'specific';
-  if (/\b(pro|max|ultra|plus|mini|air|se|elite|premium|deluxe|essentials?|gen[\s-]?\d+)\b/i.test(stripped)) return 'specific';
+  if (/\b(pro|max|ultra|plus|mini|se|elite|premium|deluxe|essentials?|gen[\s-]?\d+)\b/i.test(stripped)) return 'specific'; // Wave II.2 — dropped 'air' (false-positive on 'Air Fryer')
   if (confidence === 'low') return 'brand_only';
   return tokens.length <= 2 ? 'brand_only' : 'specific';
 }
@@ -829,8 +829,20 @@ export default async function handler(req, res) {
         { onOpen: () => null }
       );
     } else if (inputType === 'url') {
-      const u = String(body.url || '').trim();
-      if (!u || !/^https?:\/\//i.test(u)) return res.status(400).json({ error: 'valid url required' });
+      const rawUrl = String(body.url || '').trim();
+      if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) return res.status(400).json({ error: 'valid url required' });
+      // Wave II.2 — Panel audit (defense-in-depth): strip tracking and analytics
+      // params BEFORE sending the URL slug to Haiku. URL_SYSTEM_PROMPT already
+      // tells Haiku to ignore non-slug params, but stripping at the source
+      // means cleaner inputs and zero risk of Haiku weighting a tracking
+      // string as product context.
+      let u = rawUrl;
+      try {
+        const _u = new URL(rawUrl);
+        const _drop = ['utm_source','utm_medium','utm_campaign','utm_term','utm_content','utm_id','utm_name','utm_referrer','gclid','fbclid','msclkid','dclid','yclid','mc_eid','mc_cid','_ga','_gl','vero_id','vero_conv','wickedid','sm_guid','rb_clickid','referrer','redirected_from'];
+        for (const k of _drop) _u.searchParams.delete(k);
+        u = _u.toString();
+      } catch {}
       rawText = await withCircuit('anthropic',
         () => callHaikuText(URL_SYSTEM_PROMPT, `URL: ${u}`),
         { onOpen: () => null }

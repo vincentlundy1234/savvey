@@ -54,7 +54,7 @@
       ]
     },
     {
-      "source": "/(index.html|v3.html)?",
+      "source": "/(index.html)?",
       "headers": [
         {
           "key": "Cache-Control",
