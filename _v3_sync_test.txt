@@ -1,1 +1,0 @@
-v3 sync probe — written by Cowork file API at this point in session.
