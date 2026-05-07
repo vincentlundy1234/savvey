@@ -313,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5ee</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5gg</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -806,14 +806,48 @@ function cancelCamera() {
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   goHome();
 }
+// Wave GG (7 May 2026 evening) — Vision accuracy gain via:
+//   (a) tight-crop preprocessing — centre 60% square crop of the frame.
+//       Haiku gets way less background clutter to reason over.
+//   (b) 3-frame ensemble capture at t=0/120/240ms. Slight angle variations
+//       across the three frames surface text/branding any single frame
+//       might miss. All three sent to Haiku in a SINGLE API call, so no
+//       latency hit beyond the ~240ms client-side capture window.
+function _cropCentreSquare(source, sw, sh) {
+  // Crop the centre 60% square of the source image. Returns a canvas.
+  const minSide = Math.min(sw, sh);
+  const cropSize = Math.floor(minSide * 0.6);
+  const sx = Math.floor((sw - cropSize) / 2);
+  const sy = Math.floor((sh - cropSize) / 2);
+  const targetSize = Math.min(cropSize, SNAP_MAX_WIDTH);
+  const c = document.createElement('canvas');
+  c.width = targetSize; c.height = targetSize;
+  c.getContext('2d').drawImage(source, sx, sy, cropSize, cropSize, 0, 0, targetSize, targetSize);
+  return c;
+}
+function _frameToBase64(canvas) {
+  const dataUrl = canvas.toDataURL('image/jpeg', SNAP_QUALITY);
+  return dataUrl.split(',')[1];
+}
 async function captureFrame() {
   const v = document.getElementById('cam-video');
   if (!v || !v.videoWidth) return;
-  const out = downscaleImageToBase64(v, v.videoWidth, v.videoHeight);
+  const sw = v.videoWidth, sh = v.videoHeight;
+  // Capture 3 frames: t=0, t=120ms, t=240ms. Each is centre-cropped to 60%.
+  const frames = [];
+  const firstCanvas = _cropCentreSquare(v, sw, sh);
+  frames.push(_frameToBase64(firstCanvas));
+  // Save the first centre-cropped frame as the user's "your snap" reference for
+  // disambig screens. Same crop as what Haiku saw, so disambig matches reality.
+  _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
+  await new Promise(r => setTimeout(r, 120));
+  if (v.videoWidth) frames.push(_frameToBase64(_cropCentreSquare(v, v.videoWidth, v.videoHeight)));
+  await new Promise(r => setTimeout(r, 120));
+  if (v.videoWidth) frames.push(_frameToBase64(_cropCentreSquare(v, v.videoWidth, v.videoHeight)));
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
-  _lastSnapDataUrl = 'data:image/jpeg;base64,' + out.base64;
-  track('snap_captured', { bytes: out.bytes, quality: out.quality, w: out.width });
-  await callNormalize({ input_type: 'image', image_base64: out.base64, media_type: 'image/jpeg' });
+  const totalBytes = frames.reduce((s, f) => s + Math.floor(f.length * 0.75), 0);
+  track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });
+  await callNormalize({ input_type: 'image', image_base64_frames: frames, media_type: 'image/jpeg' });
 }
 
 async function handlePhotoUpload(event) {
@@ -829,9 +863,13 @@ async function handlePhotoUpload(event) {
   const img = await new Promise((res, rej) => {
     const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = dataUrl;
   });
+  // Wave GG — photo uploads use the frames array path too (single frame, but
+  // gives consistent backend code path; tight-crop NOT applied here because the
+  // user explicitly chose this image and we don't know if the product is centred).
   const out = downscaleImageToBase64(img, img.naturalWidth, img.naturalHeight);
-  track('photo_downscaled', { bytes: out.bytes, quality: out.quality, w: out.width });
-  await callNormalize({ input_type: 'image', image_base64: out.base64, media_type: 'image/jpeg' });
+  track('photo_downscaled', { bytes: out.bytes, quality: out.quality, w: out.width, frames: 1, multi_shot: false });
+  _lastSnapDataUrl = 'data:image/jpeg;base64,' + out.base64;
+  await callNormalize({ input_type: 'image', image_base64_frames: [out.base64], media_type: 'image/jpeg' });
 }
 
 async function goUrl() {
@@ -1022,7 +1060,18 @@ async function callNormalize(body) {
       bounceToType(j.canonical_search_string || '', 'Could not quite catch that. Edit and search again?');
       return;
     }
-    if (j.confidence !== 'high' && j.alternative_string) {
+    // Wave GG — confidence-gated routing using the new `specificity` flag.
+    // When Vision returns `brand_only` on a Snap (e.g. generic "Krups Nespresso
+    // U" without a model number), route to disambig with the user's snap
+    // visible rather than committing to a half-baked result page. This was
+    // the Nespresso-miss-class fix (7 May 2026 beta-2 finding).
+    const _isImageInput = body.input_type === 'image';
+    const _brandOnly = j.specificity === 'brand_only';
+    const _shouldDisambig =
+      (j.confidence !== 'high' && j.alternative_string) ||
+      (_isImageInput && _brandOnly && j.alternative_string);
+    if (_shouldDisambig) {
+      track('disambig_routed', { reason: _brandOnly ? 'brand_only' : 'low_confidence', door: _lastDoor });
       renderConfirm(j.canonical_search_string, j.alternative_string, j);
     } else {
       pushRecent(j);
@@ -1329,11 +1378,71 @@ function renderResult(displayName, payload) {
   const verifiedAmazonLink = (verified && typeof verified.link === 'string' && /^https?:\/\//i.test(verified.link))
     ? _injectAmazonTag(verified.link)
     : null;
+  // Wave GG — retailer name -> canonical host lookup. When the backend
+  // returns retailer_deep_links[host], prefer that PDP URL over the generic
+  // search URL from r.url(q). Strategic intent (Vincent product-owner call
+  // 7 May 2026): "list of retailers updated dynamically and consistently
+  // depending on the product would be a huge win". Tap Currys -> land on
+  // the actual product page, not a search results page.
+  const _RETAILER_NAME_TO_HOST = {
+    'Amazon UK': 'amazon.co.uk',
+    'Currys': 'currys.co.uk',
+    'Argos': 'argos.co.uk',
+    'John Lewis': 'johnlewis.com',
+    'Boots': 'boots.com',
+    'Tesco': 'tesco.com',
+    'Sainsbury\'s': 'sainsburys.co.uk',
+    'ASDA': 'asda.com',
+    'Asda': 'asda.com',
+    'Morrisons': 'morrisons.com',
+    'Waitrose': 'waitrose.com',
+    'Ocado': 'ocado.com',
+    'B&Q': 'diy.com',
+    'Screwfix': 'screwfix.com',
+    'Wickes': 'wickes.co.uk',
+    'Toolstation': 'toolstation.com',
+    'Halfords': 'halfords.com',
+    'Very': 'very.co.uk',
+    'AO': 'ao.com',
+    'AO.com': 'ao.com',
+    'Next': 'next.co.uk',
+    'M&S': 'marksandspencer.com',
+    'Superdrug': 'superdrug.com',
+    'Lookfantastic': 'lookfantastic.com',
+    'Cult Beauty': 'cultbeauty.co.uk',
+    'Wiggle': 'wiggle.com',
+    'Sigma Sports': 'sigmasports.com',
+    'Evans Cycles': 'evanscycles.com',
+    'Chain Reaction Cycles': 'chainreactioncycles.com',
+    'Pets at Home': 'pets-at-home.com',
+    'Zooplus': 'zooplus.co.uk',
+    'Smyths Toys': 'smyths-toys.com',
+    'The Entertainer': 'theentertainer.com',
+    'LEGO': 'lego.com',
+    'Apple': 'apple.com',
+    'Samsung': 'samsung.com',
+    'IKEA': 'ikea.com',
+    'Dunelm': 'dunelm.com',
+    'Wayfair': 'wayfair.co.uk',
+    'eBay UK': 'ebay.co.uk',
+    'Lidl': 'lidl.co.uk',
+    'Home Bargains': 'homebargains.co.uk',
+  };
+  const _deepLinks = (payload && payload.retailer_deep_links && typeof payload.retailer_deep_links === 'object') ? payload.retailer_deep_links : {};
   for (const r of list) {
     const q = (r.name === 'Amazon UK' && payload.amazon_search_query) ? payload.amazon_search_query : displayName;
+    const _host = _RETAILER_NAME_TO_HOST[r.name];
+    const _deep = (_host && _deepLinks[_host]) ? _deepLinks[_host] : null;
     const a = document.createElement('a');
-    // Prefer the verified deep link for Amazon when we have one.
-    a.href = (r.name === 'Amazon UK' && verifiedAmazonLink) ? verifiedAmazonLink : r.url(q);
+    // Priority order for the URL:
+    //   1. Amazon UK -> verified ASIN deep link (existing behaviour, unchanged)
+    //   2. Other retailer -> verified PDP from google_shopping (new this wave)
+    //   3. Fallback -> retailer search URL (existing behaviour)
+    let _resolvedHref;
+    if (r.name === 'Amazon UK' && verifiedAmazonLink) _resolvedHref = verifiedAmazonLink;
+    else if (_deep && _deep.url) _resolvedHref = _deep.url;
+    else _resolvedHref = r.url(q);
+    a.href = _resolvedHref;
     a.target = '_top';
     a.rel = 'external noopener';
     a.className = 'cta' + (r.primary ? ' primary' : '');
@@ -1344,9 +1453,20 @@ function renderResult(displayName, payload) {
       subStr  = verifiedAmazonLink
         ? 'Verified just now · tap to open this listing'
         : 'Verified just now · tap to find this on Amazon';
+    } else if (_deep) {
+      // Wave GG — non-Amazon retailer with a verified PDP deep link. Use the
+      // google_shopping price hint when present, plus a "tap to open" copy
+      // that signals this is a real product page, not a search.
+      if (_deep.price) nameStr = `${r.name} · ${_deep.price}`;
+      subStr = 'Tap to open this product on ' + r.name;
     }
     a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
-    a.addEventListener('click', () => track('cta_tapped', { retailer: r.name, category: cat, query: q, door: _lastDoor, verified: r.name === 'Amazon UK' && !!verifiedPriceStr, verified_link: r.name === 'Amazon UK' && !!verifiedAmazonLink }));
+    a.addEventListener('click', () => track('cta_tapped', {
+      retailer: r.name, category: cat, query: q, door: _lastDoor,
+      verified: r.name === 'Amazon UK' && !!verifiedPriceStr,
+      verified_link: r.name === 'Amazon UK' && !!verifiedAmazonLink,
+      verified_pdp: !!_deep,
+    }));
     ctaWrap.appendChild(a);
   }
   const heroWrap = document.getElementById('hero-img-wrap');
