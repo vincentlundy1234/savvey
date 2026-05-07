@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5hh1';
+const VERSION             = 'normalize.js v3.4.5hh2';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_hh1:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_hh2:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -977,10 +977,21 @@ export default async function handler(req, res) {
   let disambig_candidates = null;
   const _shouldDisambig = (parsed.confidence !== 'high') || (_specificity === 'brand_only');
   if (_shouldDisambig && parsed.canonical_search_string) {
+    // Wave HH.2 — when canonical is brand_only AND we have 2+ specific
+    // alternatives, drop the canonical from disambig. Tapping the vague
+    // canonical (e.g. "Kettle") just re-searches the vague query —
+    // the user wants to PICK between the specific options.
+    const _altPool = [];
+    if (parsed.alternative_string) _altPool.push(parsed.alternative_string);
+    if (Array.isArray(parsed.alternatives_array)) _altPool.push(...parsed.alternatives_array);
+    const _specAlts = _altPool.filter(s => assessSpecificity(s, null, 'medium') === 'specific');
+    const _skipCanonical = (_specificity === 'brand_only') && (_specAlts.length >= 2);
+
     const seen = new Set();
-    const pool = [parsed.canonical_search_string];
-    if (parsed.alternative_string) pool.push(parsed.alternative_string);
-    if (Array.isArray(parsed.alternatives_array)) pool.push(...parsed.alternatives_array);
+    const pool = [];
+    if (!_skipCanonical) pool.push(parsed.canonical_search_string);
+    pool.push(..._altPool);
+
     const uniq = [];
     for (const s of pool) {
       if (typeof s !== 'string') continue;
