@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5q';
+const VERSION             = 'normalize.js v3.4.5ff';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -75,7 +75,15 @@ function cacheKey(inputType, payload) {
   h.update(inputType);
   h.update('|');
   if (inputType === 'image') {
-    h.update(payload.image_base64 || '');
+    // Wave FF — hash all frames (or single image) so multi-shot requests get a
+    // stable, request-unique cache key. Without this, every frames request
+    // hashes to the same key and cache is poisoned.
+    const frames = Array.isArray(payload.image_base64_frames) ? payload.image_base64_frames : null;
+    if (frames && frames.length > 0) {
+      for (const f of frames) h.update(typeof f === 'string' ? f : '');
+    } else {
+      h.update(payload.image_base64 || '');
+    }
   } else if (inputType === 'url') {
     h.update(String(payload.url || '').trim().toLowerCase());
   } else if (inputType === 'barcode') {
@@ -83,8 +91,9 @@ function cacheKey(inputType, payload) {
   } else {
     h.update(String(payload.text || '').trim().toLowerCase());
   }
-  // v3.3 cache key bump: ensures v3.2 entries miss and re-fetch with the richer shape.
-  return 'savvey:normalize:v3_12:' + h.digest('hex').slice(0, 24);
+  // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
+  // specificity flag and retailer_deep_links populated.
+  return 'savvey:normalize:v3_ff:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -199,9 +208,29 @@ async function callHaikuText(systemPrompt, userText) {
   } finally { clearTimeout(timer); }
 }
 
-async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
+// Wave FF (7 May 2026 evening, Vincent override of post-Wave-V engine-lock):
+// callHaikuVision now accepts EITHER a single base64 string (backwards-compat
+// for any caller still on the v3.4.5ee shape) OR an array of 1-3 base64 frames
+// for multi-shot ensemble. When given multiple frames, all are bundled into a
+// single Haiku content array — one API call, slightly more tokens, materially
+// better identification because Haiku gets cross-frame evidence.
+async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   if (!ANTHROPIC_KEY) throw new Error('ANTHROPIC_API_KEY not set');
+  const framesIn = Array.isArray(imageBase64OrFrames) ? imageBase64OrFrames : [imageBase64OrFrames];
+  const frames = framesIn.filter(f => typeof f === 'string' && f.length > 100).slice(0, 3);
+  if (frames.length === 0) throw new Error('no valid image frames');
+  const isMulti = frames.length > 1;
+  const userContent = frames.map(data => ({
+    type: 'image',
+    source: { type: 'base64', media_type: mediaType, data },
+  }));
+  userContent.push({
+    type: 'text',
+    text: isMulti
+      ? `These are ${frames.length} quick consecutive snaps of a SINGLE product taken from slightly different angles in the same moment. Identify the specific product (brand AND exact model where any frame reveals it). Use combined evidence across all frames — text or branding visible in any one frame counts. Return JSON only.`
+      : 'Identify this product. Return JSON only.',
+  });
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
   try {
@@ -212,13 +241,7 @@ async function callHaikuVision(systemPrompt, imageBase64, mediaType) {
         model: MODEL,
         max_tokens: MAX_TOKENS_VISION,
         system: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: [
-            { type: 'image', source: { type: 'base64', media_type: mediaType, data: imageBase64 } },
-            { type: 'text', text: 'Identify this product. Return JSON only.' },
-          ],
-        }],
+        messages: [{ role: 'user', content: userContent }],
       }),
       signal: ac.signal,
     });
@@ -527,6 +550,105 @@ function parseAndDefault(rawText) {
   };
 }
 
+// Wave FF — server-side specificity heuristic. Used by the frontend to decide
+// whether to commit to a result page or route to disambig with the user's snap
+// visible. The Nespresso miss (7 May beta) was a generic "Krups Nespresso U"
+// landing on a result screen with the user's own snap as hero image — confidence-
+// knock. With this flag set on the response, the frontend can route brand_only
+// reads to disambig instead of a half-baked result.
+//   "specific"   = canonical has model identifier (digits, "Pro/Max/Ultra/SE",
+//                  3+ tokens after brand, or an MPN was extracted)
+//   "brand_only" = canonical is brand + generic family, no model token
+function assessSpecificity(canonical, mpn, confidence) {
+  if (!canonical) return 'unknown';
+  if (mpn && String(mpn).trim()) return 'specific';
+  const stripped = String(canonical).trim();
+  if (/\d/.test(stripped)) return 'specific';
+  const tokens = stripped.split(/\s+/).filter(t => t.length > 1);
+  if (tokens.length >= 4) return 'specific';
+  if (/\b(pro|max|ultra|plus|mini|air|se|elite|premium|deluxe|essentials?|gen[\s-]?\d+)\b/i.test(stripped)) return 'specific';
+  if (confidence === 'low') return 'brand_only';
+  return tokens.length <= 2 ? 'brand_only' : 'specific';
+}
+
+// Wave FF — SerpAPI google_shopping engine call.
+// Returns a map of UK retailer hostnames -> direct PDP URLs for the canonical
+// product. Runs in PARALLEL with the Amazon engine call (Promise.all) so wall-
+// clock latency is unchanged. Cached in KV per canonical (24h) so repeat snaps
+// of the same product don't re-bill SerpAPI.
+//
+// Strategic intent (Vincent product-owner call 7 May 2026 evening):
+// "if the links were all reliable the list of retailers updated dynamically and
+// consistently depending on the product that would be a huge win".
+const GOOGLE_SHOPPING_TIMEOUT_MS = 4000;
+const _RETAILER_HOSTS_OF_INTEREST = new Set([
+  'currys.co.uk', 'johnlewis.com', 'argos.co.uk', 'boots.com', 'tesco.com',
+  'sainsburys.co.uk', 'asda.com', 'morrisons.com', 'waitrose.com', 'ocado.com',
+  'diy.com', 'screwfix.com', 'wickes.co.uk', 'toolstation.com', 'bandq.co.uk',
+  'halfords.com', 'very.co.uk', 'ao.com', 'next.co.uk', 'marksandspencer.com',
+  'superdrug.com', 'lookfantastic.com', 'space.nk.com', 'cultbeauty.co.uk',
+  'wiggle.com', 'sigmasports.com', 'evanscycles.com', 'chainreactioncycles.com',
+  'pets-at-home.com', 'zooplus.co.uk', 'crocus.co.uk',
+  'smyths-toys.com', 'theentertainer.com', 'lego.com', 'apple.com',
+  'samsung.com', 'dell.com', 'hp.com', 'lenovo.com', 'microsoft.com',
+  'ikea.com', 'dunelm.com', 'wayfair.co.uk', 'made.com',
+]);
+function _hostFromUrl(u) {
+  try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ''); }
+  catch { return null; }
+}
+async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return null;
+  if (!query || typeof query !== 'string' || query.length < 2) return null;
+  const ck = `savvey:retailers:v1:${canonicalKey}`;
+  const cached = await kvGet(ck);
+  if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
+    return cached;
+  }
+  const url = new URL('https://serpapi.com/search.json');
+  url.searchParams.set('engine', 'google_shopping');
+  url.searchParams.set('q', query.slice(0, 150));
+  url.searchParams.set('gl', 'uk');
+  url.searchParams.set('hl', 'en');
+  url.searchParams.set('api_key', apiKey);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), GOOGLE_SHOPPING_TIMEOUT_MS);
+  try {
+    const r = await fetch(url.toString(), { signal: ac.signal });
+    clearTimeout(timer);
+    if (!r.ok) {
+      console.warn(`[${VERSION}] google_shopping HTTP ${r.status} for "${query.slice(0, 60)}"`);
+      return null;
+    }
+    const j = await r.json();
+    const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
+    const deepLinks = {};
+    for (const item of results) {
+      const link = item.product_link || item.link;
+      if (!link || typeof link !== 'string') continue;
+      const host = _hostFromUrl(link);
+      if (!host) continue;
+      if (host.includes('amazon.')) continue;
+      const matched = [..._RETAILER_HOSTS_OF_INTEREST].find(h => host === h || host.endsWith('.' + h));
+      if (!matched) continue;
+      if (deepLinks[matched]) continue;
+      deepLinks[matched] = {
+        url: link.slice(0, 500),
+        title: typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+        price: typeof item.price === 'string' ? item.price.slice(0, 30) : null,
+      };
+    }
+    if (Object.keys(deepLinks).length === 0) return null;
+    kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
+    return deepLinks;
+  } catch (err) {
+    clearTimeout(timer);
+    console.warn(`[${VERSION}] google_shopping fetch error for "${query.slice(0, 60)}":`, err.message);
+    return null;
+  }
+}
+
 // v3.4.5n — Open Food Facts lookup. Pre-resolves UK/EU grocery + toiletry
 // barcodes to a product name BEFORE Haiku sees them. Lifts Door 3 (Scan)
 // accuracy on the in-store-shopping use case. Free, no API key, generous
@@ -583,13 +705,27 @@ export default async function handler(req, res) {
   let rawText;
   try {
     if (inputType === 'image') {
-      const imageBase64 = body.image_base64;
+      // Wave FF — prefer image_base64_frames (array, 1-3) for multi-shot ensemble.
+      // Falls back to image_base64 (single) for backwards compat with the v3.4.5ee
+      // frontend. When both are provided, frames win.
+      const framesIn = Array.isArray(body.image_base64_frames) ? body.image_base64_frames : null;
+      const single = body.image_base64;
       const mediaType = body.media_type || 'image/jpeg';
-      if (!imageBase64) return res.status(400).json({ error: 'image_base64 required' });
-      const approxBytes = imageBase64.length * 0.75;
-      if (approxBytes > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'image too large (>4MB)' });
+      let payload;
+      if (framesIn && framesIn.length > 0) {
+        payload = framesIn.slice(0, 3).filter(f => typeof f === 'string' && f.length > 100);
+        if (payload.length === 0) return res.status(400).json({ error: 'image_base64_frames invalid' });
+        const totalBytes = payload.reduce((s, f) => s + f.length * 0.75, 0);
+        if (totalBytes > MAX_IMAGE_BYTES * 2) return res.status(413).json({ error: 'frames total too large (>8MB)' });
+      } else if (single) {
+        const approxBytes = single.length * 0.75;
+        if (approxBytes > MAX_IMAGE_BYTES) return res.status(413).json({ error: 'image too large (>4MB)' });
+        payload = single;
+      } else {
+        return res.status(400).json({ error: 'image_base64 or image_base64_frames required' });
+      }
       rawText = await withCircuit('anthropic',
-        () => callHaikuVision(VISION_SYSTEM_PROMPT, imageBase64, mediaType),
+        () => callHaikuVision(VISION_SYSTEM_PROMPT, payload, mediaType),
         { onOpen: () => null }
       );
     } else if (inputType === 'url') {
@@ -646,9 +782,20 @@ export default async function handler(req, res) {
     });
   }
 
+  // Wave FF — parallel SerpAPI fan-out: Amazon engine (price anchor) +
+  // google_shopping (non-Amazon retailer PDP deep links). Wall-clock latency
+  // unchanged because Promise.all waits for the slowest, and Amazon engine is
+  // already the slowest of the two (verified-price gate).
   let verified_amazon_price = null;
+  let retailer_deep_links = null;
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
-    verified_amazon_price = await fetchVerifiedAmazonPrice(parsed.canonical_search_string);
+    const canonicalKey = String(parsed.canonical_search_string).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
+    const [amazonRes, retailersRes] = await Promise.all([
+      fetchVerifiedAmazonPrice(parsed.canonical_search_string),
+      fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey),
+    ]);
+    verified_amazon_price = amazonRes;
+    retailer_deep_links = retailersRes;
   }
   // v3.4.5i — fetch alternative's verified Amazon listing too when confidence
   // is medium and an alternative was produced. Powers disambig-screen
@@ -747,10 +894,17 @@ export default async function handler(req, res) {
     if (parsed.savvey_says.review_consensus) parsed.savvey_says.review_consensus = _capWords(parsed.savvey_says.review_consensus);
   }
 
+  // Wave FF — emit specificity flag + retailer_deep_links on the response
+  // root. specificity drives frontend confidence-gated routing (specific →
+  // result page, brand_only → disambig). retailer_deep_links is a
+  // hostname → {url,title,price} map, populated from google_shopping when
+  // available, null otherwise.
   const responseBody = {
     ...parsed,
+    specificity: assessSpecificity(parsed.canonical_search_string, parsed.mpn, parsed.confidence),
     verified_amazon_price,
     alternative_amazon_price,
+    retailer_deep_links,
     _meta: {
       version: VERSION,
       input_type: inputType,
