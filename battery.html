@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>Savvey Battery — Aesop Vision Accuracy</title>
+<style>
+  :root { --green:#2a6b22; --green-soft:#e8f3e6; --ink:#14201a; --ink-soft:#4a5550; --ink-mute:#7a857f; --bg:#f6f6f4; --border:#e3e3df; --pass:#2d8a2d; --fail:#cc4444; --bord:#d68910; }
+  @media (prefers-color-scheme: dark) {
+    :root { --ink:#e8ebe8; --ink-soft:#b0b8b3; --ink-mute:#888f8a; --bg:#0f1410; --border:#2a3530; --green-soft:#1a3018; }
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif; background:var(--bg); color:var(--ink); padding:20px 16px 80px; max-width:540px; margin:0 auto; -webkit-font-smoothing:antialiased; }
+  header { padding:8px 0 16px; border-bottom:1px solid var(--border); margin-bottom:14px; }
+  h1 { font-size:22px; margin:0 0 6px; letter-spacing:-0.01em; color:var(--green); font-weight:800; }
+  .sub { color:var(--ink-mute); font-size:13px; margin:0 0 12px; line-height:1.5; }
+  .tally { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin:10px 0; }
+  .tally div { background:white; border-radius:10px; padding:10px; text-align:center; border:1px solid var(--border); }
+  @media (prefers-color-scheme: dark) { .tally div { background:#1a221d; } }
+  .tally .num { font-size:22px; font-weight:800; line-height:1; }
+  .tally .lbl { font-size:11px; color:var(--ink-mute); text-transform:uppercase; letter-spacing:0.05em; margin-top:4px; }
+  .tally .pass-num { color:var(--pass); }
+  .tally .bord-num { color:var(--bord); }
+  .tally .fail-num { color:var(--fail); }
+  .actions-bar { display:flex; gap:8px; margin:8px 0 18px; }
+  .actions-bar button { flex:1; padding:9px; background:var(--green); color:white; border:0; border-radius:8px; font-weight:700; font-size:12px; cursor:pointer; }
+  .actions-bar button.ghost { background:transparent; color:var(--green); border:1px solid var(--green); }
+  .item { background:white; border:1px solid var(--border); border-radius:12px; padding:14px; margin-bottom:10px; }
+  @media (prefers-color-scheme: dark) { .item { background:#1a221d; } }
+  .item.pass { border-left:4px solid var(--pass); }
+  .item.borderline { border-left:4px solid var(--bord); }
+  .item.fail { border-left:4px solid var(--fail); }
+  .item-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:6px; }
+  .item-name { font-weight:700; font-size:15px; flex:1; line-height:1.3; }
+  .item-num { background:var(--green-soft); color:var(--green); border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; flex-shrink:0; }
+  .item-expected { font-size:12px; color:var(--ink-mute); margin:2px 0 10px; line-height:1.4; }
+  .item-buttons { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+  .item-buttons button, .item-buttons label { font-size:12px; padding:7px 11px; border-radius:8px; border:1px solid var(--border); background:white; color:var(--ink); cursor:pointer; font-weight:600; }
+  @media (prefers-color-scheme: dark) { .item-buttons button, .item-buttons label { background:#22302a; } }
+  .item-buttons button.primary { background:var(--green); color:white; border-color:var(--green); }
+  .item-buttons button.primary:disabled { opacity:0.5; cursor:not-allowed; }
+  .item-buttons label { display:inline-flex; align-items:center; gap:5px; }
+  .item-buttons label input { display:none; }
+  .item-result { background:var(--bg); border-radius:8px; padding:9px 11px; margin-top:8px; font-size:12px; line-height:1.4; }
+  .item-result .returned { font-weight:600; color:var(--ink); }
+  .item-result .meta { color:var(--ink-mute); font-size:11px; margin-top:4px; }
+  .verdict-row { display:flex; gap:6px; margin-top:8px; }
+  .verdict-row button { flex:1; padding:7px; border-radius:8px; border:1px solid var(--border); background:transparent; font-weight:700; font-size:12px; cursor:pointer; }
+  .verdict-row button[data-v="pass"].active { background:var(--pass); color:white; border-color:var(--pass); }
+  .verdict-row button[data-v="borderline"].active { background:var(--bord); color:white; border-color:var(--bord); }
+  .verdict-row button[data-v="fail"].active { background:var(--fail); color:white; border-color:var(--fail); }
+  .item-loading { color:var(--ink-mute); font-size:12px; padding:9px 0; }
+  .footer-note { font-size:12px; color:var(--ink-mute); text-align:center; margin-top:24px; padding:12px; line-height:1.5; }
+  .footer-note a { color:var(--green); }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Savvey Battery — Aesop Vision Test</h1>
+  <p class="sub">20 minimalist-label products. Snap each (or upload a Google image) and the runner POSTs to /api/normalize. Auto-judges by comparing returned canonical to expected. Tap "Manual" to override the auto-verdict.</p>
+  <div class="tally">
+    <div><div class="num" id="tot">0</div><div class="lbl">Total</div></div>
+    <div><div class="num pass-num" id="pass">0</div><div class="lbl">Pass</div></div>
+    <div><div class="num bord-num" id="bord">0</div><div class="lbl">Border</div></div>
+    <div><div class="num fail-num" id="fail">0</div><div class="lbl">Fail</div></div>
+  </div>
+  <div class="actions-bar">
+    <button onclick="exportResults()" class="ghost">Copy results</button>
+    <button onclick="resetAll()" class="ghost">Reset all</button>
+  </div>
+</header>
+
+<main id="items"></main>
+
+<p class="footer-note">
+  Built into the PWA at <code>/battery.html</code>. Not in robots, not linked from public UI. Vincent-only.<br>
+  Failure rate decision rules: <strong>&lt;15% = ship as-is</strong>; <strong>15-30% = tighten Vision prompt</strong>; <strong>30-50% = manual SKU fallback</strong> (already shipped via Wave W); <strong>&gt;50% = hold launch</strong>.
+</p>
+
+<script>
+const API = '/api/normalize';
+const PRODUCTS = [
+  { brand:'Aesop',           name:'Resurrection Hand Wash 500ml',          expect:/aesop.*resurrection/i },
+  { brand:'Aesop',           name:'Geranium Leaf Body Cleanser',           expect:/aesop.*geranium/i },
+  { brand:'Cowshed',         name:'Refresh Hand Wash 500ml',               expect:/cowshed.*refresh/i },
+  { brand:'Cowshed',         name:'Replenish Bath & Shower Gel',           expect:/cowshed.*replenish/i },
+  { brand:'The Ordinary',    name:'Niacinamide 10% + Zinc 1%',             expect:/ordinary.*niacinamide/i },
+  { brand:'The Ordinary',    name:'Hyaluronic Acid 2% + B5',               expect:/ordinary.*hyaluronic/i },
+  { brand:'Drunk Elephant',  name:'C-Firma Vitamin C Serum',               expect:/drunk\s*elephant.*c[\s-]?firma/i },
+  { brand:'Drunk Elephant',  name:'Protini Polypeptide Cream',             expect:/drunk\s*elephant.*protini/i },
+  { brand:'Sol de Janeiro',  name:'Brazilian Bum Bum Cream 240ml',         expect:/sol\s*de\s*janeiro.*bum\s*bum/i },
+  { brand:'Sol de Janeiro',  name:'Cheirosa 62 Body Mist',                 expect:/sol\s*de\s*janeiro.*cheirosa/i },
+  { brand:'Glossier',        name:'Cloud Paint blush',                      expect:/glossier.*cloud\s*paint/i },
+  { brand:'Glossier',        name:'Boy Brow',                               expect:/glossier.*boy\s*brow/i },
+  { brand:'Le Labo',         name:'Santal 33 EDP 50ml',                     expect:/le\s*labo.*santal\s*33/i },
+  { brand:'Le Labo',         name:'Rose 31 EDP 50ml',                       expect:/le\s*labo.*rose\s*31/i },
+  { brand:'Byredo',          name:"Bal d'Afrique EDP 50ml",                 expect:/byredo.*bal\s*d.afrique/i },
+  { brand:'Byredo',          name:'Gypsy Water EDP 50ml',                   expect:/byredo.*gypsy\s*water/i },
+  { brand:'Diptyque',        name:'Baies candle 190g',                      expect:/diptyque.*baies/i },
+  { brand:'Jo Malone',       name:'English Pear & Freesia Cologne 100ml',   expect:/jo\s*malone.*pear/i },
+  { brand:'Liz Earle',       name:'Cleanse & Polish Hot Cloth Cleanser',    expect:/liz\s*earle.*cleanse/i },
+  { brand:'Elemis',          name:'Pro-Collagen Cleansing Balm',            expect:/elemis.*pro[\s-]?collagen/i },
+];
+const STORE_KEY = 'savvey_battery_state_v1';
+const state = JSON.parse(localStorage.getItem(STORE_KEY) || '{}');
+
+function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {} }
+
+function judgeAuto(returned, expectedRx) {
+  if (!returned) return 'fail';
+  if (expectedRx.test(returned)) return 'pass';
+  // borderline: returned contains the brand but not the right product line
+  const brand = expectedRx.source.split('.')[0].replace(/\\b/g,'').replace(/\\s\*/g,' ').trim();
+  if (new RegExp(brand, 'i').test(returned)) return 'borderline';
+  return 'fail';
+}
+
+function updateTally() {
+  let p=0,b=0,f=0,t=0;
+  PRODUCTS.forEach((_,i) => {
+    const v = state[i] && state[i].verdict;
+    if (v) { t++; if (v==='pass')p++; else if (v==='borderline')b++; else if (v==='fail')f++; }
+  });
+  document.getElementById('tot').textContent = t;
+  document.getElementById('pass').textContent = p;
+  document.getElementById('bord').textContent = b;
+  document.getElementById('fail').textContent = f;
+}
+
+function setVerdict(idx, v) {
+  state[idx] = state[idx] || {};
+  state[idx].verdict = v;
+  save();
+  renderAll();
+}
+
+async function runText(idx) {
+  const p = PRODUCTS[idx];
+  state[idx] = state[idx] || {};
+  state[idx].loading = true;
+  renderAll();
+  try {
+    const r = await fetch(API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ input_type:'text', text: p.brand + ' ' + p.name })
+    });
+    const j = await r.json();
+    state[idx].result = {
+      canonical: j.canonical_search_string || null,
+      confidence: j.confidence || null,
+      category: j.category || null,
+      mode: 'text',
+      ms: j._meta?.latency_ms || null,
+    };
+    if (!state[idx].verdict) {
+      state[idx].verdict = judgeAuto(j.canonical_search_string, p.expect);
+    }
+  } catch (err) {
+    state[idx].result = { error: String(err).slice(0,80), mode:'text' };
+  }
+  state[idx].loading = false;
+  save();
+  renderAll();
+}
+
+async function runImage(idx, file) {
+  const p = PRODUCTS[idx];
+  state[idx] = state[idx] || {};
+  state[idx].loading = true;
+  renderAll();
+  try {
+    const dataUrl = await new Promise((res,rej) => { const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+    const base64 = dataUrl.split(',')[1];
+    const mediaType = dataUrl.split(';')[0].split(':')[1] || 'image/jpeg';
+    const r = await fetch(API, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ input_type:'image', image_base64: base64, media_type: mediaType })
+    });
+    const j = await r.json();
+    state[idx].result = {
+      canonical: j.canonical_search_string || null,
+      confidence: j.confidence || null,
+      category: j.category || null,
+      alt: j.alternative_string || null,
+      mode: 'image',
+      ms: j._meta?.latency_ms || null,
+    };
+    if (!state[idx].verdict) {
+      state[idx].verdict = judgeAuto(j.canonical_search_string, p.expect);
+    }
+  } catch (err) {
+    state[idx].result = { error: String(err).slice(0,80), mode:'image' };
+  }
+  state[idx].loading = false;
+  save();
+  renderAll();
+}
+
+function renderItem(p, idx) {
+  const s = state[idx] || {};
+  const v = s.verdict || '';
+  const r = s.result || {};
+  const cls = v ? ' ' + v : '';
+  return `
+    <article class="item${cls}" id="item-${idx}">
+      <div class="item-head">
+        <div class="item-name">${p.brand} — ${p.name}</div>
+        <div class="item-num">#${idx+1}</div>
+      </div>
+      <div class="item-expected">Expected: matches /${p.expect.source}/i</div>
+      <div class="item-buttons">
+        <label>
+          <input type="file" accept="image/*" capture="environment" onchange="runImage(${idx}, this.files[0])">
+          📷 Snap / Upload
+        </label>
+        <button onclick="runText(${idx})">📝 Quick text test</button>
+      </div>
+      ${s.loading ? '<div class="item-loading">Calling /api/normalize...</div>' : ''}
+      ${r.canonical ? `
+        <div class="item-result">
+          <div class="returned">↳ ${r.canonical}</div>
+          <div class="meta">${r.mode} · confidence:${r.confidence||'?'} · category:${r.category||'?'}${r.alt?' · alt:'+r.alt:''}${r.ms?' · '+r.ms+'ms':''}</div>
+        </div>
+        <div class="verdict-row">
+          <button data-v="pass" class="${v==='pass'?'active':''}" onclick="setVerdict(${idx},'pass')">PASS</button>
+          <button data-v="borderline" class="${v==='borderline'?'active':''}" onclick="setVerdict(${idx},'borderline')">BORDER</button>
+          <button data-v="fail" class="${v==='fail'?'active':''}" onclick="setVerdict(${idx},'fail')">FAIL</button>
+        </div>
+      ` : (r.error ? `<div class="item-result"><div class="returned" style="color:var(--fail)">Error: ${r.error}</div></div>` : '')}
+    </article>
+  `;
+}
+
+function renderAll() {
+  document.getElementById('items').innerHTML = PRODUCTS.map((p,i) => renderItem(p,i)).join('');
+  updateTally();
+}
+
+function exportResults() {
+  const lines = ['Savvey Aesop Battery — ' + new Date().toISOString(), ''];
+  let p=0,b=0,f=0;
+  PRODUCTS.forEach((prod,i) => {
+    const s = state[i] || {};
+    const v = (s.verdict||'-').toUpperCase();
+    const r = s.result || {};
+    if (v==='PASS')p++; else if (v==='BORDERLINE')b++; else if (v==='FAIL')f++;
+    lines.push(`${i+1}. [${v}] ${prod.brand} ${prod.name}`);
+    lines.push(`   Expected: matches /${prod.expect.source}/i`);
+    lines.push(`   Returned: ${r.canonical || '-'} (${r.mode||'-'}, conf:${r.confidence||'?'}, cat:${r.category||'?'})`);
+    lines.push('');
+  });
+  const tested = p+b+f;
+  lines.push('---');
+  lines.push(`Tested: ${tested} / 20`);
+  lines.push(`PASS: ${p}, BORDERLINE: ${b}, FAIL: ${f}`);
+  if (tested>0) lines.push(`Failure rate: ${((f/tested)*100).toFixed(1)}%`);
+  lines.push('');
+  lines.push('Decision rule: <15% = ship | 15-30% = tighten Vision prompt | 30-50% = Wave W bounce-to-Type already covers | >50% = hold launch');
+  const text = lines.join('\n');
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => alert('Results copied to clipboard'));
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    alert('Results copied');
+  }
+}
+
+function resetAll() {
+  if (!confirm('Clear all battery results?')) return;
+  Object.keys(state).forEach(k => delete state[k]);
+  save();
+  renderAll();
+}
+
+renderAll();
+</script>
+</body>
+</html>
