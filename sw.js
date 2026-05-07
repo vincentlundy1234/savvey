@@ -8,6 +8,8 @@
 //    /api/*        — Network-Only. Never cache identification calls.
 // ─────────────────────────────────────────────────────────────
 
+// v3.4.5s (7 May 2026): STATIC_VER bumped v345q -> v345s for Wave S
+// (category-icon fallback in disambig when SerpAPI returns no thumbnail)
 // v3.4.5q (7 May 2026): STATIC_VER bumped v345p -> v345q for Wave Q
 // (Listerine routing hotfix + Reset link hide + affiliate disclosure under
 // Amazon CTA + dead api/* file removal + console.log strip + _meta sunset)
@@ -22,7 +24,7 @@
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345q';
+const STATIC_VER    = 'savvey-static-v345s';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
