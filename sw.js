@@ -24,11 +24,11 @@
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345dd';
+const STATIC_VER    = 'savvey-static-v345ee';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
-  '/', '/index.html', '/v3.html', '/manifest.json',
+  '/', '/index.html', '/manifest.json',
 ];
 const FONT_ORIGINS  = [
   'https://fonts.googleapis.com',
@@ -94,9 +94,6 @@ self.addEventListener('fetch', event => {
         })
         .catch(async () => {
           notifyClients({ type: 'OFFLINE' });
-          if (url.pathname === '/v3.html' || url.pathname === '/v3') {
-            return (await caches.match('/v3.html')) || caches.match('/index.html');
-          }
           return caches.match('/index.html');
         })
     );
