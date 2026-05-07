@@ -313,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5x</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5z</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -696,31 +696,44 @@ document.addEventListener('click', (e) => {
     handleSwipe(dir, screen);
   }, { passive: true });
 
+  // v3.4.5z Wave Z - wrap-around carousel across the 4 nav tabs.
+  // Restores the v2 swipe pattern: Snap -> Scan -> Type -> Home -> Snap (wrap).
+  // Right-swipe goes the other way. Active tab tracked via the bottom nav's
+  // .active class. From flow screens (result/error/confirm) the right-swipe
+  // back-to-home short-circuit still wins because it's the canonical mobile
+  // 'back' gesture and users expect it.
+  const NAV_ORDER = ['snap', 'scan', 'type', 'home'];
+  function currentNavIndex() {
+    const active = document.querySelector('.nav-tab.active');
+    if (!active) return NAV_ORDER.indexOf('home'); // default
+    const id = (active.id || '').replace(/^nav-/, '');
+    const idx = NAV_ORDER.indexOf(id);
+    return idx >= 0 ? idx : NAV_ORDER.indexOf('home');
+  }
+  function callNavByName(name) {
+    if (name === 'snap') return navSnap();
+    if (name === 'scan') return navScan();
+    if (name === 'type') return navType();
+    if (name === 'home') return navHome();
+  }
   function handleSwipe(dir, screen) {
-    // Right-swipe = back/exit (canonical mobile pattern)
+    // Flow-screen back-gesture wins on right-swipe (don't fight muscle memory)
     if (dir === 'right') {
-      if (screen === 'screen-result' || screen === 'screen-error') {
-        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
-        navHome();
-        return;
-      }
-      if (screen === 'screen-confirm') {
-        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
-        goHome();
-        return;
-      }
-      if (screen === 'screen-barcode') {
-        track('swipe_nav', { from: screen, dir: 'right', to: 'home' });
-        navHome();
+      if (screen === 'screen-result' || screen === 'screen-error' || screen === 'screen-confirm' || screen === 'screen-barcode') {
+        track('swipe_nav', { from: screen, dir: 'right', to: 'home', kind: 'back' });
+        if (screen === 'screen-confirm') goHome(); else navHome();
         return;
       }
     }
-    // Left-swipe on home = quick-launch Snap
-    if (dir === 'left' && screen === 'screen-home') {
-      track('swipe_nav', { from: 'home', dir: 'left', to: 'snap' });
-      navSnap();
-      return;
-    }
+    // Carousel: left = next tab, right = previous tab. Wraps around.
+    // Active on home/result/error/confirm/camera/barcode (not loading).
+    if (screen === 'screen-loading') return;
+    const cur = currentNavIndex();
+    const delta = dir === 'left' ? 1 : -1;
+    const nextIdx = (cur + delta + NAV_ORDER.length) % NAV_ORDER.length;
+    const nextName = NAV_ORDER[nextIdx];
+    track('swipe_nav', { from: screen, dir: dir, to: nextName, kind: 'carousel' });
+    callNavByName(nextName);
   }
 
   // First-visit hint affordance (one-shot, localStorage-gated)
@@ -731,7 +744,7 @@ document.addEventListener('click', (e) => {
           if (activeScreenId() !== 'screen-home') return;
           const hint = document.createElement('div');
           hint.className = 'swipe-hint left';
-          hint.textContent = '← swipe to Snap';
+          hint.textContent = '← swipe between Snap, Scan, Type, Home';
           document.body.appendChild(hint);
           requestAnimationFrame(() => hint.classList.add('show'));
           setTimeout(() => {
