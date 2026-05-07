@@ -313,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5gg</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5hh</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -355,11 +355,16 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <h1 class="identify-title">Which one did you mean?</h1>
   <p class="identify-sub" id="confirm-sub">We saw two possibilities. Tap the right one.</p>
   <div class="your-snap-strip" id="your-snap-strip"><img id="your-snap-img" alt="Your snap"><span>Your snap</span></div>
-  <div class="confirm-card">
+  <!-- Wave HH — dynamic 2-4 candidate buttons, populated by renderConfirm() -->
+  <div class="confirm-card" id="confirm-list">
     <button class="confirm-btn" id="confirm-a"><span class="confirm-thumb-empty" id="confirm-a-thumb"></span><span class="confirm-text" id="confirm-a-text"></span></button>
     <button class="confirm-btn" id="confirm-b"><span class="confirm-thumb-empty" id="confirm-b-thumb"></span><span class="confirm-text" id="confirm-b-text"></span></button>
   </div>
-  <div class="actions-row"><button class="ghost-btn" onclick="goHome()">← Start over</button></div>
+  <!-- Wave HH — "None of these" escape hatch -> Type screen pre-filled with brand+category -->
+  <div class="actions-row" style="display:flex;flex-direction:column;gap:8px;">
+    <button class="ghost-btn" id="confirm-none-btn" type="button">None of these — let me type it</button>
+    <button class="ghost-btn" onclick="goHome()" type="button">← Start over</button>
+  </div>
 </div>
 
 <div class="screen" id="screen-result" style="position:relative;">
@@ -1180,13 +1185,12 @@ function shouldBounceToType(j, doorIn) {
 }
 
 function renderConfirm(a, b, payload) {
-  // v3.4.5i — render disambig thumbnails when SerpAPI returned them. Converts
-  // text-recall into visual recognition (panel-mandated, 6 May 2026 beta finding).
-  // v3.4.5s Wave S — category-icon library for disambig fallback.
-  // Beta finding (Logitech M235/M185): when SerpAPI returns no thumbnail
-  // for the alternative ASIN, the empty 56x56 grey square made the screen
-  // look broken. Now we render a green-tinted category icon so the
-  // 'no image available' state reads as deliberate, not a bug.
+  // Wave HH — render 2-4 dynamic candidates from payload.disambig_candidates.
+  // Falls back to legacy [a, b] 2-option mode when the field is missing
+  // (e.g. cached pre-HH responses or unusual call sites). Adds a "None of
+  // these" escape hatch that routes to the Type door pre-filled with the
+  // brand portion of the canonical so the user can refine without retyping
+  // from scratch.
   const CONFIRM_ICONS = {
     tech:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="14" rx="2"/><line x1="8" y1="22" x2="16" y2="22"/><line x1="12" y1="18" x2="12" y2="22"/></svg>',
     home:    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>',
@@ -1197,42 +1201,100 @@ function renderConfirm(a, b, payload) {
     health:  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.29 1.51 4.04 3 5.5l7 7z"/></svg>',
     generic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
   };
-  const setThumb = (slotId, url, cat) => {
+  const _confirmCat = (payload && payload.category) || 'generic';
+
+  // Resolve candidates list. Wave HH: prefer the new structured array; fall
+  // back to [a, b] for legacy responses.
+  const fromBackend = payload && Array.isArray(payload.disambig_candidates) ? payload.disambig_candidates : null;
+  let candidates = (fromBackend && fromBackend.length >= 2)
+    ? fromBackend.slice(0, 4)
+    : [a, b].filter(s => typeof s === 'string' && s.trim());
+  if (candidates.length < 2) candidates = [a].filter(Boolean);
+
+  // Thumbnails: only the first two map to verified Amazon listings (canonical,
+  // alternative). Beyond two, we render category-icon fallback.
+  const aThumb = payload && payload.verified_amazon_price && payload.verified_amazon_price.thumbnail;
+  const bThumb = payload && payload.alternative_amazon_price && payload.alternative_amazon_price.thumbnail;
+  const thumbsByIndex = [aThumb || null, bThumb || null];
+
+  // Wipe + rebuild the candidate list DOM. We keep the static confirm-a /
+  // confirm-b nodes for the first two slots (preserves existing thumbnail
+  // styling), then dynamically append items 3 / 4 if present.
+  const listEl = document.getElementById('confirm-list');
+  if (listEl) {
+    // Remove any previously appended dynamic entries (id starts with confirm-c/d)
+    Array.from(listEl.querySelectorAll('[data-hh-dynamic]')).forEach(n => n.remove());
+  }
+
+  function setThumbInto(slotId, url, cat) {
     const slot = document.getElementById(slotId);
     if (!slot) return;
     if (url && /^https?:\/\//i.test(url)) {
       const img = document.createElement('img');
-      img.className = 'confirm-thumb';
-      img.alt = '';
+      img.className = 'confirm-thumb'; img.alt = '';
       img.onerror = () => {
-        // Fall back to category icon (NOT the bare empty square) so the
-        // disambig page reads as intentional even on image fetch failures
         const icon = document.createElement('span');
         icon.className = 'confirm-thumb-icon';
         icon.id = slotId;
         icon.innerHTML = CONFIRM_ICONS[cat] || CONFIRM_ICONS.generic;
         slot.replaceWith(icon);
       };
-      img.src = url;
-      img.id = slotId;
+      img.src = url; img.id = slotId;
       slot.replaceWith(img);
     } else {
-      // No URL provided — render category icon directly (Wave S beta fix)
       const icon = document.createElement('span');
       icon.className = 'confirm-thumb-icon';
       icon.id = slotId;
       icon.innerHTML = CONFIRM_ICONS[cat] || CONFIRM_ICONS.generic;
       slot.replaceWith(icon);
     }
-  };
-  const aThumb = payload && payload.verified_amazon_price && payload.verified_amazon_price.thumbnail;
-  const bThumb = payload && payload.alternative_amazon_price && payload.alternative_amazon_price.thumbnail;
-  document.getElementById('confirm-a-text').textContent = a;
-  document.getElementById('confirm-b-text').textContent = b;
-  const _confirmCat = (payload && payload.category) || 'generic';
-  setThumb('confirm-a-thumb', aThumb, _confirmCat);
-  setThumb('confirm-b-thumb', bThumb, _confirmCat);
-  // Wave F: show user's snap as reference when this disambig came from the camera
+  }
+
+  // Reset static slots' DOM (some prior renderConfirm runs may have replaced
+  // confirm-a-thumb with an <img>, so we re-create the empty span first).
+  ['confirm-a-thumb','confirm-b-thumb'].forEach((id, idx) => {
+    const cur = document.getElementById(id);
+    if (cur && cur.tagName !== 'SPAN') {
+      const span = document.createElement('span');
+      span.className = 'confirm-thumb-empty';
+      span.id = id;
+      cur.replaceWith(span);
+    }
+  });
+
+  const aText = candidates[0] || '';
+  const bText = candidates[1] || '';
+  document.getElementById('confirm-a-text').textContent = aText;
+  document.getElementById('confirm-b-text').textContent = bText;
+  setThumbInto('confirm-a-thumb', thumbsByIndex[0], _confirmCat);
+  setThumbInto('confirm-b-thumb', thumbsByIndex[1], _confirmCat);
+
+  // Show/hide the second static button. If we have only 1 candidate
+  // (degenerate case) hide confirm-b. Otherwise show it.
+  const bBtn = document.getElementById('confirm-b');
+  if (bBtn) bBtn.style.display = candidates.length >= 2 ? '' : 'none';
+
+  // Dynamically append candidates 3 + 4 with category-icon thumbs.
+  if (listEl) {
+    for (let i = 2; i < candidates.length && i < 4; i++) {
+      const btn = document.createElement('button');
+      btn.className = 'confirm-btn';
+      btn.id = 'confirm-c' + i;
+      btn.setAttribute('data-hh-dynamic', '1');
+      const iconSpan = document.createElement('span');
+      iconSpan.className = 'confirm-thumb-icon';
+      iconSpan.innerHTML = CONFIRM_ICONS[_confirmCat] || CONFIRM_ICONS.generic;
+      const textSpan = document.createElement('span');
+      textSpan.className = 'confirm-text';
+      textSpan.textContent = candidates[i];
+      btn.appendChild(iconSpan);
+      btn.appendChild(textSpan);
+      listEl.appendChild(btn);
+      btn.addEventListener('click', () => disambigPick(i, candidates[i], payload));
+    }
+  }
+
+  // Your-snap reference strip (Wave F — preserved).
   const snapStrip = document.getElementById('your-snap-strip');
   const snapImg = document.getElementById('your-snap-img');
   if (_lastDoor === 'snap' && _lastSnapDataUrl && snapStrip && snapImg) {
@@ -1241,47 +1303,77 @@ function renderConfirm(a, b, payload) {
   } else if (snapStrip) {
     snapStrip.classList.remove('show');
   }
-  // Wave F: when no thumbnails came back from SerpAPI, swap the sub-copy to be intentional, not broken
+
+  // Sub-copy.
   const subEl = document.getElementById('confirm-sub');
   if (subEl) {
-    if (!aThumb && !bThumb) subEl.textContent = 'Tap the closer match.';
-    else subEl.textContent = 'We saw two possibilities. Tap the right one.';
+    if (candidates.length === 2) subEl.textContent = 'We saw two possibilities. Tap the right one.';
+    else if (candidates.length === 3) subEl.textContent = 'Three possible matches. Tap the right one.';
+    else if (candidates.length >= 4) subEl.textContent = 'Several possible matches. Tap the right one.';
+    else subEl.textContent = 'Tap the closer match.';
   }
-  document.getElementById('confirm-a').onclick = () => {
-    track('disambig_resolved', { picked: 'canonical' });
-    pushRecent(lastResult);
-    renderResult(a, lastResult);
-  };
-  document.getElementById('confirm-b').onclick = async () => {
-    track('disambig_resolved', { picked: 'alternative' });
-    show('loading');
-    document.getElementById('loading-text').textContent = 'Confirming…';
-    // Wave BB: timeout for disambig alt-text re-normalize too
-    const _ac2 = new AbortController();
-    const _ato2 = setTimeout(() => _ac2.abort(), 15000);
-    try {
-      const r = await fetch('/api/normalize', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input_type: 'text', text: b }),
-        signal: _ac2.signal,
-      });
-      clearTimeout(_ato2);
-      const j = await r.json();
-      if (r.ok && j.canonical_search_string) {
-        const fresh = { ...j, _input_type: 'disambig_alt', _from_alt: true };
-        lastResult = fresh;
-        pushRecent(fresh);
-        renderResult(j.canonical_search_string, fresh);
-        return;
-      }
-    } catch {}
-    const altPayload = { ...lastResult, canonical_search_string: b, mpn: null, amazon_search_query: b };
-    pushRecent(altPayload);
-    renderResult(b, altPayload);
-  };
-  track('disambig_shown');
+
+  // Wire static buttons to the new helper. Index 0 = canonical (we already
+  // have lastResult populated for that), 1 = alternative.
+  document.getElementById('confirm-a').onclick = () => disambigPick(0, aText, payload);
+  document.getElementById('confirm-b').onclick = () => disambigPick(1, bText, payload);
+
+  // "None of these" -> Type door pre-filled with brand portion of canonical.
+  const noneBtn = document.getElementById('confirm-none-btn');
+  if (noneBtn) {
+    noneBtn.onclick = () => {
+      track('disambig_none_of_these', { door: _lastDoor, candidates_count: candidates.length });
+      const canonical = candidates[0] || '';
+      // Brand = first 1-2 tokens (e.g. "Krups Nespresso U Inissia" -> "Krups Nespresso")
+      const tokens = canonical.split(/\s+/).filter(Boolean);
+      const brandHint = tokens.slice(0, Math.min(2, tokens.length)).join(' ');
+      bounceToType(brandHint, 'Type the model number or fuller name.');
+    };
+  }
+  track('disambig_shown', { candidates_count: candidates.length, source: fromBackend ? 'backend_array' : 'legacy_pair' });
   show('confirm');
 }
+
+// Wave HH — disambig pick handler. Index 0 picks the canonical (already in
+// lastResult). Other indexes re-run /api/normalize with the picked text so the
+// result screen is grounded by a fresh verified Amazon lookup for THAT product
+// not a stale lastResult that was built against the canonical.
+async function disambigPick(idx, label, payload) {
+  track('disambig_resolved', { picked_index: idx, picked_label: String(label||'').slice(0,80), door: _lastDoor });
+  if (idx === 0) {
+    pushRecent(lastResult);
+    renderResult(label, lastResult);
+    return;
+  }
+  show('loading');
+  document.getElementById('loading-text').textContent = 'Confirming…';
+  document.getElementById('loading-sub').textContent = 'Working for you, not the retailer';
+  const _ac = new AbortController();
+  const _ato = setTimeout(() => _ac.abort(), 15000);
+  try {
+    const r = await fetch('/api/normalize', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input_type: 'text', text: label }),
+      signal: _ac.signal,
+    });
+    clearTimeout(_ato);
+    const j = await r.json();
+    if (r.ok && j.canonical_search_string) {
+      const fresh = { ...j, _input_type: 'disambig_pick', _from_disambig_idx: idx };
+      lastResult = fresh;
+      pushRecent(fresh);
+      renderResult(j.canonical_search_string, fresh);
+      return;
+    }
+  } catch {}
+  clearTimeout(_ato);
+  // Fallback: render with the label as-is (no verified Amazon anchor)
+  const fallback = { ...lastResult, canonical_search_string: label, mpn: null, amazon_search_query: label };
+  pushRecent(fallback);
+  renderResult(label, fallback);
+}
+
+
 
 function renderResult(displayName, payload) {
   document.getElementById('result-title').textContent = displayName;

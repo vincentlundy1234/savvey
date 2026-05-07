@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5ff1';
+const VERSION             = 'normalize.js v3.4.5hh';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_ff:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_hh:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -101,6 +101,7 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "confidence": "high" | "medium" | "low",
   "alternative_string": "Ninja AF300UK" | null,
+  "alternatives_array": ["Ninja AF400UK 4-tray", "Ninja Foodi MAX"] | [],
   "category": "tech" | "home" | "toys" | "diy" | "beauty" | "grocery" | "health" | "generic",
   "mpn": "AF400UK" | "QC45" | null,
   "amazon_search_query": "AF400UK" | "Bose QuietComfort 45",
@@ -115,6 +116,7 @@ Field rules:
 - canonical_search_string: cleanest brand + family + model.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
 - alternative_string: ONLY when confidence < high. NULL when high.
+- alternatives_array: 0-2 ADDITIONAL plausible product alternatives beyond alternative_string. ONLY when confidence < high AND you can name additional plausible candidates. Empty array [] otherwise. Use SPECIFIC variant names (different model numbers, sizes, sub-families). Total disambiguation pool capped at 4 items.
 - category — STRICT enum: tech | home | toys | diy | beauty | grocery | health | generic.
   - tech: phones, laptops, headphones, gaming, computer accessories, smart-home electronics.
   - home: kitchen appliances, furniture, bedding, larger household items.
@@ -499,6 +501,14 @@ function parseAndDefault(rawText) {
   const confidence = ['high','medium','low'].includes(parsed.confidence) ? parsed.confidence : 'low';
   const alternative = (confidence !== 'high' && typeof parsed.alternative_string === 'string' && parsed.alternative_string.trim())
     ? parsed.alternative_string.trim().slice(0, 200) : null;
+  // Wave HH — extract alternatives_array (0-2 extra candidates) when low/medium confidence
+  let alternatives_array = [];
+  if (confidence !== 'high' && Array.isArray(parsed.alternatives_array)) {
+    alternatives_array = parsed.alternatives_array
+      .filter(s => typeof s === 'string' && s.trim().length > 0)
+      .map(s => s.trim().slice(0, 200))
+      .slice(0, 2);
+  }
   let category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
   // v3.4.5q Wave F.1 — keyword-driven category override (defense-in-depth).
   // Beta finding 6 May 2026: Listerine snap returned with Currys/JL in alternatives, meaning Haiku
@@ -543,6 +553,7 @@ function parseAndDefault(rawText) {
     canonical_search_string: canonical,
     confidence,
     alternative_string: alternative,
+    alternatives_array, // Wave HH
     category,
     mpn,
     amazon_search_query: amazonQ,
@@ -954,12 +965,38 @@ export default async function handler(req, res) {
   // result page, brand_only → disambig). retailer_deep_links is a
   // hostname → {url,title,price} map, populated from google_shopping when
   // available, null otherwise.
+  // Wave HH — build disambig_candidates array (2-4 items). Emitted on
+  // response root. Frontend uses this when specificity==='brand_only' OR
+  // confidence!=='high' to render dynamic candidate list (replaces legacy
+  // 2-option flow). Order: canonical, alternative_string, alternatives_array.
+  // Deduped (case-insensitive trim), capped at 4.
+  const _specificity = assessSpecificity(parsed.canonical_search_string, parsed.mpn, parsed.confidence);
+  let disambig_candidates = null;
+  const _shouldDisambig = (parsed.confidence !== 'high') || (_specificity === 'brand_only');
+  if (_shouldDisambig && parsed.canonical_search_string) {
+    const seen = new Set();
+    const pool = [parsed.canonical_search_string];
+    if (parsed.alternative_string) pool.push(parsed.alternative_string);
+    if (Array.isArray(parsed.alternatives_array)) pool.push(...parsed.alternatives_array);
+    const uniq = [];
+    for (const s of pool) {
+      if (typeof s !== 'string') continue;
+      const k = s.trim().toLowerCase();
+      if (!k || seen.has(k)) continue;
+      seen.add(k);
+      uniq.push(s.trim().slice(0, 200));
+      if (uniq.length >= 4) break;
+    }
+    if (uniq.length >= 2) disambig_candidates = uniq;
+  }
+
   const responseBody = {
     ...parsed,
-    specificity: assessSpecificity(parsed.canonical_search_string, parsed.mpn, parsed.confidence),
+    specificity: _specificity,
     verified_amazon_price,
     alternative_amazon_price,
     retailer_deep_links,
+    disambig_candidates, // Wave HH
     _meta: {
       version: VERSION,
       input_type: inputType,
