@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5ff';
+const VERSION             = 'normalize.js v3.4.5ff1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -571,37 +571,86 @@ function assessSpecificity(canonical, mpn, confidence) {
   return tokens.length <= 2 ? 'brand_only' : 'specific';
 }
 
-// Wave FF — SerpAPI google_shopping engine call.
-// Returns a map of UK retailer hostnames -> direct PDP URLs for the canonical
-// product. Runs in PARALLEL with the Amazon engine call (Promise.all) so wall-
-// clock latency is unchanged. Cached in KV per canonical (24h) so repeat snaps
-// of the same product don't re-bill SerpAPI.
+// Wave FF.1 — SerpAPI google_shopping engine call (permissive parser).
 //
-// Strategic intent (Vincent product-owner call 7 May 2026 evening):
-// "if the links were all reliable the list of retailers updated dynamically and
-// consistently depending on the product that would be a huge win".
+// HOTFIX over Wave FF: the original parser tried to extract direct merchant
+// URLs from response.shopping_results[].link, but SerpAPI google_shopping
+// returns Google `aclk` redirect URLs (host = google.com) which the hostname
+// allow-list rejected -> retailer_deep_links empty on every fresh query.
+//
+// The Wave CC code comment in fetchVerifiedAmazonPrice explained this trap;
+// I missed it. Switching to the merchant identity in `source` / `seller_name`
+// (string field) and accepting the aclk URL as-is. Aclk redirects DO bounce
+// the user to the merchant PDP, just via Google's click tracker. For non-
+// Amazon retailers we don't care about affiliate-tag propagation, so this is
+// fine. Vincent UX goal preserved: tap a retailer chip -> land on product
+// page (one extra redirect hop, invisible to user).
+//
+// Returns a map of canonical retailer keys (e.g. 'currys.co.uk',
+// 'johnlewis.com') -> { url, title, price }. Canonical key derives from
+// seller_name via _SELLER_NAME_TO_HOST. Items with unknown sellers are
+// dropped (still no random aggregator junk).
 const GOOGLE_SHOPPING_TIMEOUT_MS = 4000;
-const _RETAILER_HOSTS_OF_INTEREST = new Set([
-  'currys.co.uk', 'johnlewis.com', 'argos.co.uk', 'boots.com', 'tesco.com',
-  'sainsburys.co.uk', 'asda.com', 'morrisons.com', 'waitrose.com', 'ocado.com',
-  'diy.com', 'screwfix.com', 'wickes.co.uk', 'toolstation.com', 'bandq.co.uk',
-  'halfords.com', 'very.co.uk', 'ao.com', 'next.co.uk', 'marksandspencer.com',
-  'superdrug.com', 'lookfantastic.com', 'space.nk.com', 'cultbeauty.co.uk',
-  'wiggle.com', 'sigmasports.com', 'evanscycles.com', 'chainreactioncycles.com',
-  'pets-at-home.com', 'zooplus.co.uk', 'crocus.co.uk',
-  'smyths-toys.com', 'theentertainer.com', 'lego.com', 'apple.com',
-  'samsung.com', 'dell.com', 'hp.com', 'lenovo.com', 'microsoft.com',
-  'ikea.com', 'dunelm.com', 'wayfair.co.uk', 'made.com',
-]);
-function _hostFromUrl(u) {
-  try { return new URL(u).hostname.toLowerCase().replace(/^www\./, ''); }
-  catch { return null; }
+const _SELLER_NAME_TO_HOST = (() => {
+  const m = new Map();
+  const add = (host, ...names) => names.forEach(n => m.set(n.toLowerCase(), host));
+  add('currys.co.uk', 'Currys', 'Currys PC World');
+  add('johnlewis.com', 'John Lewis', 'John Lewis & Partners', 'JohnLewis');
+  add('argos.co.uk', 'Argos');
+  add('boots.com', 'Boots', 'Boots UK');
+  add('tesco.com', 'Tesco', 'Tesco Groceries', 'Tesco UK');
+  add('sainsburys.co.uk', "Sainsbury's", 'Sainsburys');
+  add('asda.com', 'Asda', 'ASDA Groceries');
+  add('morrisons.com', 'Morrisons');
+  add('waitrose.com', 'Waitrose', 'Waitrose & Partners');
+  add('ocado.com', 'Ocado');
+  add('diy.com', 'B&Q', 'B&Q DIY');
+  add('screwfix.com', 'Screwfix');
+  add('wickes.co.uk', 'Wickes');
+  add('toolstation.com', 'Toolstation');
+  add('halfords.com', 'Halfords');
+  add('very.co.uk', 'Very', 'Very.co.uk');
+  add('ao.com', 'AO', 'AO.com', 'ao.com');
+  add('next.co.uk', 'Next');
+  add('marksandspencer.com', 'M&S', 'Marks & Spencer', 'Marks and Spencer');
+  add('superdrug.com', 'Superdrug');
+  add('lookfantastic.com', 'Lookfantastic', 'LookFantastic');
+  add('space.nk.com', 'Space NK');
+  add('cultbeauty.co.uk', 'Cult Beauty', 'CultBeauty');
+  add('wiggle.com', 'Wiggle');
+  add('sigmasports.com', 'Sigma Sports');
+  add('evanscycles.com', 'Evans Cycles', 'EvansCycles');
+  add('chainreactioncycles.com', 'Chain Reaction Cycles', 'ChainReactionCycles');
+  add('pets-at-home.com', 'Pets at Home', 'PetsAtHome');
+  add('zooplus.co.uk', 'Zooplus', 'zooplus');
+  add('smyths-toys.com', 'Smyths Toys', 'Smyths');
+  add('theentertainer.com', 'The Entertainer');
+  add('lego.com', 'LEGO', 'LEGO Shop');
+  add('apple.com', 'Apple');
+  add('samsung.com', 'Samsung');
+  add('dell.com', 'Dell');
+  add('hp.com', 'HP', 'HP Store');
+  add('lenovo.com', 'Lenovo');
+  add('microsoft.com', 'Microsoft');
+  add('ikea.com', 'IKEA', 'Ikea');
+  add('dunelm.com', 'Dunelm');
+  add('wayfair.co.uk', 'Wayfair');
+  add('made.com', 'Made.com', 'MADE');
+  return m;
+})();
+function _resolveSeller(item) {
+  const candidates = [item.source, item.seller_name, item.merchant && item.merchant.name].filter(Boolean);
+  for (const raw of candidates) {
+    const key = String(raw).trim().toLowerCase();
+    if (_SELLER_NAME_TO_HOST.has(key)) return _SELLER_NAME_TO_HOST.get(key);
+  }
+  return null;
 }
 async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v1:${canonicalKey}`;
+  const ck = `savvey:retailers:v2:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -624,21 +673,27 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
     const j = await r.json();
     const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
     const deepLinks = {};
+    let _examined = 0;
+    let _matchedSeller = 0;
     for (const item of results) {
-      const link = item.product_link || item.link;
-      if (!link || typeof link !== 'string') continue;
-      const host = _hostFromUrl(link);
+      _examined++;
+      const host = _resolveSeller(item);
       if (!host) continue;
+      _matchedSeller++;
       if (host.includes('amazon.')) continue;
-      const matched = [..._RETAILER_HOSTS_OF_INTEREST].find(h => host === h || host.endsWith('.' + h));
-      if (!matched) continue;
-      if (deepLinks[matched]) continue;
-      deepLinks[matched] = {
-        url: link.slice(0, 500),
+      if (deepLinks[host]) continue;
+      // Use the aclk redirect URL (item.link). It bounces through Google to
+      // the merchant PDP. product_link goes to Google's product page so we
+      // prefer item.link. Fall back to product_link only if link missing.
+      const url = item.link || item.product_link;
+      if (!url || typeof url !== 'string') continue;
+      deepLinks[host] = {
+        url:   url.slice(0, 500),
         title: typeof item.title === 'string' ? item.title.slice(0, 200) : null,
         price: typeof item.price === 'string' ? item.price.slice(0, 30) : null,
       };
     }
+    console.log(`[${VERSION}] google_shopping for "${query.slice(0,60)}": examined=${_examined} matched=${_matchedSeller} kept=${Object.keys(deepLinks).length}`);
     if (Object.keys(deepLinks).length === 0) return null;
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
     return deepLinks;
