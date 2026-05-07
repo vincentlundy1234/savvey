@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5hh';
+const VERSION             = 'normalize.js v3.4.5hh1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_hh:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_hh1:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -101,7 +101,7 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "confidence": "high" | "medium" | "low",
   "alternative_string": "Ninja AF300UK" | null,
-  "alternatives_array": ["Ninja AF400UK 4-tray", "Ninja Foodi MAX"] | [],
+  "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic"] | [],
   "category": "tech" | "home" | "toys" | "diy" | "beauty" | "grocery" | "health" | "generic",
   "mpn": "AF400UK" | "QC45" | null,
   "amazon_search_query": "AF400UK" | "Bose QuietComfort 45",
@@ -116,7 +116,10 @@ Field rules:
 - canonical_search_string: cleanest brand + family + model.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
 - alternative_string: ONLY when confidence < high. NULL when high.
-- alternatives_array: 0-2 ADDITIONAL plausible product alternatives beyond alternative_string. ONLY when confidence < high AND you can name additional plausible candidates. Empty array [] otherwise. Use SPECIFIC variant names (different model numbers, sizes, sub-families). Total disambiguation pool capped at 4 items.
+- alternatives_array: 0-3 ADDITIONAL plausible product candidates. Two cases:
+  (a) MEDIUM confidence on a specific product: list specific variants of the canonical (different model numbers, sizes, sub-families). Example: canonical "Apple iPhone 15 128GB" -> alternatives_array ["Apple iPhone 15 Plus", "Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"].
+  (b) LOW confidence on a vague brand+category query: list 3 POPULAR UK products in that category. Use concrete model names a UK shopper would recognise. Example: canonical "Logitech mouse" -> alternatives_array ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"]. Example: canonical "Kettle" -> alternatives_array ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"].
+  Empty array [] ONLY when you genuinely can't suggest anything useful (very obscure category, no UK retail presence). Total disambiguation pool capped at 4 items.
 - category — STRICT enum: tech | home | toys | diy | beauty | grocery | health | generic.
   - tech: phones, laptops, headphones, gaming, computer accessories, smart-home electronics.
   - home: kitchen appliances, furniture, bedding, larger household items.
@@ -507,7 +510,7 @@ function parseAndDefault(rawText) {
     alternatives_array = parsed.alternatives_array
       .filter(s => typeof s === 'string' && s.trim().length > 0)
       .map(s => s.trim().slice(0, 200))
-      .slice(0, 2);
+      .slice(0, 3); // Wave HH.1 — up to 3 alternatives so vague brand+category queries get full 4-candidate disambig
   }
   let category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
   // v3.4.5q Wave F.1 — keyword-driven category override (defense-in-depth).
