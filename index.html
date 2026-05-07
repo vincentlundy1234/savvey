@@ -215,6 +215,29 @@
   .zoom-btn { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,.45); color: white; border: 1px solid rgba(255,255,255,.18); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .15s ease, transform .12s ease; backdrop-filter: blur(6px); }
   .zoom-btn:active { transform: scale(.92); }
   .zoom-btn.active { background: white; color: #000; border-color: white; }
+  /* v3.4.5x Wave X - slim non-blocking GDPR banner + AI-use disclosure modal */
+  .consent-banner { position: fixed; left: 0; right: 0; bottom: 0; background: white; border-top: 1px solid var(--border); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); z-index: 90; box-shadow: 0 -4px 16px rgba(0,0,0,.06); display: none; align-items: center; gap: 12px; }
+  .consent-banner.show { display: flex; }
+  .consent-banner-text { flex: 1; font-size: 12px; color: var(--ink-soft); line-height: 1.5; }
+  .consent-banner-text a { color: var(--green); text-decoration: underline; }
+  .consent-banner-btn { background: var(--green); color: white; border: 0; border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 13px; cursor: pointer; flex-shrink: 0; }
+  .consent-banner-btn:active { transform: scale(.95); }
+  body:has(.consent-banner.show) .bottom-nav { bottom: 64px; }
+  @media (prefers-color-scheme: dark) { .consent-banner { background: #1a221d; } }
+
+  .ai-info-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--green-soft, #e8f3e6); color: var(--green); border: 0; font-weight: 800; font-size: 13px; cursor: pointer; vertical-align: middle; margin-left: 6px; line-height: 1; }
+  .ai-info-btn:active { transform: scale(.92); }
+  .ai-modal-backdrop { position: fixed; inset: 0; background: rgba(20,32,26,.55); z-index: 300; display: none; align-items: flex-end; justify-content: center; padding: 0; }
+  .ai-modal-backdrop.show { display: flex; }
+  .ai-modal { background: var(--bg, white); border-radius: 16px 16px 0 0; padding: 20px 22px calc(20px + env(safe-area-inset-bottom)); max-width: 480px; width: 100%; box-shadow: 0 -8px 32px rgba(0,0,0,.18); }
+  .ai-modal h3 { font-size: 18px; margin: 0 0 8px; font-weight: 800; }
+  .ai-modal p { margin: 0 0 10px; font-size: 14px; color: var(--ink-soft); line-height: 1.5; }
+  .ai-modal-close { display: block; width: 100%; background: var(--green); color: white; border: 0; border-radius: 999px; padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; margin-top: 12px; }
+  @media (prefers-reduced-motion: reduce) { .ai-modal-backdrop, .consent-banner { transition: none !important; } }
+  /* v3.4.5w Wave W - bounce toast for Door 1 -> Door 2 fallback */
+  .savvey-toast { position: fixed; left: 50%; transform: translateX(-50%) translateY(20px); bottom: calc(76px + env(safe-area-inset-bottom)); background: #14201a; color: white; padding: 12px 18px; border-radius: 999px; font-size: 14px; font-weight: 600; box-shadow: 0 6px 24px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .2s ease, transform .2s ease; z-index: 200; max-width: calc(100vw - 32px); text-align: center; }
+  .savvey-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (prefers-reduced-motion: reduce) { .savvey-toast { transition: none; } }
   /* v3.4.5o Wave E: swipe gesture micro-affordance */
   .swipe-hint { position: fixed; top: 50%; transform: translateY(-50%); background: rgba(42,107,34,.86); color: white; border-radius: 999px; padding: 6px 10px; font-size: 11px; font-weight: 700; z-index: 8; pointer-events: none; opacity: 0; transition: opacity .35s ease; box-shadow: 0 4px 14px rgba(0,0,0,.18); }
   .swipe-hint.left { right: 10px; }
@@ -290,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5s</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5x</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -339,10 +362,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="actions-row"><button class="ghost-btn" onclick="goHome()">← Start over</button></div>
 </div>
 
-<div class="screen" id="screen-result">
+<div class="screen" id="screen-result" style="position:relative;">
   <div class="badge-row"><span class="badge" id="result-badge">Identified</span></div>
   <div class="verdict-pill" id="verdict-pill"><span class="verdict-dot"></span><span id="verdict-pill-text">—</span></div>
   <p class="verdict-basis" id="verdict-basis"></p>
+  <button type="button" class="ai-info-btn" id="ai-info-btn" aria-label="How Savvey identifies products" style="position:absolute;top:14px;right:14px;">i</button>
   <h1 class="identify-title" id="result-title">—</h1>
   <p class="identify-sub" id="result-sub">Verified Amazon UK price below. Other retailers shown to check alternatives.</p>
   <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
@@ -974,6 +998,12 @@ async function callNormalize(body) {
     lastResult = { ...j, _input_type: body.input_type, _latency_ms: ms };
     track('normalize_ok', { input_type: body.input_type, confidence: j.confidence, category: j.category, ms, cache: j._meta && j._meta.cache });
     bumpCounter();
+    // v3.4.5w Wave W - Door 1 -> Door 2 fallback gate
+    if (shouldBounceToType(j, body.input_type)) {
+      track('vision_low_confidence_bounce', { canonical: String(j.canonical_search_string||'').slice(0,60), confidence: j.confidence });
+      bounceToType(j.canonical_search_string || '', 'Could not quite catch that. Edit and search again?');
+      return;
+    }
     if (j.confidence !== 'high' && j.alternative_string) {
       renderConfirm(j.canonical_search_string, j.alternative_string, j);
     } else {
@@ -987,6 +1017,95 @@ async function callNormalize(body) {
   } finally {
     window._savveyFetching = false;
   }
+}
+
+
+
+// v3.4.5x Wave X - consent banner + AI-use disclosure modal init
+(function initConsentBanner() {
+  if (typeof localStorage === 'undefined') return;
+  const KEY = 'savvey_consent_dismissed_v1';
+  if (localStorage.getItem(KEY) === '1') return;
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      const el = document.getElementById('consent-banner');
+      if (el) el.classList.add('show');
+    }, 1200);
+  });
+  document.addEventListener('click', (e) => {
+    if (e.target && e.target.id === 'consent-banner-btn') {
+      const el = document.getElementById('consent-banner');
+      if (el) el.classList.remove('show');
+      try { localStorage.setItem(KEY, '1'); } catch {}
+      track('consent_dismissed', { surface: 'banner' });
+    }
+  });
+})();
+
+(function initAiModal() {
+  function open() {
+    const b = document.getElementById('ai-modal-backdrop');
+    if (!b) return;
+    b.classList.add('show');
+    b.removeAttribute('hidden');
+    track('ai_disclosure_opened');
+  }
+  function close() {
+    const b = document.getElementById('ai-modal-backdrop');
+    if (!b) return;
+    b.classList.remove('show');
+    b.setAttribute('hidden','');
+  }
+  document.addEventListener('click', (e) => {
+    if (!e.target) return;
+    if (e.target.id === 'ai-info-btn') { e.preventDefault(); open(); }
+    else if (e.target.id === 'ai-modal-close') { e.preventDefault(); close(); }
+    else if (e.target.id === 'ai-modal-backdrop') { close(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') close();
+  });
+})();
+
+// v3.4.5w Wave W - Door 1 -> Door 2 fallback (QA Lead's elegant Aesop fix).
+// When Vision returns confidence='low' or 'Unknown product', skip the disambig
+// and result screens entirely. Bounce to Home with the Type input pre-filled
+// with whatever Vision did manage to extract. User edits and re-submits via
+// Door 2 with no dead-end UX. Beats building a separate manual SKU UI.
+let _toastTimer = null;
+function showToast(msg, ms) {
+  const el = document.getElementById('savvey-toast');
+  if (!el) return;
+  el.textContent = String(msg || '').slice(0, 120);
+  el.classList.add('show');
+  if (_toastTimer) clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), ms || 3200);
+}
+function bounceToType(seed, reason) {
+  showToast(reason || 'Could not quite catch that. Edit and try again.');
+  goHome();
+  setActiveNav('type');
+  setTimeout(() => {
+    const inp = document.getElementById('text-input');
+    if (!inp) return;
+    inp.value = seed || '';
+    try { inp.scrollIntoView({ behavior: 'smooth', block: 'center' }); } catch { inp.scrollIntoView(); }
+    inp.focus();
+    if (inp.value) try { inp.setSelectionRange(0, inp.value.length); } catch {}
+  }, 200);
+  track('door1_to_door2_fallback', { reason: String(reason || '').slice(0, 40), seed_len: (seed || '').length, from_door: _lastDoor || 'unknown' });
+}
+function shouldBounceToType(j, doorIn) {
+  // Only bounce from Snap door (image input) - other doors don't have the same low-confidence problem
+  if (doorIn !== 'image') return false;
+  const canonical = String(j && j.canonical_search_string || '').trim();
+  if (!canonical) return true;
+  if (/^unknown\b/i.test(canonical)) return true;
+  if (j.confidence === 'low') return true;
+  // Edge case: medium confidence but canonical is suspiciously generic (single word + nothing else)
+  // Only bounce if there's also no alternative_string to fall back on via disambig
+  if (j.confidence === 'medium' && !j.alternative_string && canonical.split(/\s+/).length < 2) return true;
+  return false;
 }
 
 function renderConfirm(a, b, payload) {
@@ -1554,6 +1673,20 @@ handleInbound();
 </script>
 <!-- v3.4.5m — Wave C bottom nav. Three-tab persistent navigation with
      state-reset on each tap. Hidden on camera/barcode/loading screens. -->
+<aside class="consent-banner" id="consent-banner" role="region" aria-label="Cookie and analytics notice">
+  <span class="consent-banner-text">Savvey uses anonymous analytics (no personal data) and AI to identify products. <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a></span>
+  <button class="consent-banner-btn" id="consent-banner-btn" type="button">Got it</button>
+</aside>
+<div class="ai-modal-backdrop" id="ai-modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="ai-modal-title" hidden>
+  <div class="ai-modal">
+    <h3 id="ai-modal-title">How Savvey identifies products</h3>
+    <p>We use Anthropic's Claude AI to identify the product you snap, scan, paste, or type. AI can make mistakes - especially on minimalist packaging or new product lines.</p>
+    <p>Always confirm the product on the retailer's page before buying. Your queries are not used to train the AI model. Photos are processed in real time and not stored.</p>
+    <p>Verified Amazon UK prices are fetched live via SerpAPI. Other retailer links open the retailer's own search page.</p>
+    <button class="ai-modal-close" id="ai-modal-close" type="button">Got it</button>
+  </div>
+</div>
+<div class="savvey-toast" id="savvey-toast" role="status" aria-live="polite"></div>
 <nav class="bottom-nav" id="bottom-nav" aria-label="Primary navigation">
   <button class="nav-tab" id="nav-snap" onclick="navSnap()" aria-label="Snap a product">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
