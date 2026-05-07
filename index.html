@@ -313,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5bb</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5dd</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -1115,8 +1115,11 @@ function bounceToType(seed, reason) {
   track('door1_to_door2_fallback', { reason: String(reason || '').slice(0, 40), seed_len: (seed || '').length, from_door: _lastDoor || 'unknown' });
 }
 function shouldBounceToType(j, doorIn) {
-  // Only bounce from Snap door (image input) - other doors don't have the same low-confidence problem
-  if (doorIn !== 'image') return false;
+  // v3.4.5dd: extend bounce-to-Type to barcode too. Beta finding 7 May 2026 -
+  // an unknown EAN (Open Food Facts miss + Haiku doesn't recognise digits) used
+  // to land on a result screen with 'Unknown product' verdict, looking broken.
+  // Now bounces to Type with the EAN pre-filled so user can edit to a name.
+  if (doorIn !== 'image' && doorIn !== 'barcode') return false;
   const canonical = String(j && j.canonical_search_string || '').trim();
   if (!canonical) return true;
   if (/^unknown\b/i.test(canonical)) return true;
