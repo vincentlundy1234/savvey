@@ -1,26 +1,27 @@
 {
-  "name": "Savvey — shop smart.",
+  "name": "Savvey - shop smart.",
   "short_name": "Savvey",
-  "description": "Check any product price in seconds. Savvey scans 40+ UK retailers and tells you if you're getting a fair deal.",
-  "start_url": "/",
+  "description": "Snap, scan, paste, or type any product. Savvey identifies it and shows the verified Amazon UK live price plus links to check Currys, Argos, Boots and other retailers in seconds.",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#0f2410",
+  "background_color": "#f6f6f4",
   "theme_color": "#2a6b22",
   "orientation": "portrait",
   "lang": "en-GB",
   "categories": ["shopping", "lifestyle", "finance"],
   "icons": [
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any maskable"
+      "src": "/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
     }
   ],
   "screenshots": [],

@@ -313,7 +313,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5z</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5bb</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -993,10 +993,15 @@ async function callNormalize(body) {
     document.getElementById('loading-text').textContent = phases[phaseIdx];
   }, 1200);
   const t0 = Date.now();
+  // Wave BB: AbortController prevents UI hang if Vercel function exceeds 12s
+  const _ac = new AbortController();
+  const _ato = setTimeout(() => _ac.abort(), 15000);
   try {
     const r = await fetch('/api/normalize', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      signal: _ac.signal
     });
+    clearTimeout(_ato);
     const j = await r.json();
     clearInterval(phaseTimer);
     const ms = Date.now() - t0;
@@ -1028,6 +1033,7 @@ async function callNormalize(body) {
     track('normalize_throw', { input_type: body.input_type, error: String(err).slice(0, 100) });
     showError('Network error.', 'Check your connection and try again.');
   } finally {
+    clearTimeout(_ato);  // Wave BB defensive cleanup
     window._savveyFetching = false;
   }
 }
@@ -1198,11 +1204,16 @@ function renderConfirm(a, b, payload) {
     track('disambig_resolved', { picked: 'alternative' });
     show('loading');
     document.getElementById('loading-text').textContent = 'Confirming…';
+    // Wave BB: timeout for disambig alt-text re-normalize too
+    const _ac2 = new AbortController();
+    const _ato2 = setTimeout(() => _ac2.abort(), 15000);
     try {
       const r = await fetch('/api/normalize', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ input_type: 'text', text: b }),
+        signal: _ac2.signal,
       });
+      clearTimeout(_ato2);
       const j = await r.json();
       if (r.ok && j.canonical_search_string) {
         const fresh = { ...j, _input_type: 'disambig_alt', _from_alt: true };
@@ -1361,10 +1372,12 @@ function renderResult(displayName, payload) {
   const verifiedThumb = verified && typeof verified.thumbnail === 'string' && /^https?:\/\//i.test(verified.thumbnail) ? verified.thumbnail : null;
   if (verifiedThumb) {
     heroImg.onload  = () => { heroWrap.classList.remove('empty'); heroImg.classList.add('loaded'); };
-    heroImg.onerror = () => { fetchHeroImage(displayName); };
+    heroImg.onerror = () => { /* Wave BB: silent - no /api/image fallback after Wave R deletion */ };
     heroImg.src = verifiedThumb;
   } else {
-    fetchHeroImage(displayName);
+    // Wave BB: no verified thumbnail and no /api/image fallback (deleted Wave R).
+    // Hero stays empty; result still legible without it.
+    heroWrap.classList.add('empty');
   }
 }
 
@@ -1399,21 +1412,6 @@ function renderSavveySays(ss) {
 }
 function escapeHtml(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-}
-
-async function fetchHeroImage(query) {
-  try {
-    const r = await fetch('/api/image?q=' + encodeURIComponent(query.slice(0, 80)));
-    if (!r.ok) return;
-    const j = await r.json();
-    if (!j || !j.image || !j.image.url) return;
-    const heroWrap = document.getElementById('hero-img-wrap');
-    const heroImg = document.getElementById('hero-img');
-    heroImg.onload = () => { heroWrap.classList.remove('empty'); heroImg.classList.add('loaded'); };
-    heroImg.onerror = () => {};
-    heroImg.src = j.image.url;
-    heroImg.alt = query;
-  } catch {}
 }
 
 function reportWrongIdentification() {
