@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5ii2';
+const VERSION             = 'normalize.js v3.4.5kk';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_ii2:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_kk:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -101,7 +101,12 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "confidence": "high" | "medium" | "low",
   "alternative_string": "Ninja AF300UK" | null,
-  "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic"] | [],
+  "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"] | [],
+  "alternatives_meta": [
+    {"typical_price_gbp": 24.99, "pack_size": "1.7L", "tier_label": "Mid-tier"},
+    {"typical_price_gbp": 169.00, "pack_size": "1.5L", "tier_label": "Premium"},
+    {"typical_price_gbp": 19.99, "pack_size": "1.7L", "tier_label": "Budget"}
+  ] | [],
   "category": "tech" | "home" | "toys" | "diy" | "beauty" | "grocery" | "health" | "generic",
   "mpn": "AF400UK" | "QC45" | null,
   "amazon_search_query": "AF400UK" | "Bose QuietComfort 45",
@@ -120,6 +125,11 @@ Field rules:
   (a) MEDIUM confidence on a specific product: list specific variants of the canonical (different model numbers, sizes, sub-families). Example: canonical "Apple iPhone 15 128GB" -> alternatives_array ["Apple iPhone 15 Plus", "Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"].
   (b) LOW confidence on a vague brand+category query: list 3 POPULAR UK products in that category. Use concrete model names a UK shopper would recognise. Example: canonical "Logitech mouse" -> alternatives_array ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"]. Example: canonical "Kettle" -> alternatives_array ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"].
   Empty array [] ONLY when you genuinely can't suggest anything useful (very obscure category, no UK retail presence). Total disambiguation pool capped at 4 items.
+- alternatives_meta: parallel array (same length as alternatives_array). For each candidate provide:
+  - typical_price_gbp: typical UK retail price as a number, no currency symbol. Ballpark from your training. Use null if you have no idea.
+  - pack_size: descriptor of unit count or volume — examples: "9 Pack", "500ml", "415g", "1 unit", "4 Pack", "1.7L". Use null if pack/unit context doesn't apply (e.g. electronics, single-item products).
+  - tier_label: ONE of "Premium", "Mid-tier", "Budget" — your read of the brand/product position in the UK market. Use null if you can't classify.
+  This metadata powers the disambig screen's cost-per-unit + tier badges. Empty array [] when alternatives_array is empty.
 - category — STRICT enum: tech | home | toys | diy | beauty | grocery | health | generic.
   - tech: phones, laptops, headphones, gaming, computer accessories, smart-home electronics.
   - home: kitchen appliances, furniture, bedding, larger household items.
@@ -165,6 +175,8 @@ OUTPUT: {"canonical_search_string": "Heinz Baked Beans 415g", "confidence": "hig
 const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
 
 Look for: 1) MPN/Model on box. 2) Brand + family. 3) Shelf-edge label.
+
+EMPTY PACKAGING IS A VALID INPUT. Empty bottles, finished tubes, used containers, cardboard inners, product remnants — the user is reordering. Identify what's visible from the brand and label, applying normal confidence rules: 'high' if a specific variant is readable, 'medium' if only brand+family is visible, 'low' if only the brand or category is visible (or just generic packaging like a blank cardboard inner). For LOW-confidence brand+category cases, return a generic canonical (e.g. "Toilet Roll", "Toothpaste", "Mouthwash") and populate alternatives_array with 3 popular UK products in that category.
 
 CATEGORY examples (these are STRICT — match the right enum):
 - Photo of Listerine bottle -> category="health" (oral-care/mouthwash, NOT generic)
@@ -531,11 +543,24 @@ function parseAndDefault(rawText) {
     ? parsed.alternative_string.trim().slice(0, 200) : null;
   // Wave HH — extract alternatives_array (0-2 extra candidates) when low/medium confidence
   let alternatives_array = [];
+  let alternatives_meta = [];
   if (confidence !== 'high' && Array.isArray(parsed.alternatives_array)) {
     alternatives_array = parsed.alternatives_array
       .filter(s => typeof s === 'string' && s.trim().length > 0)
       .map(s => s.trim().slice(0, 200))
       .slice(0, 3); // Wave HH.1 — up to 3 alternatives so vague brand+category queries get full 4-candidate disambig
+    // Wave KK — extract alternatives_meta (parallel array) for disambig cost-per-unit + tier rendering
+    if (Array.isArray(parsed.alternatives_meta)) {
+      alternatives_meta = parsed.alternatives_meta.slice(0, alternatives_array.length).map(m => {
+        if (!m || typeof m !== 'object') return null;
+        const price = (typeof m.typical_price_gbp === 'number' && m.typical_price_gbp > 0 && m.typical_price_gbp < 10000)
+          ? Number(m.typical_price_gbp.toFixed(2)) : null;
+        const pack = (typeof m.pack_size === 'string' && m.pack_size.trim()) ? m.pack_size.trim().slice(0, 40) : null;
+        const tier = ['Premium','Mid-tier','Budget'].includes(m.tier_label) ? m.tier_label : null;
+        if (!price && !pack && !tier) return null;
+        return { typical_price_gbp: price, pack_size: pack, tier_label: tier };
+      });
+    }
   }
   let category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
   // v3.4.5q Wave F.1 — keyword-driven category override (defense-in-depth).
@@ -588,6 +613,7 @@ function parseAndDefault(rawText) {
     confidence,
     alternative_string: alternative,
     alternatives_array, // Wave HH
+    alternatives_meta, // Wave KK — typical_price_gbp + pack_size + tier_label per candidate
     category,
     mpn,
     amazon_search_query: amazonQ,
@@ -614,6 +640,18 @@ function assessSpecificity(canonical, mpn, confidence) {
   if (/\b(pro|max|ultra|plus|mini|se|elite|premium|deluxe|essentials?|gen[\s-]?\d+)\b/i.test(stripped)) return 'specific'; // Wave II.2 — dropped 'air' (false-positive on 'Air Fryer')
   if (confidence === 'low') return 'brand_only';
   return tokens.length <= 2 ? 'brand_only' : 'specific';
+}
+
+// Wave KK — Layer 2 server-side safety sanitiser. Post-Vision canonical blacklist
+// catches cases where Haiku tried to identify something that ISN'T a product
+// (person, political symbol, drug, weapon, sensitive content). Layer 1 is
+// Haiku's built-in safety which catches most upstream; this is defense-in-depth.
+// On a hit, handler returns a clean redirect signal — frontend bounces to home
+// with a friendly "not a product" toast (no shaming, no abusive labels).
+const _SAFETY_BLOCK_RX = /\b(person|man|woman|child|baby|infant|toddler|face|portrait|selfie|naked|nude|breast|genital|penis|vagina|swastika|nazi|isis|terrorist|bomb|grenade|gun|pistol|rifle|knife|machete|cocaine|heroin|methamphet|cannabis|marijuana|weed|crack|opioid|fentanyl|noose|hanging|suicide|self[\s-]?harm|blood|gore|corpse|dead body|wound|injury)\b/i;
+function _shouldSafetyBlock(canonical) {
+  if (!canonical || typeof canonical !== 'string') return false;
+  return _SAFETY_BLOCK_RX.test(canonical);
 }
 
 // Wave FF.1 — SerpAPI google_shopping engine call (permissive parser).
@@ -894,6 +932,18 @@ export default async function handler(req, res) {
     });
   }
 
+  // Wave KK — Layer 2 safety block. Short-circuit before any caching/SerpAPI
+  // when canonical matches the blacklist. Frontend handles 'safety_block' as
+  // a clean redirect to home with a friendly toast.
+  if (_shouldSafetyBlock(parsed.canonical_search_string)) {
+    console.log(`[${VERSION}] Layer 2 safety block fired: "${(parsed.canonical_search_string||'').slice(0,80)}"`);
+    return res.status(200).json({
+      error: 'safety_block',
+      message: 'That does not look like a product. Try snapping the packaging.',
+      _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0 }
+    });
+  }
+
   // Wave II — canonical-keyed cache lookup. Different input phrasings that
   // resolve to the SAME canonical hit one shared cache entry, skipping
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
@@ -1045,33 +1095,57 @@ export default async function handler(req, res) {
   // Deduped (case-insensitive trim), capped at 4.
   const _specificity = assessSpecificity(parsed.canonical_search_string, parsed.mpn, parsed.confidence);
   let disambig_candidates = null;
+  let disambig_candidates_meta = null; // Wave KK — parallel array, [{typical_price_gbp, pack_size, tier_label}|null, ...]
   const _shouldDisambig = (parsed.confidence !== 'high') || (_specificity === 'brand_only');
   if (_shouldDisambig && parsed.canonical_search_string) {
     // Wave HH.2 — when canonical is brand_only AND we have 2+ specific
-    // alternatives, drop the canonical from disambig. Tapping the vague
-    // canonical (e.g. "Kettle") just re-searches the vague query —
-    // the user wants to PICK between the specific options.
+    // alternatives, drop the canonical from disambig.
     const _altPool = [];
-    if (parsed.alternative_string) _altPool.push(parsed.alternative_string);
-    if (Array.isArray(parsed.alternatives_array)) _altPool.push(...parsed.alternatives_array);
+    const _altMetaPool = [];
+    if (parsed.alternative_string) {
+      _altPool.push(parsed.alternative_string);
+      _altMetaPool.push(null); // alternative_string has no meta yet
+    }
+    if (Array.isArray(parsed.alternatives_array)) {
+      for (let i = 0; i < parsed.alternatives_array.length; i++) {
+        _altPool.push(parsed.alternatives_array[i]);
+        _altMetaPool.push((parsed.alternatives_meta && parsed.alternatives_meta[i]) || null);
+      }
+    }
     const _specAlts = _altPool.filter(s => assessSpecificity(s, null, 'medium') === 'specific');
     const _skipCanonical = (_specificity === 'brand_only') && (_specAlts.length >= 2);
 
     const seen = new Set();
     const pool = [];
-    if (!_skipCanonical) pool.push(parsed.canonical_search_string);
-    pool.push(..._altPool);
+    const metaPool = [];
+    if (!_skipCanonical) {
+      pool.push(parsed.canonical_search_string);
+      metaPool.push(null); // canonical has no meta in this wave
+    }
+    for (let i = 0; i < _altPool.length; i++) {
+      pool.push(_altPool[i]);
+      metaPool.push(_altMetaPool[i]);
+    }
 
     const uniq = [];
-    for (const s of pool) {
+    const uniqMeta = [];
+    for (let i = 0; i < pool.length; i++) {
+      const s = pool[i];
       if (typeof s !== 'string') continue;
       const k = s.trim().toLowerCase();
       if (!k || seen.has(k)) continue;
       seen.add(k);
       uniq.push(s.trim().slice(0, 200));
+      uniqMeta.push(metaPool[i]);
       if (uniq.length >= 4) break;
     }
-    if (uniq.length >= 2) disambig_candidates = uniq;
+    if (uniq.length >= 2) {
+      disambig_candidates = uniq;
+      // Wave KK — emit meta only if at least one entry has data
+      if (uniqMeta.some(m => m !== null)) {
+        disambig_candidates_meta = uniqMeta;
+      }
+    }
   }
 
   const responseBody = {
@@ -1081,6 +1155,7 @@ export default async function handler(req, res) {
     alternative_amazon_price,
     retailer_deep_links,
     disambig_candidates, // Wave HH
+    disambig_candidates_meta, // Wave KK — parallel array with typical_price_gbp + pack_size + tier_label per candidate
     _meta: {
       version: VERSION,
       input_type: inputType,
