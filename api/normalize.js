@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5n';
+const VERSION             = 'normalize.js v3.4.5q';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -129,6 +129,16 @@ Field rules:
 const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
 
 Look for: 1) MPN/Model on box. 2) Brand + family. 3) Shelf-edge label.
+
+CATEGORY examples (these are STRICT — match the right enum):
+- Photo of Listerine bottle -> category="health" (oral-care/mouthwash, NOT generic)
+- Photo of Colgate / Sensodyne / Oral-B -> category="health"
+- Photo of L'Oreal / Aveda / Aesop / Cowshed / The Ordinary / shampoo bottle -> category="beauty"
+- Photo of Heinz / Tesco / Sainsbury's / Walkers / branded grocery item -> category="grocery"
+- Photo of Bose / Sony / Logitech / iPhone / laptop -> category="tech"
+- Photo of Ninja air fryer / kettle / appliance -> category="home"
+- Photo of LEGO / board game / kids toy -> category="toys"
+- Photo of Bosch tools / Black+Decker / DIY item -> category="diy"
 
 ${COMMON_SCHEMA_DOC}`;
 
@@ -388,7 +398,6 @@ async function fetchVerifiedAmazonPrice(query) {
       if (primary && used) break;
     }
     if (_skippedLexical > 0) {
-      console.log(`[${VERSION}] lexical guard skipped ${_skippedLexical} items for "${query.slice(0,60)}"`);
     }
 
     if (!primary) {
@@ -467,7 +476,28 @@ function parseAndDefault(rawText) {
   const confidence = ['high','medium','low'].includes(parsed.confidence) ? parsed.confidence : 'low';
   const alternative = (confidence !== 'high' && typeof parsed.alternative_string === 'string' && parsed.alternative_string.trim())
     ? parsed.alternative_string.trim().slice(0, 200) : null;
-  const category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
+  let category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
+  // v3.4.5q Wave F.1 — keyword-driven category override (defense-in-depth).
+  // Beta finding 6 May 2026: Listerine snap returned with Currys/JL in alternatives, meaning Haiku
+  // categorised it as 'home' or 'tech' instead of 'health'. Frontend CATEGORY_MAP routes by category
+  // so a wrong category sends the user to the wrong retailers. This override catches misclassified
+  // brands BEFORE they reach the routing layer. Updated as new mismatches are found.
+  const _catKeywords = {
+    health:  /\b(listerine|colgate|sensodyne|oral[\s-]?b|corsodyl|nurofen|ibuprofen|paracetamol|panadol|calpol|gaviscon|rennie|berocca|centrum|vitamin|supplement|mouthwash|toothpaste|toothbrush)\b/i,
+    beauty:  /\b(l['']?oreal|aveda|aesop|cowshed|the\s*ordinary|drunk\s*elephant|sol\s*de\s*janeiro|nivea|olay|garnier|maybelline|max\s*factor|rimmel|estee?\s*lauder|clinique|elemis|liz\s*earle|simple|cetaphil|cerave|la\s*roche[\s-]?posay|vichy|shampoo|conditioner|moisturi[sz]er|serum|hand\s*(cream|wash|balm)|hair\s*(dry|straightener))\b/i,
+    grocery: /\b(heinz|kellogg|nestle|cadbury|walkers|pringles|coca[\s-]?cola|pepsi|robinsons|tetley|pg\s*tips|yorkshire\s*tea|warburton|hovis|mcvitie|baked\s*beans|cereal|biscuit|crisps)\b/i,
+  };
+  if (canonical) {
+    for (const [cat, rx] of Object.entries(_catKeywords)) {
+      if (rx.test(canonical)) {
+        if (category !== cat) {
+          parsed._category_override = { from: category, to: cat, by: 'keyword' };
+          category = cat;
+        }
+        break;
+      }
+    }
+  }
   const mpn = (typeof parsed.mpn === 'string' && parsed.mpn.trim()) ? parsed.mpn.trim().slice(0, 100) : null;
   const amazonQ = (typeof parsed.amazon_search_query === 'string' && parsed.amazon_search_query.trim())
     ? parsed.amazon_search_query.trim().slice(0, 200) : (mpn || canonical);
@@ -544,7 +574,6 @@ export default async function handler(req, res) {
   const cKey = cacheKey(inputType, body);
   const cached = await kvGet(cKey);
   if (cached && typeof cached === 'object' && cached.canonical_search_string) {
-    console.log(`[${VERSION}] cache HIT ${cKey.slice(-12)} (${inputType})`);
     return res.status(200).json({
       ...cached,
       _meta: { ...(cached._meta || {}), cache: 'hit', latency_ms: Date.now() - t0 }
@@ -581,7 +610,6 @@ export default async function handler(req, res) {
       // to the existing barcode-via-Haiku behaviour.
       const resolvedName = await lookupOpenFoodFacts(ean);
       if (resolvedName) {
-        console.log(`[${VERSION}] OpenFoodFacts hit for ${ean}: "${resolvedName.slice(0, 80)}"`);
         rawText = await withCircuit('anthropic',
           () => callHaikuText(TEXT_SYSTEM_PROMPT, `Query: "${resolvedName}"`),
           { onOpen: () => null }
@@ -728,7 +756,6 @@ export default async function handler(req, res) {
       input_type: inputType,
       latency_ms: Date.now() - t0,
       cache: 'miss',
-      verified_amazon_status: _lastSerpStatus,
     }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});

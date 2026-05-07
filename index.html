@@ -288,7 +288,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5p</span> <a href="#" id="reset-link" style="color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5q</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -353,6 +353,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <p style="text-align:center;margin:8px 0 18px;font-size:13px;">
     <a href="#" onclick="event.preventDefault();reportWrongIdentification();" style="color:var(--ink-mute);text-decoration:underline;font-weight:600;">Wrong product? Try again →</a>
   </p>
+  <p class="small-print" style="margin:-8px 0 12px;font-size:11px;color:var(--ink-mute);">Amazon link is an affiliate link — same price for you. Helps keep Savvey free.</p>
   <div class="actions-row">
     <button class="ghost-btn" onclick="shareResult()">Share</button>
     <button class="ghost-btn" onclick="navSnap()" aria-label="Snap another product">Snap another</button>
@@ -1299,7 +1300,6 @@ function showError(title, sub) {
 
 function track(event, props) {
   try { if (window.posthog) window.posthog.capture(event, props || {}); } catch {}
-  console.log('[savvey]', event, props || {});
 }
 
 const RECENTS_KEY = 'savvey_v3_recents';
@@ -1506,7 +1506,6 @@ async function _savveyNukeAndReload(opts) {
 
 // URL param: ?fresh=1 (or any value) auto-fires the nuke on load
 if (new URLSearchParams(window.location.search).has('fresh')) {
-  console.log('[reset] ?fresh detected — nuking SW + caches');
   _savveyNukeAndReload({ source: 'url-param' });
 }
 
