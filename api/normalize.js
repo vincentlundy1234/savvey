@@ -28,13 +28,13 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5hh2';
+const VERSION             = 'normalize.js v3.4.5ii';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
 const TIMEOUT_MS          = 8000;
-const MAX_TOKENS_VISION   = 600;
-const MAX_TOKENS_TEXT     = 500;
+const MAX_TOKENS_VISION   = 380; // Wave II
+const MAX_TOKENS_TEXT     = 320; // Wave II
 const RATE_LIMIT_PER_HOUR = 60;
 const MAX_IMAGE_BYTES     = 4 * 1024 * 1024;
 const KV_TTL_SECONDS      = 86400;
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_hh2:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_ii:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -138,6 +138,28 @@ Field rules:
   - DO NOT emit a typical_price_range field — pricing comes from a verified live source downstream.
   - DO NOT quote "current price" or any specific GBP figures. Pricing is handled outside this call.
   - For generic/no-name/grocery items, return all savvey_says fields null + confidence: "low".
+
+EXAMPLES (showing exact JSON output shape for typical inputs):
+
+Example 1 — vague brand+category (low conf, populate alternatives_array with popular UK options):
+INPUT: "kettle"
+OUTPUT: {"canonical_search_string": "Kettle", "confidence": "low", "alternative_string": null, "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"], "category": "home", "mpn": null, "amazon_search_query": "kettle", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+
+Example 2 — specific high-confidence:
+INPUT: "Bose QC45"
+OUTPUT: {"canonical_search_string": "Bose QuietComfort 45", "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "tech", "mpn": "QC45", "amazon_search_query": "Bose QuietComfort 45", "savvey_says": {"timing_advice": null, "consensus": "Best-in-class noise cancellation, comfortable for long sessions.", "confidence": "high"}}
+
+Example 3 — specific medium-confidence (variants):
+INPUT: "iPhone 15"
+OUTPUT: {"canonical_search_string": "Apple iPhone 15 128GB", "confidence": "medium", "alternative_string": "Apple iPhone 15 Plus", "alternatives_array": ["Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"], "category": "tech", "mpn": null, "amazon_search_query": "Apple iPhone 15 128GB", "savvey_says": {"timing_advice": null, "consensus": "Apple's mainline 2023 phone, USB-C and 48MP camera.", "confidence": "high"}}
+
+Example 4 — brand+category vague (low conf, popular UK products):
+INPUT: "Logitech mouse"
+OUTPUT: {"canonical_search_string": "Logitech mouse", "confidence": "low", "alternative_string": null, "alternatives_array": ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"], "category": "tech", "mpn": null, "amazon_search_query": "Logitech mouse", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+
+Example 5 — UK grocery:
+INPUT: "Heinz beans"
+OUTPUT: {"canonical_search_string": "Heinz Baked Beans 415g", "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "grocery", "mpn": null, "amazon_search_query": "Heinz Baked Beans 415g", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 `;
 
 const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
@@ -199,7 +221,8 @@ async function callHaikuText(systemPrompt, userText) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS_TEXT,
-        system: systemPrompt,
+        // Wave II — prompt caching cuts ~30-50% input tokens + 100-200ms TTFB.
+        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userText }],
       }),
       signal: ac.signal,
@@ -245,7 +268,8 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
       body: JSON.stringify({
         model: MODEL,
         max_tokens: MAX_TOKENS_VISION,
-        system: systemPrompt,
+        // Wave II — prompt caching on vision system prompt.
+        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userContent }],
       }),
       signal: ac.signal,
@@ -325,7 +349,8 @@ Verified Amazon UK price: ${price_str}` +
       body: JSON.stringify({
         model: MODEL,
         max_tokens: 180,
-        system: sys,
+        // Wave II — prompt caching on price_take system prompt.
+        system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userMsg }],
       }),
       signal: ac.signal,
@@ -519,9 +544,15 @@ function parseAndDefault(rawText) {
   // so a wrong category sends the user to the wrong retailers. This override catches misclassified
   // brands BEFORE they reach the routing layer. Updated as new mismatches are found.
   const _catKeywords = {
-    health:  /\b(listerine|colgate|sensodyne|oral[\s-]?b|corsodyl|nurofen|ibuprofen|paracetamol|panadol|calpol|gaviscon|rennie|berocca|centrum|vitamin|supplement|mouthwash|toothpaste|toothbrush)\b/i,
-    beauty:  /\b(l['']?oreal|aveda|aesop|cowshed|the\s*ordinary|drunk\s*elephant|sol\s*de\s*janeiro|nivea|olay|garnier|maybelline|max\s*factor|rimmel|estee?\s*lauder|clinique|elemis|liz\s*earle|simple|cetaphil|cerave|la\s*roche[\s-]?posay|vichy|shampoo|conditioner|moisturi[sz]er|serum|hand\s*(cream|wash|balm)|hair\s*(dry|straightener))\b/i,
-    grocery: /\b(heinz|kellogg|nestle|cadbury|walkers|pringles|coca[\s-]?cola|pepsi|robinsons|tetley|pg\s*tips|yorkshire\s*tea|warburton|hovis|mcvitie|baked\s*beans|cereal|biscuit|crisps)\b/i,
+    // Wave II — brand whitelist expanded ~12 -> ~70 entries. Catches Vision
+    // miscategorisations BEFORE they reach CATEGORY_MAP retailer routing.
+    health:  /\b(listerine|colgate|sensodyne|oral[\s-]?b|corsodyl|macleans|aquafresh|pearl\s*drops|duraphat|nurofen|ibuprofen|paracetamol|panadol|calpol|gaviscon|rennie|berocca|centrum|vitamin|supplement|mouthwash|toothpaste|toothbrush|sudocrem|savlon|germolene|piriton|piriteze|voltarol|deep\s*heat|tcp|optrex|lemsip|strepsils|olbas|covonia|benadryl|clarityn)\b/i,
+    beauty:  /\b(l['\u2019]?oreal|aveda|aesop|cowshed|the\s*ordinary|drunk\s*elephant|sol\s*de\s*janeiro|nivea|olay|garnier|maybelline|max\s*factor|rimmel|estee?\s*lauder|clinique|elemis|liz\s*earle|simple|cetaphil|cerave|la\s*roche[\s-]?posay|vichy|kerastase|matrix|wella|tresemme|pantene|head\s*&?\s*shoulders|aussie|herbal\s*essences|dove|palmolive|neutrogena|aveeno|no7|soap\s*and\s*glory|rituals|origins|charlotte\s*tilbury|fenty|nars|urban\s*decay|benefit|too\s*faced|shampoo|conditioner|moisturi[sz]er|serum|hand\s*(cream|wash|balm)|hair\s*(dry|straightener)|fragrance|perfume|aftershave)\b/i,
+    grocery: /\b(heinz|kellogg|nestle|cadbury|walkers|pringles|coca[\s-]?cola|pepsi|robinsons|tetley|pg\s*tips|yorkshire\s*tea|twinings|lipton|lurpak|country\s*life|philadelphia|ben\s*and\s*jerry|magnum|haagen[\s-]?dazs|birds\s*eye|mccain|warburton|hovis|kingsmill|mcvitie|tunnocks|mr\s*kipling|kit\s*kat|aero|galaxy|wispa|twirl|flake|fanta|sprite|lucozade|red\s*bull|monster|innocent|tropicana|highland\s*spring|evian|volvic|baked\s*beans|cereal|biscuit|crisps|fizzy|squash|teabag)\b/i,
+    tech:    /\b(apple|samsung|sony|bose|jbl|sennheiser|sonos|anker|logitech|razer|corsair|hyperx|steelseries|dell|hp|lenovo|asus|acer|msi|microsoft\s*surface|google\s*pixel|oneplus|xiaomi|fitbit|garmin|withings|kindle|fire\s*tablet|airpods|ps5|playstation|xbox|nintendo|switch)\b/i,
+    home:    /\b(ninja\s+(af|bl|bn|fg|os|sf)|smeg|dualit|kenwood|breville|delonghi|de'longhi|krups|nespresso|tassimo|dolce\s*gusto|le\s*creuset|lodge|tefal|cuisinart|kitchenaid|magimix|nutribullet|vitamix|shark|bissell|miele|hoover|vax|sebo|henry\s*hoover|russell\s*hobbs|morphy\s*richards|swan|vonshef|salter|hotpoint|aeg|electrolux|whirlpool|beko|indesit)\b/i,
+    diy:     /\b(dewalt|de[\s-]?walt|makita|milwaukee|stanley|black\s*&?\s*decker|black[\s-]?and[\s-]?decker|einhell|ryobi|festool|hilti|karcher|nilfisk|stihl|husqvarna|flymo|qualcast|webb|mountfield|cobra|hayter)\b/i,
+    toys:    /\b(lego|playmobil|hasbro|mattel|fisher[\s-]?price|barbie|hot\s*wheels|nerf|monopoly|cluedo|risk|trivial\s*pursuit|scrabble|jigsaw\s*puzzle|board\s*game)\b/i,
   };
   if (canonical) {
     for (const [cat, rx] of Object.entries(_catKeywords)) {
@@ -851,6 +882,22 @@ export default async function handler(req, res) {
     });
   }
 
+  // Wave II — canonical-keyed cache lookup. Different input phrasings that
+  // resolve to the SAME canonical hit one shared cache entry, skipping
+  // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
+  const _canonicalKey = `savvey:canonical:v1:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  if (_canonicalKey.length > 22) {
+    const canonHit = await kvGet(_canonicalKey);
+    if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
+      console.log(`[${VERSION}] canonical cache HIT for "${parsed.canonical_search_string}"`);
+      kvSet(cKey, canonHit, KV_TTL_SECONDS).catch(() => {});
+      return res.status(200).json({
+        ...canonHit,
+        _meta: { ...(canonHit._meta || {}), cache: 'canonical_hit', latency_ms: Date.now() - t0, version: VERSION }
+      });
+    }
+  }
+
   // Wave FF — parallel SerpAPI fan-out: Amazon engine (price anchor) +
   // google_shopping (non-Amazon retailer PDP deep links). Wall-clock latency
   // unchanged because Promise.all waits for the slowest, and Amazon engine is
@@ -895,23 +942,34 @@ export default async function handler(req, res) {
     } else if (verified_amazon_price.rating) {
       parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★`;
     }
-    // v3.4.0 — Haiku price_take + verdict grounded by the verified anchor.
-    // Returns { verdict, price_take } structured object. Both nullable.
-    // Verdict drives the result-screen pill; price_take is the explanatory line.
-    try {
-      const ai = await callHaikuPriceTake({
-        canonical:      parsed.canonical_search_string,
-        price_str:      verified_amazon_price.price_str,
-        used_price_str: verified_amazon_price.used_price_str,
-        category:       parsed.category,
-        rating:         verified_amazon_price.rating,
-        reviews:        verified_amazon_price.reviews,
-      });
-      if (ai) {
-        if (ai.price_take) parsed.savvey_says.price_take = ai.price_take;
-        if (ai.verdict)    parsed.savvey_says.verdict    = ai.verdict;
-      }
-    } catch (e) { /* non-critical */ }
+    // v3.4.0 / Wave II — Haiku price_take + verdict grounded by verified anchor.
+    // Wave II skip: rating >= 4.6 AND reviews >= 200 AND price > 0 -> verdict='good_buy'
+    // deterministically, skip the second Haiku call entirely. Saves ~600ms on
+    // the most common high-confidence cases (top-rated Amazon listings).
+    const _isSlamDunk =
+      Number(verified_amazon_price.rating || 0) >= 4.6 &&
+      Number(verified_amazon_price.reviews || 0) >= 200 &&
+      Number(verified_amazon_price.price || 0) > 0;
+    if (_isSlamDunk) {
+      parsed.savvey_says.verdict = 'good_buy';
+      parsed.savvey_says.price_take = null;
+      console.log(`[${VERSION}] slam-dunk skip Haiku price_take for "${parsed.canonical_search_string}"`);
+    } else {
+      try {
+        const ai = await callHaikuPriceTake({
+          canonical:      parsed.canonical_search_string,
+          price_str:      verified_amazon_price.price_str,
+          used_price_str: verified_amazon_price.used_price_str,
+          category:       parsed.category,
+          rating:         verified_amazon_price.rating,
+          reviews:        verified_amazon_price.reviews,
+        });
+        if (ai) {
+          if (ai.price_take) parsed.savvey_says.price_take = ai.price_take;
+          if (ai.verdict)    parsed.savvey_says.verdict    = ai.verdict;
+        }
+      } catch (e) { /* non-critical */ }
+    }
     // v3.4.5d — deterministic fallback. If Haiku didn't recognise the canonical
     // (returned null verdict despite a verified Amazon match), the worst-case
     // is a confident-looking green CTA on a wrong-SKU listing (e.g. Bosch
@@ -1019,5 +1077,10 @@ export default async function handler(req, res) {
     }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
+  // Wave II — also write to canonical-keyed cache so different input
+  // phrasings resolving to the same canonical share the cached response.
+  if (_canonicalKey && _canonicalKey.length > 22) {
+    kvSet(_canonicalKey, responseBody, KV_TTL_SECONDS).catch(() => {});
+  }
   return res.status(200).json(responseBody);
 }
