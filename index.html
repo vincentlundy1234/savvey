@@ -380,8 +380,21 @@
   .your-snap-strip img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: 0 0 44px; background: var(--bg); }
   .your-snap-strip span { font-weight: 600; }
   .verdict-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-  .identify-title { font-weight: 800; font-size: 28px; line-height: 1.18; margin: 4px 0 4px; letter-spacing: -0.01em; }
-  .identify-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
+  /* Wave V.9 — identify header per v5: tighter title, more breathable sub */
+  .identify-title {
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 30px; line-height: 1.14;
+    margin: 6px 0 6px;
+    letter-spacing: -0.022em;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .identify-sub {
+    color: var(--ink-soft);
+    font-size: 14.5px; line-height: 1.45;
+    margin: 0 0 20px;
+    max-width: 42ch;
+  }
   /* Wave V.3 — hero image: bigger 4:3, softer shadow, bigger radius per v5 */
   .hero-img-wrap { width: 100%; aspect-ratio: 4/3; background: var(--card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin: 6px 0 20px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
   .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 14px; opacity: 0; transition: opacity .35s ease; }
@@ -402,7 +415,15 @@
   .savvey-row .val { font-size: 14px; color: var(--ink); margin: 0; font-weight: 600; }
   .savvey-says-footer { font-size: 11px; color: var(--ink-mute); margin: 10px 0 0; line-height: 1.4; }
   /* Wave V.3 — disambig card slightly bigger radius, more breathing room */
-  .confirm-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 14px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  /* Wave V.9 — confirm-card more anchored per v5 */
+  .confirm-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 16px 14px 14px;
+    margin-bottom: 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(20,32,26,0.04);
+  }
   .confirm-btn { transition: transform .12s ease, background .15s ease; }
   .confirm-btn:active { transform: scale(.985); }
   /* Wave KK — disambig button enhanced with price + per-unit + tier + BEST VALUE */
@@ -419,7 +440,28 @@
     box-shadow: 0 2px 6px rgba(42,107,34,0.28);
   }
   .confirm-q { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
-  .confirm-btn { width: 100%; padding: 12px 14px; background: white; border: 2px solid var(--border); border-radius: var(--r-sm); font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 8px; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px; }
+  /* Wave V.9 — confirm-btn: hover lift + softer border treatment per v5 */
+  .confirm-btn {
+    width: 100%; padding: 12px 14px;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(46,107,38,0.10);
+    border-radius: 14px;
+    font-weight: 700; font-size: 16px; color: var(--ink);
+    margin-bottom: 10px;
+    cursor: pointer; text-align: left;
+    display: flex; align-items: center; gap: 12px;
+    transition: transform .12s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
+  }
+  .confirm-btn:hover {
+    background: rgba(255,255,255,0.96);
+    border-color: rgba(46,107,38,0.22);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    transform: translateY(-1px);
+  }
+  @media (prefers-color-scheme: dark) {
+    .confirm-btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
+    .confirm-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(46,107,38,0.32); }
+  }
   .confirm-thumb { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--bg); object-fit: contain; padding: 4px; }
   .confirm-thumb-empty { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--bg); }
   .confirm-thumb-icon { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--green-soft, #e8f3e6); display: flex; align-items: center; justify-content: center; color: var(--green); }
@@ -574,8 +616,27 @@
   .cta-arrow { color: var(--ink-mute); font-size: 20px; flex-shrink: 0; }
   .cta.primary .cta-arrow { color: rgba(255,255,255,.85); }
   .actions-row { display: flex; gap: 8px; margin: 18px 0 24px; }
-  .ghost-btn { flex: 1; background: transparent; border: 1px solid var(--border); color: var(--ink-soft); border-radius: var(--r-sm); padding: 12px; font-weight: 700; font-size: 14px; cursor: pointer; }
-  .ghost-btn:active { background: var(--card); }
+  /* Wave V.9 — ghost-btn: subtle hover lift per v5 */
+  .ghost-btn {
+    flex: 1; background: transparent;
+    border: 1px solid rgba(46,107,38,0.10);
+    color: var(--ink-soft);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-weight: 700; font-size: 14px;
+    cursor: pointer;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
+  }
+  .ghost-btn:hover {
+    background: rgba(255,255,255,0.6);
+    border-color: rgba(46,107,38,0.22);
+    color: var(--ink);
+  }
+  .ghost-btn:active { background: var(--card); transform: scale(.985); }
+  @media (prefers-color-scheme: dark) {
+    .ghost-btn { border-color: rgba(255,255,255,0.07); }
+    .ghost-btn:hover { background: rgba(255,255,255,0.05); border-color: rgba(46,107,38,0.32); color: var(--ink); }
+  }
   .small-print { font-size: 12px; color: var(--ink-mute); text-align: center; margin: 18px 0 8px; line-height: 1.5; }
   .trust-footer { margin: 22px 0 6px; padding: 14px 4px 4px; border-top: 1px solid var(--border); }
   /* Wave V.3 — affiliate disclosure quieter, more compact */
@@ -794,7 +855,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v8</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v9</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
