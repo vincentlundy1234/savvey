@@ -66,6 +66,11 @@
     .cta-mark.ebay { background: #f0f0f0; color: #000; }
   }
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  /* V.47 hotfix — [hidden] HTML attribute should always win over display rules.
+     Was being overridden by .badge-row { display: flex } so "QUICK CHECK" pill
+     showed on confirm screen despite hidden attribute. */
+  [hidden] { display: none !important; }
+
   html, body { margin: 0; padding: 0; }
   body {
     font-family: 'Nunito', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
@@ -668,15 +673,21 @@
   /* ═══════════════════════════════════════════════════════════════
      V.43 v5 CAMERA + BARCODE REBUILD — full-bleed dark per v5 mock
      ═══════════════════════════════════════════════════════════════ */
-  .v5-cam-screen {
-    margin: -16px;
+  /* V.47 hotfix — was using 100vw which broke the body 480px column on
+     desktop (right-half-only render + horizontal scroll). Use position:fixed
+     so the camera escapes the body container entirely and fills the viewport. */
+  .v5-cam-screen.active {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    width: 100%;
     height: 100dvh;
-    width: 100vw;
-    position: relative;
     overflow: hidden;
     color: #fff;
     padding: 0;
+    z-index: 50;
   }
+  .v5-cam-screen { padding: 0; color: #fff; }
   .v5-cam-bg {
     position: absolute; inset: 0;
     background:
@@ -2078,7 +2089,9 @@
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
   }
-  .cam-cancel::before {
+  /* V.47 hotfix — legacy ::before X char hidden when v5-cam-x is used
+     (the new V.43 button has its own SVG X — no double-X). */
+  .cam-cancel:not(.v5-cam-x)::before {
     content: '×'; color: #fff; font-size: 22px; font-weight: 600; line-height: 1;
     margin-top: -2px;
   }
@@ -2305,7 +2318,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v46</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v47</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
