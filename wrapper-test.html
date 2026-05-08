@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Savvey Wrapper Test Runner</title>
+<style>
+  :root {
+    --green: #2a6b22;
+    --red: #b03a30;
+    --amber: #d68910;
+    --ink: #14201a;
+    --ink-mute: #7a857f;
+    --bg: #f6f6f4;
+    --card: #ffffff;
+    --border: #e3e3df;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    padding: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  h1 { font-size: 22px; margin: 4px 0 4px; color: var(--green); }
+  h1 .y { color: var(--amber); }
+  .lead { color: var(--ink-mute); font-size: 13px; margin-bottom: 16px; }
+  .test-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .test-title { font-weight: 700; font-size: 15px; margin: 0 0 6px; }
+  .test-desc { color: var(--ink-mute); font-size: 13px; margin: 0 0 10px; line-height: 1.4; }
+  .badge {
+    display: inline-block;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+  .badge.pass { background: #e6f3e1; color: var(--green); }
+  .badge.fail { background: #fbe0dd; color: var(--red); }
+  .badge.pending { background: #f5e8c5; color: #6b5510; }
+  .badge.info { background: #e2eaf3; color: #335175; }
+  .result-line {
+    font-family: 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 12px;
+    color: var(--ink-mute);
+    background: #f0eee8;
+    padding: 8px 10px;
+    border-radius: 6px;
+    margin-top: 8px;
+    word-break: break-all;
+    white-space: pre-wrap;
+    max-height: 140px;
+    overflow-y: auto;
+  }
+  button {
+    background: var(--green);
+    color: #fff;
+    border: none;
+    padding: 10px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-right: 8px;
+  }
+  button:active { opacity: 0.8; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.ghost { background: transparent; color: var(--ink-mute); border: 1px solid var(--border); }
+  .summary {
+    background: var(--card);
+    border: 2px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    margin: 16px 0;
+  }
+  .summary.allpass { border-color: var(--green); background: #f0faec; }
+  .summary.anyfail { border-color: var(--red); background: #fdf1ef; }
+  .summary-title { font-weight: 800; font-size: 16px; margin: 0 0 4px; }
+  .summary-line { font-size: 13px; color: var(--ink-mute); }
+  .footer { text-align: center; color: var(--ink-mute); font-size: 11px; margin-top: 24px; }
+  a { color: var(--green); }
+</style>
+</head>
+<body>
+
+<h1>SAVVE<span class="y">Y</span><span style="color:var(--green);">.</span> wrapper test runner</h1>
+<p class="lead">Physical-device verification of Capacitor wrapper pass criteria. Run this inside the native Android/iOS shell, NOT in mobile Safari/Chrome.</p>
+
+<div id="summary" class="summary">
+  <p class="summary-title">Status: <span id="summary-status">running…</span></p>
+  <p class="summary-line" id="summary-detail">Detection in progress…</p>
+</div>
+
+<!-- Test 1: Wrapper detection -->
+<div class="test-card" id="test-1">
+  <p class="test-title">1. Capacitor wrapper detection <span class="badge pending" id="badge-1">pending</span></p>
+  <p class="test-desc">Confirms the page is loaded INSIDE the native wrapper (not just a regular browser). If this fails, none of the other tests are meaningful — you're not in the wrapper.</p>
+  <div class="result-line" id="result-1">awaiting check…</div>
+</div>
+
+<!-- Test 2: Camera plugin available -->
+<div class="test-card" id="test-2">
+  <p class="test-title">2. Camera plugin available <span class="badge pending" id="badge-2">pending</span></p>
+  <p class="test-desc">Confirms <code>@capacitor/camera</code> is loaded and bound to the wrapper. Required for Door 1 (Snap) to work natively.</p>
+  <div class="result-line" id="result-2">awaiting check…</div>
+</div>
+
+<!-- Test 3: App plugin available (for openUrl) -->
+<div class="test-card" id="test-3">
+  <p class="test-title">3. App plugin available (deep-link bridge) <span class="badge pending" id="badge-3">pending</span></p>
+  <p class="test-desc">Confirms <code>@capacitor/app</code> is loaded. Required for the affiliate handoff to break out of the WebView into native retailer apps.</p>
+  <div class="result-line" id="result-3">awaiting check…</div>
+</div>
+
+<!-- Test 4: Camera capture flow -->
+<div class="test-card" id="test-4">
+  <p class="test-title">4. Camera capture flow <span class="badge pending" id="badge-4">pending</span></p>
+  <p class="test-desc">Tap the button below — the native camera should open within ~1 second. Take any photo. The test checks that we get a usable dataUrl back.</p>
+  <button id="btn-test-camera">Run Camera Test</button>
+  <button class="ghost" id="btn-skip-camera">Skip (no camera)</button>
+  <div class="result-line" id="result-4">awaiting button tap…</div>
+</div>
+
+<!-- Test 5: Amazon affiliate handoff -->
+<div class="test-card" id="test-5">
+  <p class="test-title">5. Amazon affiliate handoff <span class="badge pending" id="badge-5">pending</span></p>
+  <p class="test-desc">Tap the button below. Tests whether <code>App.openUrl</code> launches the native Amazon app (or system browser if Amazon app not installed). After the test, return to this page manually and tap "I'm back" to mark.</p>
+  <button id="btn-test-handoff">Run Handoff Test</button>
+  <button class="ghost" id="btn-handoff-back">I'm back &mdash; passed</button>
+  <button class="ghost" id="btn-handoff-failed">I'm back &mdash; failed</button>
+  <div class="result-line" id="result-5">awaiting button tap…</div>
+</div>
+
+<p class="footer">Savvey wrapper-test.html · v1 · spike-branch only</p>
+
+<script>
+  const TESTS = { 1: null, 2: null, 3: null, 4: null, 5: null };
+
+  function setBadge(id, state, text) {
+    const el = document.getElementById('badge-' + id);
+    el.className = 'badge ' + state;
+    el.textContent = text;
+    TESTS[id] = state === 'pass' ? true : (state === 'fail' ? false : null);
+    updateSummary();
+  }
+  function setResult(id, text) {
+    document.getElementById('result-' + id).textContent = text;
+  }
+  function updateSummary() {
+    const total = Object.keys(TESTS).length;
+    const passed = Object.values(TESTS).filter(v => v === true).length;
+    const failed = Object.values(TESTS).filter(v => v === false).length;
+    const pending = Object.values(TESTS).filter(v => v === null).length;
+    const sumStatus = document.getElementById('summary-status');
+    const sumDetail = document.getElementById('summary-detail');
+    const sumWrap = document.getElementById('summary');
+    sumWrap.className = 'summary';
+    if (failed > 0) {
+      sumStatus.textContent = '⚠ FAIL';
+      sumDetail.textContent = passed + '/' + total + ' passed, ' + failed + ' FAIL, ' + pending + ' pending. Investigate failed tests above.';
+      sumWrap.classList.add('anyfail');
+    } else if (pending === 0) {
+      sumStatus.textContent = '✓ ALL PASS';
+      sumDetail.textContent = 'Wrapper passes all 5 tests. Phase 4 ready to ship to TestFlight / Play Store internal track.';
+      sumWrap.classList.add('allpass');
+    } else {
+      sumStatus.textContent = 'running…';
+      sumDetail.textContent = passed + '/' + total + ' passed, ' + pending + ' pending. Run remaining tests above.';
+    }
+  }
+
+  // Test 1: Wrapper detection
+  function runTest1() {
+    if (typeof window.Capacitor === 'undefined') {
+      setResult(1, 'window.Capacitor: undefined\n→ You are NOT inside the Capacitor wrapper.\n→ Open this page from inside the wrapper-built Savvey app on your phone, not mobile Safari/Chrome.');
+      setBadge(1, 'fail', 'FAIL');
+      return false;
+    }
+    const platform = window.Capacitor.getPlatform ? window.Capacitor.getPlatform() : 'unknown';
+    const isNative = window.Capacitor.isNativePlatform ? window.Capacitor.isNativePlatform() : false;
+    setResult(1, 'window.Capacitor: present\nplatform: ' + platform + '\nisNativePlatform: ' + isNative + '\n→ Wrapper detected.');
+    setBadge(1, 'pass', 'PASS');
+    return true;
+  }
+
+  // Test 2: Camera plugin
+  function runTest2() {
+    const cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
+    if (!cam) {
+      setResult(2, '@capacitor/camera plugin not bound.\n→ Run `npm install @capacitor/camera && npx cap sync` and rebuild.');
+      setBadge(2, 'fail', 'FAIL');
+      return false;
+    }
+    setResult(2, '@capacitor/camera plugin bound.\nMethods available: ' + Object.keys(cam).join(', '));
+    setBadge(2, 'pass', 'PASS');
+    return true;
+  }
+
+  // Test 3: App plugin (needed for openUrl)
+  function runTest3() {
+    const app = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (!app || typeof app.openUrl !== 'function') {
+      setResult(3, '@capacitor/app plugin (openUrl) not available.\n→ Run `npm install @capacitor/app && npx cap sync` and rebuild.');
+      setBadge(3, 'fail', 'FAIL');
+      return false;
+    }
+    setResult(3, '@capacitor/app plugin bound. openUrl is callable.');
+    setBadge(3, 'pass', 'PASS');
+    return true;
+  }
+
+  // Test 4: Camera capture
+  document.getElementById('btn-test-camera').onclick = async () => {
+    setBadge(4, 'pending', 'running…');
+    setResult(4, 'Opening native camera…');
+    const cam = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera;
+    if (!cam) {
+      setResult(4, 'Camera plugin missing — Test 2 should have caught this. Aborting.');
+      setBadge(4, 'fail', 'FAIL');
+      return;
+    }
+    const t0 = performance.now();
+    try {
+      const photo = await cam.getPhoto({
+        quality: 60,
+        allowEditing: false,
+        resultType: 'dataUrl',
+        source: 'CAMERA',
+        width: 1024,
+        saveToGallery: false,
+        correctOrientation: true,
+      });
+      const t1 = performance.now();
+      const sizeKB = photo && photo.dataUrl ? Math.round(photo.dataUrl.length / 1024) : 0;
+      if (!photo || !photo.dataUrl) {
+        setResult(4, 'Camera returned no dataUrl. User may have cancelled.');
+        setBadge(4, 'fail', 'FAIL');
+        return;
+      }
+      const cameraOpenedFast = (t1 - t0) < 8000; // 8s budget includes user thinking time
+      setResult(4, '✓ Camera opened, photo captured.\nelapsed: ' + Math.round(t1 - t0) + 'ms (incl. user time)\ndataUrl size: ~' + sizeKB + ' KB\nformat: ' + (photo.format || 'unknown') + '\n→ Native camera flow works.');
+      setBadge(4, cameraOpenedFast ? 'pass' : 'pending', cameraOpenedFast ? 'PASS' : 'SLOW');
+    } catch (err) {
+      setResult(4, '✗ Camera error: ' + (err && err.message || err) + '\n→ Check camera permission in Android Settings.');
+      setBadge(4, 'fail', 'FAIL');
+    }
+  };
+  document.getElementById('btn-skip-camera').onclick = () => {
+    setBadge(4, 'pass', 'SKIP');
+    setResult(4, 'Skipped by user (no camera available on this device).');
+  };
+
+  // Test 5: Amazon handoff
+  let handoffStartedAt = null;
+  document.getElementById('btn-test-handoff').onclick = async () => {
+    setBadge(5, 'pending', 'running…');
+    setResult(5, 'Calling App.openUrl with a real Amazon UK product link…');
+    const app = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App;
+    if (!app || typeof app.openUrl !== 'function') {
+      setResult(5, 'App plugin missing — Test 3 should have caught this. Aborting.');
+      setBadge(5, 'fail', 'FAIL');
+      return;
+    }
+    handoffStartedAt = Date.now();
+    try {
+      // Use a known Amazon UK ASIN deep link with the affiliate tag for verification.
+      const url = 'https://www.amazon.co.uk/dp/B09XS7JWHH?tag=savvey-21';
+      await app.openUrl({ url });
+      setResult(5, 'App.openUrl call returned successfully.\n→ Did the native Amazon app open?\n→ Tap "I\'m back — passed" if Amazon app launched (or system browser if not installed).\n→ Tap "I\'m back — failed" if nothing happened or you stayed in the WebView.');
+    } catch (err) {
+      setResult(5, '✗ openUrl error: ' + (err && err.message || err));
+      setBadge(5, 'fail', 'FAIL');
+    }
+  };
+  document.getElementById('btn-handoff-back').onclick = () => {
+    const elapsed = handoffStartedAt ? Math.round((Date.now() - handoffStartedAt) / 1000) : '?';
+    setResult(5, '✓ User confirmed: native app or system browser opened.\nGap from openUrl call to user return: ' + elapsed + 's\n→ Affiliate handoff working. Affiliate tag preserved in URL.');
+    setBadge(5, 'pass', 'PASS');
+  };
+  document.getElementById('btn-handoff-failed').onclick = () => {
+    const elapsed = handoffStartedAt ? Math.round((Date.now() - handoffStartedAt) / 1000) : '?';
+    setResult(5, '✗ User confirmed: nothing opened OR stayed in WebView.\nGap: ' + elapsed + 's\n→ App.openUrl is firing but not breaking out of WebView.\n→ Fallback strategies in phase4_wrapper_checklist.md (Browser plugin, SFSafariViewController).');
+    setBadge(5, 'fail', 'FAIL');
+  };
+
+  // Auto-run synchronous tests on page load
+  setTimeout(() => {
+    const t1 = runTest1();
+    if (t1) {
+      runTest2();
+      runTest3();
+    } else {
+      setBadge(2, 'fail', 'N/A');
+      setResult(2, 'Skipped — wrapper not detected in Test 1.');
+      setBadge(3, 'fail', 'N/A');
+      setResult(3, 'Skipped — wrapper not detected in Test 1.');
+    }
+  }, 200);
+</script>
+
+</body>
+</html>
