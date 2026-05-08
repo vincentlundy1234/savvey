@@ -100,11 +100,15 @@
       radial-gradient(50% 36% at 88% 78%, rgba(214,137,16,0.08) 0%, rgba(214,137,16,0) 65%),
       linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%);
     margin: -16px;
-    padding: 36px 28px 44px;
+    /* V.53: bumped bottom padding 44px -> 88px so 'I'll have a browse' CTA
+       isn't clipped by the fixed GDPR consent banner at viewport bottom. */
+    padding: 36px 28px 88px;
     min-height: 100dvh;
     display: none;
     flex-direction: column;
     box-sizing: border-box;
+    /* V.53: allow scroll on shorter viewports if welcome content overflows */
+    overflow-y: auto;
   }
   #screen-welcome.active { display: flex; animation: fadeIn .35s ease; }
   @media (prefers-color-scheme: dark) {
@@ -547,7 +551,8 @@
      V.44 CONFIRM/DISAMBIG — display headline + best-value sorted
      ═══════════════════════════════════════════════════════════════ */
   .v5-confirm-screen {
-    padding: 8px 0 24px;
+    /* V.53: bottom padding for nav clearance */
+    padding: 8px 0 100px;
   }
   .v5-confirm-back {
     background: none; border: none;
@@ -1247,7 +1252,9 @@
      Replaces the v3 home that was being polished via splice.
      ═══════════════════════════════════════════════════════════════ */
   .v5-home-wrap {
-    padding: 8px 18px 20px;
+    /* V.53: bottom padding bumped 20px -> 100px so Type door + footer
+       clear the fixed bottom nav (~88px tall on mobile + safe-area). */
+    padding: 8px 18px 100px;
     max-width: 480px;
     margin: 0 auto;
   }
@@ -2326,7 +2333,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v52</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v53</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
