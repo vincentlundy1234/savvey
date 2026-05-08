@@ -2330,7 +2330,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v56</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v57</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3948,7 +3948,11 @@ function renderResult(displayName, payload) {
   // (panel-approved 4 May 2026) — turns the Amazon button from "ad" into
   // "verified offer the user can see before tapping".
   const verified = payload && payload.verified_amazon_price;
-  const verifiedPriceStr = (verified && Number(verified.price) > 0)
+  // V.57 — capture verdict early so we can suppress misleading price/link
+  // when the listing is suspect (accessory hijack, wrong-SKU match).
+  const _v57verdict = payload && payload.savvey_says && payload.savvey_says.verdict;
+  const _v57suppressPrice = _v57verdict === 'check_elsewhere';
+  const verifiedPriceStr = (!_v57suppressPrice && verified && Number(verified.price) > 0)
     ? (verified.price_str || `£${Number(verified.price).toFixed(2)}`)
     : null;
   // v3.3.1 — when SerpAPI returned a verified product link, the Amazon CTA
@@ -3979,7 +3983,7 @@ function renderResult(displayName, payload) {
       return u.toString();
     } catch (e) { return null; }
   }
-  const verifiedAmazonLink = (verified && typeof verified.link === 'string' && /^https?:\/\//i.test(verified.link))
+  const verifiedAmazonLink = (!_v57suppressPrice && verified && typeof verified.link === 'string' && /^https?:\/\//i.test(verified.link))
     ? _injectAmazonTag(verified.link)
     : null;
   // Wave GG — retailer name -> canonical host lookup. When the backend
@@ -4083,7 +4087,7 @@ function renderResult(displayName, payload) {
   heroWrap.classList.add('empty');
   heroImg.classList.remove('loaded');
   heroImg.removeAttribute('src');
-  renderSavveySays(payload && payload.savvey_says);
+  renderSavveySays(payload && payload.savvey_says, _v57verdict);
   show('result');
   // v3.4.5e — fire verdict_shown AFTER the result screen is revealed (panel
   // mandate). requestAnimationFrame ensures the next paint has happened, so
@@ -4113,21 +4117,28 @@ function renderResult(displayName, payload) {
   }
 }
 
-function renderSavveySays(ss) {
+function renderSavveySays(ss, verdict) {
   const wrap = document.getElementById('savvey-says');
   const rows = document.getElementById('savvey-says-rows');
   rows.innerHTML = '';
+  // V.57 - on verdict=check_elsewhere, the live price represents an accessory
+  // or wrong-SKU listing (Layer 2 safety flagged). Suppress both Amazon
+  // price rows so the user is not anchored on a misleading number; the
+  // price_take row carries the warning explainer.
+  const _v57hidePrice = verdict === 'check_elsewhere';
+  const _livePriceVal = _v57hidePrice ? null : (ss && ss.live_amazon_price);
+  const _usedPriceVal = _v57hidePrice ? null : (ss && ss.used_amazon_price);
   // v3.3 (5 May 2026) - gate is now permissive: render whenever ANY useful
   // field is present. Verified-price fields (live_amazon_price,
   // used_amazon_price) are populated by the backend from SerpAPI and are
   // factual - they are NOT gated by Haiku's qualitative confidence score.
-  const hasVerified = ss && (ss.live_amazon_price || ss.used_amazon_price || ss.amazon_rating || ss.price_take);
+  const hasVerified = ss && (_livePriceVal || _usedPriceVal || ss.amazon_rating || ss.price_take);
   const hasQual     = ss && ss.confidence === 'high' && (ss.timing_advice || ss.consensus);
   const hasContent  = hasVerified || hasQual;
   if (!hasContent) { wrap.classList.add('empty'); return; }
   const rowsData = [
-    { em: '💷', ttl: 'Live at Amazon UK', val: ss.live_amazon_price },
-    { em: '🔁', ttl: 'Also seen used',    val: ss.used_amazon_price },
+    { em: '💷', ttl: 'Live at Amazon UK', val: _livePriceVal },
+    { em: '🔁', ttl: 'Also seen used',    val: _usedPriceVal },
     { em: '🌟', ttl: 'Amazon rating',     val: ss.amazon_rating },
     { em: '🧠', ttl: 'Savvey take',       val: ss.price_take },
     { em: '⏱️', ttl: 'Timing',          val: hasQual ? ss.timing_advice : null },
