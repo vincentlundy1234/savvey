@@ -360,60 +360,51 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { font-weight: 700; font-size: 18px; color: var(--ink); margin: 0; }
   .loading-sub { color: var(--ink-mute); font-size: 14px; margin: 6px 0 0; }
-  /* Wave V.17 — unified badge system per v5 (green default + amber + green-soft helper) */
-  .badge-row {
-    display: flex; align-items: center; gap: 8px;
-    margin: 18px 0 8px;
-    flex-wrap: wrap;
-  }
-  .badge {
-    display: inline-flex; align-items: center;
-    background: var(--green-soft);
-    color: var(--green-dark);
-    border: 1px solid rgba(46,107,38,0.16);
-    font-family: var(--font-display, 'Nunito');
-    font-size: 10.5px; font-weight: 800;
-    padding: 4px 10px;
-    border-radius: 999px;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    line-height: 1.2;
-  }
-  .badge.green-soft { background: var(--green-soft); color: var(--green-dark); border-color: rgba(46,107,38,0.16); }
-  .badge.amber {
-    background: linear-gradient(180deg, #fdf2dc 0%, #fbeed4 100%);
-    color: #8a6515;
-    border-color: rgba(214,137,16,0.28);
-  }
-  .badge.red {
-    background: linear-gradient(180deg, #fde7e7 0%, #fde0e0 100%);
-    color: #8b1a1a;
-    border-color: rgba(204,68,68,0.32);
-  }
-  @media (prefers-color-scheme: dark) {
-    .badge { background: rgba(95,180,85,0.14); color: #7fc775; border-color: rgba(46,107,38,0.32); }
-    .badge.amber { background: rgba(214,137,16,0.10); color: #e8a73a; border-color: rgba(214,137,16,0.32); }
-    .badge.red { background: rgba(204,68,68,0.10); color: #e88080; border-color: rgba(204,68,68,0.28); }
-  }
+  .badge-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; }
+  /* Wave V.4 — result badge cleaner sizing */
+  .badge.green-soft { background: var(--green-soft); color: var(--green-dark); }
+  .badge { background: var(--green-soft); color: var(--green-dark); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .badge.amber { background: #fbeed4; color: #95650a; }
   /* v3.4 verdict pill — panel-mandated 'permission to buy' moment. */
-  /* Wave V — stale-price edge state styling */
+  /* Wave V.18 — stale-price banner per v5: warm-amber with crisper typography */
   .stale-banner {
-    display: flex; align-items: center; gap: 10px;
-    background: var(--bg-amber-wash); border: 1px solid rgba(214,137,16,0.28);
-    border-radius: 12px; padding: 10px 12px; margin: 0 0 10px;
-    color: var(--amber-deep); font-size: 12.5px; font-weight: 600;
-    box-shadow: var(--shadow-sm);
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(180deg, #fef7e8 0%, rgba(251,238,212,0.85) 100%);
+    border: 1px solid rgba(214,137,16,0.28);
+    border-radius: 14px;
+    padding: 11px 14px;
+    margin: 0 0 12px;
+    color: var(--amber-deep, #8a6515);
+    font-size: 12.5px; font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(214,137,16,0.06);
   }
   .stale-banner[hidden] { display: none !important; }
-  .stale-icon { font-size: 14px; flex: 0 0 auto; }
-  .stale-text { flex: 1; line-height: 1.3; }
+  .stale-icon {
+    font-size: 16px; flex: 0 0 auto;
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: rgba(214,137,16,0.12);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .stale-text { flex: 1; line-height: 1.35; letter-spacing: 0.005em; }
   .stale-text #stale-age { font-weight: 800; font-variant-numeric: tabular-nums; }
   .stale-refresh {
-    background: var(--amber); color: #fff; border: none;
-    padding: 6px 12px; border-radius: 999px; font-size: 11.5px; font-weight: 800;
-    letter-spacing: 0.3px; cursor: pointer; flex: 0 0 auto;
+    background: linear-gradient(180deg, #d68910 0%, #b07a0a 100%);
+    color: #fff; border: none;
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 11.5px; font-weight: 800;
+    letter-spacing: 0.04em;
+    cursor: pointer; flex: 0 0 auto;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -1px 0 rgba(0,0,0,0.10) inset, 0 2px 6px rgba(214,137,16,0.18);
+    transition: transform .12s ease, box-shadow .15s ease;
   }
-  .stale-refresh:active { background: var(--amber-deep); }
+  .stale-refresh:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -1px 0 rgba(0,0,0,0.12) inset, 0 4px 10px rgba(214,137,16,0.24); }
+  .stale-refresh:active { transform: scale(.96); }
+  @media (prefers-color-scheme: dark) {
+    .stale-banner { background: linear-gradient(180deg, rgba(214,137,16,0.10) 0%, rgba(214,137,16,0.06) 100%); box-shadow: none; }
+    .stale-icon { background: rgba(214,137,16,0.18); }
+  }
   /* Wave V — Nunito for display headlines, Inter for body */
   .tagline, .identify-title, h1.identify-title { font-family: var(--font-display, 'Nunito'); letter-spacing: -0.025em; }
   /* Wave V.7 — verdict pill: bolder presence + entrance slide+fade per v5 */
@@ -455,10 +446,34 @@
   }
   .verdict-basis { display: none; font-size: 12px; color: var(--ink-mute); margin: -8px 0 12px; line-height: 1.4; }
   .verdict-basis.show { display: block; }
-  .your-snap-strip { display: none; align-items: center; gap: 10px; padding: 8px 12px; background: #f6f6f4; border-radius: 12px; margin: 0 0 14px; font-size: 13px; color: var(--ink-mute); }
+  /* Wave V.18 — your-snap-strip per v5: refined card-like treatment */
+  .your-snap-strip {
+    display: none; align-items: center; gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(46,107,38,0.10);
+    border-radius: 14px;
+    margin: 0 0 16px;
+    font-size: 13px; color: var(--ink-soft);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
   .your-snap-strip.show { display: flex; }
-  .your-snap-strip img { width: 44px; height: 44px; border-radius: 8px; object-fit: cover; flex: 0 0 44px; background: var(--bg); }
-  .your-snap-strip span { font-weight: 600; }
+  .your-snap-strip img {
+    width: 48px; height: 48px;
+    border-radius: 10px;
+    object-fit: cover;
+    flex: 0 0 48px;
+    background: var(--bg);
+    border: 1px solid rgba(46,107,38,0.06);
+  }
+  .your-snap-strip span {
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 0.005em;
+  }
+  @media (prefers-color-scheme: dark) {
+    .your-snap-strip { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); box-shadow: none; }
+  }
   .verdict-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
   /* Wave V.9 — identify header per v5: tighter title, more breathable sub */
   .identify-title {
@@ -735,20 +750,7 @@
   }
   .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
-  /* Wave V.17 — beta-tag mirrors new badge token */
-  .beta-tag {
-    display: inline-flex; align-items: center;
-    padding: 2px 8px;
-    border-radius: 999px;
-    background: var(--green-soft);
-    color: var(--green-dark);
-    border: 1px solid rgba(46,107,38,0.16);
-    font-family: var(--font-display, 'Nunito');
-    font-weight: 800; font-size: 10px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    line-height: 1.2;
-  }
+  .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
   .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
   .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
   .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
@@ -948,7 +950,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v17</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v18</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
