@@ -570,6 +570,41 @@
     background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='4 12 9 17 20 6'/></svg>");
     background-repeat: no-repeat; background-position: center; background-size: 7px;
   }
+  /* V.65 â€” V.64 visible regression fixes */
+
+  /* 1. Verdict pill: drop the inner .verdict-dot span. ::before checkmark
+        from V.64 already provides the dot. Showing both = âœ“âœ“. */
+  .verdict-pill .verdict-dot,
+  .v5-verdict-pill .verdict-dot {
+    display: none !important;
+  }
+
+  /* 2. Hide the legacy 'IDENTIFIED Â· HOME' confidence badge on result.
+        The verdict pill already conveys identity + the basis line covers it.
+        v5 design has neither badge. */
+  #result-badge,
+  .v5-confidence-chip {
+    display: none !important;
+  }
+
+  /* 3. Re-anchor the AI info i icon to top-right of screen-result.
+        It was floating mid-screen because of layout changes from V.41
+        watermark + V.55 verdict-block hide. Pin it absolute top-right. */
+  #ai-info-btn {
+    position: absolute !important;
+    top: 16px !important;
+    right: 16px !important;
+    z-index: 4 !important;
+  }
+  #screen-result { position: relative !important; }
+
+  /* 4. Trim the verdict watermark â€” it's bleeding outside containers
+        when verdict-block is showing. Tighten to inside the block only. */
+  .v5-verdict-watermark {
+    overflow: hidden !important;
+    max-width: 100% !important;
+  }
+
 
 
   [hidden] { display: none !important; }
@@ -5159,6 +5194,93 @@ handleInbound();
   } else {
     var sr = document.getElementById('screen-result');
     if (sr) obs.observe(sr, { attributes: true, attributeFilter: ['class'] });
+  }
+})();
+</script>
+
+<script>
+/* V.65: Savvey Says decorator that ALWAYS fires on renderResult.
+   Replaces V.64 observer (which missed when cached results render before
+   the observer attaches). Proxies window.renderResult to call decorator
+   AFTER the original. Also proxies show() so re-rendering on same payload
+   works. */
+(function v65SavveyDecorator() {
+  function decorate() {
+    try {
+      var lr = window.lastResult || (typeof lastResult !== 'undefined' ? lastResult : null);
+      if (!lr || !lr.savvey_says) return;
+      var ss = lr.savvey_says;
+      var rows = document.getElementById('savvey-says-rows');
+      var head = document.querySelector('#savvey-says .v5-savvey-says-head, #savvey-says .savvey-says-head');
+      if (!rows || !head) return;
+
+      // Drop existing v64/v65 inserts before re-injecting
+      var oldPrefix = document.querySelector('#savvey-says .v5-savvey-says-prefix');
+      var oldLive = document.querySelector('#savvey-says .v5-savvey-live-row');
+      if (oldPrefix) oldPrefix.remove();
+      if (oldLive) oldLive.remove();
+
+      if (!ss.live_amazon_price) return;
+
+      // Prefix tag
+      var p = document.createElement('div');
+      p.className = 'v5-savvey-says-prefix';
+      p.textContent = 'Amazon UK live price check';
+      head.parentNode.insertBefore(p, head.nextSibling);
+
+      // Combined Live Price card + Buy on Amazon CTA
+      var row = document.createElement('div');
+      row.className = 'v5-savvey-live-row';
+      var card = document.createElement('div');
+      card.className = 'v5-savvey-live-card';
+      card.innerHTML = '<div class="icon">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h2l2.5 11a2 2 0 0 0 2 1.5h7a2 2 0 0 0 2-1.5L21 8H6"/><circle cx="9" cy="20" r="1.2"/><circle cx="17" cy="20" r="1.2"/></svg>' +
+        '</div>' +
+        '<div><div class="label">Live price</div><div class="value">' + ss.live_amazon_price + '</div></div>';
+      row.appendChild(card);
+      var verifiedLink = (lr.verified_amazon_price && lr.verified_amazon_price.link)
+        || ('https://www.amazon.co.uk/s?k=' + encodeURIComponent(lr.canonical_search_string || '') + '&tag=savvey-21');
+      var cta = document.createElement('a');
+      cta.className = 'v5-savvey-buy-cta';
+      cta.href = verifiedLink;
+      cta.target = '_top';
+      cta.rel = 'external noopener';
+      cta.innerHTML = 'Buy on Amazon &rarr;';
+      row.appendChild(cta);
+      head.parentNode.insertBefore(row, rows);
+
+      // Hide the redundant 'Live at Amazon UK' row in the rows block
+      Array.from(rows.querySelectorAll('.savvey-row')).forEach(function(r) {
+        var t = r.querySelector('.ttl');
+        if (t && /live at amazon/i.test(t.textContent)) r.style.display = 'none';
+      });
+    } catch (e) { console.warn('[v65 decorator]', e); }
+  }
+
+  function install() {
+    if (typeof window.renderResult === 'function' && !window.__v65Wrapped) {
+      var orig = window.renderResult;
+      window.renderResult = function() {
+        var ret = orig.apply(this, arguments);
+        try { setTimeout(decorate, 30); } catch (e) {}
+        return ret;
+      };
+      window.__v65Wrapped = true;
+    }
+    // Also re-decorate when result screen becomes active again (back nav)
+    var sr = document.getElementById('screen-result');
+    if (sr) {
+      var obs = new MutationObserver(function() {
+        if (sr.classList.contains('active')) setTimeout(decorate, 30);
+      });
+      obs.observe(sr, { attributes: true, attributeFilter: ['class'] });
+    }
+    if (sr && sr.classList.contains('active')) setTimeout(decorate, 30);
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
   }
 })();
 </script>
