@@ -143,6 +143,225 @@
 
 
 
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.45 v5 ERROR + BOTTOM NAV REBUILD
+     ═══════════════════════════════════════════════════════════════ */
+  .v5-error-screen {
+    background: linear-gradient(180deg, rgba(214,137,16,0.07) 0%, rgba(214,137,16,0.02) 80%, transparent 100%);
+    margin: -16px -16px 0;
+    padding: 12px 20px 24px;
+    min-height: calc(100dvh - 80px);
+  }
+  .v5-err-eyebrow {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--amber-soft, #fbeed4);
+    color: var(--amber-deep, #7a4f08);
+    font-size: 11px; font-weight: 800; letter-spacing: 0.4px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+    border: 1px solid rgba(214,137,16,0.22);
+  }
+  .v5-err-eyebrow-dot {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--amber, #d68910);
+  }
+  .v5-err-title {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 30px; font-weight: 800;
+    letter-spacing: -0.025em; line-height: 1.1;
+    margin: 0 0 6px;
+    color: var(--ink);
+    text-wrap: balance;
+  }
+  .v5-err-body {
+    font-size: 14.5px; line-height: 1.5;
+    margin: 0 0 20px;
+    color: var(--ink-soft);
+  }
+  .v5-err-suggestions {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-bottom: 22px;
+  }
+  .v5-err-suggestion {
+    background: rgba(255,255,255,0.78);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(20,32,26,0.08);
+    border-radius: 16px;
+    padding: 14px;
+    display: flex; align-items: center; gap: 14px;
+    text-align: left; cursor: pointer;
+    color: var(--ink);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 4px 10px rgba(20,32,26,0.04);
+    transition: transform .12s ease, box-shadow .15s ease;
+    font-family: inherit;
+    width: 100%;
+  }
+  .v5-err-suggestion:hover { transform: translateY(-1px); box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 6px 14px rgba(20,32,26,0.06); }
+  .v5-err-suggestion:active { transform: scale(.992); }
+  .v5-err-suggestion-icon {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #f0f7ee, #d6f1d2);
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    border: 1px solid rgba(42,107,34,0.10);
+    color: var(--green-dark, #1d4a18);
+  }
+  .v5-err-suggestion-text { flex: 1; min-width: 0; }
+  .v5-err-suggestion-title {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 14.5px; font-weight: 800;
+    color: var(--ink);
+  }
+  .v5-err-suggestion-sub {
+    font-size: 12px; color: var(--ink-mute);
+    margin-top: 1px;
+  }
+  .v5-err-suggestion-arrow {
+    color: var(--ink-mute);
+    flex: 0 0 auto;
+  }
+  .v5-err-reassurance {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 14px;
+    background: var(--green-soft, #e8f3e6);
+    border: 1px solid rgba(42,107,34,0.12);
+    border-radius: 16px;
+  }
+  .v5-err-reassurance-icon {
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid rgba(42,107,34,0.18);
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    color: var(--green-dark, #1d4a18);
+    box-shadow: 0 2px 6px rgba(42,107,34,0.10);
+  }
+  .v5-err-reassurance-text { flex: 1; min-width: 0; }
+  .v5-err-reassurance-title {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 2px;
+    line-height: 1.4;
+  }
+  .v5-err-reassurance-sub {
+    font-size: 12.5px; line-height: 1.45;
+    color: var(--ink-soft);
+  }
+  @media (prefers-color-scheme: dark) {
+    .v5-err-suggestion { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
+    .v5-err-suggestion-icon { background: linear-gradient(135deg, rgba(95,180,85,0.18), rgba(95,180,85,0.08)); border-color: rgba(95,180,85,0.18); color: #7fc775; }
+    .v5-err-reassurance { background: rgba(95,180,85,0.10); border-color: rgba(95,180,85,0.22); }
+    .v5-err-reassurance-icon { background: rgba(95,180,85,0.18); border-color: rgba(95,180,85,0.30); color: #7fc775; box-shadow: none; }
+  }
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.45 v5 BOTTOM NAV — 4-column grid: Home | Snap-hero | Scan | Type
+     Snap is a raised gradient pill, others are flat icon+label
+     ═══════════════════════════════════════════════════════════════ */
+  .v5-bottom-nav {
+    background: var(--green-soft, #e8f3e6);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    border-top: 1px solid rgba(42,107,34,0.10);
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr 1fr;
+    align-items: end;
+    gap: 4px;
+    padding: 10px 12px calc(26px + env(safe-area-inset-bottom));
+    z-index: 100;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v5-bottom-nav { background: #101218; border-top-color: rgba(255,255,255,0.06); }
+  }
+  /* Default nav items (Home / Scan / Type) — flat, semi-muted */
+  .v5-nav-item {
+    background: transparent !important;
+    border: none !important;
+    padding: 8px 6px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 3px !important;
+    color: var(--ink-soft) !important;
+    cursor: pointer;
+    opacity: 0.78;
+    transition: opacity .18s ease, color .18s ease;
+    min-height: auto;
+    min-width: 44px;
+    position: relative;
+  }
+  .v5-nav-item svg {
+    width: 19px !important;
+    height: 19px !important;
+    stroke-width: 1.9;
+    transition: stroke-width .18s ease;
+  }
+  .v5-nav-item span {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 10px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.2px !important;
+    text-transform: none !important;
+  }
+  .v5-nav-item.active,
+  .v5-nav-item:hover {
+    opacity: 1;
+    color: var(--green-dark, #1d4a18) !important;
+  }
+  .v5-nav-item.active svg { stroke-width: 2.4; }
+  .v5-nav-item.active span { font-weight: 800; }
+  /* Hide the V.6 active-pill underline — v5 nav doesn't use it */
+  .v5-bottom-nav .nav-tab::after { display: none; }
+
+  /* Snap hero pill — raised gradient */
+  .v5-nav-hero {
+    justify-self: center;
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%) !important;
+    border: none !important;
+    padding: 10px 22px !important;
+    border-radius: 16px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 3px !important;
+    color: #fff !important;
+    cursor: pointer;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.25) inset,
+      0 -2px 0 rgba(0,0,0,0.18) inset,
+      0 6px 16px rgba(42,107,34,0.32);
+    transition: transform 180ms cubic-bezier(.2,.7,.3,1);
+    min-height: auto;
+  }
+  .v5-nav-hero:active { transform: scale(1.03); }
+  .v5-nav-hero svg {
+    width: 22px !important;
+    height: 22px !important;
+    stroke: #fff !important;
+    stroke-width: 2.4 !important;
+  }
+  .v5-nav-hero span {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 12px !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.005em !important;
+    line-height: 1 !important;
+    color: #fff !important;
+    text-transform: none !important;
+    display: flex; align-items: baseline; justify-content: center;
+  }
+  .v5-nav-hero-dot {
+    color: var(--amber, #d68910) !important;
+  }
+  /* ═══════════════════════════════════════════════════════════════ */
+
   /* ═══════════════════════════════════════════════════════════════
      V.44 v5 LOADING + CONFIRM REBUILD
      ═══════════════════════════════════════════════════════════════ */
@@ -2077,7 +2296,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v44</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v45</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -2382,12 +2601,66 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </p>
 </div>
 
-<div class="screen" id="screen-error">
-  <div class="badge-row"><span class="badge amber">Couldn't identify</span></div>
-  <div class="error-card">
-    <p class="error-title" id="error-title">We didn't catch that.</p>
-    <p class="error-sub" id="error-sub">Try a clearer photo, a different URL, or type the product name.</p>
-    <button class="ghost-btn" onclick="goHome()" style="background:var(--green);color:white;border-color:var(--green-dark);">Try again</button>
+<div class="screen v5-error-screen" id="screen-error">
+  <!-- v5 ERROR REBUILD (V.45) — eyebrow + title + body + suggestion cards + reassurance -->
+  <div class="v5-err-eyebrow" id="v5-err-eyebrow">
+    <span class="v5-err-eyebrow-dot"></span>
+    <span id="v5-err-eyebrow-text">Couldn't quite tell</span>
+  </div>
+
+  <!-- Hidden engine IDs preserved for compat (badge-row was used for "Couldn't identify") -->
+  <div class="badge-row" hidden><span class="badge amber">Couldn't identify</span></div>
+
+  <h1 class="v5-err-title error-title" id="error-title">That one stumped us.</h1>
+  <p class="v5-err-body error-sub" id="error-sub">We couldn't see a product. Try framing the packaging or the model number on the back.</p>
+
+  <!-- 3 suggestion cards — JS can replace the 3 by setting their data-target / labels but defaults are good -->
+  <div class="v5-err-suggestions">
+    <button class="v5-err-suggestion" type="button" onclick="navSnap()">
+      <div class="v5-err-suggestion-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </div>
+      <div class="v5-err-suggestion-text">
+        <div class="v5-err-suggestion-title">Snap again, closer</div>
+        <div class="v5-err-suggestion-sub">Aim at the model number on the back</div>
+      </div>
+      <svg class="v5-err-suggestion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <button class="v5-err-suggestion" type="button" onclick="navScan()">
+      <div class="v5-err-suggestion-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/></svg>
+      </div>
+      <div class="v5-err-suggestion-text">
+        <div class="v5-err-suggestion-title">Scan the barcode</div>
+        <div class="v5-err-suggestion-sub">Most reliable identifier</div>
+      </div>
+      <svg class="v5-err-suggestion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+    <button class="v5-err-suggestion" type="button" onclick="navType()">
+      <div class="v5-err-suggestion-icon">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      </div>
+      <div class="v5-err-suggestion-text">
+        <div class="v5-err-suggestion-title">Type the name</div>
+        <div class="v5-err-suggestion-sub">"Bose QC45", "AF400UK", etc.</div>
+      </div>
+      <svg class="v5-err-suggestion-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+    </button>
+  </div>
+
+  <!-- Reassurance card -->
+  <div class="v5-err-reassurance">
+    <div class="v5-err-reassurance-icon" aria-hidden="true">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="12" cy="12" r="5.5" stroke="currentColor" stroke-width="1.6"/>
+        <circle cx="12" cy="12" r="2" fill="var(--amber, #d68910)"/>
+      </svg>
+    </div>
+    <div class="v5-err-reassurance-text">
+      <div class="v5-err-reassurance-title">We're new - and learning fast.</div>
+      <div class="v5-err-reassurance-sub">We'll get this one next time.</div>
+    </div>
   </div>
 </div>
 
@@ -4105,22 +4378,23 @@ handleInbound();
   </div>
 </div>
 <div class="savvey-toast" id="savvey-toast" role="status" aria-live="polite"></div>
-<nav class="bottom-nav" id="bottom-nav" aria-label="Primary navigation">
-  <button class="nav-tab" id="nav-snap" onclick="navSnap()" aria-label="Snap a product">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-    <span>Snap</span>
+<nav class="bottom-nav v5-bottom-nav" id="bottom-nav" aria-label="Primary navigation">
+  <!-- v5 BOTTOM NAV REBUILD (V.45) — Home (left) | Snap hero (centre) | Scan | Type -->
+  <button class="nav-tab v5-nav-item" id="nav-home" onclick="navHome()" aria-label="Home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+    <span>Home</span>
   </button>
-  <button class="nav-tab" id="nav-scan" onclick="navScan()" aria-label="Scan a barcode">
+  <button class="nav-tab v5-nav-hero" id="nav-snap" onclick="navSnap()" aria-label="Snap a product">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+    <span>Snap<span class="v5-nav-hero-dot">.</span></span>
+  </button>
+  <button class="nav-tab v5-nav-item" id="nav-scan" onclick="navScan()" aria-label="Scan a barcode">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="2" height="12"></rect><rect x="6" y="6" width="1" height="12"></rect><rect x="9" y="6" width="3" height="12"></rect><rect x="14" y="6" width="1" height="12"></rect><rect x="17" y="6" width="2" height="12"></rect><rect x="21" y="6" width="1" height="12"></rect></svg>
     <span>Scan</span>
   </button>
-  <button class="nav-tab" id="nav-type" onclick="navType()" aria-label="Type to search">
+  <button class="nav-tab v5-nav-item" id="nav-type" onclick="navType()" aria-label="Type to search">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
     <span>Type</span>
-  </button>
-  <button class="nav-tab" id="nav-home" onclick="navHome()" aria-label="Home">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
-    <span>Home</span>
   </button>
 </nav>
 </body>
