@@ -1891,10 +1891,13 @@
   body:has(#screen-welcome.active) .v5-bottom-nav { display: none !important; }
   body:has(#screen-welcome.active) .screen { padding-bottom: 0; }
 
-    /* Hide nav on full-screen / transient screens */
+    /* Hide nav on full-screen / transient screens */  /* V.61: hide BOTH legacy .bottom-nav and current .v5-bottom-nav on full-screen / transient screens */
   body:has(#screen-camera.active) .bottom-nav,
   body:has(#screen-barcode.active) .bottom-nav,
-  body:has(#screen-loading.active) .bottom-nav { display: none; }
+  body:has(#screen-loading.active) .bottom-nav,
+  body:has(#screen-camera.active) .v5-bottom-nav,
+  body:has(#screen-barcode.active) .v5-bottom-nav,
+  body:has(#screen-loading.active) .v5-bottom-nav { display: none !important; }
   body:has(#screen-camera.active) .screen,
   body:has(#screen-barcode.active) .screen,
   body:has(#screen-loading.active) .screen { padding-bottom: 0; }
