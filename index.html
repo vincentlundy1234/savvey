@@ -219,78 +219,18 @@
     margin: 0 0 20px;
     max-width: 38ch;
   }
-  /* Wave V.16 — recent chips: horizontal scroll rail with edge fade per v5 */
-  .recent-row { margin: 20px 0 4px; }
-  .recent-label {
-    font-family: var(--font-display, 'Nunito');
-    font-size: 11px; font-weight: 800;
-    color: var(--ink-mute);
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-    margin: 0 0 10px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .recent-clear {
-    background: none; border: none;
-    color: var(--ink-mute);
-    font-size: 11px; font-weight: 700;
-    text-transform: none; letter-spacing: 0.005em;
-    cursor: pointer;
-    padding: 4px 6px;
-    border-radius: 8px;
-    transition: background .15s ease, color .15s ease;
-  }
-  .recent-clear:hover { background: rgba(46,107,38,0.06); color: var(--ink); }
-  .recent-chips {
-    display: flex;
-    flex-wrap: nowrap;
-    gap: 8px;
-    margin: 0 -16px 18px;
-    padding: 2px 16px 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
-    scroll-snap-type: x proximity;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
-    mask-image: linear-gradient(90deg, transparent 0, black 12px, black calc(100% - 24px), transparent 100%);
-    -webkit-mask-image: linear-gradient(90deg, transparent 0, black 12px, black calc(100% - 24px), transparent 100%);
-  }
-  .recent-chips::-webkit-scrollbar { display: none; }
-  /* Wave V.4 + V.16 — recent chip: subtle accent + lift + scroll-snap */
-  .recent-chip {
-    background: rgba(255,255,255,0.78);
-    backdrop-filter: blur(8px);
-    border: 1px solid rgba(46,107,38,0.10);
-    border-left: 3px solid var(--green);
-    border-radius: 14px;
-    padding: 9px 14px 9px 17px;
-    font-size: 13px; font-weight: 700;
-    color: var(--ink);
-    cursor: pointer;
-    max-width: 220px;
-    flex-shrink: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    scroll-snap-align: start;
-    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 6px rgba(20,32,26,0.04);
-    transition: transform .12s ease, background .15s ease, border-color .15s ease, box-shadow .15s ease;
-  }
-  .recent-chip:hover {
-    background: rgba(255,255,255,0.95);
-    border-color: rgba(46,107,38,0.22);
-    border-left-color: var(--green-dark, #1d4a18);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 4px 12px rgba(20,32,26,0.06);
-    transform: translateY(-1px);
-  }
-  .recent-chip:active {
-    transform: translateY(0) scale(.985);
-    background: var(--green-soft);
-    border-color: var(--green);
-  }
+  .recent-row { margin: 18px 0 4px; }
+  .recent-label { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .recent-clear { background: none; border: none; color: var(--ink-mute); font-size: 11px; font-weight: 700; cursor: pointer; padding: 2px 4px; }
+  .recent-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
+  /* Wave V.4 — recent chips with subtle accent + lift per v5 */
+  .recent-chip { background: rgba(255,255,255,0.78); backdrop-filter: blur(8px); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 12px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 6px rgba(20,32,26,0.04); transition: transform .12s ease; }
+  .recent-chip:active { transform: scale(.985); background: var(--green-soft); border-color: var(--green); }
   @media (prefers-color-scheme: dark) {
-    .recent-chip { background: rgba(255,255,255,0.04); box-shadow: none; border-color: rgba(255,255,255,0.07); }
-    .recent-chip:hover { background: rgba(255,255,255,0.07); }
+    .recent-chip { background: rgba(255,255,255,0.04); box-shadow: none; }
     .recent-chip:active { background: rgba(95,180,85,0.16); }
   }
+  .recent-chip:active { background: var(--green-soft); border-color: var(--green); }
   /* Wave V.4 — secondary doors (non-primary): unified quiet palette per v5
      Single restrained treatment, no per-door theming. Hero Snap door keeps
      its own .door.primary treatment. */
@@ -420,11 +360,41 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { font-weight: 700; font-size: 18px; color: var(--ink); margin: 0; }
   .loading-sub { color: var(--ink-mute); font-size: 14px; margin: 6px 0 0; }
-  .badge-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; }
-  /* Wave V.4 — result badge cleaner sizing */
-  .badge.green-soft { background: var(--green-soft); color: var(--green-dark); }
-  .badge { background: var(--green-soft); color: var(--green-dark); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
-  .badge.amber { background: #fbeed4; color: #95650a; }
+  /* Wave V.17 — unified badge system per v5 (green default + amber + green-soft helper) */
+  .badge-row {
+    display: flex; align-items: center; gap: 8px;
+    margin: 18px 0 8px;
+    flex-wrap: wrap;
+  }
+  .badge {
+    display: inline-flex; align-items: center;
+    background: var(--green-soft);
+    color: var(--green-dark);
+    border: 1px solid rgba(46,107,38,0.16);
+    font-family: var(--font-display, 'Nunito');
+    font-size: 10.5px; font-weight: 800;
+    padding: 4px 10px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    line-height: 1.2;
+  }
+  .badge.green-soft { background: var(--green-soft); color: var(--green-dark); border-color: rgba(46,107,38,0.16); }
+  .badge.amber {
+    background: linear-gradient(180deg, #fdf2dc 0%, #fbeed4 100%);
+    color: #8a6515;
+    border-color: rgba(214,137,16,0.28);
+  }
+  .badge.red {
+    background: linear-gradient(180deg, #fde7e7 0%, #fde0e0 100%);
+    color: #8b1a1a;
+    border-color: rgba(204,68,68,0.32);
+  }
+  @media (prefers-color-scheme: dark) {
+    .badge { background: rgba(95,180,85,0.14); color: #7fc775; border-color: rgba(46,107,38,0.32); }
+    .badge.amber { background: rgba(214,137,16,0.10); color: #e8a73a; border-color: rgba(214,137,16,0.32); }
+    .badge.red { background: rgba(204,68,68,0.10); color: #e88080; border-color: rgba(204,68,68,0.28); }
+  }
   /* v3.4 verdict pill — panel-mandated 'permission to buy' moment. */
   /* Wave V — stale-price edge state styling */
   .stale-banner {
@@ -765,7 +735,20 @@
   }
   .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
-  .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
+  /* Wave V.17 — beta-tag mirrors new badge token */
+  .beta-tag {
+    display: inline-flex; align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--green-soft);
+    color: var(--green-dark);
+    border: 1px solid rgba(46,107,38,0.16);
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
   .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
   .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
   .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
@@ -965,7 +948,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v16</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v17</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
