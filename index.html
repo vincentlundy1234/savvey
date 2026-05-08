@@ -343,72 +343,23 @@
     .door-input-wrap { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .door-input-wrap:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
   }
-  /* Wave V.12 — loading screen: composed halo + crisper spinner + display-grade copy per v5 */
-  .loading-wrap {
-    padding: 80px 0 70px;
-    text-align: center;
-    position: relative;
-    min-height: 280px;
-  }
+  /* Wave V.3 — loading screen with green-pulse + softer cream backdrop per v5 */
+  .loading-wrap { padding: 70px 0 60px; text-align: center; position: relative; }
   .loading-wrap::before {
-    content: ''; position: absolute; left: 50%; top: 56px;
-    transform: translateX(-50%);
-    width: 220px; height: 220px; border-radius: 50%;
-    background:
-      radial-gradient(circle at 35% 35%, rgba(95,180,85,0.25) 0%, rgba(95,180,85,0.10) 35%, rgba(95,180,85,0) 70%),
-      radial-gradient(circle, var(--green-soft) 0%, transparent 72%);
+    content: ''; position: absolute; left: 50%; top: 60px; transform: translateX(-50%);
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle, var(--green-soft) 0%, transparent 70%);
     z-index: 0; pointer-events: none;
-    animation: pulse 2.6s ease-in-out infinite;
-    filter: blur(0.5px);
-  }
-  .loading-wrap::after {
-    content: ''; position: absolute; left: 50%; top: 76px;
-    transform: translateX(-50%);
-    width: 180px; height: 180px; border-radius: 50%;
-    border: 1px solid rgba(46,107,38,0.10);
-    z-index: 0; pointer-events: none;
-    animation: pulse-ring 2.6s ease-in-out infinite;
+    animation: pulse 2.4s ease-in-out infinite;
   }
   @keyframes pulse {
-    0%, 100% { transform: translateX(-50%) scale(0.85); opacity: 0.55; }
+    0%, 100% { transform: translateX(-50%) scale(0.85); opacity: 0.6; }
     50%      { transform: translateX(-50%) scale(1.05); opacity: 1; }
   }
-  @keyframes pulse-ring {
-    0%, 100% { transform: translateX(-50%) scale(0.95); opacity: 0.5; }
-    50%      { transform: translateX(-50%) scale(1.12); opacity: 0.15; }
-  }
-  .spinner {
-    position: relative; z-index: 1;
-    width: 60px; height: 60px;
-    border-radius: 50%;
-    border: 3px solid rgba(46,107,38,0.14);
-    border-top-color: var(--green);
-    border-right-color: var(--green-light, #5fb455);
-    animation: spin .85s cubic-bezier(.6,.2,.4,.8) infinite;
-    margin: 0 auto 26px;
-    box-shadow: 0 0 24px rgba(46,107,38,0.10);
-  }
+  .spinner { position: relative; z-index: 1; width: 56px; height: 56px; border-radius: 50%; border: 3px solid var(--green-soft); border-top-color: var(--green); animation: spin .9s linear infinite; margin: 0 auto 22px; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text {
-    font-family: var(--font-display, 'Nunito');
-    font-weight: 800; font-size: 20px;
-    color: var(--ink);
-    margin: 0;
-    letter-spacing: -0.015em;
-    position: relative; z-index: 1;
-  }
-  .loading-sub {
-    color: var(--ink-mute);
-    font-size: 13.5px;
-    margin: 8px 0 0;
-    line-height: 1.4;
-    letter-spacing: 0.005em;
-    position: relative; z-index: 1;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .loading-wrap::before, .loading-wrap::after { animation: none; }
-    .spinner { animation: spin 1.4s linear infinite; }
-  }
+  .loading-text { font-weight: 700; font-size: 18px; color: var(--ink); margin: 0; }
+  .loading-sub { color: var(--ink-mute); font-size: 14px; margin: 6px 0 0; }
   .badge-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; }
   /* Wave V.4 — result badge cleaner sizing */
   .badge.green-soft { background: var(--green-soft); color: var(--green-dark); }
@@ -755,9 +706,57 @@
   .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
   .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-  .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
-  .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
-  .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
+  /* Wave V.13 — try-again-btn: prominent green CTA living inside the error card */
+  .try-again-btn.ghost-btn {
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    color: white;
+    border: none;
+    font-weight: 800;
+    padding: 13px 18px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 -1px 0 rgba(0,0,0,0.10) inset,
+      0 4px 12px rgba(42,107,34,0.22);
+  }
+  .try-again-btn.ghost-btn:hover {
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 50%, var(--green-dark, #1d4a18) 100%);
+    color: white;
+    border-color: transparent;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.22) inset,
+      0 -1px 0 rgba(0,0,0,0.12) inset,
+      0 6px 16px rgba(42,107,34,0.28);
+  }
+  /* Wave V.13 — error card per v5: amber-warm warmth, not red-alert */
+  .error-card {
+    background: linear-gradient(180deg, #fef7e8 0%, #fbeed4 100%);
+    border: 1px solid rgba(214,137,16,0.22);
+    border-radius: 20px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(214,137,16,0.08);
+  }
+  .error-title {
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 20px;
+    margin: 0 0 8px;
+    color: var(--amber-deep, #8a6515);
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+  }
+  .error-sub {
+    color: var(--ink-soft);
+    font-size: 14.5px;
+    margin: 0 0 18px;
+    line-height: 1.45;
+  }
+  @media (prefers-color-scheme: dark) {
+    .error-card {
+      background: linear-gradient(180deg, rgba(214,137,16,0.10) 0%, rgba(214,137,16,0.06) 100%);
+      border-color: rgba(214,137,16,0.28);
+      box-shadow: none;
+    }
+    .error-title { color: #e8a73a; }
+  }
   /* Wave V.1 — camera chrome trim per v5: corner brackets only (no continuous dashed
      line), X icon top-left replacing Cancel pill, ~95% viewport fill */
   .cam-wrap { position: relative; background: #000; border-radius: var(--r-md); overflow: hidden; aspect-ratio: 3/4.2; margin: 8px 0; }
@@ -954,7 +953,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v12</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v13</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -1048,7 +1047,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="error-card">
     <p class="error-title" id="error-title">We didn't catch that.</p>
     <p class="error-sub" id="error-sub">Try a clearer photo, a different URL, or type the product name.</p>
-    <button class="ghost-btn" onclick="goHome()" style="background:var(--green);color:white;border-color:var(--green-dark);">Try again</button>
+    <button class="ghost-btn try-again-btn" onclick="goHome()">Try again</button>
   </div>
 </div>
 
