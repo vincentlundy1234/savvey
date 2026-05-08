@@ -194,10 +194,31 @@
   .screen.active { display: block; animation: fadeIn .22s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   /* Wave V.1 — v5 hero typography */
-  .tagline { font-weight: 800; font-size: 30px; line-height: 1.05; margin: 18px 0 6px; letter-spacing: -0.025em; text-wrap: balance; }
-  .tagline-accent { color: var(--green); }
-  @media (prefers-color-scheme: dark) { .tagline-accent { color: var(--green-light, #5fb455); } }
-  .tagsub { color: var(--ink-soft); font-size: 15px; margin: 0 0 22px; }
+  /* Wave V.8 — tagline + tagsub: more confident hierarchy per v5 */
+  .tagline {
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 32px; line-height: 1.04;
+    margin: 20px 0 8px;
+    letter-spacing: -0.028em;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .tagline-accent {
+    color: var(--green);
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 65%, var(--green-dark, #1d4a18) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  @media (prefers-color-scheme: dark) {
+    .tagline-accent { color: var(--green-light, #5fb455); -webkit-text-fill-color: var(--green-light, #5fb455); background: none; }
+  }
+  .tagsub {
+    color: var(--ink-soft);
+    font-size: 15px; line-height: 1.45;
+    margin: 0 0 20px;
+    max-width: 38ch;
+  }
   .recent-row { margin: 18px 0 4px; }
   .recent-label { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
   .recent-clear { background: none; border: none; color: var(--ink-mute); font-size: 11px; font-weight: 700; cursor: pointer; padding: 2px 4px; }
@@ -458,6 +479,29 @@
   .confirm-btn:active { background: var(--green-soft); border-color: var(--green); }
   /* Wave V.3 — CTA list spacing + primary CTA enhancement */
   .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 24px; }
+  /* Wave V.8 — alt-retailer row staggered entrance per v5
+     Children get a slight delay so they cascade in beneath the verdict pill.
+     Reduced motion respected. */
+  @keyframes cta-row-enter {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  .cta-list .cta { animation: cta-row-enter .35s cubic-bezier(.2,.8,.2,1) both; }
+  .cta-list .cta:nth-child(1) { animation-delay: .04s; }
+  .cta-list .cta:nth-child(2) { animation-delay: .12s; }
+  .cta-list .cta:nth-child(3) { animation-delay: .20s; }
+  .cta-list .cta:nth-child(4) { animation-delay: .28s; }
+  .cta-list .cta:nth-child(5) { animation-delay: .36s; }
+  @media (prefers-reduced-motion: reduce) {
+    .cta-list .cta { animation: none; }
+  }
+  /* Wave V.8 — counter dot subtle pulse to signal live data */
+  @keyframes counter-dot-pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50%      { transform: scale(1.25); opacity: 0.65; }
+  }
+  .counter-dot { animation: counter-dot-pulse 2.4s ease-in-out infinite; transform-origin: center; }
+  @media (prefers-reduced-motion: reduce) { .counter-dot { animation: none; } }
   /* Wave V.5 — secondary CTA (alternative-retailer rows) refinement per v5
      - Quieter background to match unified doors palette from V.4
      - Tighter typography hierarchy; arrow swapped to chevron via CSS
@@ -535,9 +579,19 @@
   .small-print { font-size: 12px; color: var(--ink-mute); text-align: center; margin: 18px 0 8px; line-height: 1.5; }
   .trust-footer { margin: 22px 0 6px; padding: 14px 4px 4px; border-top: 1px solid var(--border); }
   /* Wave V.3 — affiliate disclosure quieter, more compact */
-  .trust-line { font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; margin: 0 0 6px; }
-  .trust-line strong { color: var(--ink-soft); font-weight: 700; }
-  .trust-disclosure { font-size: 10.5px; opacity: 0.85; }
+  /* Wave V.8 — trust line typography per v5: tighter + clearer hierarchy */
+  .trust-line {
+    font-size: 11.5px; color: var(--ink-mute);
+    line-height: 1.55; margin: 0 0 8px;
+    letter-spacing: 0.005em;
+  }
+  .trust-line strong { color: var(--ink-soft); font-weight: 800; }
+  .trust-disclosure {
+    font-size: 10.5px; opacity: 0.82;
+    padding-top: 4px;
+    border-top: 1px solid rgba(46,107,38,0.06);
+    margin-top: 4px;
+  }
   .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
   .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
@@ -691,7 +745,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <p class="tagsub">Snap your shelf. Restock without thinking. Free, no sign-up, UK only.</p>
   <!-- Wave V.4 — counter line: cleaner copy + tighter visual -->
   <p id="counter" style="margin:0 0 22px;font-size:12.5px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;display:flex;align-items:center;gap:6px;">
-    <span style="display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--green);"></span>
+    <span class="counter-dot" style="display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--green);"></span>
     <span id="counter-num">—</span> products identified by Savvey shoppers this week
   </p>
 
@@ -740,7 +794,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v7</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v8</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
