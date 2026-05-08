@@ -1872,7 +1872,15 @@
   @media (prefers-color-scheme: dark) { .bottom-nav { background: rgba(15,20,16,0.96); } }
   /* Reserve bottom space on screens that show the nav so content doesn't hide under it */
   .screen { padding-bottom: 88px; }
-  /* Hide nav on full-screen / transient screens */
+
+  /* V.51 hotfix — welcome must also hide bottom-nav. v5 spec puts no nav on
+     welcome (per WelcomeScreen JSX which omits the nav prop). The nav was
+     covering the "I'll have a browse" skip CTA at the bottom of welcome. */
+  body:has(#screen-welcome.active) .bottom-nav,
+  body:has(#screen-welcome.active) .v5-bottom-nav { display: none !important; }
+  body:has(#screen-welcome.active) .screen { padding-bottom: 0; }
+
+    /* Hide nav on full-screen / transient screens */
   body:has(#screen-camera.active) .bottom-nav,
   body:has(#screen-barcode.active) .bottom-nav,
   body:has(#screen-loading.active) .bottom-nav { display: none; }
@@ -2318,7 +2326,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v50</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v51</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
