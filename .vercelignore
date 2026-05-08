@@ -1,37 +1,36 @@
+# Savvey .vercelignore — files NOT shipped to the production Vercel deploy.
+# Refreshed Wave V.38 (8 May 2026) — stripped 12 stale dead-file references
+# pointing at things removed during the v2 -> v3.0 Smart Router pivot.
+
+# Generic backup / archive patterns (forward-looking — no current matches)
 _archive/
 *.archive
 *.backup-*
-_v3_sync_test.txt
-_v3_force_flush.txt
-_size_probe.txt
-eval-runner.mjs
-eval-results-*.csv
-eval-summary-*.json
-eval-v2.9.2-baseline.csv
-eval-v2.9.2-baseline.html
-v3-smoke-test.md
-v3-RECOVERY-needed.md
-STAGE-DELETE.txt
+*.recovered
 
-# Strategic Review Board mandate (4 May 2026) — Zero-Scraping Purge.
-# These files are dead in v3.1 and excluded from the production deploy.
-# Awaiting `git rm` on Vincent's side (see STAGE-DELETE.txt) to remove from
-# source control entirely.
-api/scrape.js
-api/probe-retailers.js
-components/
+# Cowork sandbox staging artefacts (also in .gitignore so unlikely to reach
+# Vercel, but defence in depth)
+_wave_*/
+_staging_*/
+APPLY*.ps1
+COMMIT_MSG.txt
+*.new
 
-# Probe / staging files — never deploy.
-index.html.new
-vercel.json.new
-.vercelignore.new
-index.html.recovered
-index.html.backup-pre-107d-resultrow
-index.html.backup-pre-107d-resultrow.kept
-api/ai-search.js.backup-pre-107d
-api/_health.js
-# v3.3 build staging — never deploy these (Cowork .new + cp pattern artifacts)
-api/normalize.js.new
-api/normalize_v33_build.js
-api/*.tmp_rewrite
-*.tmp_rewrite
+# Internal-only tools (run locally; not part of production runtime)
+tools/
+.github/
+
+# Local-only env files (never commit, but defence in depth)
+.env
+.env.local
+
+# OS / editor noise (also in .gitignore)
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Capacitor wrapper artefacts (built locally for spike branch — never
+# shipped to web Vercel deploy)
+android/
+ios/
