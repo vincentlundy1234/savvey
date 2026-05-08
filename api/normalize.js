@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5kk';
+const VERSION             = 'normalize.js v3.4.5kk1';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -93,7 +93,7 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_kk:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_kk2:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -947,7 +947,7 @@ export default async function handler(req, res) {
   // Wave II — canonical-keyed cache lookup. Different input phrasings that
   // resolve to the SAME canonical hit one shared cache entry, skipping
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
-  const _canonicalKey = `savvey:canonical:v1:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v2:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
