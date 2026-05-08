@@ -2895,7 +2895,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v59</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v67</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5294,6 +5294,71 @@ handleInbound();
     }
     if (sr && sr.classList.contains('active')) setTimeout(decorate, 30);
   }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', install);
+  } else {
+    install();
+  }
+})();
+</script>
+
+<script>
+/* V.67: V.65 decorator timing race fix.
+   V.65 fires on setTimeout(decorate, 30) after renderResult returns,
+   but renderSavveySays() populates rows asynchronously after that.
+   Net effect: brief stale price + redundant 'Live at Amazon UK' row.
+   V.67 fix: MutationObserver on #savvey-says-rows childList that
+   (a) removes the previous query's V.65 inserts immediately on mutation
+       so the hero card cannot show a stale price during the transition;
+   (b) hides any newly populated 'Live at Amazon UK' row by exact-text
+       match â€” the row will re-appear on every new query render and we
+       hide it each time. */
+(function v67SavveyHardener() {
+  function hideRedundantRow() {
+    try {
+      var rows = document.getElementById('savvey-says-rows');
+      if (!rows) return;
+      Array.from(rows.querySelectorAll('.savvey-row')).forEach(function(r) {
+        var t = r.querySelector('.ttl, .label');
+        if (t && /live at amazon/i.test(t.textContent || '')) {
+          r.style.display = 'none';
+        }
+      });
+    } catch (e) { console.warn('[v67 hideRedundantRow]', e); }
+  }
+
+  function flushStaleInserts() {
+    try {
+      var oldPrefix = document.querySelector('#savvey-says .v5-savvey-says-prefix');
+      var oldLive = document.querySelector('#savvey-says .v5-savvey-live-row');
+      if (oldPrefix) oldPrefix.remove();
+      if (oldLive) oldLive.remove();
+    } catch (e) { console.warn('[v67 flushStaleInserts]', e); }
+  }
+
+  function install() {
+    var rows = document.getElementById('savvey-says-rows');
+    if (!rows) {
+      // Wait for DOM
+      setTimeout(install, 100);
+      return;
+    }
+    var obs = new MutationObserver(function() {
+      // Step 1: kill stale V.65 inserts immediately so user can't see
+      // the previous query's price flash.
+      flushStaleInserts();
+      // Step 2: after V.65's setTimeout(decorate, 30) re-inserts fresh
+      // copies, hide the redundant row. Schedule for slightly after
+      // V.65 to ensure rows are fully populated.
+      setTimeout(hideRedundantRow, 80);
+      setTimeout(hideRedundantRow, 250);
+    });
+    obs.observe(rows, { childList: true, subtree: false });
+    // Initial pass for first render
+    setTimeout(hideRedundantRow, 80);
+    setTimeout(hideRedundantRow, 250);
+  }
+
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', install);
   } else {
