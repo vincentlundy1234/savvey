@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v50';
+const VERSION             = 'normalize.js v3.4.5v52';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -70,8 +70,15 @@ async function kvSet(key, value, ttl) {
   try { await kv.set(key, value, { ex: ttl }); } catch {}
 }
 
+// V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
+// fix changes the response shape or fixes a data bug). Old entries become
+// unreachable; new entries get the new salt.
+const CACHE_PREFIX = 'sav-v52';
+
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
+  h.update(CACHE_PREFIX);
+  h.update('|');
   h.update(inputType);
   h.update('|');
   if (inputType === 'image') {
