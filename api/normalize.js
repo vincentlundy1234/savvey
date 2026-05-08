@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v31';
+const VERSION             = 'normalize.js v3.4.5v50';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -500,7 +500,10 @@ async function fetchVerifiedAmazonPrice(query) {
 
     return {
       price:           Number(primary.extracted_price),
-      price_str:       String(primary.price || `£${primary.extracted_price}`).slice(0, 30),
+      // V.50 — Amazon UK is always GBP. SerpAPI's primary.price field can include
+      // "EUR" / "USD" prefix when the listing geo-mismatches; force £ prefix from
+      // extracted_price so users always see "£218.69" not "EUR 218.69".
+      price_str:       (Number.isFinite(Number(primary.extracted_price)) ? `£${Number(primary.extracted_price).toFixed(2)}` : String(primary.price || '').slice(0, 30)),
       currency:        'GBP',
       source:          'amazon.co.uk',
       source_type:     'organic',
@@ -512,7 +515,8 @@ async function fetchVerifiedAmazonPrice(query) {
       reviews:         reviewsVal,
       is_prime:        isPrime,
       used_price:      used ? Number(used.extracted_price) : null,
-      used_price_str:  used ? String(used.price || `£${used.extracted_price}`).slice(0, 30) : null,
+      // V.50 — same currency-safety as price_str above.
+      used_price_str:  used ? (Number.isFinite(Number(used.extracted_price)) ? `£${Number(used.extracted_price).toFixed(2)}` : String(used.price || '').slice(0, 30)) : null,
       fetched_at:      new Date().toISOString(),
     };
   } catch (err) {
