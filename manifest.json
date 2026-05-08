@@ -5,11 +5,15 @@
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f6f6f4",
+  "background_color": "#faf7f0",
   "theme_color": "#2a6b22",
   "orientation": "portrait",
   "lang": "en-GB",
-  "categories": ["shopping", "lifestyle", "finance"],
+  "categories": [
+    "shopping",
+    "lifestyle",
+    "finance"
+  ],
   "icons": [
     {
       "src": "/icon.svg",
