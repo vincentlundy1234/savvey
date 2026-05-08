@@ -140,6 +140,303 @@
     color: var(--ink-soft);
   }
 
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.41 v5 RESULT REBUILD — actual layout from Claude Design v5
+     ═══════════════════════════════════════════════════════════════ */
+  /* Per-verdict screen tint — applied via JS adding a class to body */
+  body.verdict-good_buy #screen-result.active { background: linear-gradient(180deg, rgba(95,180,85,0.08) 0%, rgba(95,180,85,0.02) 80%, transparent 100%); }
+  body.verdict-fair #screen-result.active,
+  body.verdict-wait #screen-result.active { background: linear-gradient(180deg, rgba(214,137,16,0.07) 0%, rgba(214,137,16,0.02) 80%, transparent 100%); }
+  body.verdict-check_elsewhere #screen-result.active { background: linear-gradient(180deg, rgba(204,68,68,0.07) 0%, rgba(204,68,68,0.02) 80%, transparent 100%); }
+
+  .v5-result-back {
+    background: none; border: none; padding: 6px 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--ink-soft);
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    margin: 0 0 6px;
+  }
+  .v5-result-back:hover { color: var(--ink); }
+  .v5-result-back svg { stroke: currentColor; }
+
+  /* Stale banner per v5 — clock icon container + 2-line text + Refresh CTA */
+  .v5-stale-banner {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+    background: var(--amber-soft, #fbeed4);
+    border: 1px solid rgba(184,136,32,0.28);
+    border-radius: 12px;
+    box-shadow: none;
+  }
+  .v5-stale-banner[hidden] { display: none !important; }
+  .v5-stale-icon {
+    flex: 0 0 auto; width: 26px; height: 26px;
+    border-radius: 999px;
+    background: rgba(184,136,32,0.18);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--amber-deep, #7a4f08);
+  }
+  .v5-stale-text { flex: 1; min-width: 0; }
+  .v5-stale-title {
+    font-size: 12.5px; font-weight: 800; letter-spacing: -0.005em;
+    color: #7a4f08; line-height: 1.2;
+  }
+  .v5-stale-sub {
+    font-size: 11px; color: #8a5a08;
+    margin-top: 2px; line-height: 1.3;
+  }
+  .v5-stale-refresh {
+    flex: 0 0 auto;
+    padding: 7px 12px; border-radius: 999px;
+    background: #fff;
+    border: 1px solid rgba(184,136,32,0.32);
+    color: #7a4f08;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 11.5px; font-weight: 800; letter-spacing: -0.005em;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  .v5-stale-refresh:hover { background: rgba(184,136,32,0.06); }
+
+  /* Verdict block — tinted bg + relative + watermark in corner */
+  .v5-verdict-block {
+    position: relative; overflow: hidden;
+    background: var(--green-soft, #e8f3e6);
+    border: 1px solid rgba(20,32,26,0.05);
+    border-radius: 18px;
+    padding: 12px;
+    margin: 6px 0 12px;
+  }
+  body.verdict-good_buy .v5-verdict-block { background: var(--green-soft, #e8f3e6); }
+  body.verdict-fair .v5-verdict-block,
+  body.verdict-wait .v5-verdict-block { background: var(--amber-soft, #fbeed4); }
+  body.verdict-check_elsewhere .v5-verdict-block { background: var(--red-soft, #fde0e0); }
+
+  .v5-verdict-watermark {
+    position: absolute; right: -12px; top: -6px;
+    font-family: var(--font-display, 'Nunito');
+    font-size: 70px; font-weight: 800;
+    color: var(--green); opacity: 0.10;
+    transform: rotate(-12deg);
+    letter-spacing: -0.04em;
+    pointer-events: none;
+    text-transform: capitalize;
+  }
+  body.verdict-good_buy .v5-verdict-watermark { color: var(--green); }
+  body.verdict-fair .v5-verdict-watermark,
+  body.verdict-wait .v5-verdict-watermark { color: var(--amber); }
+  body.verdict-check_elsewhere .v5-verdict-watermark { color: var(--red); }
+
+  .v5-verdict-content { position: relative; }
+
+  /* Verdict pill — gradient stamp with circular icon */
+  .v5-verdict-pill {
+    display: none; align-items: center; gap: 8px;
+    background: linear-gradient(180deg, var(--green) 0%, var(--green-dark, #1d4a18) 100%);
+    color: #fff; padding: 7px 12px 7px 9px;
+    border-radius: 999px;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 800; letter-spacing: -0.005em;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(42,107,34,0.33);
+    margin-bottom: 6px;
+    text-transform: none;
+    width: fit-content; max-width: 100%;
+    animation: v5-verdict-pop 320ms cubic-bezier(.2,.8,.4,1.2);
+  }
+  .v5-verdict-pill.show { display: inline-flex; }
+  body.verdict-good_buy .v5-verdict-pill { background: linear-gradient(180deg, var(--green) 0%, var(--green-dark) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(42,107,34,0.33); }
+  body.verdict-fair .v5-verdict-pill,
+  body.verdict-wait .v5-verdict-pill { background: linear-gradient(180deg, var(--amber, #d68910) 0%, var(--amber-deep, #7a4f08) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(214,137,16,0.33); }
+  body.verdict-check_elsewhere .v5-verdict-pill { background: linear-gradient(180deg, var(--red, #cc4444) 0%, var(--red-deep, #8a2a2a) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(204,68,68,0.33); }
+  body.verdict-neutral .v5-verdict-pill { background: linear-gradient(180deg, #7a857f 0%, #4a5550 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(0,0,0,0.16); }
+
+  @keyframes v5-verdict-pop {
+    0%   { transform: scale(0.85); opacity: 0; }
+    60%  { transform: scale(1.04); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v5-verdict-pill { animation: none; }
+  }
+  .v5-verdict-pill-icon {
+    width: 20px; height: 20px; border-radius: 999px;
+    background: rgba(255,255,255,0.22);
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+  }
+
+  .v5-verdict-basis {
+    font-size: 12px; line-height: 1.4; font-weight: 600;
+    color: var(--green-dark, #1d4a18);
+    margin: 0; padding-right: 110px;
+  }
+  body.verdict-fair .v5-verdict-basis,
+  body.verdict-wait .v5-verdict-basis { color: var(--amber-deep, #7a4f08); }
+  body.verdict-check_elsewhere .v5-verdict-basis { color: var(--red-deep, #8a2a2a); }
+  .v5-verdict-basis:empty { display: none; }
+
+  /* Confidence chip — bottom-right corner */
+  .v5-confidence-chip {
+    position: absolute; right: 10px; bottom: 10px;
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 8px; border-radius: 999px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(20,32,26,0.08);
+    font-size: 9.5px; font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--green-dark, #1d4a18);
+    text-transform: uppercase;
+    white-space: nowrap;
+    z-index: 2;
+  }
+  .v5-confidence-dot {
+    width: 5px; height: 5px; border-radius: 999px;
+    background: var(--green);
+  }
+
+  /* AI info button — re-anchored to verdict block area */
+  .v5-info-btn { position: absolute; top: 14px; right: 14px; z-index: 3; }
+
+  /* Compact product header — image 88px left + title/sub right */
+  .v5-product-header {
+    display: flex; align-items: center; gap: 12px;
+    margin: 0 0 14px;
+  }
+  .v5-product-hero { flex: 0 0 auto; width: 88px; }
+  .v5-product-hero .hero-img-wrap {
+    width: 88px; height: 88px;
+    aspect-ratio: 1;
+    margin: 0;
+    border-radius: 14px;
+    padding: 0;
+  }
+  .v5-product-hero .hero-img-wrap img {
+    padding: 4px; border-radius: 12px;
+  }
+  .v5-product-meta { flex: 1; min-width: 0; }
+  .v5-result-title {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 19px; font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.15;
+    margin: 0 0 3px;
+    text-wrap: balance;
+  }
+  .v5-result-sub {
+    font-size: 12px; color: var(--ink-mute);
+    margin: 0; line-height: 1.4;
+  }
+
+  /* Savvey Says block — wordmark + says label header */
+  .v5-savvey-says {
+    background: var(--card, #fff);
+    border: 1px solid rgba(20,32,26,0.08);
+    border-radius: 18px;
+    padding: 4px 14px 12px;
+    margin: 16px 0 18px;
+    box-shadow: 0 2px 8px rgba(20,32,26,0.04);
+  }
+  .v5-savvey-says.empty { display: none; }
+  .v5-savvey-says-head {
+    display: flex; align-items: center; gap: 6px;
+    padding: 12px 0 4px;
+    margin: 0;
+    font-size: 11px; font-weight: 800;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--ink);
+  }
+  .v5-savvey-wordmark {
+    font-size: 12px; font-weight: 800;
+    letter-spacing: -0.022em;
+    color: var(--green);
+    text-transform: none;
+    line-height: 1;
+  }
+  .v5-savvey-wordmark .y { color: var(--amber); }
+  .v5-savvey-wordmark .dot { color: var(--green-dark); }
+  .v5-savvey-says-label {
+    font-weight: 700;
+    color: var(--ink-mute);
+    text-transform: lowercase;
+    letter-spacing: 0;
+  }
+  .v5-savvey-says-footer {
+    font-size: 10.5px; color: var(--ink-mute);
+    line-height: 1.4;
+    margin: 10px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid rgba(20,32,26,0.05);
+  }
+
+  /* Retailer rows container — replaces v3 .cta-list which stacked Amazon CTA + alts vertically */
+  .v5-retailer-rows {
+    display: flex; flex-direction: column;
+    gap: 6px; margin: 10px 0 14px;
+  }
+
+  /* Affiliate disclosure */
+  .v5-affiliate-line {
+    font-size: 10.5px; color: var(--ink-mute);
+    line-height: 1.4;
+    margin: 0 0 14px;
+    padding: 0 4px;
+  }
+
+  /* Action row — vertical stack (icon + label) per v5 */
+  .v5-result-actions {
+    display: flex; gap: 6px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(20,32,26,0.05);
+    margin: 0 0 8px;
+  }
+  .v5-result-action {
+    flex: 1; background: none; border: none;
+    padding: 8px 4px;
+    display: flex; flex-direction: column;
+    align-items: center; gap: 4px;
+    color: var(--ink-mute);
+    cursor: pointer;
+    font-family: var(--font-body, 'Nunito');
+    transition: color .15s ease, transform .12s ease;
+  }
+  .v5-result-action:hover { color: var(--ink); }
+  .v5-result-action:active { transform: scale(.96); }
+  .v5-result-action span {
+    font-size: 10.5px; font-weight: 700;
+  }
+
+  /* Wrong product link */
+  .v5-wrong-product {
+    text-align: center;
+    margin: 10px 0 18px;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 12px;
+  }
+  .v5-wrong-product a {
+    background: none; border: none;
+    color: var(--ink-mute);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .v5-wrong-product a:hover { color: var(--ink); }
+
+  /* Dark-mode mirror tweaks for v5 result */
+  @media (prefers-color-scheme: dark) {
+    .v5-verdict-block { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
+    .v5-savvey-says { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
+    .v5-savvey-says-footer { border-top-color: rgba(255,255,255,0.06); }
+    .v5-confidence-chip { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.14); }
+    .v5-result-actions { border-top-color: rgba(255,255,255,0.06); }
+  }
+  /* ═══════════════════════════════════════════════════════════════ */
+
   /* ═══════════════════════════════════════════════════════════════
      V.40 v5 HOME REBUILD — actual layout from Claude Design v5
      Replaces the v3 home that was being polished via splice.
@@ -1214,7 +1511,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v40</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v41</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -1270,38 +1567,106 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen" id="screen-result" style="position:relative;">
-  <div class="badge-row"><span class="badge" id="result-badge">Identified</span></div>
-  <!-- Wave V — stale-price edge state. Amber clock pill above verdict shown
-       when result was cached >24h ago (canonical_hit). Refresh button re-fires
-       the same query so user sees the live verdict, but the old data stays
-       visible while the refresh loads. -->
-  <div id="stale-banner" class="stale-banner" hidden>
-    <span class="stale-icon" aria-hidden="true">🕒</span>
-    <span class="stale-text">Price checked <span id="stale-age">a few hours</span> ago · tap refresh for live</span>
-    <button class="stale-refresh" id="stale-refresh-btn" type="button">Refresh</button>
+  <!-- v5 RESULT REBUILD (V.41) — DOM rewrite matching Claude Design v5 ResultScreen -->
+
+  <!-- Back to home — v5 has small text link instead of bottom-nav-only -->
+  <button class="v5-result-back" type="button" onclick="goHome()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+    </svg>
+    Home
+  </button>
+
+  <!-- Stale banner (engine: stale-banner / stale-age / stale-refresh-btn) -->
+  <div id="stale-banner" class="v5-stale-banner stale-banner" hidden>
+    <div class="v5-stale-icon" aria-hidden="true">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+    </div>
+    <div class="v5-stale-text">
+      <div class="v5-stale-title">Price checked <span id="stale-age">a few hours</span> ago</div>
+      <div class="v5-stale-sub">Tap refresh to fetch the live retailer price.</div>
+    </div>
+    <button class="v5-stale-refresh stale-refresh" id="stale-refresh-btn" type="button">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15A9 9 0 1 1 5.64 5.64L23 10"/></svg>
+      Refresh
+    </button>
   </div>
-  <div class="verdict-pill" id="verdict-pill"><span class="verdict-dot"></span><span id="verdict-pill-text">—</span></div>
-  <p class="verdict-basis" id="verdict-basis"></p>
-  <button type="button" class="ai-info-btn" id="ai-info-btn" aria-label="How Savvey identifies products" style="position:absolute;top:14px;right:14px;">i</button>
-  <h1 class="identify-title" id="result-title">—</h1>
-  <p class="identify-sub" id="result-sub">Verified Amazon UK price below. Other retailers shown to check alternatives.</p>
-  <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
-  <div class="savvey-says empty" id="savvey-says">
-    <div class="savvey-says-head"><div class="savvey-says-spark">✦</div><div class="savvey-says-label">Savvey says</div></div>
+
+  <!-- Hidden engine ID kept for compat (badge-row was used for "Identified" label) -->
+  <div class="badge-row" hidden><span class="badge" id="result-badge">Identified</span></div>
+
+  <!-- VERDICT BLOCK — tinted bg + verdict pill stamp + watermark + confidence chip -->
+  <div class="v5-verdict-block" id="v5-verdict-block">
+    <div class="v5-verdict-watermark" id="v5-verdict-watermark" aria-hidden="true">—</div>
+    <div class="v5-verdict-content">
+      <!-- verdict pill (engine: verdict-pill / verdict-pill-text) -->
+      <div class="v5-verdict-pill verdict-pill" id="verdict-pill">
+        <span class="v5-verdict-pill-icon" aria-hidden="true">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="20 6 9 17 4 12"/>
+          </svg>
+        </span>
+        <span class="verdict-dot" hidden></span>
+        <span id="verdict-pill-text">—</span>
+      </div>
+      <p class="v5-verdict-basis verdict-basis" id="verdict-basis"></p>
+    </div>
+    <!-- Confidence chip anchored bottom-right (filled by JS via existing result-badge content if needed) -->
+    <div class="v5-confidence-chip" id="v5-confidence-chip">
+      <span class="v5-confidence-dot"></span>
+      <span id="v5-confidence-text">Identified</span>
+    </div>
+  </div>
+
+  <button type="button" class="ai-info-btn v5-info-btn" id="ai-info-btn" aria-label="How Savvey identifies products">i</button>
+
+  <!-- Compact product header — hero image left (88px) + title/sub right -->
+  <div class="v5-product-header">
+    <div class="v5-product-hero">
+      <div class="hero-img-wrap empty" id="hero-img-wrap"><img id="hero-img" alt=""></div>
+    </div>
+    <div class="v5-product-meta">
+      <h1 class="identify-title v5-result-title" id="result-title">—</h1>
+      <p class="identify-sub v5-result-sub" id="result-sub">Verified Amazon UK price below.</p>
+    </div>
+  </div>
+
+  <!-- Savvey Says block — wordmark header + IntelRow rows (engine: savvey-says / savvey-says-rows / savvey-says-footer) -->
+  <div class="savvey-says v5-savvey-says empty" id="savvey-says">
+    <div class="v5-savvey-says-head savvey-says-head">
+      <span class="v5-savvey-wordmark">SAVVE<span class="y">Y</span><span class="dot">.</span></span>
+      <span class="v5-savvey-says-label savvey-says-label">says</span>
+    </div>
     <div id="savvey-says-rows"></div>
-    <p class="savvey-says-footer">General context — typical UK retail. Tap a retailer below for live price.</p>
+    <p class="v5-savvey-says-footer savvey-says-footer">Live price below. Other retailers shown for context.</p>
   </div>
-  <div class="cta-list" id="cta-list"></div>
-  <p style="text-align:center;margin:8px 0 18px;font-size:13px;">
-    <a href="#" onclick="event.preventDefault();reportWrongIdentification();" style="color:var(--ink-mute);text-decoration:underline;font-weight:600;">Wrong product? Try again →</a>
+
+  <!-- Retailer rows — Amazon first (rendered as v5 split row), then alternatives (engine: cta-list) -->
+  <div class="v5-retailer-rows cta-list" id="cta-list"></div>
+
+  <!-- Affiliate disclosure -->
+  <p class="v5-affiliate-line">Amazon link is an affiliate link — same price for you. Helps keep Savvey free.</p>
+
+  <!-- Action row — Share / Snap another / Home (vertical stack icon + label per v5) -->
+  <div class="v5-result-actions">
+    <button class="v5-result-action" type="button" onclick="shareResult()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      <span>Share</span>
+    </button>
+    <button class="v5-result-action" type="button" onclick="navSnap()" aria-label="Snap another product">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      <span>Snap another</span>
+    </button>
+    <button class="v5-result-action" type="button" onclick="goHome()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      <span>Home</span>
+    </button>
+  </div>
+
+  <!-- Wrong product link -->
+  <p class="v5-wrong-product">
+    <a href="#" onclick="event.preventDefault();reportWrongIdentification();">Wrong product? Try again →</a>
   </p>
-  <p class="small-print" style="margin:-8px 0 12px;font-size:11px;color:var(--ink-mute);">Amazon link is an affiliate link — same price for you. Helps keep Savvey free.</p>
-  <div class="actions-row">
-    <button class="ghost-btn" onclick="shareResult()">Share</button>
-    <button class="ghost-btn" onclick="navSnap()" aria-label="Snap another product">Snap another</button>
-    <button class="ghost-btn" onclick="goHome()">Home</button>
-  </div>
-  <p class="small-print">Prices are live on each retailer's own page. Amazon links contain our affiliate tag — same price for you.</p>
 </div>
 
 <div class="screen" id="screen-error">
