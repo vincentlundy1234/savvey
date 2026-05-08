@@ -100,15 +100,11 @@
       radial-gradient(50% 36% at 88% 78%, rgba(214,137,16,0.08) 0%, rgba(214,137,16,0) 65%),
       linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%);
     margin: -16px;
-    /* V.53: bumped bottom padding 44px -> 88px so 'I'll have a browse' CTA
-       isn't clipped by the fixed GDPR consent banner at viewport bottom. */
-    padding: 36px 28px 88px;
+    padding: 36px 28px 44px;
     min-height: 100dvh;
     display: none;
     flex-direction: column;
     box-sizing: border-box;
-    /* V.53: allow scroll on shorter viewports if welcome content overflows */
-    overflow-y: auto;
   }
   #screen-welcome.active { display: flex; animation: fadeIn .35s ease; }
   @media (prefers-color-scheme: dark) {
@@ -551,8 +547,7 @@
      V.44 CONFIRM/DISAMBIG — display headline + best-value sorted
      ═══════════════════════════════════════════════════════════════ */
   .v5-confirm-screen {
-    /* V.53: bottom padding for nav clearance */
-    padding: 8px 0 100px;
+    padding: 8px 0 24px;
   }
   .v5-confirm-back {
     background: none; border: none;
@@ -1252,9 +1247,7 @@
      Replaces the v3 home that was being polished via splice.
      ═══════════════════════════════════════════════════════════════ */
   .v5-home-wrap {
-    /* V.53: bottom padding bumped 20px -> 100px so Type door + footer
-       clear the fixed bottom nav (~88px tall on mobile + safe-area). */
-    padding: 8px 18px 100px;
+    padding: 8px 18px 20px;
     max-width: 480px;
     margin: 0 auto;
   }
@@ -2333,7 +2326,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v53</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v54</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -2607,7 +2600,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       <span class="v5-savvey-says-label savvey-says-label">says</span>
     </div>
     <div id="savvey-says-rows"></div>
-    <p class="v5-savvey-says-footer savvey-says-footer">Live price below. Other retailers shown for context.</p>
+    <p class="v5-savvey-says-footer savvey-says-footer" hidden></p>
   </div>
 
   <!-- Retailer rows — Amazon first (rendered as v5 split row), then alternatives (engine: cta-list) -->
@@ -3879,11 +3872,10 @@ function renderResult(displayName, payload) {
   const _stale = document.getElementById('stale-banner');
   if (_stale) {
     const cacheState = payload && payload._meta && payload._meta.cache;
-    if (cacheState === 'canonical_hit') {
-      _stale.removeAttribute('hidden');
-    } else {
-      _stale.setAttribute('hidden','');
-    }
+    // V.54: stale-banner suppressed until we ship server-side cache_age.
+    // Showing 'Price checked a few hours ago' on every canonical_hit was
+    // misleading because the actual age can be anywhere from <1min to 24h.
+    _stale.setAttribute('hidden','');
   }
   if (v && ['good_buy','fair','wait','check_elsewhere'].includes(v)) {
     const label = { good_buy: 'Good buy', fair: 'Fair price', wait: 'Wait — sale likely', check_elsewhere: 'Check listing carefully' }[v];
@@ -4045,8 +4037,8 @@ function renderResult(displayName, payload) {
     if (r.name === 'Amazon UK' && verifiedPriceStr) {
       nameStr = `${r.name} · ${verifiedPriceStr}`;
       subStr  = verifiedAmazonLink
-        ? 'Verified just now · tap to open this listing'
-        : 'Verified just now · tap to find this on Amazon';
+        ? 'Verified UK price · tap to open this listing'
+        : 'Verified UK price · tap to find this on Amazon';
     } else if (_deep) {
       // Wave GG — non-Amazon retailer with a verified PDP deep link. Use the
       // google_shopping price hint when present, plus a "tap to open" copy
