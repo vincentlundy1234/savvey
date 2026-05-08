@@ -45,7 +45,7 @@
     --font-display: 'Nunito', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     /* Wave V — proper tone-mapped slate dark mode (not navy fill).
        Per v5 design pushback: re-painted, not tinted. */
     :root {
@@ -73,7 +73,7 @@
 
   /* 1. KILL prefers-color-scheme dark auto-flip. v5 design is cream-first. */
   :root, html, body { color-scheme: light !important; }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     :root {
       --green: #2a6b22 !important; --green-dark: #1d4a18 !important; --green-deep: #143d10 !important; --green-light: #5fb455 !important;
       --green-soft: #e8f3e6 !important; --green-softer: #d6f1d2 !important;
@@ -168,6 +168,11 @@
     border-top: 1px solid rgba(42,107,34,0.10) !important;
     backdrop-filter: none !important;
   }
+  /* V.63: explicit z-index on nav buttons so Snap. hero doesn't obscure Home tap target */
+  .v5-bottom-nav .nav-tab { position: relative; z-index: 2; }
+  .v5-bottom-nav .nav-tab[id="nav-home"] { z-index: 3; }
+  .v5-bottom-nav { z-index: 50; }
+
 
   /* 7. Greeting Nunito display weight */
   .v5-greeting {
@@ -218,7 +223,7 @@
     overflow-y: auto;
   }
   #screen-welcome.active { display: flex; animation: fadeIn .35s ease; }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     #screen-welcome { background:
       radial-gradient(60% 40% at 25% 18%, rgba(95,180,85,0.18) 0%, rgba(95,180,85,0) 65%),
       radial-gradient(50% 36% at 88% 78%, rgba(214,137,16,0.14) 0%, rgba(214,137,16,0) 65%),
@@ -235,13 +240,13 @@
     color: var(--ink-soft); text-transform: uppercase;
     margin-bottom: 14px; align-self: flex-start;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .welcome-trust-strip { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: var(--ink-soft); }
   }
   .welcome-trust-dot {
     width: 5px; height: 5px; border-radius: 999px; background: var(--green);
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .welcome-trust-dot { background: var(--green-light, #5fb455); }
   }
   .welcome-wordmark {
@@ -251,7 +256,7 @@
   }
   .welcome-y { color: var(--amber); }
   .welcome-dot { color: var(--green); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .welcome-wordmark { color: var(--green-light, #5fb455); }
     .welcome-dot { color: var(--green-light, #5fb455); }
   }
@@ -375,7 +380,7 @@
     font-size: 12.5px; line-height: 1.45;
     color: var(--ink-soft);
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-err-suggestion { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
     .v5-err-suggestion-icon { background: linear-gradient(135deg, rgba(95,180,85,0.18), rgba(95,180,85,0.08)); border-color: rgba(95,180,85,0.18); color: #7fc775; }
     .v5-err-reassurance { background: rgba(95,180,85,0.10); border-color: rgba(95,180,85,0.22); }
@@ -398,7 +403,7 @@
     padding: 10px 12px calc(26px + env(safe-area-inset-bottom));
     z-index: 100;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-bottom-nav { background: #101218; border-top-color: rgba(255,255,255,0.06); }
   }
   /* Default nav items (Home / Scan / Type) — flat, semi-muted */
@@ -775,7 +780,7 @@
   }
   .v5-confirm-startover:hover { color: var(--ink); }
   /* Dark-mode mirror */
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-confirm-btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
     .v5-your-snap-strip { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
     .v5-confirm-none { background: rgba(255,255,255,0.04); }
@@ -1349,7 +1354,7 @@
   .v5-wrong-product a:hover { color: var(--ink); }
 
   /* Dark-mode mirror tweaks for v5 result */
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-verdict-block { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
     .v5-savvey-says { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
     .v5-savvey-says-footer { border-top-color: rgba(255,255,255,0.06); }
@@ -1397,7 +1402,7 @@
     color: var(--green);
     font-weight: 800;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-greeting-smile { color: #fff; }
   }
 
@@ -1420,7 +1425,7 @@
   }
   .v5-hero-snap:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 16px 36px rgba(42,107,34,0.28); }
   .v5-hero-snap:active { transform: scale(.992); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-hero-snap { background: linear-gradient(135deg, var(--green-dark) 0%, #143d10 100%); }
   }
   .v5-hero-snap-content {
@@ -1467,7 +1472,7 @@
     transform: translateY(-1px);
   }
   .v5-door:active { transform: scale(.992) translateY(0); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-door {
       background: rgba(255,255,255,0.04);
       border-color: rgba(255,255,255,0.07);
@@ -1486,7 +1491,7 @@
     color: var(--green-dark, #1d4a18);
   }
   .v5-door-icon svg { width: 20px; height: 20px; }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-door-icon { background: rgba(95,180,85,0.14); color: #7fc775; }
   }
   .v5-door-text { flex: 1; min-width: 0; }
@@ -1553,7 +1558,7 @@
     font-family: inherit;
   }
   .v5-door--input button:active { transform: scale(.96); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .v5-door--input .v5-door-input-row { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .v5-door--input .v5-door-input-row:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
   }
@@ -1576,7 +1581,7 @@
     color: var(--ink);
   }
   .welcome-accent { color: var(--green); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .welcome-accent { color: var(--green-light, #5fb455); }
   }
   .welcome-body {
@@ -1614,7 +1619,7 @@
     display: flex; align-items: center; justify-content: center;
     cursor: pointer;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .welcome-secondary {
       background: rgba(214,137,16,0.10); color: #e8a73a;
       border-color: rgba(214,137,16,0.28);
@@ -1639,7 +1644,7 @@
     background-clip: text;
     -webkit-text-fill-color: transparent;
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .tagline-accent { color: var(--green-light, #5fb455); -webkit-text-fill-color: var(--green-light, #5fb455); background: none; }
   }
   .tagsub {
@@ -1655,7 +1660,7 @@
   /* Wave V.4 — recent chips with subtle accent + lift per v5 */
   .recent-chip { background: rgba(255,255,255,0.78); backdrop-filter: blur(8px); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 12px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 6px rgba(20,32,26,0.04); transition: transform .12s ease; }
   .recent-chip:active { transform: scale(.985); background: var(--green-soft); border-color: var(--green); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .recent-chip { background: rgba(255,255,255,0.04); box-shadow: none; }
     .recent-chip:active { background: rgba(95,180,85,0.16); }
   }
@@ -1673,7 +1678,7 @@
     min-height: 76px;
   }
   .door:active { transform: scale(.992); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .door { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
   }
   .door:active { transform: scale(.985); box-shadow: var(--shadow-md); }
@@ -1700,7 +1705,7 @@
   }
   .door.primary:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -1px 0 rgba(0,0,0,0.10) inset, 0 18px 38px rgba(42,107,34,0.30); }
   .door.primary:active { transform: scale(.992); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .door.primary { background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-deep) 100%); }
   }
   .door.primary .door-title { color: white; }
@@ -1708,7 +1713,7 @@
   /* Wave V.4 — door icon container per v5: bigger, rounded square, green-soft */
   .door-icon { width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--green-soft); margin-bottom: 0; flex: 0 0 auto; }
   .door-icon svg { width: 20px; height: 20px; stroke: var(--green-dark, #1d4a18); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .door-icon { background: rgba(95,180,85,0.14); }
     .door-icon svg { stroke: #7fc775; }
   }
@@ -1768,7 +1773,7 @@
       0 4px 12px rgba(42,107,34,0.28);
   }
   .door-input-wrap button:active { transform: scale(.96); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .door-input-wrap { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .door-input-wrap:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
   }
@@ -1937,7 +1942,7 @@
     box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     transform: translateY(-1px);
   }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .confirm-btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .confirm-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(46,107,38,0.32); }
   }
@@ -1987,7 +1992,7 @@
   .nav-tab svg { width: 22px; height: 22px; pointer-events: none; }
   .nav-tab.active { color: var(--green); }
   .nav-tab:active { transform: scale(0.96); }
-  @media (prefers-color-scheme: dark) { .bottom-nav { background: rgba(15,20,16,0.96); } }
+  @media (prefers-color-scheme: dark) and (max-width: 1px) { .bottom-nav { background: rgba(15,20,16,0.96); } }
   /* Reserve bottom space on screens that show the nav so content doesn't hide under it */
   .screen { padding-bottom: 88px; }
 
@@ -2068,7 +2073,7 @@
   }
   .cta:not(.primary):hover .cta-arrow { opacity: 0.9; transform: translateX(2px); }
 
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .cta:not(.primary) {
       background: rgba(255,255,255,0.04);
       border-color: rgba(255,255,255,0.07);
@@ -2152,7 +2157,7 @@
     color: var(--ink);
   }
   .ghost-btn:active { background: var(--card); transform: scale(.985); }
-  @media (prefers-color-scheme: dark) {
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
     .ghost-btn { border-color: rgba(255,255,255,0.07); }
     .ghost-btn:hover { background: rgba(255,255,255,0.05); border-color: rgba(46,107,38,0.32); color: var(--ink); }
   }
@@ -2291,7 +2296,7 @@
     }
   }
 
-  @media (prefers-color-scheme: dark) { .consent-banner { background: #1a221d; } }
+  @media (prefers-color-scheme: dark) and (max-width: 1px) { .consent-banner { background: #1a221d; } }
 
   .ai-info-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--green-soft, #e8f3e6); color: var(--green); border: 0; font-weight: 800; font-size: 13px; cursor: pointer; vertical-align: middle; margin-left: 6px; line-height: 1; }
   .ai-info-btn:active { transform: scale(.92); }
