@@ -142,6 +142,301 @@
 
 
 
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.44 v5 LOADING + CONFIRM REBUILD
+     ═══════════════════════════════════════════════════════════════ */
+  .v5-loading-screen {
+    min-height: calc(100dvh - 120px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 24px;
+  }
+  .v5-loading-inner {
+    width: 100%;
+    max-width: 360px;
+    display: flex; flex-direction: column;
+    align-items: center;
+    gap: 0;
+  }
+  /* Retailer orbit — central S badge with 5 retailer chips orbiting */
+  .v5-loading-orbit {
+    position: relative;
+    width: 180px; height: 180px;
+    margin-bottom: 18px;
+    animation: v5-orbit-spin 8s linear infinite;
+  }
+  @keyframes v5-orbit-spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+  .v5-loading-core {
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    width: 80px; height: 80px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.25) inset,
+      0 8px 22px rgba(42,107,34,0.32);
+    display: flex; align-items: center; justify-content: center;
+    animation: v5-orbit-counter-spin 8s linear infinite;
+  }
+  @keyframes v5-orbit-counter-spin {
+    from { transform: translate(-50%, -50%) rotate(0deg); }
+    to   { transform: translate(-50%, -50%) rotate(-360deg); }
+  }
+  .v5-loading-core-letter {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 36px; font-weight: 800;
+    color: white;
+    letter-spacing: -0.04em;
+  }
+  .v5-orbit-chip {
+    position: absolute;
+    width: 32px; height: 32px;
+    border-radius: 999px;
+    background: white;
+    border: 1px solid rgba(20,32,26,0.08);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 11px; font-weight: 800;
+    color: var(--ink, #14201a);
+    box-shadow: 0 4px 10px rgba(20,32,26,0.08);
+    animation: v5-orbit-counter-spin 8s linear infinite;
+  }
+  .v5-orbit-chip--1 { top: 0; left: 50%; transform: translateX(-50%); }
+  .v5-orbit-chip--2 { top: 25%; right: 0; }
+  .v5-orbit-chip--3 { bottom: 25%; right: 0; font-size: 9.5px; }
+  .v5-orbit-chip--4 { bottom: 0; left: 50%; transform: translateX(-50%); font-size: 9.5px; }
+  .v5-orbit-chip--5 { top: 50%; left: 0; transform: translateY(-50%); }
+  @media (prefers-reduced-motion: reduce) {
+    .v5-loading-orbit, .v5-loading-core, .v5-orbit-chip { animation: none; }
+  }
+  /* Horizontal phase timeline */
+  .v5-loading-timeline {
+    width: 100%;
+    max-width: 320px;
+    display: flex; align-items: flex-start;
+    justify-content: space-between;
+    position: relative;
+    margin-top: 4px;
+  }
+  .v5-timeline-line {
+    position: absolute;
+    left: 14px; right: 14px;
+    top: 9px; height: 2px;
+    background: rgba(42,107,34,0.10);
+    border-radius: 999px;
+    z-index: 0;
+  }
+  .v5-timeline-line--progress {
+    right: auto;
+    width: 0%;
+    background: var(--green);
+    transition: width 320ms ease;
+  }
+  .v5-loading-timeline[data-phase="0"] .v5-timeline-line--progress { width: 0; }
+  .v5-loading-timeline[data-phase="1"] .v5-timeline-line--progress { width: calc((100% - 28px) * 0.333); }
+  .v5-loading-timeline[data-phase="2"] .v5-timeline-line--progress { width: calc((100% - 28px) * 0.666); }
+  .v5-loading-timeline[data-phase="3"] .v5-timeline-line--progress { width: calc(100% - 28px); }
+  .v5-timeline-node {
+    position: relative; z-index: 1;
+    flex: 1;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+  }
+  .v5-timeline-circle {
+    width: 20px; height: 20px;
+    border-radius: 999px;
+    border: 2px solid var(--border-strong, rgba(20,32,26,0.14));
+    background: white;
+    display: flex; align-items: center; justify-content: center;
+    transition: all 240ms;
+  }
+  .v5-timeline-node--active .v5-timeline-circle {
+    border-color: var(--green);
+    box-shadow: 0 0 0 4px rgba(95,180,85,0.22);
+  }
+  .v5-timeline-node--active .v5-timeline-circle::after {
+    content: '';
+    width: 7px; height: 7px;
+    border-radius: 999px;
+    background: var(--green);
+    animation: v5-node-pulse 1s ease-in-out infinite;
+  }
+  @keyframes v5-node-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.6; transform: scale(0.8); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v5-timeline-node--active .v5-timeline-circle::after { animation: none; }
+  }
+  .v5-timeline-node--done .v5-timeline-circle {
+    border-color: var(--green);
+    background: var(--green);
+  }
+  .v5-timeline-node--done .v5-timeline-circle::after {
+    content: '';
+    width: 11px; height: 11px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") no-repeat center / contain;
+  }
+  .v5-timeline-label {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 10.5px; font-weight: 600;
+    letter-spacing: -0.005em;
+    text-align: center; line-height: 1.25;
+    color: var(--ink-mute);
+    text-wrap: balance;
+    max-width: 72px;
+    opacity: 0.7;
+    transition: opacity .2s, font-weight .2s, color .2s;
+  }
+  .v5-timeline-node--active .v5-timeline-label,
+  .v5-timeline-node--done .v5-timeline-label {
+    color: var(--ink);
+    font-weight: 800;
+    opacity: 1;
+  }
+  /* Witty subtitle (engine: loading-text repurposed) */
+  .v5-loading-witty {
+    margin-top: 16px;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 12.5px; font-style: italic;
+    color: var(--ink-mute);
+    text-align: center; line-height: 1.4;
+    max-width: 280px;
+  }
+  .v5-loading-sub-hidden { display: none; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.44 CONFIRM/DISAMBIG — display headline + best-value sorted
+     ═══════════════════════════════════════════════════════════════ */
+  .v5-confirm-screen {
+    padding: 8px 0 24px;
+  }
+  .v5-confirm-back {
+    background: none; border: none;
+    padding: 6px 0;
+    display: inline-flex; align-items: center; gap: 4px;
+    color: var(--ink-soft);
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .v5-confirm-back:hover { color: var(--ink); }
+  .v5-confirm-title {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 28px; font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin: 0 0 4px;
+  }
+  .v5-confirm-sub {
+    font-size: 14px; color: var(--ink-mute);
+    margin: 0 0 18px;
+    line-height: 1.45;
+  }
+  /* Your-snap strip — v5 styling */
+  .v5-your-snap-strip {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 12px;
+    background: var(--green-soft, #e8f3e6);
+    border: 1px solid rgba(42,107,34,0.10);
+    border-radius: 12px;
+    margin-bottom: 14px;
+  }
+  .v5-your-snap-strip img {
+    width: 40px; height: 40px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #2a3a30 0%, #0f1410 100%);
+    object-fit: cover;
+    flex: 0 0 auto;
+  }
+  .v5-your-snap-strip:not(.show) { display: none; }
+  .v5-your-snap-meta { flex: 1; min-width: 0; }
+  .v5-your-snap-eyebrow {
+    font-size: 10.5px; font-weight: 800;
+    letter-spacing: 0.5px;
+    color: var(--green-dark, #1d4a18);
+    text-transform: uppercase;
+  }
+  .v5-your-snap-time {
+    font-size: 13px; color: var(--ink);
+    margin-top: 1px; font-weight: 600;
+  }
+  /* Confirm card — list of candidates, no surrounding box */
+  .v5-confirm-card {
+    display: flex; flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+    background: none;
+    border: none;
+    padding: 0;
+    box-shadow: none;
+  }
+  .v5-confirm-btn {
+    background: white;
+    border: 1px solid var(--border, rgba(20,32,26,0.08));
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+    text-align: left;
+    cursor: pointer;
+    color: var(--ink);
+    box-shadow: 0 2px 6px rgba(20,32,26,0.04);
+    position: relative;
+    min-height: 64px;
+    width: 100%;
+    font-family: inherit;
+    transition: transform .12s ease, box-shadow .15s ease;
+  }
+  .v5-confirm-btn:hover { box-shadow: 0 4px 12px rgba(20,32,26,0.08); transform: translateY(-1px); }
+  .v5-confirm-btn:active { transform: scale(.992) translateY(0); }
+  .v5-confirm-thumb {
+    width: 48px; height: 48px;
+    flex: 0 0 48px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--green-soft, #e8f3e6) 0%, rgba(46,107,38,0.12) 100%);
+    border: 1px solid rgba(46,107,38,0.10);
+  }
+  /* "None of these" ghost button */
+  .v5-confirm-none {
+    width: 100%;
+    background: rgba(255,255,255,0.6);
+    border: 1px dashed var(--border-strong, rgba(20,32,26,0.14));
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    color: var(--ink-soft);
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    margin-bottom: 8px;
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .v5-confirm-none:hover { background: rgba(255,255,255,0.85); border-color: rgba(46,107,38,0.32); color: var(--ink); }
+  /* Start over */
+  .v5-confirm-startover {
+    width: 100%;
+    background: none; border: none;
+    font-family: var(--font-body, 'Nunito');
+    font-size: 13px; font-weight: 700;
+    color: var(--ink-mute);
+    cursor: pointer;
+    padding: 10px;
+  }
+  .v5-confirm-startover:hover { color: var(--ink); }
+  /* Dark-mode mirror */
+  @media (prefers-color-scheme: dark) {
+    .v5-confirm-btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
+    .v5-your-snap-strip { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); }
+    .v5-confirm-none { background: rgba(255,255,255,0.04); }
+  }
+  /* ═══════════════════════════════════════════════════════════════ */
+
   /* ═══════════════════════════════════════════════════════════════
      V.43 v5 CAMERA + BARCODE REBUILD — full-bleed dark per v5 mock
      ═══════════════════════════════════════════════════════════════ */
@@ -1782,7 +2077,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v43</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v44</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -1892,29 +2187,96 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 </div>
 
-<div class="screen" id="screen-loading">
-  <div class="loading-wrap">
-    <div class="spinner"></div>
-    <p class="loading-text" id="loading-text">Identifying your product…</p>
-    <p class="loading-sub" id="loading-sub">~1–2 seconds</p>
+<div class="screen v5-loading-screen" id="screen-loading">
+  <!-- v5 LOADING REBUILD (V.44) — 4-phase horizontal timeline + retailer orbit -->
+  <div class="v5-loading-inner">
+
+    <!-- Retailer orbit spinner -->
+    <div class="v5-loading-orbit" aria-hidden="true">
+      <div class="v5-loading-core">
+        <span class="v5-loading-core-letter">S</span>
+      </div>
+      <span class="v5-orbit-chip v5-orbit-chip--1">A</span>
+      <span class="v5-orbit-chip v5-orbit-chip--2">C</span>
+      <span class="v5-orbit-chip v5-orbit-chip--3">JL</span>
+      <span class="v5-orbit-chip v5-orbit-chip--4">Ar</span>
+      <span class="v5-orbit-chip v5-orbit-chip--5">B</span>
+    </div>
+
+    <!-- Horizontal phase timeline -->
+    <div class="v5-loading-timeline" id="v5-loading-timeline" data-phase="0">
+      <div class="v5-timeline-line"></div>
+      <div class="v5-timeline-line v5-timeline-line--progress" id="v5-timeline-progress"></div>
+      <div class="v5-timeline-node v5-timeline-node--active" data-phase="0">
+        <div class="v5-timeline-circle"></div>
+        <div class="v5-timeline-label">Identifying the goods</div>
+      </div>
+      <div class="v5-timeline-node" data-phase="1">
+        <div class="v5-timeline-circle"></div>
+        <div class="v5-timeline-label">Checking UK prices</div>
+      </div>
+      <div class="v5-timeline-node" data-phase="2">
+        <div class="v5-timeline-circle"></div>
+        <div class="v5-timeline-label">Checking retailers</div>
+      </div>
+      <div class="v5-timeline-node" data-phase="3">
+        <div class="v5-timeline-circle"></div>
+        <div class="v5-timeline-label">Drafting verdict</div>
+      </div>
+    </div>
+
+    <!-- Engine: keep loading-text + loading-sub IDs so JS can populate them -->
+    <p class="loading-text v5-loading-witty" id="loading-text">Usually under 4 seconds.</p>
+    <p class="loading-sub v5-loading-sub-hidden" id="loading-sub" hidden>~1-2 seconds</p>
   </div>
 </div>
 
-<div class="screen" id="screen-confirm">
-  <div class="badge-row"><span class="badge amber">Quick check</span></div>
-  <h1 class="identify-title">Which one did you mean?</h1>
-  <p class="identify-sub" id="confirm-sub">We saw two possibilities. Tap the right one.</p>
-  <div class="your-snap-strip" id="your-snap-strip"><img id="your-snap-img" alt="Your snap"><span>Your snap</span></div>
-  <!-- Wave HH — dynamic 2-4 candidate buttons, populated by renderConfirm() -->
-  <div class="confirm-card" id="confirm-list">
-    <button class="confirm-btn" id="confirm-a"><span class="confirm-thumb-empty" id="confirm-a-thumb"></span><span class="confirm-text" id="confirm-a-text"></span></button>
-    <button class="confirm-btn" id="confirm-b"><span class="confirm-thumb-empty" id="confirm-b-thumb"></span><span class="confirm-text" id="confirm-b-text"></span></button>
+<div class="screen v5-confirm-screen" id="screen-confirm">
+  <!-- v5 CONFIRM REBUILD (V.44) — display headline + best-value-on-top candidates -->
+  <button class="v5-confirm-back" type="button" onclick="goHome()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+    </svg>
+    Back
+  </button>
+
+  <!-- Hidden engine ID (badge-row was used for "Quick check" label, no longer surfaced) -->
+  <div class="badge-row" hidden><span class="badge amber">Quick check</span></div>
+
+  <h1 class="v5-confirm-title identify-title">Which one?</h1>
+  <p class="v5-confirm-sub identify-sub" id="confirm-sub">Best value on top.</p>
+
+  <!-- Your-snap reference strip (engine: your-snap-strip / your-snap-img) -->
+  <div class="your-snap-strip v5-your-snap-strip" id="your-snap-strip">
+    <img id="your-snap-img" alt="Your snap">
+    <div class="v5-your-snap-meta">
+      <div class="v5-your-snap-eyebrow">YOUR SNAP</div>
+      <div class="v5-your-snap-time">Just now</div>
+    </div>
   </div>
-  <!-- Wave HH — "None of these" escape hatch -> Type screen pre-filled with brand+category -->
-  <div class="actions-row" style="display:flex;flex-direction:column;gap:8px;">
-    <button class="ghost-btn" id="confirm-none-btn" type="button">None of these — let me type it</button>
-    <button class="ghost-btn" onclick="goHome()" type="button">← Start over</button>
+
+  <!-- Dynamic 2-4 candidate buttons (engine: confirm-list / confirm-a / confirm-b -
+       renderConfirm() injects more buttons + populates per-unit/tier metadata) -->
+  <div class="confirm-card v5-confirm-card" id="confirm-list">
+    <button class="confirm-btn v5-confirm-btn" id="confirm-a">
+      <span class="confirm-thumb-empty v5-confirm-thumb" id="confirm-a-thumb"></span>
+      <span class="confirm-text v5-confirm-text" id="confirm-a-text"></span>
+    </button>
+    <button class="confirm-btn v5-confirm-btn" id="confirm-b">
+      <span class="confirm-thumb-empty v5-confirm-thumb" id="confirm-b-thumb"></span>
+      <span class="confirm-text v5-confirm-text" id="confirm-b-text"></span>
+    </button>
   </div>
+
+  <!-- "None of these" ghost button -->
+  <button class="v5-confirm-none ghost-btn" id="confirm-none-btn" type="button">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+      <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+    </svg>
+    None of these - let me type it
+  </button>
+
+  <button class="v5-confirm-startover ghost-btn" type="button" onclick="goHome()">&larr; Start over</button>
 </div>
 
 <div class="screen" id="screen-result" style="position:relative;">
