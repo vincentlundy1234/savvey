@@ -2330,7 +2330,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v57</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v58</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4135,7 +4135,19 @@ function renderSavveySays(ss, verdict) {
   const hasVerified = ss && (_livePriceVal || _usedPriceVal || ss.amazon_rating || ss.price_take);
   const hasQual     = ss && ss.confidence === 'high' && (ss.timing_advice || ss.consensus);
   const hasContent  = hasVerified || hasQual;
-  if (!hasContent) { wrap.classList.add('empty'); return; }
+  // V.58 - when Amazon can't verify a match (le creuset casserole 24cm,
+  // niche grocery, refurb-only stock), show a single honest row instead
+  // of silently hiding the Savvey Says block. Keeps the branded label
+  // present so the user knows we tried.
+  if (!hasContent) {
+    const div = document.createElement('div');
+    div.className = 'savvey-row';
+    div.innerHTML = `<span class="em">ℹ️</span><div class="body"><p class="ttl">Not on Amazon UK</p><p class="val">Couldn't verify a live listing - try the alternative retailers below.</p></div>`;
+    rows.appendChild(div);
+    wrap.classList.remove('empty');
+    track('savvey_says_empty_fallback');
+    return;
+  }
   const rowsData = [
     { em: '💷', ttl: 'Live at Amazon UK', val: _livePriceVal },
     { em: '🔁', ttl: 'Also seen used',    val: _usedPriceVal },
