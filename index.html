@@ -75,11 +75,30 @@
     -webkit-font-smoothing: antialiased;
   }
   button, input { font-family: inherit; }
-  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
-  .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.02em; color: var(--green); }
+  /* Wave V.14 — topbar + logo: display-grade wordmark + tighter hint per v5 */
+  .topbar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0 8px;
+  }
+  .logo {
+    font-family: var(--font-body, 'Nunito');
+    font-weight: 800; font-size: 22px;
+    letter-spacing: -0.022em;
+    color: var(--green);
+    line-height: 1;
+    cursor: pointer;
+    transition: transform .12s ease;
+  }
+  .logo:hover { transform: scale(1.02); }
+  .logo:active { transform: scale(.96); }
   .logo .y { color: var(--amber); }
   .logo .dot { color: var(--green-dark); }   /* was red — retired per brand pack 4 May 2026 */
-  .hint { font-size: 12px; color: var(--ink-mute); font-weight: 600; }
+  .hint {
+    font-size: 11.5px; color: var(--ink-mute);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
   .screen { display: none; }
   /* Wave V.2 — Welcome first-visit screen per v5 design */
   #screen-welcome {
@@ -191,8 +210,18 @@
       border-color: rgba(214,137,16,0.28);
     }
   }
-  .screen.active { display: block; animation: fadeIn .22s ease; }
-  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  /* Wave V.14 — screen entrance: smoother cubic-bezier per v5 */
+  .screen.active {
+    display: block;
+    animation: fadeIn .28s cubic-bezier(.2,.8,.2,1) both;
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .screen.active { animation: none; }
+  }
   /* Wave V.1 — v5 hero typography */
   /* Wave V.8 — tagline + tagsub: more confident hierarchy per v5 */
   .tagline {
@@ -706,57 +735,9 @@
   .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
   .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
-  /* Wave V.13 — try-again-btn: prominent green CTA living inside the error card */
-  .try-again-btn.ghost-btn {
-    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
-    color: white;
-    border: none;
-    font-weight: 800;
-    padding: 13px 18px;
-    box-shadow:
-      0 1px 0 rgba(255,255,255,0.18) inset,
-      0 -1px 0 rgba(0,0,0,0.10) inset,
-      0 4px 12px rgba(42,107,34,0.22);
-  }
-  .try-again-btn.ghost-btn:hover {
-    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 50%, var(--green-dark, #1d4a18) 100%);
-    color: white;
-    border-color: transparent;
-    box-shadow:
-      0 1px 0 rgba(255,255,255,0.22) inset,
-      0 -1px 0 rgba(0,0,0,0.12) inset,
-      0 6px 16px rgba(42,107,34,0.28);
-  }
-  /* Wave V.13 — error card per v5: amber-warm warmth, not red-alert */
-  .error-card {
-    background: linear-gradient(180deg, #fef7e8 0%, #fbeed4 100%);
-    border: 1px solid rgba(214,137,16,0.22);
-    border-radius: 20px;
-    padding: 20px;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(214,137,16,0.08);
-  }
-  .error-title {
-    font-family: var(--font-display, 'Nunito');
-    font-weight: 800; font-size: 20px;
-    margin: 0 0 8px;
-    color: var(--amber-deep, #8a6515);
-    letter-spacing: -0.015em;
-    line-height: 1.2;
-  }
-  .error-sub {
-    color: var(--ink-soft);
-    font-size: 14.5px;
-    margin: 0 0 18px;
-    line-height: 1.45;
-  }
-  @media (prefers-color-scheme: dark) {
-    .error-card {
-      background: linear-gradient(180deg, rgba(214,137,16,0.10) 0%, rgba(214,137,16,0.06) 100%);
-      border-color: rgba(214,137,16,0.28);
-      box-shadow: none;
-    }
-    .error-title { color: #e8a73a; }
-  }
+  .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
+  .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
+  .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
   /* Wave V.1 — camera chrome trim per v5: corner brackets only (no continuous dashed
      line), X icon top-left replacing Cancel pill, ~95% viewport fill */
   .cam-wrap { position: relative; background: #000; border-radius: var(--r-md); overflow: hidden; aspect-ratio: 3/4.2; margin: 8px 0; }
@@ -953,7 +934,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v13</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v14</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -1047,7 +1028,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="error-card">
     <p class="error-title" id="error-title">We didn't catch that.</p>
     <p class="error-sub" id="error-sub">Try a clearer photo, a different URL, or type the product name.</p>
-    <button class="ghost-btn try-again-btn" onclick="goHome()">Try again</button>
+    <button class="ghost-btn" onclick="goHome()" style="background:var(--green);color:white;border-color:var(--green-dark);">Try again</button>
   </div>
 </div>
 
