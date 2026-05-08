@@ -748,10 +748,9 @@
   .v5-cam-hint {
     position: absolute;
     top: calc(env(safe-area-inset-top, 12px) + 56px);
-    /* V.48 hotfix — left+right+margin auto wasn't centering with width:fit-content
-       on absolute-positioned element. Switch to left:50% + transform translate-x. */
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0; right: 0;
+    margin: 0 auto;
+    width: fit-content;
     padding: 6px 14px;
     border-radius: 999px;
     background: rgba(0,0,0,0.40);
@@ -942,18 +941,7 @@
     margin: 0;
     z-index: 10;
   }
-
-  /* V.48 hotfix — V.45's `.v5-bottom-nav { display: grid !important }` was
-     winning over V.43's body:has() hide rule. Add the same !important to
-     beat it. */
-  body:has(#screen-camera.active) .v5-bottom-nav,
-  body:has(#screen-camera.active) .bottom-nav,
-  body:has(#screen-barcode.active) .v5-bottom-nav,
-  body:has(#screen-barcode.active) .bottom-nav,
-  body:has(#screen-loading.active) .v5-bottom-nav,
-  body:has(#screen-loading.active) .bottom-nav { display: none !important; }
-
-    /* hide bottom-nav on camera/barcode (already done via existing CSS but keep) */
+  /* hide bottom-nav on camera/barcode (already done via existing CSS but keep) */
   body:has(#screen-camera.active) .bottom-nav,
   body:has(#screen-barcode.active) .bottom-nav { display: none; }
   /* ═══════════════════════════════════════════════════════════════ */
@@ -2313,7 +2301,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </div>
         <div class="v5-door-input-row">
           <input id="text-input" type="text" inputmode="search" enterkeyhint="search" placeholder="Bose QC45, AF400UK, iPhone 15…">
-          <button onclick="goSearch()" type="button">Search</button>
+          <button onclick="goText()" type="button">Search</button>
         </div>
       </div>
     </div>
@@ -2330,7 +2318,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v48</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v49</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
