@@ -289,10 +289,60 @@
   .door-title { font-weight: 800; font-size: 20px; margin: 0 0 4px; line-height: 1.2; }
   .door.primary .door-title { font-size: 24px; }
   .door-sub { color: var(--ink-soft); font-size: 14px; margin: 0; line-height: 1.4; }
-  .door-input-wrap { margin-top: 12px; display: flex; gap: 8px; }
-  .door-input-wrap input { flex: 1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 15px; outline: none; background: white; color: var(--ink); }
-  .door-input-wrap input:focus { border-color: var(--green); }
-  .door-input-wrap button { background: var(--green); color: white; border: none; border-radius: var(--r-sm); padding: 0 18px; font-weight: 700; font-size: 15px; cursor: pointer; }
+  /* Wave V.10 — door input field polish per v5: refined focus ring + Go button */
+  .door-input-wrap {
+    margin-top: 14px;
+    display: flex;
+    gap: 8px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(46,107,38,0.10);
+    border-radius: 14px;
+    padding: 4px;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .door-input-wrap:focus-within {
+    background: rgba(255,255,255,0.95);
+    border-color: rgba(46,107,38,0.32);
+    box-shadow: 0 0 0 3px rgba(46,107,38,0.10);
+  }
+  .door-input-wrap input {
+    flex: 1; min-width: 0;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 11px;
+    font-size: 15px;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    -webkit-appearance: none; appearance: none;
+  }
+  .door-input-wrap input::placeholder { color: var(--ink-mute); }
+  .door-input-wrap button {
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    color: white;
+    border: none;
+    border-radius: 11px;
+    padding: 0 20px;
+    font-weight: 800; font-size: 15px;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 -1px 0 rgba(0,0,0,0.08) inset,
+      0 2px 8px rgba(42,107,34,0.22);
+    transition: transform .12s ease, box-shadow .15s ease;
+  }
+  .door-input-wrap button:hover {
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.22) inset,
+      0 -1px 0 rgba(0,0,0,0.10) inset,
+      0 4px 12px rgba(42,107,34,0.28);
+  }
+  .door-input-wrap button:active { transform: scale(.96); }
+  @media (prefers-color-scheme: dark) {
+    .door-input-wrap { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
+    .door-input-wrap:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
+  }
   /* Wave V.3 — loading screen with green-pulse + softer cream backdrop per v5 */
   .loading-wrap { padding: 70px 0 60px; text-align: center; position: relative; }
   .loading-wrap::before {
@@ -855,7 +905,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v9</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v10</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
