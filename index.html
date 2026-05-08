@@ -446,10 +446,52 @@
     max-width: 42ch;
   }
   /* Wave V.3 — hero image: bigger 4:3, softer shadow, bigger radius per v5 */
-  .hero-img-wrap { width: 100%; aspect-ratio: 4/3; background: var(--card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin: 6px 0 20px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
-  .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 14px; opacity: 0; transition: opacity .35s ease; }
+  /* Wave V.26 — hero image: skeleton shimmer while loading + crisp loaded state per v5 */
+  .hero-img-wrap {
+    width: 100%;
+    aspect-ratio: 4/3;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    overflow: hidden;
+    margin: 6px 0 20px;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 6px 18px rgba(20,32,26,0.04);
+    position: relative;
+  }
+  .hero-img-wrap::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(
+      90deg,
+      rgba(46,107,38,0.02) 0%,
+      rgba(46,107,38,0.06) 50%,
+      rgba(46,107,38,0.02) 100%
+    );
+    background-size: 200% 100%;
+    animation: hero-shimmer 1.6s ease-in-out infinite;
+    z-index: 0;
+  }
+  .hero-img-wrap.loaded::before { display: none; }
+  @keyframes hero-shimmer {
+    0%   { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+  .hero-img-wrap img {
+    width: 100%; height: 100%;
+    object-fit: contain;
+    padding: 14px;
+    opacity: 0;
+    transition: opacity .4s cubic-bezier(.2,.8,.2,1);
+    position: relative;
+    z-index: 1;
+  }
   .hero-img-wrap img.loaded { opacity: 1; }
   .hero-img-wrap.empty { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .hero-img-wrap::before { animation: none; }
+    .hero-img-wrap img { transition: none; }
+  }
   /* Wave V.3 — Savvey Says block: cleaner card, tighter hierarchy, accent line */
   .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px 18px; margin: 0 0 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
   .savvey-says::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 100%); }
@@ -665,18 +707,7 @@
   .cta.primary .cta-sub { color: rgba(255,255,255,.8); }
   .cta-arrow { color: var(--ink-mute); font-size: 20px; flex-shrink: 0; }
   .cta.primary .cta-arrow { color: rgba(255,255,255,.85); }
-  /* Wave V.25 — footer trust block: more deliberate spacing */
-  .footer-trust {
-    margin-top: 24px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(46,107,38,0.06);
-  }
-  /* Wave V.25 — actions-row spacing per v5 */
-  .actions-row {
-    display: flex; gap: 10px;
-    margin: 20px 0 24px;
-  }
-  .actions-row .ghost-btn { flex: 1; }
+  .actions-row { display: flex; gap: 8px; margin: 18px 0 24px; }
   /* Wave V.9 — ghost-btn: subtle hover lift per v5 */
   .ghost-btn {
     flex: 1; background: transparent;
@@ -958,10 +989,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 
   <footer class="trust-footer">
-    <div class="footer-trust">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v25</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
-    </div>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v26</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -2434,7 +2463,7 @@ function renderResult(displayName, payload) {
   // mismatched/stale images. Falls back to the existing hero search if absent.
   const verifiedThumb = verified && typeof verified.thumbnail === 'string' && /^https?:\/\//i.test(verified.thumbnail) ? verified.thumbnail : null;
   if (verifiedThumb) {
-    heroImg.onload  = () => { heroWrap.classList.remove('empty'); heroImg.classList.add('loaded'); };
+    heroImg.onload  = () => { heroWrap.classList.remove('empty'); heroWrap.classList.add('loaded'); heroImg.classList.add('loaded'); };
     heroImg.onerror = () => { /* Wave BB: silent - no /api/image fallback after Wave R deletion */ };
     heroImg.src = verifiedThumb;
   } else {
