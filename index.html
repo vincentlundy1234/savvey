@@ -604,6 +604,23 @@
     overflow: hidden !important;
     max-width: 100% !important;
   }
+  /* V.66 - kill the V.64 ::before checkmark on verdict pill. The existing
+     .v5-verdict-pill-icon SVG span is the sole tick. ::before was producing
+     a second visible checkmark. */
+  .verdict-pill::before,
+  .v5-verdict-pill::before { content: none !important; display: none !important; background: none !important; }
+  .v5-verdict-pill-icon {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 18px !important; height: 18px !important;
+    border-radius: 999px !important;
+    background: rgba(255,255,255,0.22) !important;
+    color: #fff !important;
+    flex: 0 0 auto !important;
+  }
+  .v5-verdict-pill-icon svg { width: 12px; height: 12px; }
+
 
 
 
