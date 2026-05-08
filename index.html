@@ -139,7 +139,215 @@
     font-size: 22px; font-weight: 700; font-style: italic;
     color: var(--ink-soft);
   }
-  .welcome-spacer { flex: 1; min-height: 24px; }
+
+  /* ═══════════════════════════════════════════════════════════════
+     V.40 v5 HOME REBUILD — actual layout from Claude Design v5
+     Replaces the v3 home that was being polished via splice.
+     ═══════════════════════════════════════════════════════════════ */
+  .v5-home-wrap {
+    padding: 8px 18px 20px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .v5-home-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 36px;
+    padding-top: 8px;
+  }
+  .v5-wordmark {
+    font-family: var(--font-body, 'Nunito');
+    font-weight: 800; font-size: 26px;
+    letter-spacing: -0.022em;
+    color: var(--green);
+    line-height: 1;
+  }
+  .v5-wordmark .y { color: var(--amber); }
+  .v5-wordmark .dot { color: var(--green-dark); }
+  /* Hello Savver greeting — display 30px per v5 */
+  .v5-greeting {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 30px; font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin: 0 0 56px;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .v5-greeting-smile {
+    color: var(--green);
+    font-weight: 800;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v5-greeting-smile { color: #fff; }
+  }
+
+  /* Hero Snap door — gradient bg, 24px radius, 132px min-height, content bottom */
+  .v5-hero-snap {
+    width: 100%;
+    background: linear-gradient(135deg, var(--green-light, #5fb455) 0%, var(--green) 55%, var(--green-deep, #143d10) 100%);
+    border: none;
+    border-radius: 24px;
+    padding: 22px 22px 20px;
+    color: #fff;
+    text-align: left;
+    cursor: pointer;
+    overflow: hidden;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 12px 28px rgba(42,107,34,0.22);
+    margin-bottom: 10px;
+    min-height: 132px;
+    position: relative;
+    transition: transform .12s ease, box-shadow .25s ease;
+  }
+  .v5-hero-snap:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 16px 36px rgba(42,107,34,0.28); }
+  .v5-hero-snap:active { transform: scale(.992); }
+  @media (prefers-color-scheme: dark) {
+    .v5-hero-snap { background: linear-gradient(135deg, var(--green-dark) 0%, #143d10 100%); }
+  }
+  .v5-hero-snap-content {
+    position: relative;
+    display: flex; flex-direction: column;
+    height: 100%;
+    justify-content: flex-end;
+  }
+  .v5-hero-snap-title {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 26px; font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+    margin-bottom: 6px;
+  }
+  .v5-hero-snap-sub {
+    font-size: 13.5px; opacity: 0.86; line-height: 1.4;
+  }
+
+  /* 3 secondary doors — single quiet palette */
+  .v5-secondary-doors {
+    display: flex; flex-direction: column; gap: 8px;
+    margin-bottom: 32px;
+  }
+  .v5-door {
+    width: 100%;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(20,32,26,0.06);
+    border-radius: 18px;
+    padding: 16px 18px;
+    color: var(--ink);
+    text-align: left;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 14px;
+    min-height: 76px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
+    transition: background .15s ease, border-color .15s ease, box-shadow .15s ease, transform .12s ease;
+    font-family: inherit;
+  }
+  .v5-door:hover {
+    background: rgba(255,255,255,0.95);
+    border-color: rgba(46,107,38,0.16);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 4px 12px rgba(20,32,26,0.05);
+    transform: translateY(-1px);
+  }
+  .v5-door:active { transform: scale(.992) translateY(0); }
+  @media (prefers-color-scheme: dark) {
+    .v5-door {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.07);
+      box-shadow: none;
+      color: var(--ink);
+    }
+    .v5-door:hover { background: rgba(255,255,255,0.07); border-color: rgba(46,107,38,0.32); }
+  }
+  /* Door icon container — 42x42 rounded square, green-soft bg */
+  .v5-door-icon {
+    width: 42px; height: 42px;
+    border-radius: 12px;
+    background: var(--green-soft, #e8f3e6);
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+    color: var(--green-dark, #1d4a18);
+  }
+  .v5-door-icon svg { width: 20px; height: 20px; }
+  @media (prefers-color-scheme: dark) {
+    .v5-door-icon { background: rgba(95,180,85,0.14); color: #7fc775; }
+  }
+  .v5-door-text { flex: 1; min-width: 0; }
+  .v5-door-title {
+    font-family: var(--font-body, 'Nunito');
+    font-size: 16px; font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    color: var(--ink);
+  }
+  .v5-door-sub {
+    font-size: 13px;
+    color: var(--ink-soft);
+    margin-top: 3px;
+    line-height: 1.3;
+  }
+
+  /* Doors with embedded input (Paste / Type) — input row appears under sub text */
+  .v5-door--input {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    cursor: default;
+  }
+  .v5-door--input .v5-door-input-row {
+    flex: 1 0 100%;
+    margin-top: 12px;
+    display: flex;
+    gap: 8px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(46,107,38,0.10);
+    border-radius: 14px;
+    padding: 4px;
+    transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+  }
+  .v5-door--input .v5-door-input-row:focus-within {
+    background: rgba(255,255,255,0.95);
+    border-color: rgba(46,107,38,0.32);
+    box-shadow: 0 0 0 3px rgba(46,107,38,0.10);
+  }
+  .v5-door--input input {
+    flex: 1; min-width: 0;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 11px;
+    font-size: 15px;
+    outline: none;
+    background: transparent;
+    color: var(--ink);
+    -webkit-appearance: none; appearance: none;
+    font-family: inherit;
+  }
+  .v5-door--input input::placeholder { color: var(--ink-mute); }
+  .v5-door--input button {
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    color: white;
+    border: none;
+    border-radius: 11px;
+    padding: 0 18px;
+    font-weight: 800; font-size: 14px;
+    letter-spacing: 0.01em;
+    cursor: pointer;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 -1px 0 rgba(0,0,0,0.08) inset, 0 2px 8px rgba(42,107,34,0.22);
+    transition: transform .12s ease, box-shadow .15s ease;
+    font-family: inherit;
+  }
+  .v5-door--input button:active { transform: scale(.96); }
+  @media (prefers-color-scheme: dark) {
+    .v5-door--input .v5-door-input-row { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
+    .v5-door--input .v5-door-input-row:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
+  }
+  /* hide the engine-stub (counter / recent chips) which v5 home doesn't show */
+  .v5-engine-stub { display: none !important; }
+  /* footer trust block for v5 home */
+  .v5-home-footer {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(46,107,38,0.06);
+  }
+  /* ═══════════════════════════════════════════════════════════════ */
+
+    .welcome-spacer { flex: 1; min-height: 24px; }
   .welcome-headline {
     font-family: var(--font-display, 'Nunito');
     font-size: 38px; font-weight: 800; line-height: 1.05;
@@ -924,62 +1132,91 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen active" id="screen-home">
-  <!-- Wave V.1 — v5 design copy + "a snap" green highlight -->
-  <h1 class="tagline">The honest UK price,<br>in <span class="tagline-accent">a snap</span>.</h1>
-  <p class="tagsub">Snap your shelf. Restock without thinking. Free, no sign-up, UK only.</p>
-  <!-- Wave V.4 — counter line: cleaner copy + tighter visual -->
-  <p id="counter" style="margin:0 0 22px;font-size:12.5px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;display:flex;align-items:center;gap:6px;">
-    <span class="counter-dot" style="display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--green);"></span>
-    <span id="counter-num">—</span> products identified by Savvey shoppers this week
-  </p>
-
-  <button class="door primary" onclick="goSnap()">
-    <div class="door-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
-    <h2 class="door-title">Snap a product</h2>
-    <p class="door-sub">In-store? Snap the box or the product — we'll identify it instantly.</p>
-    <p class="door-sub" style="margin-top:8px;font-size:13px;opacity:.85;">Or <a href="#" onclick="event.preventDefault();event.stopPropagation();document.getElementById('photo-upload').click();" style="color:white;text-decoration:underline;font-weight:700;">upload a photo</a></p>
-  </button>
-  <input id="photo-upload" type="file" accept="image/*" hidden onchange="handlePhotoUpload(event)">
-  <input id="photo-fallback" type="file" accept="image/*" capture="environment" hidden onchange="handlePhotoUpload(event)">
-
-  <button class="door" onclick="goBarcode()" style="display:flex;align-items:center;gap:14px;text-align:left;">
-    <div class="door-icon" style="margin-bottom:0;flex-shrink:0;"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/></svg></div>
-    <div style="flex:1;">
-      <h2 class="door-title" style="font-size:18px;">Scan a barcode</h2>
-      <p class="door-sub">Decoded on your device — 0ms server hit.</p>
+  <!-- v5 REBUILD (V.40): rebuilt to match Claude Design v5 spec -->
+  <!-- Top wordmark + Hello Savver :) greeting -->
+  <div class="v5-home-wrap">
+    <div class="v5-home-header">
+      <div class="v5-wordmark" aria-label="Savvey">SAVVE<span class="y">Y</span><span class="dot">.</span></div>
     </div>
-    <span style="color:var(--ink-mute);font-size:18px;flex-shrink:0;">→</span>
-  </button>
 
-  <div class="door">
-    <div class="door-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
-    <h2 class="door-title">Paste a retailer link</h2>
-    <p class="door-sub">Saw it on Instagram? Paste the URL.</p>
-    <div class="door-input-wrap">
-      <input id="url-input" type="url" inputmode="url" placeholder="https://www.argos.co.uk/...">
-      <button onclick="goUrl()">Go</button>
+    <h1 class="v5-greeting" id="tagline">Hello Savver <span class="v5-greeting-smile">:)</span></h1>
+
+    <!-- Hero Snap door per v5 — gradient bg, 24px radius, content bottom-aligned -->
+    <button class="v5-hero-snap" onclick="goSnap()" type="button">
+      <div class="v5-hero-snap-content">
+        <div class="v5-hero-snap-title">Snap a product</div>
+        <div class="v5-hero-snap-sub">Restock more simply at home or check a price in-store.</div>
+      </div>
+    </button>
+
+    <!-- Hidden file inputs preserved for engine compat -->
+    <input id="photo-upload" type="file" accept="image/*" hidden onchange="handlePhotoUpload(event)">
+    <input id="photo-fallback" type="file" accept="image/*" capture="environment" hidden onchange="handlePhotoUpload(event)">
+
+    <!-- 3 secondary doors per v5 — single quiet palette, 76px min-height, 42x42 icon container -->
+    <div class="v5-secondary-doors">
+      <button class="v5-door" onclick="goBarcode()" type="button">
+        <div class="v5-door-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/>
+          </svg>
+        </div>
+        <div class="v5-door-text">
+          <div class="v5-door-title">Scan a barcode</div>
+          <div class="v5-door-sub">Any side of the box</div>
+        </div>
+      </button>
+
+      <div class="v5-door v5-door--input" id="paste-door">
+        <div class="v5-door-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+          </svg>
+        </div>
+        <div class="v5-door-text">
+          <div class="v5-door-title">Paste a link</div>
+          <div class="v5-door-sub">From any UK retailer</div>
+        </div>
+        <div class="v5-door-input-row">
+          <input id="url-input" type="url" inputmode="url" placeholder="https://www.argos.co.uk/...">
+          <button onclick="goUrl()" type="button">Go</button>
+        </div>
+      </div>
+
+      <div class="v5-door v5-door--input" id="type-door">
+        <div class="v5-door-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+        <div class="v5-door-text">
+          <div class="v5-door-title">Type a name</div>
+          <div class="v5-door-sub">"Bose QC45", "AF400UK"…</div>
+        </div>
+        <div class="v5-door-input-row">
+          <input id="text-input" type="text" inputmode="search" enterkeyhint="search" placeholder="Bose QC45, AF400UK, iPhone 15…">
+          <button onclick="goSearch()" type="button">Search</button>
+        </div>
+      </div>
     </div>
-  </div>
 
-  <div class="door">
-    <div class="door-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <h2 class="door-title">Search by name or model</h2>
-    <p class="door-sub">Know what you want? Type it.</p>
-    <div class="door-input-wrap">
-      <input id="text-input" type="text" inputmode="search" enterkeyhint="search" placeholder="Bose QC45, AF400UK, iPhone 15…">
-      <button onclick="goText()">Go</button>
+    <!-- Engine-facing elements kept in DOM (hidden) for JS compat: counter, recent chips -->
+    <div class="v5-engine-stub" hidden aria-hidden="true">
+      <p id="counter"><span id="counter-num">—</span></p>
+      <div id="recent-row" hidden>
+        <div id="recent-label-wrap"><span class="recent-label">Recent</span><button class="recent-clear" id="recent-clear" type="button">Clear</button></div>
+        <div class="recent-chips" id="recent-chips"></div>
+      </div>
     </div>
-  </div>
 
-  <div class="recent-row" id="recent-row" hidden>
-    <p class="recent-label"><span>Recent</span><button class="recent-clear" onclick="clearRecents()">Clear</button></p>
-    <div class="recent-chips" id="recent-chips"></div>
+    <!-- Trust footer per v5 -->
+    <footer class="v5-home-footer">
+      <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v40</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    </footer>
   </div>
-
-  <footer class="trust-footer">
-    <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v32</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
-  </footer>
 </div>
 
 <div class="screen" id="screen-barcode">
