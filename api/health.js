@@ -21,7 +21,7 @@ import { applySecurityHeaders } from './_shared.js';
 
 export const config = { runtime: 'nodejs', maxDuration: 5 };
 
-const VERSION = 'health.js v1.1.0';
+const VERSION = 'health.js v1.2.0';
 
 export default function handler(req, res) {
   applySecurityHeaders(res, '*');
@@ -35,6 +35,7 @@ export default function handler(req, res) {
   // that lands without one of these will show up here before users hit it.
   const env = {
     anthropic: Boolean(process.env.ANTHROPIC_API_KEY),
+    serpapi:   Boolean(process.env.SERPAPI_KEY),
     kv:        Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN),
   };
 
