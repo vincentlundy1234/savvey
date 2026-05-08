@@ -645,71 +645,49 @@
   }
   .cta { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); text-decoration: none; color: var(--ink); box-shadow: var(--shadow-sm); transition: transform .15s ease; }
   .cta:active { transform: scale(.985); }
-  /* Wave V.27 — Amazon primary CTA: v5 hero gradient + compound shadow + display weight */
-  .cta.primary {
-    background:
-      radial-gradient(ellipse at 22% 18%, rgba(255,255,255,0.18) 0%, rgba(255,255,255,0) 55%),
-      linear-gradient(135deg, var(--green-light, #5fb455) 0%, var(--green) 50%, var(--green-dark, #1d4a18) 100%);
-    color: white;
-    border: none;
-    padding: 22px 22px;
-    border-radius: 22px;
-    box-shadow:
-      0 1px 0 rgba(255,255,255,0.22) inset,
-      0 -1px 0 rgba(0,0,0,0.10) inset,
-      0 6px 20px rgba(42,107,34,0.30),
-      0 1px 2px rgba(0,0,0,0.06);
-    margin-bottom: 6px;
-    position: relative;
-    overflow: hidden;
-    transition: transform .15s ease, box-shadow .25s ease;
-  }
-  .cta.primary::after {
-    content: ''; position: absolute; inset: 0;
-    background: radial-gradient(ellipse at 88% 110%, rgba(0,0,0,0.16) 0%, rgba(0,0,0,0) 60%);
-    pointer-events: none;
-  }
-  .cta.primary:hover { box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 -1px 0 rgba(0,0,0,0.10) inset, 0 10px 26px rgba(42,107,34,0.34), 0 1px 2px rgba(0,0,0,0.06); }
-  .cta.primary:active { transform: scale(.992); }
-  .cta.primary .cta-name {
+  .cta.primary { background: var(--green); color: white; border: none; padding: 22px 20px; box-shadow: 0 4px 14px rgba(42,107,34,.28), 0 1px 2px rgba(0,0,0,.06); margin-bottom: 4px; }
+  .cta.primary .cta-name { font-size: 19px; font-weight: 800; letter-spacing: -0.01em; }
+  .cta.primary .cta-arrow { font-size: 24px; font-weight: 700; }
+  /* Wave V.28 — cta-mark base: refined typography + inset highlight per v5 */
+  .cta-mark {
+    width: 44px; height: 44px;
+    border-radius: 11px;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--bg);
+    flex-shrink: 0;
     font-family: var(--font-display, 'Nunito');
-    font-size: 19px; font-weight: 800;
-    letter-spacing: -0.012em;
-    position: relative; z-index: 1;
+    font-weight: 800; font-size: 12px;
+    color: var(--ink);
+    letter-spacing: -0.022em;
+    line-height: 1;
+    text-align: center;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.5) inset, 0 1px 2px rgba(0,0,0,0.08);
   }
-  .cta.primary .cta-sub {
-    color: rgba(255,255,255,0.85);
-    font-size: 13px;
-    margin-top: 3px;
-    position: relative; z-index: 1;
-    letter-spacing: 0.005em;
-  }
-  .cta.primary .cta-arrow {
-    font-size: 24px; font-weight: 700;
-    color: rgba(255,255,255,0.95);
-    position: relative; z-index: 1;
-    transition: transform .2s ease;
-  }
-  .cta.primary:hover .cta-arrow { transform: translateX(3px); }
-  .cta-mark { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--bg); flex-shrink: 0; font-weight: 800; font-size: 12px; color: var(--ink); letter-spacing: -0.02em; line-height: 1; text-align: center; }
-  .cta.primary .cta-mark {
-    background: white;
-    color: #ff9900;
-    width: 52px; height: 52px;
-    font-size: 14px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.18), 0 1px 0 rgba(255,255,255,0.6) inset;
-    position: relative; z-index: 1;
-  }
+  .cta.primary .cta-mark { background: white; color: #ff9900; width: 52px; height: 52px; font-size: 14px; }
+  /* Wave V.28 — retailer brand pills: clean colour, white inset top highlight */
   .cta-mark.amzn { background: #232f3e; color: #ff9900; }
-  .cta.primary .cta-mark.amzn { background: white; color: #ff9900; }
+  .cta.primary .cta-mark.amzn { background: white; color: #ff9900; box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 8px rgba(0,0,0,0.18); }
   .cta-mark.curr { background: #4c1c91; color: white; }
   .cta-mark.argo { background: #ed1c24; color: white; }
   .cta-mark.jl   { background: #000; color: white; font-size: 14px; }
   .cta-mark.smyt { background: #e51b26; color: white; font-size: 13px; }
   .cta-mark.scre { background: #002d5c; color: #fbb700; font-size: 13px; }
   .cta-mark.bq   { background: #ee7203; color: white; font-size: 12px; }
-  .cta-mark.ebay { background: #fff; color: #000; border: 1px solid #e0e0e0; font-size: 12px; }
+  .cta-mark.ebay {
+    background: linear-gradient(180deg, #fff 0%, #f5f5f5 100%);
+    color: #000;
+    border: 1px solid rgba(0,0,0,0.08);
+    font-size: 12px;
+    box-shadow: 0 1px 0 rgba(255,255,255,1) inset, 0 1px 2px rgba(0,0,0,0.08);
+  }
+  /* Additional retailer marks per Wave 99/103: */
+  .cta-mark.tesc { background: #ee1c2e; color: white; font-size: 12px; }
+  .cta-mark.sain { background: #f06c00; color: white; font-size: 12px; }
+  .cta-mark.boot { background: #05054b; color: white; font-size: 11px; letter-spacing: -0.04em; }
+  .cta-mark.lf   { background: #fff; color: #000; border: 1px solid rgba(0,0,0,0.08); font-size: 11px; letter-spacing: -0.04em; box-shadow: 0 1px 0 rgba(255,255,255,1) inset, 0 1px 2px rgba(0,0,0,0.06); }
+  .cta-mark.appl { background: #000; color: white; font-size: 18px; }
+  .cta-mark.zara { background: #000; color: white; font-size: 12px; }
+  .cta-mark.next { background: #000; color: white; font-size: 12px; }
   .cta-body { flex: 1; min-width: 0; }
   .cta-name { font-weight: 800; font-size: 17px; margin: 0; line-height: 1.2; }
   .cta-sub { font-size: 13px; color: var(--ink-soft); margin: 2px 0 0; }
@@ -999,7 +977,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v27</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v28</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
