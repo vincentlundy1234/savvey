@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v56';
+const VERSION             = 'normalize.js v3.4.5v69';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -179,6 +179,17 @@ INPUT: "Heinz beans"
 OUTPUT: {"canonical_search_string": "Heinz Baked Beans 415g", "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "grocery", "mpn": null, "amazon_search_query": "Heinz Baked Beans 415g", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 `;
 
+// V.69 - Shared system prefix injected as the cache_control:ephemeral block
+// across all 4 doors (vision/url/text/barcode). Anthropic prompt cache matches
+// by prefix; this means all 4 doors share ONE cache entry instead of four.
+// Mode-specific tails (VISION_SYSTEM_PROMPT etc) become the second uncached
+// system block. Cold-call TTFB drops ~150-250ms; input-token cost drops 30-50%.
+const SHARED_SYSTEM_PREFIX = `You are Savvey, a UK retail product identifier.
+
+When given an input you produce a clean canonical search string and metadata in the strict JSON shape below. Mode-specific guidance (PHOTO / URL / TEXT / BARCODE) is appended in a separate block after this one.
+
+${COMMON_SCHEMA_DOC}`;
+
 const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
 
 Look for: 1) MPN/Model on box. 2) Brand + family. 3) Shelf-edge label.
@@ -193,15 +204,11 @@ CATEGORY examples (these are STRICT — match the right enum):
 - Photo of Bose / Sony / Logitech / iPhone / laptop -> category="tech"
 - Photo of Ninja air fryer / kettle / appliance -> category="home"
 - Photo of LEGO / board game / kids toy -> category="toys"
-- Photo of Bosch tools / Black+Decker / DIY item -> category="diy"
-
-${COMMON_SCHEMA_DOC}`;
+- Photo of Bosch tools / Black+Decker / DIY item -> category="diy"`;
 
 const URL_SYSTEM_PROMPT = `You are a UK retail URL parser. Extract product identity from the URL string ALONE — do NOT fetch the page. UK e-commerce URLs typically include the product name in the slug.
 
-Infer category from the URL's domain.
-
-${COMMON_SCHEMA_DOC}`;
+Infer category from the URL's domain.`;
 
 const TEXT_SYSTEM_PROMPT = `You are a UK retail query normaliser. The user typed a search string. May have typos. Clean it up.
 
@@ -212,9 +219,7 @@ Examples:
 - "kettle" → canonical="Kettle", confidence="low", category="home", savvey_says all null
 - "Listerine" → canonical="Listerine Mouthwash", category="health" (mouthwash is oral-care/health, NOT generic)
 - "L'Oreal shampoo" → canonical="L'Oreal Elvive Shampoo", category="beauty"
-- "Heinz beans" → canonical="Heinz Baked Beans 415g", category="grocery" 
-
-${COMMON_SCHEMA_DOC}`;
+- "Heinz beans" → canonical="Heinz Baked Beans 415g", category="grocery" `;
 
 const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier.
 
@@ -224,9 +229,7 @@ UK EAN prefixes: 50/502 = UK; 5060... = UK food/grocery; 5012... = UK consumer g
 - "medium" if you can guess from prefix
 - "low" if unknown — return canonical_search_string="Unknown product", confidence="low"
 
-Do NOT hallucinate.
-
-${COMMON_SCHEMA_DOC}`;
+Do NOT hallucinate.`;
 
 async function callHaikuText(systemPrompt, userText) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
@@ -241,7 +244,11 @@ async function callHaikuText(systemPrompt, userText) {
         model: MODEL,
         max_tokens: MAX_TOKENS_TEXT,
         // Wave II — prompt caching cuts ~30-50% input tokens + 100-200ms TTFB.
-        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+        // V.69 - two-block system: shared schema cached, mode-tail uncached.
+        system: [
+          { type: 'text', text: SHARED_SYSTEM_PREFIX, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: systemPrompt },
+        ],
         messages: [{ role: 'user', content: userText }],
       }),
       signal: ac.signal,
@@ -288,7 +295,11 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
         model: MODEL,
         max_tokens: MAX_TOKENS_VISION,
         // Wave II — prompt caching on vision system prompt.
-        system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+        // V.69 - two-block system: shared schema cached, mode-tail uncached.
+        system: [
+          { type: 'text', text: SHARED_SYSTEM_PREFIX, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: systemPrompt },
+        ],
         messages: [{ role: 'user', content: userContent }],
       }),
       signal: ac.signal,
@@ -302,7 +313,7 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
   } finally { clearTimeout(timer); }
 }
 
-const SERPAPI_TIMEOUT_MS = 4000;
+const SERPAPI_TIMEOUT_MS = 2000; // V.69 - was 4000ms; SerpAPI p95 ~1.4s
 const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
 
@@ -684,7 +695,7 @@ function _shouldSafetyBlock(canonical) {
 // 'johnlewis.com') -> { url, title, price }. Canonical key derives from
 // seller_name via _SELLER_NAME_TO_HOST. Items with unknown sellers are
 // dropped (still no random aggregator junk).
-const GOOGLE_SHOPPING_TIMEOUT_MS = 4000;
+const GOOGLE_SHOPPING_TIMEOUT_MS = 2000; // V.69
 const _SELLER_NAME_TO_HOST = (() => {
   const m = new Map();
   const add = (host, ...names) => names.forEach(n => m.set(n.toLowerCase(), host));
@@ -975,26 +986,30 @@ export default async function handler(req, res) {
   // google_shopping (non-Amazon retailer PDP deep links). Wall-clock latency
   // unchanged because Promise.all waits for the slowest, and Amazon engine is
   // already the slowest of the two (verified-price gate).
+  // V.69 - alternative_amazon_price now rides the existing Promise.all batch
+  // (was sequential before; ~600-900ms latency leak on medium-conf queries).
+  // Powers disambig-screen thumbnails so users compare visually instead of
+  // recalling model numbers (panel mandate 6 May 2026 beta - Logitech M235 vs
+  // M185 case). Cost still ONE extra SerpAPI call per disambig (~30% queries).
   let verified_amazon_price = null;
   let retailer_deep_links = null;
+  let alternative_amazon_price_v69 = null;
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
     const canonicalKey = String(parsed.canonical_search_string).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
-    const [amazonRes, retailersRes] = await Promise.all([
+    const fetchAlt = (parsed.alternative_string && parsed.confidence === 'medium')
+      ? fetchVerifiedAmazonPrice(parsed.alternative_string)
+      : Promise.resolve(null);
+    const [amazonRes, retailersRes, altAmazonRes] = await Promise.all([
       fetchVerifiedAmazonPrice(parsed.canonical_search_string),
       fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey),
+      fetchAlt,
     ]);
     verified_amazon_price = amazonRes;
     retailer_deep_links = retailersRes;
+    alternative_amazon_price_v69 = altAmazonRes;
   }
-  // v3.4.5i — fetch alternative's verified Amazon listing too when confidence
-  // is medium and an alternative was produced. Powers disambig-screen
-  // thumbnails so users compare visually instead of recalling model numbers
-  // (panel-mandated 6 May 2026 beta finding — Logitech M235 vs M185 case).
-  // Cost: ONE extra SerpAPI call per disambig case (~30% of queries).
-  let alternative_amazon_price = null;
-  if (parsed.alternative_string && parsed.confidence === 'medium') {
-    alternative_amazon_price = await fetchVerifiedAmazonPrice(parsed.alternative_string);
-  }
+  // V.69 - alternative_amazon_price now resolved via the parallel batch above.
+  const alternative_amazon_price = alternative_amazon_price_v69;
 
 
   if (verified_amazon_price && parsed.savvey_says) {
