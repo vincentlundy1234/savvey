@@ -73,7 +73,15 @@ jobs:
             echo "::error::ANTHROPIC_API_KEY missing on deploy $deploy"
             exit 1
           fi
-          echo "/api/health OK (deploy=$deploy, anthropic=$anth)"
+          # Wave V.37: soft-warn on missing SERPAPI (verified Amazon price degraded
+          # but app still functional via Haiku-only path). Don't hard-fail —
+          # this lets us ship with SERPAPI key rotated/missing as long as the
+          # hot path works.
+          serpapi=$(jq -r '.env.serpapi // false' /tmp/h 2>/dev/null)
+          if [ "$serpapi" != "true" ]; then
+            echo "::warning::SERPAPI_KEY missing on deploy $deploy — verified Amazon prices will be degraded"
+          fi
+          echo "/api/health OK (deploy=$deploy, anthropic=$anth, serpapi=$serpapi)"
 
       - name: /api/normalize (text door — real code-path check)
         run: |
@@ -115,19 +123,23 @@ jobs:
           fi
           echo "frontend HTML intact ($bytes bytes, closes with /html)"
 
-      - name: Service worker + manifest reachable
+      - name: Service worker + manifest + assets reachable
         run: |
           set -e
-          sw_status=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "https://savvey.vercel.app/sw.js")
-          if [ "$sw_status" != "200" ]; then
-            echo "::error::/sw.js returned $sw_status"
+          fail=0
+          # Critical assets — hard fail if missing (Wave V.34 fix verified)
+          for asset in sw.js manifest.json icon.svg icon-maskable.svg icon-192.png icon-512.png privacy.html terms.html; do
+            status=$(curl -sS -o /dev/null -w "%{http_code}" \
+              "https://savvey.vercel.app/$asset")
+            if [ "$status" != "200" ]; then
+              echo "::error::/$asset returned $status (expected 200)"
+              fail=1
+            else
+              echo "  /$asset 200 OK"
+            fi
+          done
+          if [ $fail -ne 0 ]; then
+            echo "::error::one or more required assets unreachable"
             exit 1
           fi
-          mf_status=$(curl -sS -o /dev/null -w "%{http_code}" \
-            "https://savvey.vercel.app/manifest.json")
-          if [ "$mf_status" != "200" ]; then
-            echo "::error::/manifest.json returned $mf_status"
-            exit 1
-          fi
-          echo "sw.js + manifest.json both 200"
+          echo "all required assets reachable"
