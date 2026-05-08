@@ -476,53 +476,20 @@
   }
   .confirm-btn { transition: transform .12s ease, background .15s ease; }
   .confirm-btn:active { transform: scale(.985); }
-  /* Wave V.19 — disambig text + BEST VALUE badge polish per v5 */
-  .confirm-text {
-    display: flex; flex-direction: column;
-    align-items: flex-start;
-    gap: 3px;
-    flex: 1; min-width: 0;
-    position: relative;
-    padding-right: 80px;
-  }
-  .confirm-line1 {
-    font-weight: 700; font-size: 15px;
-    color: var(--ink);
-    line-height: 1.25;
-    word-break: break-word;
-    letter-spacing: -0.005em;
-  }
-  .confirm-line2 {
-    font-size: 12px;
-    color: var(--ink-mute);
-    line-height: 1.3;
-    font-variant-numeric: tabular-nums;
-    letter-spacing: 0.01em;
-  }
+  /* Wave KK — disambig button enhanced with price + per-unit + tier + BEST VALUE */
+  .confirm-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1; min-width: 0; position: relative; padding-right: 76px; }
+  .confirm-line1 { font-weight: 600; font-size: 15px; color: var(--ink); line-height: 1.2; word-break: break-word; }
+  .confirm-line2 { font-size: 12px; color: var(--ink-mute); line-height: 1.2; }
   .confirm-best-badge {
-    position: absolute; right: 0; top: 50%;
-    transform: translateY(-50%);
-    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 100%);
     color: #fff;
-    font-family: var(--font-display, 'Nunito');
-    font-size: 9px; font-weight: 800;
-    letter-spacing: 0.08em;
-    padding: 5px 8px;
-    border-radius: 6px;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
+    padding: 4px 7px; border-radius: 5px;
     white-space: nowrap;
-    text-transform: uppercase;
-    box-shadow:
-      0 1px 0 rgba(255,255,255,0.18) inset,
-      0 -1px 0 rgba(0,0,0,0.10) inset,
-      0 3px 8px rgba(42,107,34,0.32);
+    box-shadow: 0 2px 6px rgba(42,107,34,0.28);
   }
-  .confirm-q {
-    font-family: var(--font-display, 'Nunito');
-    font-weight: 800; font-size: 16px;
-    margin: 0 0 14px;
-    color: var(--ink);
-    letter-spacing: -0.005em;
-  }
+  .confirm-q { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
   /* Wave V.9 — confirm-btn: hover lift + softer border treatment per v5 */
   .confirm-btn {
     width: 100%; padding: 12px 14px;
@@ -545,32 +512,9 @@
     .confirm-btn { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .confirm-btn:hover { background: rgba(255,255,255,0.07); border-color: rgba(46,107,38,0.32); }
   }
-  /* Wave V.19 — confirm thumbnail variants with consistent radius + border */
-  .confirm-thumb {
-    width: 58px; height: 58px;
-    flex: 0 0 58px;
-    border-radius: 12px;
-    background: var(--bg);
-    object-fit: contain; padding: 4px;
-    border: 1px solid rgba(46,107,38,0.06);
-  }
-  .confirm-thumb-empty {
-    width: 58px; height: 58px;
-    flex: 0 0 58px;
-    border-radius: 12px;
-    background: var(--bg);
-    border: 1px solid rgba(46,107,38,0.06);
-  }
-  .confirm-thumb-icon {
-    width: 58px; height: 58px;
-    flex: 0 0 58px;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--green-soft, #e8f3e6) 0%, rgba(46,107,38,0.16) 100%);
-    border: 1px solid rgba(46,107,38,0.10);
-    display: flex; align-items: center; justify-content: center;
-    color: var(--green-dark);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset;
-  }
+  .confirm-thumb { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--bg); object-fit: contain; padding: 4px; }
+  .confirm-thumb-empty { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--bg); }
+  .confirm-thumb-icon { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--green-soft, #e8f3e6); display: flex; align-items: center; justify-content: center; color: var(--green); }
   .confirm-thumb-icon svg { width: 28px; height: 28px; }
   .confirm-text { flex: 1; min-width: 0; line-height: 1.3; }
   /* v3.4.5m — Wave C bottom nav (panel-mandated 6 May 2026 beta finding).
@@ -833,6 +777,49 @@
   .consent-banner-btn { background: var(--green); color: white; border: 0; border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 13px; cursor: pointer; flex-shrink: 0; }
   .consent-banner-btn:active { transform: scale(.95); }
   body:has(.consent-banner.show) .bottom-nav { bottom: 64px; }
+  /* Wave V.20 — accessibility pass per v5: focus-visible rings + tap-target audit */
+  /* Modern browsers: focus-visible only shows ring on keyboard focus, not mouse click.
+     Falls back gracefully on older browsers (no rule = browser default outline). */
+  button:focus-visible,
+  a:focus-visible,
+  [role="button"]:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid rgba(46,107,38,0.45);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+  /* Override for elements that already have rounded corners — match the radius */
+  .door:focus-visible,
+  .cta:focus-visible,
+  .confirm-btn:focus-visible,
+  .ghost-btn:focus-visible,
+  .welcome-primary:focus-visible,
+  .welcome-secondary:focus-visible,
+  .recent-chip:focus-visible {
+    outline-offset: 3px;
+    border-radius: inherit;
+  }
+  .nav-tab:focus-visible {
+    outline: 3px solid rgba(46,107,38,0.45);
+    outline-offset: -3px;
+    border-radius: 12px;
+  }
+  /* Tap-target minimums per WCAG 2.5.5 (Level AAA) — 44x44 minimum */
+  .nav-tab { min-width: 44px; }
+  .stale-refresh { min-height: 32px; }
+  .recent-clear { min-height: 28px; }
+  /* Reduced-motion respects user's OS-level preference for ALL animations */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+
   @media (prefers-color-scheme: dark) { .consent-banner { background: #1a221d; } }
 
   .ai-info-btn { display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: var(--green-soft, #e8f3e6); color: var(--green); border: 0; font-weight: 800; font-size: 13px; cursor: pointer; vertical-align: middle; margin-left: 6px; line-height: 1; }
@@ -961,7 +948,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v19</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v20</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
