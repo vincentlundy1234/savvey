@@ -83,7 +83,10 @@
   .screen { display: none; }
   .screen.active { display: block; animation: fadeIn .22s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-  .tagline { font-weight: 700; font-size: 26px; line-height: 1.15; margin: 18px 0 4px; }
+  /* Wave V.1 — v5 hero typography */
+  .tagline { font-weight: 800; font-size: 30px; line-height: 1.05; margin: 18px 0 6px; letter-spacing: -0.025em; text-wrap: balance; }
+  .tagline-accent { color: var(--green); }
+  @media (prefers-color-scheme: dark) { .tagline-accent { color: var(--green-light, #5fb455); } }
   .tagsub { color: var(--ink-soft); font-size: 15px; margin: 0 0 22px; }
   .recent-row { margin: 18px 0 4px; }
   .recent-label { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
@@ -98,7 +101,15 @@
     width: 100%; text-align: left; display: block;
   }
   .door:active { transform: scale(.985); box-shadow: var(--shadow-md); }
-  .door.primary { background: var(--green); color: white; border-color: var(--green-dark); padding: 24px; }
+  /* Wave V.1 — hero Snap door per v5: layered gradient + 132px min-height + inset highlight */
+  .door.primary {
+    background: linear-gradient(135deg, var(--green-light) 0%, var(--green) 55%, var(--green-deep) 100%);
+    color: white; border: none; padding: 22px 22px 20px; border-radius: 24px;
+    min-height: 132px; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 12px 28px rgba(42,107,34,0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    .door.primary { background: linear-gradient(135deg, var(--green-dark) 0%, var(--green-deep) 100%); }
+  }
   .door.primary .door-title { color: white; }
   .door.primary .door-sub { color: rgba(255,255,255,.85); }
   .door-icon { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--green-soft); margin-bottom: 12px; }
@@ -240,15 +251,48 @@
   .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
   .error-title { font-weight: 800; font-size: 18px; margin: 0 0 6px; color: var(--red); }
   .error-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 14px; }
-  .cam-wrap { position: relative; background: #000; border-radius: var(--r-md); overflow: hidden; aspect-ratio: 3/4; margin: 12px 0; }
+  /* Wave V.1 — camera chrome trim per v5: corner brackets only (no continuous dashed
+     line), X icon top-left replacing Cancel pill, ~95% viewport fill */
+  .cam-wrap { position: relative; background: #000; border-radius: var(--r-md); overflow: hidden; aspect-ratio: 3/4.2; margin: 8px 0; }
   .cam-wrap video { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .cam-cutout { position: absolute; inset: 12% 8% 25% 8%; border: 2px dashed rgba(255,255,255,.6); border-radius: 14px; pointer-events: none; }
-  .cam-cutout::before, .cam-cutout::after { content: ''; position: absolute; width: 24px; height: 24px; border: 3px solid white; border-radius: 4px; }
-  .cam-cutout::before { top: -3px; left: -3px; border-right: none; border-bottom: none; }
-  .cam-cutout::after { top: -3px; right: -3px; border-left: none; border-bottom: none; }
+  .cam-cutout { position: absolute; inset: 14% 10% 22% 10%; pointer-events: none; }
+  /* Four corner brackets only — no continuous frame */
+  .cam-cutout::before, .cam-cutout::after,
+  .cam-cutout > .br, .cam-cutout > .bl {
+    content: ''; position: absolute; width: 22px; height: 22px;
+    border: 2.5px solid rgba(255,255,255,0.85); border-radius: 3px;
+  }
+  .cam-cutout::before { top: 0; left: 0; border-right: none; border-bottom: none; }
+  .cam-cutout::after { top: 0; right: 0; border-left: none; border-bottom: none; }
+  .cam-cutout > .br { bottom: 0; right: 0; border-left: none; border-top: none; }
+  .cam-cutout > .bl { bottom: 0; left: 0; border-right: none; border-top: none; }
   .cam-shutter { position: absolute; bottom: 18px; left: 50%; transform: translateX(-50%); width: 64px; height: 64px; border-radius: 50%; background: white; border: 4px solid rgba(255,255,255,.4); cursor: pointer; }
   .cam-shutter:active { transform: translateX(-50%) scale(.92); }
-  .cam-cancel { position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,.4); color: white; border: none; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 13px; cursor: pointer; }
+  /* Wave V.1 — Cancel pill replaced by X icon top-left (per v5 mobile-first chrome). */
+  .cam-cancel {
+    position: absolute; top: 12px; left: 12px;
+    width: 36px; height: 36px; padding: 0;
+    background: rgba(0,0,0,.36); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 999px;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .cam-cancel::before {
+    content: '×'; color: #fff; font-size: 22px; font-weight: 600; line-height: 1;
+    margin-top: -2px;
+  }
+  .cam-cancel-text { display: none; }  /* hide the legacy "Cancel" text label */
+  /* Wave V.1 — auto-fade hint strip at top of camera viewport */
+  .cam-hint {
+    position: absolute; top: 56px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,0,0,0.36); backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: rgba(255,255,255,0.92); font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 999px;
+    pointer-events: none; transition: opacity 0.4s ease;
+    z-index: 10;
+  }
   .zoom-indicator { position: absolute; top: 12px; left: 12px; background: rgba(0,0,0,.55); color: white; border-radius: 999px; padding: 5px 11px; font-weight: 700; font-size: 13px; pointer-events: none; min-width: 40px; text-align: center; backdrop-filter: blur(6px); transition: opacity .2s ease; }
   .zoom-controls { position: absolute; bottom: 18px; right: 12px; display: flex; flex-direction: column; gap: 6px; }
   .zoom-btn { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,.45); color: white; border: 1px solid rgba(255,255,255,.18); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .15s ease, transform .12s ease; backdrop-filter: blur(6px); }
@@ -310,8 +354,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen active" id="screen-home">
-  <h1 class="tagline">Find the best UK price.</h1>
-  <p class="tagsub">Snap, scan, paste, or type. We identify your product and show the verified Amazon UK price.</p>
+  <!-- Wave V.1 — v5 design copy + "a snap" green highlight -->
+  <h1 class="tagline">The honest UK price,<br>in <span class="tagline-accent">a snap</span>.</h1>
+  <p class="tagsub">Snap your shelf. Restock without thinking. Free, no sign-up, UK only.</p>
   <p id="counter" style="margin:0 0 18px;font-size:12px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;">✦ <span id="counter-num">—</span> products identified by Savvey shoppers</p>
 
   <button class="door primary" onclick="goSnap()">
@@ -359,7 +404,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5hh</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v1</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -372,12 +417,12 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen" id="screen-camera">
-  <h1 class="tagline">Snap the box or the product</h1>
-  <p class="tagsub">Hold steady and frame the front of the product. Model number = best.</p>
+  <!-- Wave V.1 — light camera chrome per v5: title + sub minimised, X close top-left, auto-fade hint -->
   <div class="cam-wrap">
     <video id="cam-video" autoplay playsinline muted></video>
-    <div class="cam-cutout"></div>
-    <button class="cam-cancel" onclick="cancelCamera()">Cancel</button>
+    <div class="cam-cutout"><span class="bl"></span><span class="br"></span></div>
+    <button class="cam-cancel" onclick="cancelCamera()" aria-label="Close camera"><span class="cam-cancel-text">Cancel</span></button>
+    <div class="cam-hint" id="cam-hint">Frame the product or its packaging.</div>
     <button class="cam-shutter" onclick="captureFrame()" aria-label="Capture"></button>
     <div class="zoom-indicator" id="zoom-indicator" hidden>1×</div>
     <div class="zoom-controls" id="zoom-controls" hidden>
@@ -1157,6 +1202,33 @@ async function callNormalize(body) {
 }
 
 
+
+// Wave V.1 — auto-fade the camera hint after 3 seconds when camera screen activates
+(function initCamHintAutoFade() {
+  let _camHintTimer = null;
+  function _fadeHint() {
+    const hint = document.getElementById('cam-hint');
+    if (!hint) return;
+    hint.style.opacity = '1';
+    if (_camHintTimer) clearTimeout(_camHintTimer);
+    _camHintTimer = setTimeout(() => {
+      const h = document.getElementById('cam-hint');
+      if (h) h.style.opacity = '0';
+    }, 3000);
+  }
+  // Hook into show() if present — fade hint when camera screen activates
+  const _origShow = window.show;
+  if (typeof _origShow === 'function') {
+    window.show = function(id, opts) {
+      _origShow(id, opts);
+      if (id === 'camera') {
+        const h = document.getElementById('cam-hint');
+        if (h) h.style.opacity = '1';
+        _fadeHint();
+      }
+    };
+  }
+})();
 
 // Wave V — stale-price refresh button. Re-fires the canonical text query
 // to bypass canonical cache and fetch live retail data.
