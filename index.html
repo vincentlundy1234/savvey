@@ -81,6 +81,110 @@
   .logo .dot { color: var(--green-dark); }   /* was red — retired per brand pack 4 May 2026 */
   .hint { font-size: 12px; color: var(--ink-mute); font-weight: 600; }
   .screen { display: none; }
+  /* Wave V.2 — Welcome first-visit screen per v5 design */
+  #screen-welcome {
+    background: linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%);
+    margin: -16px;
+    padding: 36px 28px 44px;
+    min-height: 100dvh;
+    display: none;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+  #screen-welcome.active { display: flex; animation: fadeIn .35s ease; }
+  @media (prefers-color-scheme: dark) {
+    #screen-welcome { background: linear-gradient(180deg, #15171c 0%, #1a1d24 60%, #1f2229 100%); }
+  }
+  .welcome-trust-strip {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 5px 11px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(20,32,26,0.08);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-radius: 999px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.6px;
+    color: var(--ink-soft); text-transform: uppercase;
+    margin-bottom: 14px; align-self: flex-start;
+  }
+  @media (prefers-color-scheme: dark) {
+    .welcome-trust-strip { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); color: var(--ink-soft); }
+  }
+  .welcome-trust-dot {
+    width: 5px; height: 5px; border-radius: 999px; background: var(--green);
+  }
+  @media (prefers-color-scheme: dark) {
+    .welcome-trust-dot { background: var(--green-light, #5fb455); }
+  }
+  .welcome-wordmark {
+    font-family: var(--font-body); font-weight: 800; font-size: 56px;
+    letter-spacing: -0.025em; color: var(--green); line-height: 1;
+    display: inline-flex; align-items: baseline;
+  }
+  .welcome-y { color: var(--amber); }
+  .welcome-dot { color: var(--green); }
+  @media (prefers-color-scheme: dark) {
+    .welcome-wordmark { color: var(--green-light, #5fb455); }
+    .welcome-dot { color: var(--green-light, #5fb455); }
+  }
+  .welcome-tagline {
+    margin-top: 4px;
+    font-family: var(--font-display, 'Nunito');
+    font-size: 22px; font-weight: 700; font-style: italic;
+    color: var(--ink-soft);
+  }
+  .welcome-spacer { flex: 1; min-height: 24px; }
+  .welcome-headline {
+    font-family: var(--font-display, 'Nunito');
+    font-size: 38px; font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.025em; margin: 0 0 14px;
+    text-wrap: balance;
+    color: var(--ink);
+  }
+  .welcome-accent { color: var(--green); }
+  @media (prefers-color-scheme: dark) {
+    .welcome-accent { color: var(--green-light, #5fb455); }
+  }
+  .welcome-body {
+    font-size: 16px; line-height: 1.5; margin: 0;
+    color: var(--ink-soft);
+    max-width: 320px;
+  }
+  .welcome-primary {
+    width: 100%;
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    color: #fff; border: none;
+    border-radius: 20px;
+    padding: 22px 20px;
+    font-family: var(--font-body); font-size: 20px; font-weight: 800;
+    letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    cursor: pointer;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.25) inset,
+      0 -2px 0 rgba(0,0,0,0.15) inset,
+      0 8px 22px rgba(42,107,34,0.32),
+      0 2px 4px rgba(42,107,34,0.18);
+    margin-bottom: 10px;
+  }
+  .welcome-primary svg { width: 22px; height: 22px; }
+  .welcome-secondary {
+    width: 100%;
+    background: var(--amber-soft, #fbeed4);
+    color: var(--amber-deep, #a06a08);
+    border: 1px solid rgba(214,137,16,0.22);
+    border-radius: 20px;
+    padding: 22px 20px;
+    font-family: var(--font-body); font-size: 20px; font-weight: 800;
+    letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  @media (prefers-color-scheme: dark) {
+    .welcome-secondary {
+      background: rgba(214,137,16,0.10); color: #e8a73a;
+      border-color: rgba(214,137,16,0.28);
+    }
+  }
   .screen.active { display: block; animation: fadeIn .22s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   /* Wave V.1 — v5 hero typography */
@@ -152,7 +256,7 @@
   .stale-refresh:active { background: var(--amber-deep); }
   /* Wave V — Nunito for display headlines, Inter for body */
   .tagline, .identify-title, h1.identify-title { font-family: var(--font-display, 'Nunito'); letter-spacing: -0.025em; }
-  .verdict-pill { display: none; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 999px; font-size: 13px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; margin: 0 0 12px; width: fit-content; max-width: 100%; }
+  .verdict-pill { display: none; align-items: center; gap: 9px; padding: 11px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 800; letter-spacing: 0.05em; text-transform: uppercase; margin: 0 0 14px; width: fit-content; max-width: 100%; box-shadow: var(--shadow-sm); }
   .verdict-pill.show { display: inline-flex; }
   .verdict-pill.good_buy       { background: #d6f1d2; color: #1a5a1a; border: 1px solid #5fbf52; }
   .verdict-pill.fair           { background: #fbeed4; color: #95650a; border: 1px solid #d68910; }
@@ -200,6 +304,13 @@
   /* v3.4.5m — Wave C bottom nav (panel-mandated 6 May 2026 beta finding).
      Three-tab persistent nav: Snap / Type / Home. Hidden on full-screen
      camera/barcode/loading to avoid overlap with the existing Cancel UI. */
+    /* Wave V.2 — Snap-tab visual primacy in bottom nav */
+  .nav-tab[id="nav-snap"] { color: var(--green); }
+  .nav-tab[id="nav-snap"] svg { stroke: var(--green); }
+  body:has(#screen-home.active) .nav-tab[id="nav-snap"]::before {
+    content: ''; position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+    width: 28px; height: 3px; border-radius: 999px; background: var(--green); opacity: 0.7;
+  }
   .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: rgba(255,255,255,0.96); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 1px solid var(--border); padding: 6px 0 calc(6px + env(safe-area-inset-bottom)); z-index: 100; }
   .nav-tab { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 4px; background: transparent; border: 0; color: var(--ink-mute); font-size: 11px; font-weight: 600; cursor: pointer; transition: color 0.15s ease; min-height: 56px; }
   .nav-tab svg { width: 22px; height: 22px; pointer-events: none; }
@@ -353,6 +464,32 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="hint" id="hint" aria-live="polite"></div>
 </div>
 
+<!-- Wave V.2 — Welcome first-visit screen per v5 design.
+     Shown only on first visit (localStorage flag). After dismissal, page
+     loads with screen-home as before. No state-machine refactor — just a
+     conditional initial render via initWelcomeFirstVisit() at the bottom. -->
+<div class="screen" id="screen-welcome">
+  <div class="welcome-trust-strip" aria-hidden="true">
+    <span class="welcome-trust-dot"></span>
+    UK · always free · no sign-up
+  </div>
+  <div class="welcome-wordmark" aria-label="Savvey">
+    SAVVE<span class="welcome-y">Y</span><span class="welcome-dot">.</span>
+  </div>
+  <div class="welcome-tagline">shop smart.</div>
+  <div class="welcome-spacer"></div>
+  <h1 class="welcome-headline">The honest UK price,<br>in <span class="welcome-accent">a snap</span>.</h1>
+  <p class="welcome-body">Saves time. Saves money.<br>At home or in-store. Simple.</p>
+  <div class="welcome-spacer"></div>
+  <button class="welcome-primary" id="welcome-start-btn" type="button">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    Snap a product
+  </button>
+  <button class="welcome-secondary" id="welcome-skip-btn" type="button">
+    I'll have a browse
+  </button>
+</div>
+
 <div class="screen active" id="screen-home">
   <!-- Wave V.1 — v5 design copy + "a snap" green highlight -->
   <h1 class="tagline">The honest UK price,<br>in <span class="tagline-accent">a snap</span>.</h1>
@@ -404,7 +541,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v1</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v2</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
@@ -1202,6 +1339,35 @@ async function callNormalize(body) {
 }
 
 
+
+// Wave V.2 — Welcome first-visit screen. localStorage gated.
+(function initWelcomeFirstVisit() {
+  let dismissed = false;
+  try { dismissed = localStorage.getItem('savvey_welcome_dismissed_v1') === '1'; } catch (e) {}
+  if (dismissed) return; // returning user — skip welcome
+  // First visit: hide screen-home, show screen-welcome
+  const home = document.getElementById('screen-home');
+  const welcome = document.getElementById('screen-welcome');
+  if (home && welcome) {
+    home.classList.remove('active');
+    welcome.classList.add('active');
+  }
+  function _dismiss(then) {
+    try { localStorage.setItem('savvey_welcome_dismissed_v1', '1'); } catch (e) {}
+    if (welcome) welcome.classList.remove('active');
+    if (home) home.classList.add('active');
+    track('welcome_dismissed', { via: then });
+    if (then === 'snap') {
+      // Defer until home is rendered, then trigger goSnap
+      setTimeout(() => { try { goSnap(); } catch (e) {} }, 50);
+    }
+  }
+  const startBtn = document.getElementById('welcome-start-btn');
+  const skipBtn = document.getElementById('welcome-skip-btn');
+  if (startBtn) startBtn.addEventListener('click', () => _dismiss('snap'));
+  if (skipBtn) skipBtn.addEventListener('click', () => _dismiss('browse'));
+  track('welcome_shown', {});
+})();
 
 // Wave V.1 — auto-fade the camera hint after 3 seconds when camera screen activates
 (function initCamHintAutoFade() {
