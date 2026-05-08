@@ -69,6 +69,113 @@
   /* V.47 hotfix — [hidden] HTML attribute should always win over display rules.
      Was being overridden by .badge-row { display: flex } so "QUICK CHECK" pill
      showed on confirm screen despite hidden attribute. */
+  /* V.62 DESIGN FIDELITY â€” close gap to v5 source (cream-first + atmosphere) */
+
+  /* 1. KILL prefers-color-scheme dark auto-flip. v5 design is cream-first. */
+  :root, html, body { color-scheme: light !important; }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --green: #2a6b22 !important; --green-dark: #1d4a18 !important; --green-deep: #143d10 !important; --green-light: #5fb455 !important;
+      --green-soft: #e8f3e6 !important; --green-softer: #d6f1d2 !important;
+      --amber: #d68910 !important; --amber-deep: #a06a08 !important; --amber-soft: #fbeed4 !important;
+      --red: #cc4444 !important; --red-deep: #8a2a2a !important; --red-soft: #fde0e0 !important;
+      --ink: #14201a !important; --ink-soft: #4a5550 !important; --ink-mute: #7a857f !important;
+      --bg: #faf7f0 !important; --bg-cream: #f6f1e6 !important; --bg-warm: #faf7f0 !important;
+      --bg-green-wash: #eef5ea !important; --bg-amber-wash: #fbf3e1 !important;
+      --card: #ffffff !important; --border: rgba(20,32,26,0.08) !important;
+    }
+    body { background: var(--bg) !important; color: var(--ink) !important; }
+  }
+
+  /* 2. Body cream gradient â€” replaces flat fill with v5 warm radial blend */
+  body {
+    background:
+      radial-gradient(60% 36% at 18% 14%, rgba(95,180,85,0.08) 0%, rgba(95,180,85,0) 65%),
+      radial-gradient(50% 32% at 88% 82%, rgba(214,137,16,0.07) 0%, rgba(214,137,16,0) 65%),
+      linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%) !important;
+    background-attachment: fixed !important;
+  }
+
+  /* 3. Mesh atmosphere keyframes + auto-attached blobs on key screens */
+  @keyframes v62-blob-a {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(8%, 6%) scale(1.12); }
+    66%      { transform: translate(-6%, 10%) scale(0.94); }
+  }
+  @keyframes v62-blob-b {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    33%      { transform: translate(-7%, -9%) scale(1.08); }
+    66%      { transform: translate(6%, -4%) scale(0.96); }
+  }
+  #screen-home::before,
+  #screen-result::before,
+  #screen-confirm::before,
+  #screen-loading::before {
+    content: '';
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(70% 50% at 12% 10%, rgba(42,107,34,0.10) 0%, rgba(42,107,34,0) 65%),
+      radial-gradient(60% 50% at 92% 88%, rgba(214,137,16,0.08) 0%, rgba(214,137,16,0) 65%);
+    animation: v62-blob-a 32s ease-in-out infinite alternate;
+  }
+  #screen-home > *,
+  #screen-result > *,
+  #screen-confirm > *,
+  #screen-loading > * { position: relative; z-index: 1; }
+
+  /* 4. Per-screen body tints via :has() */
+  body:has(#screen-loading.active) {
+    background:
+      radial-gradient(60% 40% at 50% 30%, rgba(95,180,85,0.16) 0%, rgba(95,180,85,0) 70%),
+      linear-gradient(180deg, #eef5ea 0%, #e3eedc 100%) !important;
+  }
+  body:has(#screen-error.active) {
+    background:
+      radial-gradient(50% 36% at 50% 24%, rgba(214,137,16,0.14) 0%, rgba(214,137,16,0) 70%),
+      linear-gradient(180deg, #fbf3e1 0%, #f4e8c8 100%) !important;
+  }
+  body.verdict-good_buy:has(#screen-result.active) {
+    background:
+      radial-gradient(60% 40% at 14% 14%, rgba(42,107,34,0.14) 0%, rgba(42,107,34,0) 65%),
+      linear-gradient(180deg, #eef5ea 0%, #e3eedc 100%) !important;
+  }
+  body.verdict-fair:has(#screen-result.active),
+  body.verdict-wait:has(#screen-result.active) {
+    background:
+      radial-gradient(60% 40% at 14% 14%, rgba(214,137,16,0.16) 0%, rgba(214,137,16,0) 65%),
+      linear-gradient(180deg, #fbf3e1 0%, #f4e8c8 100%) !important;
+  }
+  body.verdict-check_elsewhere:has(#screen-result.active) {
+    background:
+      radial-gradient(60% 40% at 14% 14%, rgba(204,68,68,0.16) 0%, rgba(204,68,68,0) 65%),
+      linear-gradient(180deg, #fbeaea 0%, #f4d2d2 100%) !important;
+  }
+
+  /* 5. Doors as frosted glass over cream */
+  .v5-door {
+    background: rgba(255,255,255,0.72) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-color: rgba(20,32,26,0.06) !important;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 6px rgba(20,32,26,0.04) !important;
+  }
+
+  /* 6. Bottom nav green-soft band per v5 */
+  .v5-bottom-nav {
+    background: #e8f3e6 !important;
+    border-top: 1px solid rgba(42,107,34,0.10) !important;
+    backdrop-filter: none !important;
+  }
+
+  /* 7. Greeting Nunito display weight */
+  .v5-greeting {
+    font-family: 'Nunito', system-ui, sans-serif !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.025em !important;
+  }
+
   [hidden] { display: none !important; }
 
   html, body { margin: 0; padding: 0; }
