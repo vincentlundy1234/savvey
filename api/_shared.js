@@ -1,13 +1,17 @@
-// api/_shared.js — Savvey shared core v1.0
+// api/_shared.js — Savvey shared core v1.1 (Wave V.36 doc refresh)
 //
 // Single source of truth for retailer config, price bounds, and the helpers
-// used across ai-search.js, ai-wit.js, search.js, and scrape.js. Eliminates
-// the "three retailer lists" drift bug class permanently.
+// used by /api endpoints. The legacy v2 endpoints (ai-search.js, ai-wit.js,
+// search.js, scrape.js) were removed during the v3.0 Smart Router pivot
+// (3 May 2026); only normalize.js + health.js consume this module now.
 //
-// Imported into each endpoint via:  import { ... } from './_shared.js';
+// Imported via:  import { ... } from './_shared.js';
 //
 // Adding a retailer = ONE edit to UK_RETAILERS below. Adding a price floor
-// or ceiling = ONE edit to the constants. No more hunting across four files.
+// or ceiling = ONE edit to the constants. The drift bug class this module
+// was originally created to prevent (multiple endpoints with desynced
+// retailer lists) is now structurally impossible — only one endpoint
+// imports it.
 
 // ─────────────────────────────────────────────────────────────
 // Retailer config

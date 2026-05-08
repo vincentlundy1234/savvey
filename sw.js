@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────
-//  Savvey — Service Worker v3.4.5
+//  Savvey — Service Worker v3.4.1
 //
 //  Cache strategies:
 //    FONT_CACHE    — Stale-While-Revalidate for Google Fonts
@@ -24,7 +24,7 @@
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345v35';
+const STATIC_VER    = 'savvey-static-v345v36';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
@@ -56,7 +56,7 @@ self.addEventListener('activate', event => {
     caches.keys()
       .then(keys => Promise.all(
         keys.filter(k => !KEEP.includes(k)).map(k => {
-          console.log('[SW] Purging stale cache:', k);
+          console.log('[SW v3.4.1] Purging stale cache:', k);
           return caches.delete(k);
         })
       ))
@@ -71,9 +71,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
 
   // 1. API — always network-only, never cache
-  //    (Supabase was the v2-era backend — removed during v3.0 Smart Router pivot.
-  //     Hostname check stripped Wave V.35.)
-  if (url.pathname.startsWith('/api/')) {
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('supabase.co')) {
     return;
   }
 
