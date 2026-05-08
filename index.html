@@ -75,30 +75,11 @@
     -webkit-font-smoothing: antialiased;
   }
   button, input { font-family: inherit; }
-  /* Wave V.14 — topbar + logo: display-grade wordmark + tighter hint per v5 */
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 14px 0 8px;
-  }
-  .logo {
-    font-family: var(--font-body, 'Nunito');
-    font-weight: 800; font-size: 22px;
-    letter-spacing: -0.022em;
-    color: var(--green);
-    line-height: 1;
-    cursor: pointer;
-    transition: transform .12s ease;
-  }
-  .logo:hover { transform: scale(1.02); }
-  .logo:active { transform: scale(.96); }
+  .topbar { display: flex; align-items: center; justify-content: space-between; padding: 14px 0 6px; }
+  .logo { font-weight: 800; font-size: 22px; letter-spacing: -0.02em; color: var(--green); }
   .logo .y { color: var(--amber); }
   .logo .dot { color: var(--green-dark); }   /* was red — retired per brand pack 4 May 2026 */
-  .hint {
-    font-size: 11.5px; color: var(--ink-mute);
-    font-weight: 700;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-  }
+  .hint { font-size: 12px; color: var(--ink-mute); font-weight: 600; }
   .screen { display: none; }
   /* Wave V.2 — Welcome first-visit screen per v5 design */
   #screen-welcome {
@@ -210,18 +191,8 @@
       border-color: rgba(214,137,16,0.28);
     }
   }
-  /* Wave V.14 — screen entrance: smoother cubic-bezier per v5 */
-  .screen.active {
-    display: block;
-    animation: fadeIn .28s cubic-bezier(.2,.8,.2,1) both;
-  }
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(6px); }
-    to   { opacity: 1; transform: none; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .screen.active { animation: none; }
-  }
+  .screen.active { display: block; animation: fadeIn .22s ease; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
   /* Wave V.1 — v5 hero typography */
   /* Wave V.8 — tagline + tagsub: more confident hierarchy per v5 */
   .tagline {
@@ -480,19 +451,78 @@
   .hero-img-wrap img.loaded { opacity: 1; }
   .hero-img-wrap.empty { display: none; }
   /* Wave V.3 — Savvey Says block: cleaner card, tighter hierarchy, accent line */
-  .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px 18px; margin: 0 0 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
-  .savvey-says::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 100%); }
+  /* Wave V.15 — Savvey Says: tighter row rhythm + display label per v5 */
+  .savvey-says {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    padding: 16px 18px 18px;
+    margin: 0 0 20px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 12px rgba(20,32,26,0.04);
+    position: relative; overflow: hidden;
+  }
+  .savvey-says::before {
+    content: ''; position: absolute; top: 0; left: 0; bottom: 0;
+    width: 3px;
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 65%, var(--green-dark, #1d4a18) 100%);
+    border-radius: 0 2px 2px 0;
+  }
   .savvey-says.empty { display: none; }
   .savvey-says-head { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
-  .savvey-says-spark { width: 28px; height: 28px; border-radius: 9px; background: var(--green-soft); color: var(--green-dark); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
-  .savvey-says-label { font-weight: 800; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--green-dark); }
-  .savvey-row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); align-items: flex-start; }
-  .savvey-row:first-of-type { border-top: none; padding-top: 0; }
-  .savvey-row .em { flex-shrink: 0; font-size: 17px; line-height: 1.4; }
+  .savvey-says-spark {
+    width: 30px; height: 30px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, var(--green-soft) 0%, rgba(46,107,38,0.16) 100%);
+    color: var(--green-dark);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 15px;
+    flex-shrink: 0;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.6) inset;
+  }
+  .savvey-says-label {
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--green-dark);
+  }
+  .savvey-row {
+    display: flex; gap: 12px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(46,107,38,0.06);
+    align-items: flex-start;
+  }
+  .savvey-row:first-of-type { border-top: none; padding-top: 2px; }
+  .savvey-row:last-of-type { padding-bottom: 2px; }
+  .savvey-row .em {
+    flex-shrink: 0;
+    font-size: 18px; line-height: 1.3;
+    width: 22px; text-align: center;
+  }
   .savvey-row .body { flex: 1; min-width: 0; line-height: 1.4; }
-  .savvey-row .ttl { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 2px; }
-  .savvey-row .val { font-size: 14px; color: var(--ink); margin: 0; font-weight: 600; }
-  .savvey-says-footer { font-size: 11px; color: var(--ink-mute); margin: 10px 0 0; line-height: 1.4; }
+  .savvey-row .ttl {
+    font-size: 10.5px; font-weight: 800;
+    color: var(--ink-mute);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 0 0 3px;
+  }
+  .savvey-row .val {
+    font-size: 14.5px;
+    color: var(--ink);
+    margin: 0;
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .savvey-says-footer {
+    font-size: 11px;
+    color: var(--ink-mute);
+    margin: 12px 0 0;
+    padding-top: 10px;
+    line-height: 1.45;
+    border-top: 1px solid rgba(46,107,38,0.06);
+    letter-spacing: 0.005em;
+  }
   /* Wave V.3 — disambig card slightly bigger radius, more breathing room */
   /* Wave V.9 — confirm-card more anchored per v5 */
   .confirm-card {
@@ -934,7 +964,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v14</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v15</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
