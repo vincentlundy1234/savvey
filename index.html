@@ -384,7 +384,52 @@
   body:has(#screen-loading.active) .screen { padding-bottom: 0; }
   .confirm-btn:active { background: var(--green-soft); border-color: var(--green); }
   /* Wave V.3 — CTA list spacing + primary CTA enhancement */
-  .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 24px; }
+  .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0 24px; }
+  /* Wave V.5 — secondary CTA (alternative-retailer rows) refinement per v5
+     - Quieter background to match unified doors palette from V.4
+     - Tighter typography hierarchy; arrow swapped to chevron via CSS
+     - Hover/active lift mirrors door interactions for visual coherence */
+  .cta:not(.primary) {
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(46,107,38,0.08);
+    padding: 14px 16px;
+    gap: 12px;
+    border-radius: 18px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+    transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease, background .15s ease;
+  }
+  .cta:not(.primary):hover {
+    background: rgba(255,255,255,0.95);
+    border-color: rgba(46,107,38,0.16);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+  }
+  .cta:not(.primary):active { transform: scale(.985) translateY(0); }
+  .cta:not(.primary) .cta-mark { width: 40px; height: 40px; border-radius: 10px; }
+  .cta:not(.primary) .cta-name { font-size: 16px; letter-spacing: -0.005em; }
+  .cta:not(.primary) .cta-sub { font-size: 12.5px; line-height: 1.35; margin-top: 3px; color: var(--ink-soft); }
+  .cta:not(.primary) .cta-arrow { font-size: 0; width: 8px; height: 14px; position: relative; opacity: 0.5; transition: opacity .15s ease, transform .15s ease; }
+  .cta:not(.primary) .cta-arrow::before {
+    content: ''; position: absolute; inset: 0;
+    border-right: 2px solid var(--ink-mute);
+    border-top: 2px solid var(--ink-mute);
+    transform: rotate(45deg);
+    width: 8px; height: 8px; top: 3px; right: 0;
+    border-radius: 1px;
+  }
+  .cta:not(.primary):hover .cta-arrow { opacity: 0.9; transform: translateX(2px); }
+
+  @media (prefers-color-scheme: dark) {
+    .cta:not(.primary) {
+      background: rgba(255,255,255,0.04);
+      border-color: rgba(255,255,255,0.07);
+    }
+    .cta:not(.primary):hover {
+      background: rgba(255,255,255,0.07);
+      border-color: rgba(46,107,38,0.32);
+    }
+  }
+
   .cta.primary {
     background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
     box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 8px 22px rgba(42,107,34,0.28);
@@ -609,7 +654,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v4</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v5</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
