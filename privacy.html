@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Privacy Policy - Savvey</title>
-<meta name="description" content="Savvey privacy policy. We don't collect personal data. Anonymised analytics only. Full disclosure of how we process your queries.">
+<meta name="description" content="Savvey privacy policy. We don't collect personal data. Anonymised analytics only. Full disclosure of how we process your queries, photos, and clicks.">
 <link rel="manifest" href="/manifest.json">
 <link rel="icon" href="/favicon.ico">
 <style>
@@ -54,66 +54,91 @@
 </header>
 
 <h1>Privacy Policy</h1>
-<p class="updated">Last updated: 7 May 2026</p>
+<p class="updated">Last updated: 8 May 2026</p>
 
-<p>Savvey is a UK price-comparison Progressive Web App. We are committed to protecting your privacy. This policy explains what data we collect, why, and how we handle it.</p>
+<p>Savvey is a UK snap-to-reorder app run by Savvey Ltd. We are committed to protecting your privacy and complying with UK GDPR. This policy explains exactly what data passes through our systems, why, who else sees it, and what you can do about it.</p>
 
 <h2>What we collect</h2>
-<p>When you use Savvey, we collect:</p>
+<p>When you use Savvey, the following data is processed:</p>
 <ul>
-  <li>Product searches you make (text typed, photos snapped, barcodes scanned, URLs pasted) - to identify the product and return price information.</li>
-  <li>Anonymised usage analytics via PostHog - page views, button taps, search results, app version. We do NOT collect any data that identifies you personally.</li>
-  <li>Local browser storage - recent searches and your preferences (e.g. swipe hint dismissed). This stays on your device and is never sent to our servers.</li>
+  <li><strong>Product searches</strong> &mdash; the text you type, photos you snap (typically 3 frames stitched into one AI request), barcodes you scan, or URLs you paste. We use these to identify the product and return price information. Tracking parameters (utm_*, gclid, fbclid, etc) are automatically stripped from URLs before they reach our AI.</li>
+  <li><strong>Anonymised usage analytics</strong> via PostHog &mdash; events such as "snap captured," "result shown," "retailer chip tapped." These contain no personal identifiers, no IP retention, no cross-app tracking.</li>
+  <li><strong>Local browser storage</strong> &mdash; recent searches, your preferences (e.g. swipe-hint dismissed, GDPR consent banner dismissed). This stays on your device. We never access it from our servers.</li>
+  <li><strong>Cached responses</strong> &mdash; for performance, we cache product identifications by content hash for up to 24 hours in our key-value store (Vercel KV). The cache key is a hash of your input; nothing in the cache is linked to you.</li>
 </ul>
 
 <h2>What we do not collect</h2>
 <ul>
-  <li>We do NOT collect names, email addresses, phone numbers, or any other personal identifiers.</li>
-  <li>We do NOT collect financial information, payment details, or purchase history.</li>
-  <li>We do NOT track your activity outside of Savvey.</li>
-  <li>We do NOT sell, rent, or share your data with third parties for marketing.</li>
+  <li>We do <strong>NOT</strong> collect names, email addresses, phone numbers, or any other personal identifiers.</li>
+  <li>We do <strong>NOT</strong> have user accounts. There is no sign-up, login, or password.</li>
+  <li>We do <strong>NOT</strong> collect financial information, payment details, or purchase history.</li>
+  <li>We do <strong>NOT</strong> track your activity outside of Savvey.</li>
+  <li>We do <strong>NOT</strong> sell, rent, or share your data with third parties for marketing.</li>
+  <li>We do <strong>NOT</strong> retain photos you snap beyond the duration of the AI identification request (typically a few seconds).</li>
+  <li>We do <strong>NOT</strong> use your data to train AI models. Our AI provider (Anthropic) does not retain content sent through their API.</li>
 </ul>
 
 <h2>How we use your data</h2>
 <ul>
-  <li>Product searches are sent to Anthropic Claude (AI provider) to identify the product. Anthropic processes these on our behalf under their Data Processing Agreement and does not retain the data for model training. See <a href="https://anthropic.com/privacy">anthropic.com/privacy</a> for Anthropic's policy.</li>
-  <li>Photos snapped via the camera are sent to Anthropic for product identification, processed in real-time, and are not stored on our servers.</li>
-  <li>Verified Amazon UK prices are fetched via SerpAPI on your behalf. SerpAPI does not retain queries beyond their own logging requirements.</li>
-  <li>Anonymised analytics help us understand which features work and which need improvement.</li>
+  <li><strong>Anthropic Claude (AI):</strong> product searches and snapped photos are sent to Anthropic Claude Haiku for identification. Anthropic processes these on our behalf under their Data Processing Agreement and does <em>not</em> retain content beyond the immediate request lifecycle. See <a href="https://anthropic.com/privacy">anthropic.com/privacy</a> for Anthropic's policy.</li>
+  <li><strong>SerpAPI:</strong> verified Amazon UK prices and Google Shopping retailer deep-links are fetched via SerpAPI on your behalf. SerpAPI does not retain queries beyond their own logging requirements.</li>
+  <li><strong>Open Food Facts:</strong> for barcode scans, we may pre-resolve the EAN via the Open Food Facts public database to improve identification accuracy on grocery and household items. No personal data is sent.</li>
+  <li><strong>Skimlinks:</strong> when you click a non-Amazon retailer link, the click may be routed through Skimlinks (a UK affiliate aggregator). Skimlinks measures clicks and conversions for affiliate commission tracking. Skimlinks may set first-party cookies on the destination retailer's domain (not on Savvey). See <a href="https://skimlinks.com/privacy-policy">skimlinks.com/privacy-policy</a>.</li>
+  <li><strong>Anonymous analytics</strong> via PostHog tell us which features users engage with so we can improve them. No PII, no cross-app tracking.</li>
 </ul>
+
+<h2>Safety filtering</h2>
+<p>To protect users and our service, Savvey includes a server-side filter that detects when a snapped image or query appears to be of something other than a product (for example, a person, a sensitive object, or content that doesn't fit the app's purpose). On a match, the app shows a friendly redirect message ("That doesn't look like a product. Try snapping the packaging") and discards the input without storing it. We log only the fact that a filter event occurred, not the content that triggered it.</p>
 
 <h2>Where your data is processed</h2>
 <ul>
-  <li>Anthropic Claude: US (under EU-US Data Privacy Framework)</li>
-  <li>SerpAPI: US</li>
-  <li>Vercel (hosting): US/EU</li>
-  <li>PostHog (analytics): EU (Frankfurt)</li>
+  <li><strong>Vercel</strong> (hosting + serverless functions): US/EU edge network</li>
+  <li><strong>Anthropic Claude</strong>: US (under EU&ndash;US Data Privacy Framework)</li>
+  <li><strong>SerpAPI</strong>: US</li>
+  <li><strong>PostHog</strong> (analytics): EU (Frankfurt)</li>
+  <li><strong>Skimlinks</strong> (affiliate routing): UK / US</li>
+  <li><strong>Open Food Facts</strong>: France (public open-data API)</li>
+</ul>
+
+<h2>Retention</h2>
+<p>We retain:</p>
+<ul>
+  <li>Cached responses: up to 24 hours, then automatically deleted by TTL.</li>
+  <li>Anonymous analytics events: 12 months in PostHog, then deleted.</li>
+  <li>Server logs (technical errors only, no content): 30 days.</li>
+  <li>Your photos and queries: not retained beyond the immediate request lifecycle.</li>
 </ul>
 
 <h2>Your rights under UK GDPR</h2>
 <p>As a UK user, you have the right to:</p>
 <ul>
   <li>Access the data we hold about you</li>
-  <li>Request deletion of your data</li>
+  <li>Request rectification or deletion of your data</li>
   <li>Object to processing</li>
-  <li>File a complaint with the ICO (Information Commissioner's Office)</li>
+  <li>Restrict processing</li>
+  <li>Data portability</li>
+  <li>File a complaint with the Information Commissioner's Office (<a href="https://ico.org.uk">ico.org.uk</a>)</li>
 </ul>
-<p>Because we don't collect personally identifying information, we typically have no data tied to you specifically. If you want to clear your local browser storage, append <code>?fresh=1</code> to the Savvey URL or use your browser's site data controls.</p>
+<p>Because we don't collect personally identifying information and don't have user accounts, we typically have no data tied to you specifically. If you want to clear your local browser storage, append <code>?fresh=1</code> to the Savvey URL or use your browser's site-data controls.</p>
 
-<h2>Affiliate links</h2>
-<p>Savvey earns a small commission when you buy via the Amazon UK links shown in the app. This never changes the price you pay. We disclose this clearly on every result screen.</p>
+<h2>Affiliate links + revenue</h2>
+<p>Savvey may earn a small commission when you buy via the Amazon UK link or other retailer links shown in the app (Currys, John Lewis, Argos, Boots, Tesco and others, routed via Skimlinks). This is how we keep the app free. The price you pay never changes &mdash; it's the same as if you'd typed the URL yourself. We disclose this clearly on every result screen.</p>
 
 <h2>AI use</h2>
-<p>Savvey uses artificial intelligence (Anthropic Claude) to identify products and synthesise context. AI can make mistakes - always verify product details on the retailer's page before purchasing. No images or queries are used to train the AI model.</p>
+<p>Savvey uses Anthropic's Claude Haiku 4.5 to identify products from photos and to provide UK retail context (typical price bands, popular alternatives, product tier classification &mdash; Premium / Mid-tier / Budget). The AI's role is identification and context only. Every price you see on a result screen is verified live from a real retailer listing &mdash; no AI-generated prices are ever shown to users. AI can make mistakes &mdash; always verify product details on the retailer's page before purchasing. No images or queries are used to train any AI model.</p>
+
+<h2>Children</h2>
+<p>Savvey is not designed for children under 13. We do not knowingly collect data from children. If you believe a child has used Savvey, contact us and we'll remove any traces.</p>
 
 <h2>Changes to this policy</h2>
-<p>We may update this policy from time to time. Material changes will be flagged in the app.</p>
+<p>We may update this policy from time to time. Material changes will be flagged in the app and at the top of this page.</p>
 
-<h2>Contact</h2>
-<p>Questions about this policy: <a href="mailto:privacy@savvey.app">privacy@savvey.app</a></p>
+<h2>Contact + data requests</h2>
+<p>Questions about this policy or to exercise your GDPR rights: <a href="mailto:legal@savvey.me">legal@savvey.me</a>.</p>
+<p>Operated by Savvey Ltd, a private company limited by shares registered in England and Wales.</p>
 
 <footer>
-  &copy; Savvey 2026. shop smart.
+  &copy; Savvey Ltd 2026. shop smart.
 </footer>
 </body>
 </html>
