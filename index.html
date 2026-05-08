@@ -132,26 +132,23 @@
     .welcome-wordmark { color: var(--green-light, #5fb455); }
     .welcome-dot { color: var(--green-light, #5fb455); }
   }
-  /* Wave V.11 — older welcome-tagline rule moved to V.11 block above */
+  .welcome-tagline {
+    margin-top: 4px;
+    font-family: var(--font-display, 'Nunito');
+    font-size: 22px; font-weight: 700; font-style: italic;
+    color: var(--ink-soft);
+  }
   .welcome-spacer { flex: 1; min-height: 24px; }
-  /* Wave V.11 — welcome-headline a touch larger + tighter per v5 */
   .welcome-headline {
     font-family: var(--font-display, 'Nunito');
-    font-size: 40px; font-weight: 800; line-height: 1.04;
-    letter-spacing: -0.028em; margin: 0 0 14px;
+    font-size: 38px; font-weight: 800; line-height: 1.05;
+    letter-spacing: -0.025em; margin: 0 0 14px;
     text-wrap: balance;
     color: var(--ink);
   }
-  /* Wave V.11 — welcome-accent gradient text-clip matches V.8 tagline */
-  .welcome-accent {
-    color: var(--green);
-    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 65%, var(--green-dark, #1d4a18) 100%);
-    -webkit-background-clip: text;
-    background-clip: text;
-    -webkit-text-fill-color: transparent;
-  }
+  .welcome-accent { color: var(--green); }
   @media (prefers-color-scheme: dark) {
-    .welcome-accent { color: var(--green-light, #5fb455); -webkit-text-fill-color: var(--green-light, #5fb455); background: none; }
+    .welcome-accent { color: var(--green-light, #5fb455); }
   }
   .welcome-body {
     font-size: 16px; line-height: 1.5; margin: 0;
@@ -176,45 +173,23 @@
     margin-bottom: 10px;
   }
   .welcome-primary svg { width: 22px; height: 22px; }
-  /* Wave V.11 — welcome-secondary quieter per v5: subordinate to primary */
   .welcome-secondary {
     width: 100%;
-    background: rgba(255,255,255,0.55);
-    color: var(--ink-soft);
-    border: 1px solid rgba(46,107,38,0.10);
-    border-radius: 18px;
-    padding: 18px 20px;
-    font-family: var(--font-body); font-size: 17px; font-weight: 700;
-    letter-spacing: -0.005em;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
+    background: var(--amber-soft, #fbeed4);
+    color: var(--amber-deep, #a06a08);
+    border: 1px solid rgba(214,137,16,0.22);
+    border-radius: 20px;
+    padding: 22px 20px;
+    font-family: var(--font-body); font-size: 20px; font-weight: 800;
+    letter-spacing: -0.01em;
+    display: flex; align-items: center; justify-content: center;
     cursor: pointer;
-    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .12s ease;
   }
-  .welcome-secondary:hover {
-    background: rgba(255,255,255,0.85);
-    border-color: rgba(46,107,38,0.22);
-    color: var(--ink);
-  }
-  .welcome-secondary:active { transform: scale(.985); }
   @media (prefers-color-scheme: dark) {
     .welcome-secondary {
-      background: rgba(255,255,255,0.04);
-      color: var(--ink-soft);
-      border-color: rgba(255,255,255,0.07);
+      background: rgba(214,137,16,0.10); color: #e8a73a;
+      border-color: rgba(214,137,16,0.28);
     }
-    .welcome-secondary:hover {
-      background: rgba(255,255,255,0.07);
-      border-color: rgba(46,107,38,0.32);
-      color: var(--ink);
-    }
-  }
-  /* Wave V.11 — welcome-tagline more confident italics + colour */
-  .welcome-tagline {
-    margin-top: 6px;
-    font-family: var(--font-display, 'Nunito');
-    font-size: 20px; font-weight: 700; font-style: italic;
-    color: var(--ink-soft);
-    letter-spacing: -0.005em;
   }
   .screen.active { display: block; animation: fadeIn .22s ease; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -368,23 +343,72 @@
     .door-input-wrap { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .door-input-wrap:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
   }
-  /* Wave V.3 — loading screen with green-pulse + softer cream backdrop per v5 */
-  .loading-wrap { padding: 70px 0 60px; text-align: center; position: relative; }
+  /* Wave V.12 — loading screen: composed halo + crisper spinner + display-grade copy per v5 */
+  .loading-wrap {
+    padding: 80px 0 70px;
+    text-align: center;
+    position: relative;
+    min-height: 280px;
+  }
   .loading-wrap::before {
-    content: ''; position: absolute; left: 50%; top: 60px; transform: translateX(-50%);
-    width: 200px; height: 200px; border-radius: 50%;
-    background: radial-gradient(circle, var(--green-soft) 0%, transparent 70%);
+    content: ''; position: absolute; left: 50%; top: 56px;
+    transform: translateX(-50%);
+    width: 220px; height: 220px; border-radius: 50%;
+    background:
+      radial-gradient(circle at 35% 35%, rgba(95,180,85,0.25) 0%, rgba(95,180,85,0.10) 35%, rgba(95,180,85,0) 70%),
+      radial-gradient(circle, var(--green-soft) 0%, transparent 72%);
     z-index: 0; pointer-events: none;
-    animation: pulse 2.4s ease-in-out infinite;
+    animation: pulse 2.6s ease-in-out infinite;
+    filter: blur(0.5px);
+  }
+  .loading-wrap::after {
+    content: ''; position: absolute; left: 50%; top: 76px;
+    transform: translateX(-50%);
+    width: 180px; height: 180px; border-radius: 50%;
+    border: 1px solid rgba(46,107,38,0.10);
+    z-index: 0; pointer-events: none;
+    animation: pulse-ring 2.6s ease-in-out infinite;
   }
   @keyframes pulse {
-    0%, 100% { transform: translateX(-50%) scale(0.85); opacity: 0.6; }
+    0%, 100% { transform: translateX(-50%) scale(0.85); opacity: 0.55; }
     50%      { transform: translateX(-50%) scale(1.05); opacity: 1; }
   }
-  .spinner { position: relative; z-index: 1; width: 56px; height: 56px; border-radius: 50%; border: 3px solid var(--green-soft); border-top-color: var(--green); animation: spin .9s linear infinite; margin: 0 auto 22px; }
+  @keyframes pulse-ring {
+    0%, 100% { transform: translateX(-50%) scale(0.95); opacity: 0.5; }
+    50%      { transform: translateX(-50%) scale(1.12); opacity: 0.15; }
+  }
+  .spinner {
+    position: relative; z-index: 1;
+    width: 60px; height: 60px;
+    border-radius: 50%;
+    border: 3px solid rgba(46,107,38,0.14);
+    border-top-color: var(--green);
+    border-right-color: var(--green-light, #5fb455);
+    animation: spin .85s cubic-bezier(.6,.2,.4,.8) infinite;
+    margin: 0 auto 26px;
+    box-shadow: 0 0 24px rgba(46,107,38,0.10);
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .loading-text { font-weight: 700; font-size: 18px; color: var(--ink); margin: 0; }
-  .loading-sub { color: var(--ink-mute); font-size: 14px; margin: 6px 0 0; }
+  .loading-text {
+    font-family: var(--font-display, 'Nunito');
+    font-weight: 800; font-size: 20px;
+    color: var(--ink);
+    margin: 0;
+    letter-spacing: -0.015em;
+    position: relative; z-index: 1;
+  }
+  .loading-sub {
+    color: var(--ink-mute);
+    font-size: 13.5px;
+    margin: 8px 0 0;
+    line-height: 1.4;
+    letter-spacing: 0.005em;
+    position: relative; z-index: 1;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .loading-wrap::before, .loading-wrap::after { animation: none; }
+    .spinner { animation: spin 1.4s linear infinite; }
+  }
   .badge-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; }
   /* Wave V.4 — result badge cleaner sizing */
   .badge.green-soft { background: var(--green-soft); color: var(--green-dark); }
@@ -930,7 +954,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v11</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v12</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
