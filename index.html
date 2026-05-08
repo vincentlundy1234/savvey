@@ -803,7 +803,53 @@ function downscaleImageToBase64(source, sourceWidth, sourceHeight) {
   return { base64: dataUrl.split(',')[1], bytes, quality: SNAP_QUALITY, width: cw, height: ch };
 }
 
+// Wave-spike-sync — Capacitor wrapper Camera path. Activated only when running
+// inside the native iOS/Android shell (window.Capacitor present). Uses the
+// @capacitor/camera plugin's getPhoto. Returned dataUrl is run through
+// downscaleImageToBase64 + tight-crop as defensive backstop (Wave GG mandate).
+async function goSnapCapacitor() {
+  show('loading');
+  document.getElementById('loading-text').textContent = 'Capturing…';
+  document.getElementById('loading-sub').textContent = 'Working for you, not the retailer';
+  try {
+    const photo = await window.Capacitor.Plugins.Camera.getPhoto({
+      quality: 60, allowEditing: false, resultType: 'dataUrl', source: 'CAMERA',
+      width: 1024, saveToGallery: false, correctOrientation: true,
+    });
+    if (!photo || !photo.dataUrl) { goHome(); return; }
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i); i.onerror = rej; i.src = photo.dataUrl;
+    });
+    // Wave GG tight-crop equivalent — centre 60% square then downscale.
+    const minSide = Math.min(img.naturalWidth, img.naturalHeight);
+    const cropSize = Math.floor(minSide * 0.6);
+    const sx = Math.floor((img.naturalWidth - cropSize) / 2);
+    const sy = Math.floor((img.naturalHeight - cropSize) / 2);
+    const c = document.createElement('canvas');
+    c.width = Math.min(cropSize, SNAP_MAX_WIDTH);
+    c.height = c.width;
+    c.getContext('2d').drawImage(img, sx, sy, cropSize, cropSize, 0, 0, c.width, c.height);
+    const dataUrl = c.toDataURL('image/jpeg', SNAP_QUALITY);
+    const base64 = dataUrl.split(',')[1];
+    const bytes = Math.floor(base64.length * 0.75);
+    _lastSnapDataUrl = dataUrl;
+    track('snap_captured', { bytes, quality: SNAP_QUALITY, w: c.width, frames: 1, multi_shot: false, source: 'capacitor' });
+    await callNormalize({ input_type: 'image', image_base64_frames: [base64], media_type: 'image/jpeg' });
+  } catch (err) {
+    track('snap_camera_denied', { reason: String(err && err.message || err).slice(0, 80), source: 'capacitor' });
+    goHome();
+    document.getElementById('photo-fallback').click();
+  }
+}
+
 async function goSnap() {
+  // Wave-spike-sync — when inside the Capacitor wrapper, route through the
+  // native Camera plugin (more reliable in WKWebView, proper permission flow).
+  // PWA path (mobile Safari, Chrome) continues to use getUserMedia as today.
+  if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Camera) {
+    return goSnapCapacitor();
+  }
   show('camera');
   try {
     camStream = await navigator.mediaDevices.getUserMedia({
@@ -2013,7 +2059,51 @@ if (_resetLink) {
   });
 }
 
-track('app_loaded', { ua_mobile: /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent), standalone: window.matchMedia('(display-mode: standalone)').matches });
+// Wave-spike-sync — Capacitor deep-link bridge. When running inside the
+// native wrapper, intercept clicks on retailer-bound anchors and route through
+// App.openUrl() so the user genuinely escapes the WebView and lands in the
+// native Amazon (or default browser), preserving the authenticated affiliate
+// cookie drop. Without this, target='_top' would trap users in a captive
+// in-app WebView and kill the affiliate handoff (Marketplace Specialist red-alert).
+const CAPACITOR_RETAILER_HOSTS = new Set([
+  'amazon.co.uk','www.amazon.co.uk','m.amazon.co.uk',
+  'boots.com','www.boots.com',
+  'currys.co.uk','www.currys.co.uk',
+  'argos.co.uk','www.argos.co.uk',
+  'johnlewis.com','www.johnlewis.com',
+  'tesco.com','www.tesco.com',
+  'sainsburys.co.uk','www.sainsburys.co.uk',
+  'lookfantastic.com','www.lookfantastic.com',
+  'hollandandbarrett.com','www.hollandandbarrett.com',
+  'superdrug.com','www.superdrug.com',
+  'screwfix.com','www.screwfix.com',
+  'diy.com','www.diy.com',
+  'smythstoys.com','www.smythstoys.com',
+  'smyths-toys.com','www.smyths-toys.com',
+  'halfords.com','www.halfords.com',
+  'ao.com','www.ao.com',
+  'asda.com','groceries.asda.com',
+  'morrisons.com','www.morrisons.com',
+  'ebay.co.uk','www.ebay.co.uk'
+]);
+document.addEventListener('click', (e) => {
+  if (!window.Capacitor || !window.Capacitor.Plugins || !window.Capacitor.Plugins.App) return;
+  const a = e.target && e.target.closest && e.target.closest('a[target="_top"][href]');
+  if (!a) return;
+  let host = '';
+  try { host = new URL(a.href).hostname.toLowerCase(); } catch { return; }
+  if (!CAPACITOR_RETAILER_HOSTS.has(host)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  window.Capacitor.Plugins.App.openUrl({ url: a.href }).then(() => {
+    track('cta_tapped_external', { retailer_host: host, via: 'capacitor' });
+  }).catch((err) => {
+    console.warn('[savvey] Capacitor openUrl failed, falling back', err);
+    window.location.href = a.href;
+  });
+}, true);
+
+track('app_loaded', { ua_mobile: /iPhone|iPad|Android|Mobile/i.test(navigator.userAgent), standalone: window.matchMedia('(display-mode: standalone)').matches, capacitor: !!(window.Capacitor && window.Capacitor.Plugins) });
 handleInbound();
 </script>
 <!-- v3.4.5m — Wave C bottom nav. Three-tab persistent navigation with

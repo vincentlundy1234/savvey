@@ -1,9 +1,24 @@
 {
   "name": "savvey",
-  "version": "2.9.0",
+  "version": "3.4.5kk-spike",
   "private": true,
   "type": "module",
+  "description": "Savvey UK price-check PWA -- Smart Router + Capacitor wrapper for Android/iOS",
+  "scripts": {
+    "cap:sync": "npx cap sync",
+    "cap:open:android": "npx cap open android",
+    "cap:run:android": "npx cap run android"
+  },
   "dependencies": {
-    "@vercel/kv": "^3.0.0"
+    "@vercel/kv": "^3.0.0",
+    "@capacitor/android": "^6.1.0",
+    "@capacitor/app": "^6.0.0",
+    "@capacitor/browser": "^6.0.0",
+    "@capacitor/camera": "^6.0.0",
+    "@capacitor/core": "^6.1.0",
+    "@capacitor/ios": "^6.1.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.1.0"
   }
 }

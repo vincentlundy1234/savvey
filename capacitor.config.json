@@ -1,0 +1,41 @@
+{
+  "appId": "com.savvey.app",
+  "appName": "Savvey",
+  "webDir": ".",
+  "server": {
+    "url": "https://savvey.vercel.app",
+    "cleartext": false,
+    "allowNavigation": [
+      "savvey.vercel.app",
+      "savvey.app",
+      "*.amazon.co.uk",
+      "*.boots.com",
+      "*.currys.co.uk",
+      "*.argos.co.uk",
+      "*.johnlewis.com",
+      "*.tesco.com",
+      "*.sainsburys.co.uk",
+      "*.lookfantastic.com",
+      "*.hollandandbarrett.com",
+      "*.superdrug.com",
+      "*.screwfix.com",
+      "*.diy.com",
+      "*.smythstoys.com",
+      "*.ebay.co.uk"
+    ]
+  },
+  "plugins": {
+    "Camera": {
+      "androidScalePresentation": "fill"
+    }
+  },
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "scrollEnabled": true
+  }
+}

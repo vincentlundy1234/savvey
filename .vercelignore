@@ -35,3 +35,9 @@ api/normalize.js.new
 api/normalize_v33_build.js
 api/*.tmp_rewrite
 *.tmp_rewrite
+
+# Spike branch — Capacitor wrapper assets (never deploy these to Vercel)
+android/
+ios/
+capacitor.config.json
+wrapper-spike-test-plan.md
