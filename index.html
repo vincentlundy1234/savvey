@@ -83,7 +83,10 @@
   .screen { display: none; }
   /* Wave V.2 — Welcome first-visit screen per v5 design */
   #screen-welcome {
-    background: linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%);
+    background: 
+      radial-gradient(60% 40% at 25% 18%, rgba(95,180,85,0.10) 0%, rgba(95,180,85,0) 65%),
+      radial-gradient(50% 36% at 88% 78%, rgba(214,137,16,0.08) 0%, rgba(214,137,16,0) 65%),
+      linear-gradient(180deg, #faf7f0 0%, #f6f1e6 60%, #f0e9d8 100%);
     margin: -16px;
     padding: 36px 28px 44px;
     min-height: 100dvh;
@@ -93,7 +96,10 @@
   }
   #screen-welcome.active { display: flex; animation: fadeIn .35s ease; }
   @media (prefers-color-scheme: dark) {
-    #screen-welcome { background: linear-gradient(180deg, #15171c 0%, #1a1d24 60%, #1f2229 100%); }
+    #screen-welcome { background:
+      radial-gradient(60% 40% at 25% 18%, rgba(95,180,85,0.18) 0%, rgba(95,180,85,0) 65%),
+      radial-gradient(50% 36% at 88% 78%, rgba(214,137,16,0.14) 0%, rgba(214,137,16,0) 65%),
+      linear-gradient(180deg, #15171c 0%, #1a1d24 60%, #1f2229 100%); }
   }
   .welcome-trust-strip {
     display: inline-flex; align-items: center; gap: 8px;
@@ -196,13 +202,29 @@
   .recent-label { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.06em; margin: 0 0 8px; display: flex; justify-content: space-between; align-items: center; }
   .recent-clear { background: none; border: none; color: var(--ink-mute); font-size: 11px; font-weight: 700; cursor: pointer; padding: 2px 4px; }
   .recent-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 18px; }
-  .recent-chip { background: var(--card); border: 1px solid var(--border); border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* Wave V.4 — recent chips with subtle accent + lift per v5 */
+  .recent-chip { background: rgba(255,255,255,0.78); backdrop-filter: blur(8px); border: 1px solid var(--border); border-left: 3px solid var(--green); border-radius: 12px; padding: 8px 14px; font-size: 13px; font-weight: 700; color: var(--ink); cursor: pointer; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset, 0 2px 6px rgba(20,32,26,0.04); transition: transform .12s ease; }
+  .recent-chip:active { transform: scale(.985); background: var(--green-soft); border-color: var(--green); }
+  @media (prefers-color-scheme: dark) {
+    .recent-chip { background: rgba(255,255,255,0.04); box-shadow: none; }
+    .recent-chip:active { background: rgba(95,180,85,0.16); }
+  }
   .recent-chip:active { background: var(--green-soft); border-color: var(--green); }
+  /* Wave V.4 — secondary doors (non-primary): unified quiet palette per v5
+     Single restrained treatment, no per-door theming. Hero Snap door keeps
+     its own .door.primary treatment. */
   .door {
-    background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg);
-    padding: 18px; box-shadow: var(--shadow-sm); margin-bottom: 12px;
-    cursor: pointer; transition: transform .15s ease, box-shadow .2s ease;
+    background: rgba(255,255,255,0.7); border: 1px solid rgba(20,32,26,0.06);
+    border-radius: 18px;
+    padding: 16px 18px; box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
+    margin-bottom: 8px;
+    cursor: pointer; transition: transform .12s ease;
     width: 100%; text-align: left; display: block;
+    min-height: 76px;
+  }
+  .door:active { transform: scale(.992); }
+  @media (prefers-color-scheme: dark) {
+    .door { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.06); box-shadow: none; }
   }
   .door:active { transform: scale(.985); box-shadow: var(--shadow-md); }
   /* Wave V.1 — hero Snap door per v5: layered gradient + 132px min-height + inset highlight */
@@ -216,7 +238,13 @@
   }
   .door.primary .door-title { color: white; }
   .door.primary .door-sub { color: rgba(255,255,255,.85); }
-  .door-icon { width: 44px; height: 44px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--green-soft); margin-bottom: 12px; }
+  /* Wave V.4 — door icon container per v5: bigger, rounded square, green-soft */
+  .door-icon { width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; background: var(--green-soft); margin-bottom: 0; flex: 0 0 auto; }
+  .door-icon svg { width: 20px; height: 20px; stroke: var(--green-dark, #1d4a18); }
+  @media (prefers-color-scheme: dark) {
+    .door-icon { background: rgba(95,180,85,0.14); }
+    .door-icon svg { stroke: #7fc775; }
+  }
   .door.primary .door-icon { background: rgba(255,255,255,.18); }
   .door-icon svg { width: 24px; height: 24px; stroke: var(--green); }
   .door.primary .door-icon svg { stroke: white; }
@@ -227,12 +255,26 @@
   .door-input-wrap input { flex: 1; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--r-sm); font-size: 15px; outline: none; background: white; color: var(--ink); }
   .door-input-wrap input:focus { border-color: var(--green); }
   .door-input-wrap button { background: var(--green); color: white; border: none; border-radius: var(--r-sm); padding: 0 18px; font-weight: 700; font-size: 15px; cursor: pointer; }
-  .loading-wrap { padding: 80px 0; text-align: center; }
-  .spinner { width: 56px; height: 56px; border-radius: 50%; border: 4px solid var(--green-soft); border-top-color: var(--green); animation: spin .8s linear infinite; margin: 0 auto 18px; }
+  /* Wave V.3 — loading screen with green-pulse + softer cream backdrop per v5 */
+  .loading-wrap { padding: 70px 0 60px; text-align: center; position: relative; }
+  .loading-wrap::before {
+    content: ''; position: absolute; left: 50%; top: 60px; transform: translateX(-50%);
+    width: 200px; height: 200px; border-radius: 50%;
+    background: radial-gradient(circle, var(--green-soft) 0%, transparent 70%);
+    z-index: 0; pointer-events: none;
+    animation: pulse 2.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { transform: translateX(-50%) scale(0.85); opacity: 0.6; }
+    50%      { transform: translateX(-50%) scale(1.05); opacity: 1; }
+  }
+  .spinner { position: relative; z-index: 1; width: 56px; height: 56px; border-radius: 50%; border: 3px solid var(--green-soft); border-top-color: var(--green); animation: spin .9s linear infinite; margin: 0 auto 22px; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .loading-text { font-weight: 700; font-size: 18px; color: var(--ink); margin: 0; }
   .loading-sub { color: var(--ink-mute); font-size: 14px; margin: 6px 0 0; }
   .badge-row { display: flex; align-items: center; gap: 8px; margin: 16px 0 6px; }
+  /* Wave V.4 — result badge cleaner sizing */
+  .badge.green-soft { background: var(--green-soft); color: var(--green-dark); }
   .badge { background: var(--green-soft); color: var(--green-dark); font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.04em; }
   .badge.amber { background: #fbeed4; color: #95650a; }
   /* v3.4 verdict pill — panel-mandated 'permission to buy' moment. */
@@ -272,15 +314,18 @@
   .verdict-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
   .identify-title { font-weight: 800; font-size: 28px; line-height: 1.18; margin: 4px 0 4px; letter-spacing: -0.01em; }
   .identify-sub { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
-  .hero-img-wrap { width: 100%; aspect-ratio: 16/10; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); overflow: hidden; margin: 4px 0 18px; display: flex; align-items: center; justify-content: center; }
-  .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 8px; opacity: 0; transition: opacity .25s ease; }
+  /* Wave V.3 — hero image: bigger 4:3, softer shadow, bigger radius per v5 */
+  .hero-img-wrap { width: 100%; aspect-ratio: 4/3; background: var(--card); border: 1px solid var(--border); border-radius: 20px; overflow: hidden; margin: 6px 0 20px; display: flex; align-items: center; justify-content: center; box-shadow: var(--shadow-sm); }
+  .hero-img-wrap img { width: 100%; height: 100%; object-fit: contain; padding: 14px; opacity: 0; transition: opacity .35s ease; }
   .hero-img-wrap img.loaded { opacity: 1; }
   .hero-img-wrap.empty { display: none; }
-  .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; margin: 0 0 18px; box-shadow: var(--shadow-sm); }
+  /* Wave V.3 — Savvey Says block: cleaner card, tighter hierarchy, accent line */
+  .savvey-says { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px 18px; margin: 0 0 20px; box-shadow: var(--shadow-sm); position: relative; overflow: hidden; }
+  .savvey-says::before { content: ''; position: absolute; top: 0; left: 0; bottom: 0; width: 3px; background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 100%); }
   .savvey-says.empty { display: none; }
-  .savvey-says-head { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
-  .savvey-says-spark { width: 24px; height: 24px; border-radius: 8px; background: var(--green-soft); color: var(--green-dark); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex-shrink: 0; }
-  .savvey-says-label { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--green-dark); }
+  .savvey-says-head { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+  .savvey-says-spark { width: 28px; height: 28px; border-radius: 9px; background: var(--green-soft); color: var(--green-dark); display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+  .savvey-says-label { font-weight: 800; font-size: 12.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--green-dark); }
   .savvey-row { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); align-items: flex-start; }
   .savvey-row:first-of-type { border-top: none; padding-top: 0; }
   .savvey-row .em { flex-shrink: 0; font-size: 17px; line-height: 1.4; }
@@ -288,12 +333,23 @@
   .savvey-row .ttl { font-size: 11px; font-weight: 700; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 2px; }
   .savvey-row .val { font-size: 14px; color: var(--ink); margin: 0; font-weight: 600; }
   .savvey-says-footer { font-size: 11px; color: var(--ink-mute); margin: 10px 0 0; line-height: 1.4; }
-  .confirm-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); padding: 16px; margin-bottom: 18px; }
+  /* Wave V.3 — disambig card slightly bigger radius, more breathing room */
+  .confirm-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 14px; margin-bottom: 16px; box-shadow: var(--shadow-sm); }
+  .confirm-btn { transition: transform .12s ease, background .15s ease; }
+  .confirm-btn:active { transform: scale(.985); }
   /* Wave KK — disambig button enhanced with price + per-unit + tier + BEST VALUE */
   .confirm-text { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; flex: 1; min-width: 0; position: relative; padding-right: 76px; }
   .confirm-line1 { font-weight: 600; font-size: 15px; color: var(--ink); line-height: 1.2; word-break: break-word; }
   .confirm-line2 { font-size: 12px; color: var(--ink-mute); line-height: 1.2; }
-  .confirm-best-badge { position: absolute; right: 0; top: 50%; transform: translateY(-50%); background: var(--brand, #2a6b22); color: #fff; font-size: 9px; font-weight: 700; letter-spacing: 0.5px; padding: 3px 6px; border-radius: 4px; white-space: nowrap; }
+  .confirm-best-badge {
+    position: absolute; right: 0; top: 50%; transform: translateY(-50%);
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 100%);
+    color: #fff;
+    font-size: 9px; font-weight: 800; letter-spacing: 0.6px;
+    padding: 4px 7px; border-radius: 5px;
+    white-space: nowrap;
+    box-shadow: 0 2px 6px rgba(42,107,34,0.28);
+  }
   .confirm-q { font-weight: 700; font-size: 16px; margin: 0 0 14px; }
   .confirm-btn { width: 100%; padding: 12px 14px; background: white; border: 2px solid var(--border); border-radius: var(--r-sm); font-weight: 700; font-size: 16px; color: var(--ink); margin-bottom: 8px; cursor: pointer; text-align: left; display: flex; align-items: center; gap: 12px; }
   .confirm-thumb { width: 56px; height: 56px; flex: 0 0 56px; border-radius: 8px; background: var(--bg); object-fit: contain; padding: 4px; }
@@ -327,7 +383,12 @@
   body:has(#screen-barcode.active) .screen,
   body:has(#screen-loading.active) .screen { padding-bottom: 0; }
   .confirm-btn:active { background: var(--green-soft); border-color: var(--green); }
+  /* Wave V.3 — CTA list spacing + primary CTA enhancement */
   .cta-list { display: flex; flex-direction: column; gap: 10px; margin: 8px 0 24px; }
+  .cta.primary {
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.22) inset, 0 8px 22px rgba(42,107,34,0.28);
+  }
   .cta { display: flex; align-items: center; gap: 14px; padding: 16px 18px; background: var(--card); border: 1px solid var(--border); border-radius: var(--r-md); text-decoration: none; color: var(--ink); box-shadow: var(--shadow-sm); transition: transform .15s ease; }
   .cta:active { transform: scale(.985); }
   .cta.primary { background: var(--green); color: white; border: none; padding: 22px 20px; box-shadow: 0 4px 14px rgba(42,107,34,.28), 0 1px 2px rgba(0,0,0,.06); margin-bottom: 4px; }
@@ -355,8 +416,11 @@
   .ghost-btn:active { background: var(--card); }
   .small-print { font-size: 12px; color: var(--ink-mute); text-align: center; margin: 18px 0 8px; line-height: 1.5; }
   .trust-footer { margin: 22px 0 6px; padding: 14px 4px 4px; border-top: 1px solid var(--border); }
-  .trust-line { font-size: 12px; color: var(--ink-mute); line-height: 1.55; margin: 0 0 8px; }
+  /* Wave V.3 — affiliate disclosure quieter, more compact */
+  .trust-line { font-size: 11.5px; color: var(--ink-mute); line-height: 1.5; margin: 0 0 6px; }
   .trust-line strong { color: var(--ink-soft); font-weight: 700; }
+  .trust-disclosure { font-size: 10.5px; opacity: 0.85; }
+  .beta-tag { font-variant-numeric: tabular-nums; font-weight: 700; }
   .trust-disclosure { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 0; }
   .beta-tag { display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 999px; background: var(--green-soft); color: var(--green-dark); font-weight: 800; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; }
   .error-card { background: #fef0ee; border: 1px solid #f5c8c1; border-radius: var(--r-md); padding: 18px; }
@@ -494,7 +558,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <!-- Wave V.1 — v5 design copy + "a snap" green highlight -->
   <h1 class="tagline">The honest UK price,<br>in <span class="tagline-accent">a snap</span>.</h1>
   <p class="tagsub">Snap your shelf. Restock without thinking. Free, no sign-up, UK only.</p>
-  <p id="counter" style="margin:0 0 18px;font-size:12px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;">✦ <span id="counter-num">—</span> products identified by Savvey shoppers</p>
+  <!-- Wave V.4 — counter line: cleaner copy + tighter visual -->
+  <p id="counter" style="margin:0 0 22px;font-size:12.5px;color:var(--ink-mute);font-weight:700;letter-spacing:0.02em;display:flex;align-items:center;gap:6px;">
+    <span style="display:inline-block;width:6px;height:6px;border-radius:999px;background:var(--green);"></span>
+    <span id="counter-num">—</span> products identified by Savvey shoppers this week
+  </p>
 
   <button class="door primary" onclick="goSnap()">
     <div class="door-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
@@ -541,7 +609,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <footer class="trust-footer">
     <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v2</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+    <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v4</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
   </footer>
 </div>
 
