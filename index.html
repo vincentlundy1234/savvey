@@ -1511,7 +1511,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v41</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v42</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -2837,6 +2837,8 @@ function renderResult(displayName, payload) {
   const pillEl = document.getElementById('verdict-pill');
   const pillTxt = document.getElementById('verdict-pill-text');
   pillEl.classList.remove('show', 'good_buy', 'fair', 'wait', 'check_elsewhere', 'neutral');
+  // V.42 — also clear v5 verdict-tone class on body so screen tint resets between results
+  document.body.classList.remove('verdict-good_buy','verdict-fair','verdict-wait','verdict-check_elsewhere','verdict-neutral');
   // Wave F: verdict basis micro-copy explains WHY (panel + beta finding 'good buy based on what?').
   // Built dynamically from what data is present so it's always honest about the basis.
   const basisEl = document.getElementById('verdict-basis');
@@ -2864,11 +2866,18 @@ function renderResult(displayName, payload) {
     const label = { good_buy: 'Good buy', fair: 'Fair price', wait: 'Wait — sale likely', check_elsewhere: 'Check listing carefully' }[v];
     pillTxt.textContent = label;
     pillEl.classList.add('show', v);
+    document.body.classList.add('verdict-' + v);
+    // V.42 — populate v5 verdict watermark (the rotated big word in corner)
+    const _wm = document.getElementById('v5-verdict-watermark');
+    if (_wm) _wm.textContent = ({good_buy:'Good',fair:'Fair',wait:'Wait',check_elsewhere:'Check'})[v] || '';
     if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
   } else if (ss && ss.live_amazon_price) {
     // Wave F: neutral pill when verdict is null but we have a verified price
     pillTxt.textContent = 'Identified — see retailer';
     pillEl.classList.add('show', 'neutral');
+    document.body.classList.add('verdict-neutral');
+    const _wm2 = document.getElementById('v5-verdict-watermark');
+    if (_wm2) _wm2.textContent = '';
     if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
     // v3.4.5e — verdict_shown is now fired AFTER show('result') below (in
     // a requestAnimationFrame) to ensure it tracks the moment the user
@@ -2878,11 +2887,14 @@ function renderResult(displayName, payload) {
   const cat = (payload && payload.category) || 'generic';
   const conf = payload && payload.confidence;
   const badgeEl = document.getElementById('result-badge');
+  // V.42 — also mirror the badge text into the v5 confidence chip
+  const _v5conf = document.getElementById('v5-confidence-text');
   let badgeText;
   if (conf === 'high') badgeText = 'Identified · ' + cat.toUpperCase();
   else if (conf === 'medium') badgeText = 'Best guess · ' + cat.toUpperCase();
   else badgeText = 'Best guess · check retailer';
   badgeEl.textContent = badgeText;
+  if (_v5conf) _v5conf.textContent = badgeEl.textContent;
   badgeEl.classList.toggle('amber', conf !== 'high');
   const subEl = document.getElementById('result-sub');
   if (subEl) {
