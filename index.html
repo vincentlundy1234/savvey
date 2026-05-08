@@ -1016,6 +1016,10 @@
     padding: 12px;
     margin: 6px 0 12px;
   }
+  /* V.55 — hide verdict block entirely when there is no verdict and no
+     verified live price. Without this rule the empty green pill renders as
+     a watermark-only ghost on low-confidence vague-brand searches. */
+  .v5-verdict-block.empty { display: none !important; }
   body.verdict-good_buy .v5-verdict-block { background: var(--green-soft, #e8f3e6); }
   body.verdict-fair .v5-verdict-block,
   body.verdict-wait .v5-verdict-block { background: var(--amber-soft, #fbeed4); }
@@ -2326,7 +2330,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v54</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v55</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3886,6 +3890,9 @@ function renderResult(displayName, payload) {
     const _wm = document.getElementById('v5-verdict-watermark');
     if (_wm) _wm.textContent = ({good_buy:'Good',fair:'Fair',wait:'Wait',check_elsewhere:'Check'})[v] || '';
     if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
+    // V.55 — ensure block is shown
+    const _vb = document.getElementById('v5-verdict-block');
+    if (_vb) _vb.classList.remove('empty');
   } else if (ss && ss.live_amazon_price) {
     // Wave F: neutral pill when verdict is null but we have a verified price
     pillTxt.textContent = 'Identified — see retailer';
@@ -3894,6 +3901,17 @@ function renderResult(displayName, payload) {
     const _wm2 = document.getElementById('v5-verdict-watermark');
     if (_wm2) _wm2.textContent = '';
     if (basisEl && basisLine) { basisEl.textContent = basisLine; basisEl.classList.add('show'); }
+    // V.55 — ensure block is shown
+    const _vb2 = document.getElementById('v5-verdict-block');
+    if (_vb2) _vb2.classList.remove('empty');
+  } else {
+    // V.55 — no verdict + no live price: hide the verdict-block
+    // entirely so the empty green pill ghost no longer appears at the
+    // top of low-confidence vague-brand results.
+    const _wm3 = document.getElementById('v5-verdict-watermark');
+    if (_wm3) _wm3.textContent = '';
+    const _vb3 = document.getElementById('v5-verdict-block');
+    if (_vb3) _vb3.classList.add('empty');
     // v3.4.5e — verdict_shown is now fired AFTER show('result') below (in
     // a requestAnimationFrame) to ensure it tracks the moment the user
     // actually SEES the verdict, not the moment the DOM mutation happens
@@ -4039,6 +4057,11 @@ function renderResult(displayName, payload) {
       subStr  = verifiedAmazonLink
         ? 'Verified UK price · tap to open this listing'
         : 'Verified UK price · tap to find this on Amazon';
+    } else if (r.name === 'Amazon UK' && !verifiedPriceStr) {
+      // V.55 — honest copy when we have no verified price: the default
+      // retailer-config sub said 'Verified live price' which read as a
+      // freshness claim even though no price was rendered next to the name.
+      subStr = 'Tap to search Amazon UK';
     } else if (_deep) {
       // Wave GG — non-Amazon retailer with a verified PDP deep link. Use the
       // google_shopping price hint when present, plus a "tap to open" copy
