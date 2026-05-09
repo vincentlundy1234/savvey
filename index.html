@@ -125,6 +125,72 @@
   #screen-confirm > *,
   #screen-loading > * { position: relative; z-index: 1; }
 
+  /* =========================================================================
+     V.76 — Z-INDEX REGISTRY (Bug F: stacking-context discipline)
+     -------------------------------------------------------------------------
+     Documenting the canonical scale so future modals don't land behind
+     existing ones. Use only the tokens below. Do not introduce new arbitrary
+     z-index values without adding a row here.
+
+       0          → atmosphere blob, body backgrounds (decorative only)
+       1          → screen content (above blob, below chrome)
+       2-9        → in-screen flow accents (verdict pip rays, badge halos,
+                    intra-screen overlays that should NOT escape the screen)
+       10         → screen .active layer (top of in-screen z-context)
+       50         → topbar / bottom-nav (chrome over screens, below modals)
+       90         → toast / haptic feedback flash (transient confirmations)
+       100        → in-page sheets (A2HS prompt, share sheet, install prompt)
+       200        → confirm/disambig modal stack
+       300        → AI-info modal, GDPR consent banner
+       9999       → safety overlay (Layer 2 safety_block, error states only)
+
+     Rule: anything modal-like = 100+. Anything chrome = 50. Anything
+     screen-internal = ≤ 10. If you need a new tier, slot it here first.
+     ======================================================================= */
+
+  /* =========================================================================
+     V.76 — TOUCH TARGET ENFORCEMENT (Bug E: WCAG 2.5.5 Level AA)
+     -------------------------------------------------------------------------
+     Every interactive control must hit 44×44 CSS pixels minimum. Apple HIG
+     recommends 44pt; Material recommends 48dp; WCAG 2.5.5 Level AAA = 44×44.
+     Even at AA we enforce it because in-store users tap with cold fingers
+     while holding a basket. Spec violations here = miss-taps = trust loss.
+     ======================================================================= */
+  /* Defensive baseline: all buttons that aren't part of an explicitly
+     hit-area-extended pattern hit 44×44. Specific components below override
+     where the visible pill is smaller but the tap area is padded out. */
+  button, [role="button"], a.btn, .v5-door-input-row button, .recent-chip,
+  .v71-recent-chip, .nav-tab, .v5-bottom-nav a, .v5-bottom-nav button,
+  .actions-row button, .actions-row a, #reset-link, .clear-input-x,
+  .recent-clear, .ai-info-close, .share-close, .modal-close,
+  .gdpr-banner button, .install-sheet button, .a2hs-sheet button {
+    min-height: 44px;
+    min-width: 44px;
+    /* Ensure padding contributes to the hit-area, not just the visual frame */
+    box-sizing: border-box;
+  }
+  /* Small visual chips can be ≤44 visually but MUST extend tap area via
+     ::before pseudo so the touch target stays ≥44. Used for the V.71 recent
+     strip thumbnails and other dense rows. */
+  .v71-recent-chip { position: relative; }
+  .v71-recent-chip::before {
+    content: "";
+    position: absolute;
+    inset: -6px;
+    /* expands hit-area outward by 6px on all sides */
+  }
+  /* Disambig list rows — tap-target audit. Each row must be 44 tall. */
+  .confirm-row, .alt-row, .disambig-row {
+    min-height: 56px; /* 44 baseline + 12 visual breathing */
+  }
+  /* Footer 'Reset' link is intentionally tiny but tap area must still
+     hit 44×44. Pad invisibly. */
+  #reset-link {
+    display: inline-block;
+    padding: 12px 8px;
+    margin: -12px -8px;
+  }
+
   /* 4. Per-screen body tints via :has() */
   body:has(#screen-loading.active) {
     background:
@@ -2324,8 +2390,13 @@
     .v5-door--input .v5-door-input-row { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.07); }
     .v5-door--input .v5-door-input-row:focus-within { background: rgba(255,255,255,0.08); border-color: rgba(46,107,38,0.45); box-shadow: 0 0 0 3px rgba(46,107,38,0.15); }
   }
-  /* hide the engine-stub (counter / recent chips) which v5 home doesn't show */
+  /* V.76 — v5-engine-stub deleted from DOM (was hiding savings counter +
+     legacy text-chip recents). Selector retained as dead-letter no-op
+     in case any straggler markup reappears. */
   .v5-engine-stub { display: none !important; }
+  /* V.76 — legacy recent-row / recent-chips / recent-clear no longer
+     in DOM. Hidden defensively. QW1 V.71 v71-recent-strip is canonical. */
+  #recent-row, .recent-chips, .recent-clear, #counter { display: none !important; }
   /* footer trust block for v5 home */
   .v5-home-footer {
     margin-top: 16px;
@@ -3202,19 +3273,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       </div>
     </div>
 
-    <!-- Engine-facing elements kept in DOM (hidden) for JS compat: counter, recent chips -->
-    <div class="v5-engine-stub" hidden aria-hidden="true">
-      <p id="counter"><span id="counter-num">—</span></p>
-      <div id="recent-row" hidden>
-        <div id="recent-label-wrap"><span class="recent-label">Recent</span><button class="recent-clear" id="recent-clear" type="button">Clear</button></div>
-        <div class="recent-chips" id="recent-chips"></div>
-      </div>
-    </div>
+    <!-- V.76 — savings counter (vanity metric) + legacy text-chip recents
+         deleted per board ruling. QW1 V.71 rich strip (v71-recent-strip)
+         supersedes the legacy recent-chips on home. -->
 
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v75</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v76</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5180,7 +5246,11 @@ function track(event, props) {
   try { if (window.posthog) window.posthog.capture(event, props || {}); } catch {}
 }
 
-const RECENTS_KEY = 'savvey_v3_recents';
+// V.76 — board ruling 9 May 2026: legacy text-chip recents and savings counter
+// deleted as vanity / dead-weight. These keys + functions remain stubbed so
+// older call sites in callNormalize/disambigPick don't ReferenceError.
+// QW1 V.71 rich strip (v71-recent-strip) is the canonical recents component.
+const RECENTS_KEY = 'savvey_v3_recents_DEPRECATED_V76';
 const RECENTS_MAX = 5;
 function loadRecents() {
   try { const raw = localStorage.getItem(RECENTS_KEY); return raw ? JSON.parse(raw) : []; } catch { return []; }
@@ -5209,24 +5279,10 @@ function clearRecents() {
   renderRecents();
 }
 function renderRecents() {
-  const list = loadRecents();
-  const row = document.getElementById('recent-row');
-  const wrap = document.getElementById('recent-chips');
-  if (!list.length) { row.hidden = true; wrap.innerHTML = ''; return; }
-  row.hidden = false;
-  wrap.innerHTML = '';
-  for (const r of list) {
-    const chip = document.createElement('button');
-    chip.className = 'recent-chip';
-    chip.textContent = r.canonical_search_string;
-    chip.title = r.canonical_search_string;
-    chip.onclick = () => {
-      track('recent_tapped', { category: r.category });
-      lastResult = r;
-      renderResult(r.canonical_search_string, r);
-    };
-    wrap.appendChild(chip);
-  }
+  // V.76 — no-op. Legacy text-chip recents row deleted from DOM. The QW1
+  // V.71 rich strip handles this via its own MutationObserver on
+  // screen-home.active. Keeping this stub so existing call sites
+  // (callNormalize, disambigPick) don't throw.
 }
 
 let _installPromptEvt = null;
@@ -5344,20 +5400,10 @@ function getCounter() {
   try { return parseInt(localStorage.getItem(COUNTER_KEY) || '0', 10) + COUNTER_BASE; }
   catch { return COUNTER_BASE; }
 }
-function bumpCounter() {
-  try {
-    const cur = parseInt(localStorage.getItem(COUNTER_KEY) || '0', 10) + 1;
-    localStorage.setItem(COUNTER_KEY, String(cur));
-    renderCounter();
-  } catch {}
-}
-function renderCounter() {
-  const el = document.getElementById('counter-num');
-  if (el) el.textContent = getCounter().toLocaleString('en-GB');
-}
-
-renderCounter();
-renderRecents();
+// V.76 — savings counter (vanity metric) deleted per board ruling 9 May 2026.
+// Stubs retained so callNormalize's bumpCounter() invocation doesn't throw.
+function bumpCounter() { /* no-op — board ruling, vanity metric */ }
+function renderCounter() { /* no-op */ }
 // v3.4.4 force-refresh affordance — testing-phase escape hatch for stuck PWA caches.
 // Activated either via ?fresh=1 URL param (auto-runs on load) OR by tapping the
 // 'Reset' link in the home-screen footer. Unregisters all service workers,
