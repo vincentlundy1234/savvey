@@ -3214,7 +3214,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v74</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v75</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3640,9 +3640,48 @@ let _navInternal = false;
 // which input door fired the most recent /api/normalize call so verdict_shown
 // and cta_tapped events can be sliced by door. Set inside callNormalize().
 let _lastDoor = null;
+// V.75 — module-scope handle for the in-flight /api/normalize fetch so
+// screen-change can abort it, plus a monotonic sequence number so a stale
+// late-arriving response can't write its verdict over a newer screen state.
+// Without this, a user who taps Snap then immediately Home gets a ghost
+// result panel rendering ~6s later on the home screen. Bug A in the
+// V.75 UI/UX architect sweep.
+let _savveyActiveAbort = null;
+let _savveyFetchSeq = 0;
+// V.75 — reentrancy guard for goSnap(). Prevents a rapid double-tap on the
+// Snap button from firing two getUserMedia() requests in parallel and
+// leaving an orphaned MediaStream draining battery. Bug B in the sweep.
+let _savveyCameraStarting = false;
+// V.75 — anti-jank guard for V.68 entrance animations. show() rapidly toggling
+// .active off/on during fast nav restarts the keyframes mid-animation and
+// looks broken. Track the last activation timestamp per screen and short-circuit
+// the animation reset if the same screen reactivates within 400ms. Bug D.
+const _savveyLastShownAt = Object.create(null);
 function show(id, opts) {
+  // V.75 — if we're navigating AWAY from the loading screen (i.e. the user
+  // gave up or hit back), cancel the in-flight /api/normalize request so a
+  // stale result can't render on whatever screen they landed on. The 'loading'
+  // destination itself should NOT cancel — that's a fresh query starting.
+  if (id !== 'loading' && _savveyActiveAbort) {
+    try { _savveyActiveAbort.abort(); } catch {}
+    _savveyActiveAbort = null;
+  }
+  // V.75 — clear stale verdict object when returning to home so a late
+  // re-render or back-button history pop can't resurface yesterday's result.
+  if (id === 'home') { lastResult = null; }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById('screen-' + id).classList.add('active');
+  const _target = document.getElementById('screen-' + id);
+  if (!_target) return;
+  // V.75 — animation re-fire throttle. If same screen reactivated within 400ms,
+  // skip the .active toggle dance that restarts entrance keyframes mid-flight.
+  const _now = Date.now();
+  const _last = _savveyLastShownAt[id] || 0;
+  if (_now - _last < 400 && _target.classList.contains('active')) {
+    // already active and recent — no-op the visual reset
+  } else {
+    _target.classList.add('active');
+    _savveyLastShownAt[id] = _now;
+  }
   window.scrollTo(0, 0);
   if (id === 'home') document.getElementById('hint').textContent = '';
   if (!opts || !opts.fromPop) {
@@ -3972,6 +4011,16 @@ function downscaleImageToBase64(source, sourceWidth, sourceHeight) {
 }
 
 async function goSnap() {
+  // V.75 — reentrancy guard. A rapid double-tap on the Snap door fires
+  // getUserMedia() twice in parallel and leaves an orphan MediaStream
+  // draining battery + holding the camera light on. Bug B in the sweep.
+  if (_savveyCameraStarting) return;
+  // If a stream is already live (user re-tapped from camera screen), short-circuit.
+  if (camStream && camStream.getTracks && camStream.getTracks().some(t => t.readyState === 'live')) {
+    show('camera');
+    return;
+  }
+  _savveyCameraStarting = true;
   show('camera');
   try {
     camStream = await navigator.mediaDevices.getUserMedia({
@@ -3985,6 +4034,8 @@ async function goSnap() {
     track('snap_camera_denied', { reason: String(err && err.name || err).slice(0, 40) });
     goHome();
     document.getElementById('photo-fallback').click();
+  } finally {
+    _savveyCameraStarting = false;
   }
 }
 function cancelCamera() {
@@ -4217,7 +4268,13 @@ async function callNormalize(body) {
   }, 1200);
   const t0 = Date.now();
   // Wave BB: AbortController prevents UI hang if Vercel function exceeds 12s
+  // V.75: register at module scope so show()/stopAllScanners() can abort on
+  // screen change (Bug A — orphan in-flight fetch). Also stamp this call's
+  // sequence number so we can reject a late response if a newer call started.
+  if (_savveyActiveAbort) { try { _savveyActiveAbort.abort(); } catch {} }
   const _ac = new AbortController();
+  _savveyActiveAbort = _ac;
+  const _mySeq = ++_savveyFetchSeq;
   const _ato = setTimeout(() => _ac.abort(), 15000);
   try {
     const r = await fetch('/api/normalize', {
@@ -4228,6 +4285,13 @@ async function callNormalize(body) {
     const j = await r.json();
     clearInterval(phaseTimer);
     const ms = Date.now() - t0;
+    // V.75 — drop response if a newer call has started or this one was aborted.
+    // Without this, a late response from a cancelled query renders over the
+    // user's current screen as a ghost result. Bug A in the V.75 sweep.
+    if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) {
+      track('normalize_stale_dropped', { input_type: body.input_type, ms });
+      return;
+    }
     if (!r.ok || j.error) {
       track('normalize_error', { input_type: body.input_type, status: r.status, error: j.error || r.status, ms });
       // Wave KK — Layer 2 safety block. Friendly redirect, no shaming.
@@ -4278,11 +4342,23 @@ async function callNormalize(body) {
     }
   } catch (err) {
     clearInterval(phaseTimer);
-    track('normalize_throw', { input_type: body.input_type, error: String(err).slice(0, 100) });
-    showError('Network error.', 'Check your connection and try again.');
+    // V.75 — swallow AbortError silently; that's the user navigating away,
+    // not a real error worth surfacing. Anything else gets the normal path.
+    if (err && (err.name === 'AbortError' || String(err).indexOf('aborted') !== -1)) {
+      track('normalize_aborted', { input_type: body.input_type, ms: Date.now() - t0 });
+    } else {
+      track('normalize_throw', { input_type: body.input_type, error: String(err).slice(0, 100) });
+      // Only surface error if user is still on the loading screen for this call.
+      if (_mySeq === _savveyFetchSeq) {
+        showError('Network error.', 'Check your connection and try again.');
+      }
+    }
   } finally {
     clearTimeout(_ato);  // Wave BB defensive cleanup
     window._savveyFetching = false;
+    // V.75 — only release the global handle if it still points at us
+    // (a later call may have already replaced it).
+    if (_savveyActiveAbort === _ac) { _savveyActiveAbort = null; }
   }
 }
 
