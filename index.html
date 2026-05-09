@@ -3214,7 +3214,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v72</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v73</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6344,6 +6344,10 @@ handleInbound();
     }
   }
 
+  // V.73: expose classifier so the V.73 interceptor can call it with a timeout
+  window.__v72ClassifyBase64 = classifyBase64;
+  window.__v72UpdateNarration = updateLoadingNarration;
+
   // Intercept fetch to /api/normalize on image input — run classification in parallel
   var origFetch = window.fetch;
   window.fetch = function() {
@@ -6375,6 +6379,73 @@ handleInbound();
     } catch (e) { /* swallow - never break fetch */ }
     return origFetch.apply(this, args);
   };
+})();
+</script>
+
+
+
+<script>
+/* ========================================================================
+   V.73 MOBILE-CLIP V2 — pre-classify with timeout + backend hint plumbing
+   Supersedes V.72 V1 fire-and-forget interceptor.
+   ======================================================================== */
+
+(function v73MobileCLIPv2() {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  var CLASSIFY_TIMEOUT_MS = 600;
+  var CONFIDENCE_THRESHOLD = 0.55;
+  var lastIntercept = 0;
+
+  function classifyWithTimeout(base64) {
+    var fn = (typeof window.__v72ClassifyBase64 === 'function')
+      ? window.__v72ClassifyBase64
+      : null;
+    if (!fn) return Promise.resolve(null);
+    return Promise.race([
+      fn(base64).catch(function(){ return null; }),
+      new Promise(function(resolve) { setTimeout(function(){ resolve(null); }, CLASSIFY_TIMEOUT_MS); })
+    ]);
+  }
+
+  // Replace the V.72 interceptor with a V.73 await-with-timeout version.
+  // Uses a flag to avoid double-wrapping if loaded multiple times.
+  if (window.__v73Wrapped) return;
+  var origFetch = window.fetch;
+  window.fetch = async function() {
+    var args = Array.prototype.slice.call(arguments);
+    try {
+      var url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url);
+      if (url && url.indexOf('/api/normalize') !== -1 && args[1] && args[1].body) {
+        var bodyStr = (typeof args[1].body === 'string') ? args[1].body : null;
+        if (bodyStr) {
+          var body = null;
+          try { body = JSON.parse(bodyStr); } catch (e) {}
+          if (body && body.input_type === 'image') {
+            var frame = body.image_base64
+              || (Array.isArray(body.image_base64_frames) && body.image_base64_frames[0])
+              || null;
+            if (frame && (Date.now() - lastIntercept) > 800) {
+              lastIntercept = Date.now();
+              try {
+                var cat = await classifyWithTimeout(frame);
+                if (cat && cat.confidence >= CONFIDENCE_THRESHOLD && cat.category && cat.category !== 'generic') {
+                  body.category_hint = cat.category;
+                  args[1].body = JSON.stringify(body);
+                  window.__v72LastCategory = cat;
+                  // Also nudge the loading screen narration immediately
+                  try { window.__v72UpdateNarration && window.__v72UpdateNarration(cat); } catch (e) {}
+                }
+              } catch (e) { /* swallow - never break fetch */ }
+            }
+          }
+        }
+      }
+    } catch (e) { /* swallow */ }
+    return origFetch.apply(this, args);
+  };
+  window.__v73Wrapped = true;
 })();
 </script>
 

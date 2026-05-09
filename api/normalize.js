@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v72';
+const VERSION             = 'normalize.js v3.4.5v73';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -857,6 +857,25 @@ async function lookupOpenFoodFacts(ean) {
   }
 }
 
+
+// V.73 — Mobile-CLIP V2: when frontend sends category_hint from on-device
+// classifier, inject as soft constraint at the END of the Vision tail prompt.
+// SOFT (not strict) so misclassifications don't poison high-confidence Haiku
+// reads of explicit MPN/brand text on the package. Empirical bias only.
+function _buildVisionPromptWithHint(basePrompt, hint) {
+  if (!hint || typeof hint !== 'string') return basePrompt;
+  const allowed = ['tech','home','toys','diy','beauty','grocery','health','generic'];
+  if (!allowed.includes(hint)) return basePrompt;
+  if (hint === 'generic') return basePrompt;
+  return basePrompt + `
+
+ON-DEVICE CLASSIFIER HINT (soft signal, not authoritative):
+The user's phone classifier suggests this image is in the "${hint}" category.
+- If readable brand/model on the package matches a different category, TRUST the package text and IGNORE this hint.
+- If the package is ambiguous (empty container, partial label, generic packaging), this hint can break ties.
+- Do NOT bias category enum solely on this hint without supporting evidence.`;
+}
+
 export default async function handler(req, res) {
   applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -904,7 +923,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'image_base64 or image_base64_frames required' });
       }
       rawText = await withCircuit('anthropic',
-        () => callHaikuVision(VISION_SYSTEM_PROMPT, payload, mediaType),
+        () => callHaikuVision(_buildVisionPromptWithHint(VISION_SYSTEM_PROMPT, body && body.category_hint), payload, mediaType),
         { onOpen: () => null }
       );
     } else if (inputType === 'url') {
@@ -996,7 +1015,7 @@ export default async function handler(req, res) {
       kvSet(cKey, canonHit, KV_TTL_SECONDS).catch(() => {});
       return res.status(200).json({
         ...canonHit,
-        _meta: { ...(canonHit._meta || {}), cache: 'canonical_hit', latency_ms: Date.now() - t0, version: VERSION }
+        _meta: { ...(canonHit._meta || {}), cache: 'canonical_hit', latency_ms: Date.now() - t0, version: VERSION, category_hint_received: (body && body.category_hint) || null }
       });
     }
   }
