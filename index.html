@@ -573,7 +573,7 @@
   /* V.65 â€” V.64 visible regression fixes */
 
   /* 1. Verdict pill: drop the inner .verdict-dot span. ::before checkmark
-        from V.64 already provides the dot. Showing both = âœ“âœ“. */
+        from V.64 already provides the dot. Showing both = ✓✓. */
   .verdict-pill .verdict-dot,
   .v5-verdict-pill .verdict-dot {
     display: none !important;
@@ -3214,7 +3214,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v73</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v74</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4261,9 +4261,14 @@ async function callNormalize(body) {
     // the Nespresso-miss-class fix (7 May 2026 beta-2 finding).
     const _isImageInput = body.input_type === 'image';
     const _brandOnly = j.specificity === 'brand_only';
+    // V.74 — also fire disambig when alternatives_array has options even if
+    // alternative_string is null. Catches "Bose"/"Logitech mouse" style brand-only
+    // text searches that previously fell through to the V.58 empty state.
+    const _hasDisambigOptions = !!(j.alternative_string ||
+      (Array.isArray(j.alternatives_array) && j.alternatives_array.length >= 1));
     const _shouldDisambig =
-      (j.confidence !== 'high' && j.alternative_string) ||
-      (_isImageInput && _brandOnly && j.alternative_string);
+      (j.confidence !== 'high' && _hasDisambigOptions) ||
+      (_isImageInput && _brandOnly && _hasDisambigOptions);
     if (_shouldDisambig) {
       track('disambig_routed', { reason: _brandOnly ? 'brand_only' : 'low_confidence', door: _lastDoor });
       renderConfirm(j.canonical_search_string, j.alternative_string, j);
@@ -5363,16 +5368,19 @@ handleInbound();
    Engine-safe: only mutates inside #screen-loading; doesn't touch the
    loading-state JS that auto-advances after callNormalize completes. */
 (function v64LoadingOrbit() {
+  // V.74 — tightened orbit distances. Was 110-130 which clipped 'Very' and
+  // 'John Lewis' on narrow phones; reduced to 84-94 so 9 pills sit inside the
+  // 280px stage with proper margins. Angles redistributed for even spread.
   var RETAILERS = [
-    { name: 'Very',         angle: 200, dist: 110, status: 'pending' },
-    { name: 'Amazon',       angle: 250, dist: 115, status: 'checked' },
-    { name: 'Argos',        angle: 290, dist: 110, status: 'pending' },
-    { name: 'ASDA',         angle: 175, dist: 122, status: 'checked' },
-    { name: 'Currys',       angle: 320, dist: 118, status: 'pending' },
-    { name: 'Boots',        angle: 155, dist: 115, status: 'checked' },
-    { name: 'John Lewis',   angle: 360, dist: 122, status: 'pending' },
-    { name: 'AO',           angle: 130, dist: 130, status: 'checked' },
-    { name: 'Tesco',        angle: 105, dist: 130, status: 'checked' },
+    { name: 'Very',         angle: 200, dist:  88, status: 'pending' },
+    { name: 'Amazon',       angle: 250, dist:  92, status: 'checked' },
+    { name: 'Argos',        angle: 290, dist:  88, status: 'pending' },
+    { name: 'ASDA',         angle: 170, dist:  90, status: 'checked' },
+    { name: 'Currys',       angle: 320, dist:  90, status: 'pending' },
+    { name: 'Boots',        angle: 145, dist:  90, status: 'checked' },
+    { name: 'John Lewis',   angle:  20, dist:  94, status: 'pending' },
+    { name: 'AO',           angle: 110, dist:  94, status: 'checked' },
+    { name: 'Tesco',        angle:  60, dist:  94, status: 'checked' },
   ];
   function buildStage() {
     var stage = document.createElement('div');
@@ -5395,7 +5403,7 @@ handleInbound();
       p.style.animationDelay = (i * 200) + 'ms';
       var dot = document.createElement('span');
       dot.className = 'v64-load-pill-dot';
-      if (r.status === 'checked') dot.textContent = 'âœ“';
+      if (r.status === 'checked') dot.textContent = '✓';
       var lab = document.createElement('span');
       lab.textContent = r.name;
       p.appendChild(dot); p.appendChild(lab);
@@ -5415,7 +5423,7 @@ handleInbound();
       w.className = 'v64-load-phase ' + ph.state;
       var d = document.createElement('div');
       d.className = 'v64-load-phase-dot';
-      if (ph.state === 'done') d.textContent = 'âœ“';
+      if (ph.state === 'done') d.textContent = '✓';
       var l = document.createElement('div');
       l.className = 'v64-load-phase-label';
       l.innerHTML = ph.lbl.replace(/Â /g,'<br>');
