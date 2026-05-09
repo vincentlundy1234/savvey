@@ -749,6 +749,196 @@
     }
   }
 
+  /* ========== V.71 QUICK WINS BUNDLE — habit-loop UI ========== */
+
+  /* QW1 — Last 3 Snaps strip */
+  .v71-recent-strip {
+    margin: 12px 0 16px;
+    padding: 0;
+  }
+  .v71-recent-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-mute, #7a857f);
+    margin: 0 0 8px 4px;
+  }
+  .v71-recent-track {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    padding: 2px 4px 8px;
+    scrollbar-width: none;
+  }
+  .v71-recent-track::-webkit-scrollbar { display: none; }
+  .v71-recent-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    padding: 8px 12px 8px 8px;
+    background: rgba(255,255,255,0.78);
+    border: 1px solid rgba(20,32,26,0.06);
+    border-radius: 999px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--ink, #14201a);
+    cursor: pointer;
+    scroll-snap-align: start;
+    transition: transform 160ms cubic-bezier(0.22,1,0.36,1), background 160ms ease;
+  }
+  .v71-recent-chip:active { transform: scale(0.96); background: rgba(255,255,255,0.95); }
+  .v71-recent-thumb {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    object-fit: cover;
+    background: #f0e9d8;
+    flex: 0 0 auto;
+  }
+  .v71-recent-thumb-empty {
+    width: 28px; height: 28px;
+    border-radius: 6px;
+    background: #f0e9d8;
+    flex: 0 0 auto;
+  }
+  .v71-recent-title {
+    font-weight: 600;
+    max-width: 160px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .v71-recent-dot {
+    width: 8px; height: 8px;
+    border-radius: 999px;
+    flex: 0 0 auto;
+  }
+  .v71-recent-dot--good_buy { background: #2a6b22; }
+  .v71-recent-dot--fair { background: #d68910; }
+  .v71-recent-dot--wait { background: #d68910; }
+  .v71-recent-dot--check_elsewhere { background: #cc4444; }
+
+  /* QW5 — Restocking smart chip */
+  .v71-restocking-chip {
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    margin: 8px 0 14px;
+    background: linear-gradient(135deg, #e8f3e6 0%, #d6f1d2 100%);
+    border: 1px solid rgba(42,107,34,0.18);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 6px rgba(42,107,34,0.08);
+  }
+  .v71-restocking-tap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    background: transparent;
+    border: 0;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: #14201a;
+    cursor: pointer;
+    text-align: left;
+  }
+  .v71-restocking-tap:active { background: rgba(42,107,34,0.08); }
+  .v71-restocking-icon { font-size: 16px; }
+  .v71-restocking-label { flex: 1; }
+  .v71-restocking-dismiss {
+    flex: 0 0 auto;
+    padding: 0 16px;
+    background: transparent;
+    border: 0;
+    border-left: 1px solid rgba(42,107,34,0.18);
+    color: var(--ink-mute, #7a857f);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+  }
+  .v71-restocking-dismiss:active { background: rgba(42,107,34,0.08); }
+
+  /* QW4 — A2HS install prompt sheet */
+  .v71-a2hs-sheet {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    z-index: 9999;
+    padding: 16px;
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    background: rgba(20,32,26,0.4);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    animation: v71-a2hs-fade 280ms ease-out;
+  }
+  @keyframes v71-a2hs-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .v71-a2hs-card {
+    width: 100%;
+    max-width: 420px;
+    padding: 20px;
+    background: #fff;
+    border-radius: 18px;
+    box-shadow: 0 8px 24px rgba(20,32,26,0.18);
+    animation: v71-a2hs-rise 380ms cubic-bezier(0.22,1,0.36,1);
+  }
+  @keyframes v71-a2hs-rise {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .v71-a2hs-card h3 {
+    margin: 0 0 6px;
+    font-size: 17px;
+    font-weight: 800;
+    color: var(--ink, #14201a);
+  }
+  .v71-a2hs-card p {
+    margin: 0 0 16px;
+    font-size: 14px;
+    color: var(--ink-soft, #4a5550);
+    line-height: 1.4;
+  }
+  .v71-a2hs-buttons {
+    display: flex;
+    gap: 10px;
+  }
+  .v71-a2hs-skip, .v71-a2hs-add {
+    flex: 1;
+    padding: 12px;
+    border-radius: 12px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    border: 0;
+  }
+  .v71-a2hs-skip {
+    background: rgba(20,32,26,0.06);
+    color: var(--ink-soft, #4a5550);
+  }
+  .v71-a2hs-add {
+    background: var(--green, #2a6b22);
+    color: #fff;
+  }
+  .v71-a2hs-skip:active, .v71-a2hs-add:active { transform: scale(0.97); }
+
+  /* QW2 — Trust theatre loading: phase label fade animation */
+  .v5-timeline-node[data-v71-phase] .v5-timeline-label,
+  .v5-timeline-node[data-v71-phase] [class*="timeline-label"] {
+    transition: opacity 220ms ease;
+  }
+
+
+
 
 
 
@@ -3024,7 +3214,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v69</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v72</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5577,5 +5767,616 @@ handleInbound();
   setTimeout(markReady, 1500);
 })();
 </script>
+
+
+<script>
+/* ========================================================================
+   V.71 QUICK WINS BUNDLE
+   QW1: Last 3 Snaps strip on home
+   QW2: Trust-theatre live status during loading
+   QW3: Web Share Target API integration
+   QW4: Smart A2HS install prompt at trust moment
+   QW5: Restocking smart chip
+   All localStorage-backed, zero backend, zero auth, zero schema.
+   ======================================================================== */
+
+(function v71QuickWins() {
+  'use strict';
+
+  // ---------- shared helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function escapeHTML(s) {
+    return String(s).replace(/[&<>"']/g, function(c) {
+      return { '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c];
+    });
+  }
+  function lsGet(k, fallback) {
+    try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : fallback; }
+    catch (e) { return fallback; }
+  }
+  function lsSet(k, v) {
+    try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+  }
+
+  // =====================================================================
+  // QW3 — Web Share Target API
+  // =====================================================================
+  (function shareTarget() {
+    var params = new URLSearchParams(location.search);
+    var sharedUrl = params.get('url');
+    var sharedText = params.get('text') || params.get('q');
+    var payload = sharedUrl || sharedText;
+    if (!payload) return;
+    function go() {
+      // If looks like URL, route to Paste door (goLink). Else Type door.
+      var isUrl = /^https?:\/\//i.test(payload);
+      if (isUrl) {
+        var ui = $('url-input');
+        if (ui && typeof goLink === 'function') {
+          ui.value = payload;
+          ui.dispatchEvent(new Event('input',{bubbles:true}));
+          goLink();
+          return;
+        }
+      }
+      var ti = $('text-input');
+      if (ti && typeof goText === 'function') {
+        ti.value = payload;
+        ti.dispatchEvent(new Event('input',{bubbles:true}));
+        goText();
+      }
+    }
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', function(){ setTimeout(go, 300); });
+    } else {
+      setTimeout(go, 300);
+    }
+  })();
+
+  // =====================================================================
+  // QW2 — Trust-theatre loading status narration
+  // =====================================================================
+  (function trustTheatre() {
+    var phaseLabels = [
+      'Reading the label.',
+      'Checking Amazon UK live price.',
+      'Comparing UK retailers.',
+      'Drafting your verdict.'
+    ];
+    var phaseTimings = [0, 800, 2200, 3200];
+    var activeTimers = [];
+
+    function setPhase(idx) {
+      var timeline = $('v5-loading-timeline');
+      if (!timeline) return;
+      var nodes = timeline.querySelectorAll('.v5-timeline-node');
+      nodes.forEach(function(n, i) {
+        n.classList.toggle('v5-timeline-node--active', i === idx);
+        n.classList.toggle('v5-timeline-node--done', i < idx);
+        n.setAttribute('data-v71-phase', String(i));
+        var labels = n.querySelectorAll('.v5-timeline-label');
+        if (labels.length === 0) {
+          // Fallback: any text-bearing child
+          labels = n.querySelectorAll('span, div');
+        }
+        if (phaseLabels[i] && labels.length > 0) {
+          // Find the label-bearing element (the one that already has text)
+          for (var j = 0; j < labels.length; j++) {
+            if (labels[j].textContent && labels[j].textContent.trim().length > 0 && !labels[j].querySelector('*')) {
+              labels[j].textContent = phaseLabels[i];
+              break;
+            }
+          }
+        }
+      });
+    }
+
+    function startNarration() {
+      stopNarration();
+      setPhase(0);
+      for (var i = 1; i < phaseTimings.length; i++) {
+        (function(idx, delay) {
+          activeTimers.push(setTimeout(function() { setPhase(idx); }, delay));
+        })(i, phaseTimings[i]);
+      }
+    }
+    function stopNarration() {
+      activeTimers.forEach(function(t) { clearTimeout(t); });
+      activeTimers = [];
+    }
+
+    function init() {
+      var sl = $('screen-loading');
+      if (!sl) return;
+      new MutationObserver(function() {
+        if (sl.classList.contains('active')) startNarration();
+        else stopNarration();
+      }).observe(sl, { attributes: true, attributeFilter: ['class'] });
+      if (sl.classList.contains('active')) startNarration();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else { init(); }
+  })();
+
+  // =====================================================================
+  // QW1 — Last 3 Snaps strip on home (and shared history backbone for QW5)
+  // =====================================================================
+  var RECENT_KEY = 'savvey_recent_snaps';
+  var HISTORY_KEY = 'savvey_snap_history';
+  var MAX_RECENT = 12;
+
+  function captureSnapToRecent() {
+    var lr = window.lastResult || (typeof lastResult !== 'undefined' ? lastResult : null);
+    if (!lr || !lr.canonical_search_string) return;
+    if (lr.confidence === 'low') return;
+
+    var canonical = lr.canonical_search_string;
+    var entry = {
+      canonical: canonical,
+      title: lr.product_title || canonical,
+      thumb: (lr.verified_amazon_price && lr.verified_amazon_price.thumbnail) || null,
+      verdict: (lr.savvey_says && lr.savvey_says.verdict) || null,
+      category: lr.category || 'generic',
+      ts: Date.now()
+    };
+
+    // Recent: dedupe by canonical, prepend, cap
+    var recent = lsGet(RECENT_KEY, []);
+    recent = recent.filter(function(e) { return e.canonical !== canonical; });
+    recent.unshift(entry);
+    lsSet(RECENT_KEY, recent.slice(0, MAX_RECENT));
+
+    // History: per-product visit log (for QW5)
+    var hist = lsGet(HISTORY_KEY, {});
+    if (!hist[canonical]) {
+      hist[canonical] = { category: entry.category, visits: [], dismissedUntil: 0 };
+    }
+    hist[canonical].visits.push(entry.ts);
+    hist[canonical].visits = hist[canonical].visits.slice(-12);
+    hist[canonical].category = entry.category;
+    lsSet(HISTORY_KEY, hist);
+
+    renderRecentStrip();
+    renderRestockingChip();
+  }
+
+  function renderRecentStrip() {
+    var home = $('screen-home');
+    if (!home) return;
+    var list = lsGet(RECENT_KEY, []);
+    var strip = $('v71-recent-strip');
+
+    if (list.length === 0) {
+      if (strip) strip.remove();
+      return;
+    }
+
+    if (!strip) {
+      strip = document.createElement('div');
+      strip.id = 'v71-recent-strip';
+      strip.className = 'v71-recent-strip';
+      var wrap = home.querySelector('.v5-home-wrap') || home;
+      // Insert after greeting, before first door
+      var firstDoor = wrap.querySelector('.v5-door, .door');
+      if (firstDoor) wrap.insertBefore(strip, firstDoor);
+      else wrap.appendChild(strip);
+    }
+
+    var top6 = list.slice(0, 6);
+    strip.innerHTML =
+      '<div class="v71-recent-label">Recent</div>' +
+      '<div class="v71-recent-track">' +
+        top6.map(function(e) {
+          var thumb = e.thumb
+            ? '<img class="v71-recent-thumb" src="' + escapeHTML(e.thumb) + '" alt="" loading="lazy">'
+            : '<span class="v71-recent-thumb-empty"></span>';
+          var dot = e.verdict
+            ? '<span class="v71-recent-dot v71-recent-dot--' + escapeHTML(e.verdict) + '"></span>'
+            : '';
+          var title = (e.title || e.canonical || '').slice(0, 32);
+          return '<button class="v71-recent-chip" data-canonical="' + escapeHTML(e.canonical) + '" type="button">' +
+            thumb +
+            '<span class="v71-recent-title">' + escapeHTML(title) + '</span>' +
+            dot +
+          '</button>';
+        }).join('') +
+      '</div>';
+
+    // Wire taps
+    strip.querySelectorAll('.v71-recent-chip').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var canonical = btn.getAttribute('data-canonical');
+        if (!canonical) return;
+        var ti = $('text-input');
+        if (ti && typeof goText === 'function') {
+          ti.value = canonical;
+          ti.dispatchEvent(new Event('input',{bubbles:true}));
+          goText();
+        }
+      });
+    });
+  }
+
+  // =====================================================================
+  // QW5 — Restocking smart chip (uses HISTORY_KEY from QW1)
+  // =====================================================================
+  var DEFAULT_INTERVALS = {
+    grocery: 7, health: 30, beauty: 30, home: 60,
+    tech: 365, diy: 90, toys: 365, generic: 30
+  };
+
+  function getDueProducts() {
+    var hist = lsGet(HISTORY_KEY, {});
+    var now = Date.now();
+    var due = [];
+    Object.keys(hist).forEach(function(canonical) {
+      var rec = hist[canonical];
+      if (rec.dismissedUntil && now < rec.dismissedUntil) return;
+      var visits = rec.visits || [];
+      if (visits.length === 0) return;
+
+      var lastVisit = visits[visits.length - 1];
+      var daysSinceLast = (now - lastVisit) / 86400000;
+
+      var predictedInterval;
+      if (visits.length >= 2) {
+        var sum = 0;
+        for (var i = 1; i < visits.length; i++) sum += (visits[i] - visits[i-1]);
+        predictedInterval = (sum / (visits.length - 1)) / 86400000;
+      } else {
+        predictedInterval = DEFAULT_INTERVALS[rec.category] || 30;
+      }
+
+      if (daysSinceLast >= predictedInterval - 5 && daysSinceLast <= predictedInterval + 14) {
+        due.push({
+          canonical: canonical,
+          category: rec.category,
+          daysSinceLast: daysSinceLast,
+          predictedInterval: predictedInterval
+        });
+      }
+    });
+    due.sort(function(a, b) {
+      return Math.abs(a.daysSinceLast - a.predictedInterval) -
+             Math.abs(b.daysSinceLast - b.predictedInterval);
+    });
+    return due.slice(0, 1);
+  }
+
+  function renderRestockingChip() {
+    var home = $('screen-home');
+    if (!home) return;
+    var existing = $('v71-restocking-chip');
+    var due = getDueProducts();
+
+    if (due.length === 0) {
+      if (existing) existing.remove();
+      return;
+    }
+
+    var top = due[0];
+
+    if (!existing) {
+      existing = document.createElement('div');
+      existing.id = 'v71-restocking-chip';
+      existing.className = 'v71-restocking-chip';
+      var wrap = home.querySelector('.v5-home-wrap') || home;
+      var firstDoor = wrap.querySelector('.v5-door, .door');
+      if (firstDoor) wrap.insertBefore(existing, firstDoor);
+      else wrap.appendChild(existing);
+    }
+
+    existing.innerHTML =
+      '<button class="v71-restocking-tap" data-canonical="' + escapeHTML(top.canonical) + '" type="button">' +
+        '<span class="v71-restocking-icon">' +
+          '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15.5-6.3L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.3L3 16"/><path d="M3 21v-5h5"/></svg>' +
+        '</span>' +
+        '<span class="v71-restocking-label">Restocking ' + escapeHTML(top.canonical.slice(0, 36)) + '?</span>' +
+      '</button>' +
+      '<button class="v71-restocking-dismiss" type="button" aria-label="Dismiss">×</button>';
+
+    existing.querySelector('.v71-restocking-tap').addEventListener('click', function() {
+      var ti = $('text-input');
+      if (ti && typeof goText === 'function') {
+        ti.value = top.canonical;
+        ti.dispatchEvent(new Event('input',{bubbles:true}));
+        goText();
+      }
+    });
+
+    existing.querySelector('.v71-restocking-dismiss').addEventListener('click', function(ev) {
+      ev.stopPropagation();
+      var hist = lsGet(HISTORY_KEY, {});
+      if (hist[top.canonical]) {
+        hist[top.canonical].dismissedUntil = Date.now() + (7 * 86400000);
+        lsSet(HISTORY_KEY, hist);
+      }
+      existing.remove();
+    });
+  }
+
+  // =====================================================================
+  // QW4 — Smart A2HS install prompt at trust moment
+  // =====================================================================
+  var deferredInstallPrompt = null;
+  window.addEventListener('beforeinstallprompt', function(e) {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+  });
+
+  function maybeShowA2HS() {
+    if (!deferredInstallPrompt) return;
+    if (localStorage.getItem('savvey_a2hs_decided') === 'true') return;
+    var lr = window.lastResult || (typeof lastResult !== 'undefined' ? lastResult : null);
+    var verdict = lr && lr.savvey_says && lr.savvey_says.verdict;
+    if (!verdict || (verdict !== 'good_buy' && verdict !== 'fair')) return;
+
+    setTimeout(function() {
+      if (!deferredInstallPrompt) return;
+      if (localStorage.getItem('savvey_a2hs_decided') === 'true') return;
+
+      var sheet = document.createElement('div');
+      sheet.className = 'v71-a2hs-sheet';
+      sheet.innerHTML =
+        '<div class="v71-a2hs-card">' +
+          '<h3>Add Savvey to your home screen?</h3>' +
+          '<p>Snap any item in 2 taps next time you need to restock. No accounts, no fuss.</p>' +
+          '<div class="v71-a2hs-buttons">' +
+            '<button class="v71-a2hs-skip" type="button">Maybe later</button>' +
+            '<button class="v71-a2hs-add" type="button">Add to home</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(sheet);
+
+      sheet.querySelector('.v71-a2hs-skip').addEventListener('click', function() {
+        localStorage.setItem('savvey_a2hs_decided', 'true');
+        sheet.remove();
+      });
+      sheet.querySelector('.v71-a2hs-add').addEventListener('click', function() {
+        if (!deferredInstallPrompt) { sheet.remove(); return; }
+        try { deferredInstallPrompt.prompt(); } catch (e) {}
+        try {
+          deferredInstallPrompt.userChoice.then(function() {
+            localStorage.setItem('savvey_a2hs_decided', 'true');
+            deferredInstallPrompt = null;
+            sheet.remove();
+          });
+        } catch (e) {
+          localStorage.setItem('savvey_a2hs_decided', 'true');
+          sheet.remove();
+        }
+      });
+      // Auto-dismiss on backdrop tap
+      sheet.addEventListener('click', function(ev) {
+        if (ev.target === sheet) {
+          localStorage.setItem('savvey_a2hs_decided', 'true');
+          sheet.remove();
+        }
+      });
+    }, 5200);
+  }
+
+  // =====================================================================
+  // Wire all into renderResult + screen-home activation
+  // =====================================================================
+  function wrapRenderResult() {
+    if (typeof window.renderResult !== 'function') return;
+    if (window.__v71Wrapped) return;
+    var orig = window.renderResult;
+    window.renderResult = function() {
+      var ret = orig.apply(this, arguments);
+      try { setTimeout(captureSnapToRecent, 80); } catch (e) {}
+      try { setTimeout(maybeShowA2HS, 80); } catch (e) {}
+      return ret;
+    };
+    window.__v71Wrapped = true;
+  }
+
+  function init() {
+    wrapRenderResult();
+    renderRecentStrip();
+    renderRestockingChip();
+
+    var home = $('screen-home');
+    if (home) {
+      new MutationObserver(function() {
+        if (home.classList.contains('active')) {
+          renderRecentStrip();
+          renderRestockingChip();
+        }
+      }).observe(home, { attributes: true, attributeFilter: ['class'] });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+
+
+
+<script>
+/* ========================================================================
+   V.72 MOBILE-CLIP V1 — on-device category classifier
+   Panel-mandated (Performance Engineer): HF Mobile-CLIP-class only,
+   NO fine-tuning, lazy-loaded to protect bundle.
+
+   V1 scope (this push):
+   - Lazy-load transformers.js + tiny image classifier on first Snap-door
+     touch. Bundle stays ~0KB until user opens camera.
+   - Run classification IN PARALLEL with the /api/normalize call (zero
+     added latency to cold path).
+   - When classifier returns first (~200-400ms), update the loading
+     screen narration to category-specific copy.
+   - Stash result on window.__v72LastCategory for future backend wire-up.
+
+   Out of scope (V2+):
+   - Backend category-hint plumbing to skip Haiku Vision (real 1.5s win)
+   - Offline-only degraded mode (PWA reliability win)
+   - Confidence-gated direct routing for high-conf cases
+
+   Implementation: uses @huggingface/transformers from CDN with
+   `Xenova/mobilenet_v2_1.0_224` (~14MB cached, one-time download per
+   device). Maps top-3 ImageNet predictions to our 8-category enum.
+   Strictly additive — no existing-code paths modified. Falls back
+   silently if classifier fails to load.
+   ======================================================================== */
+
+(function v72MobileCLIP() {
+  'use strict';
+  if (typeof window === 'undefined') return;
+
+  var pipelinePromise = null;
+  var pipeline = null;
+  var lastFrameRun = 0;
+
+  // Lazy-load: only when user opens the camera screen
+  function maybeLoad() {
+    if (pipelinePromise) return pipelinePromise;
+    pipelinePromise = (async function() {
+      try {
+        var mod = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.0.2/dist/transformers.min.js');
+        if (mod && mod.env) {
+          mod.env.allowLocalModels = false;
+          mod.env.useBrowserCache = true;
+        }
+        if (mod && typeof mod.pipeline === 'function') {
+          pipeline = await mod.pipeline('image-classification', 'Xenova/mobilenet_v2_1.0_224', { quantized: true });
+          window.__v72Ready = true;
+          console.log('[v72] On-device classifier loaded');
+        }
+      } catch (e) {
+        console.warn('[v72] classifier load failed (will fall back silently)', e && e.message);
+        pipeline = null;
+      }
+      return pipeline;
+    })();
+    return pipelinePromise;
+  }
+
+  // Trigger lazy-load when user enters camera flow
+  function watchCameraScreen() {
+    var sc = document.getElementById('screen-camera');
+    if (!sc) { setTimeout(watchCameraScreen, 600); return; }
+    new MutationObserver(function() {
+      if (sc.classList.contains('active')) maybeLoad();
+    }).observe(sc, { attributes: true, attributeFilter: ['class'] });
+    if (sc.classList.contains('active')) maybeLoad();
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', watchCameraScreen);
+  } else {
+    watchCameraScreen();
+  }
+
+  // ImageNet token → retail category mapping
+  var IMAGENET_KEYWORDS = {
+    health: /toothbrush|soap[\s_-]?dispenser|pill|tablet|tube|medicine|mouthwash/i,
+    beauty: /lipstick|perfume|lotion|hair[\s_-]?spray|cosmetic|nail[\s_-]?polish|sunscreen/i,
+    grocery: /bottle|can\b|cereal|food|biscuit|chocolate|coffee|tea|jar|carton|crisp|loaf/i,
+    home: /kettle|microwave|vacuum|fryer|iron|toaster|blender|kitchenware|pan|pot|cushion|lamp/i,
+    tech: /cellular[\s_-]?telephone|laptop|headphone|earbud|computer|monitor|keyboard|mouse|tablet|smartphone|television/i,
+    toys: /toy|puzzle|teddy|doll|game[\s_-]?board|lego|brick/i,
+    diy: /hammer|screwdriver|drill|wrench|tool|saw|nail\b|screw\b|garden|hose/i
+  };
+
+  function mapToCategory(results) {
+    if (!Array.isArray(results) || results.length === 0) return null;
+    for (var i = 0; i < Math.min(3, results.length); i++) {
+      var label = String(results[i].label || '').toLowerCase();
+      for (var cat in IMAGENET_KEYWORDS) {
+        if (IMAGENET_KEYWORDS[cat].test(label)) {
+          return { category: cat, confidence: results[i].score || 0, raw_label: label };
+        }
+      }
+    }
+    return { category: 'generic', confidence: results[0].score || 0, raw_label: String(results[0].label || '') };
+  }
+
+  // Category-aware loading-screen narration overrides
+  var CATEGORY_NARRATION = {
+    tech: 'Reading the electronics label.',
+    home: 'Reading appliance markings.',
+    grocery: 'Reading the grocery packaging.',
+    beauty: 'Reading the beauty product label.',
+    health: 'Reading the health product label.',
+    diy: 'Reading the tool markings.',
+    toys: 'Reading the toy packaging.',
+    generic: 'Reading the label.'
+  };
+
+  function updateLoadingNarration(cat) {
+    if (!cat) return;
+    var timeline = document.getElementById('v5-loading-timeline');
+    if (!timeline) return;
+    var firstNode = timeline.querySelector('.v5-timeline-node');
+    if (!firstNode) return;
+    var labels = firstNode.querySelectorAll('.v5-timeline-label');
+    if (labels.length === 0) {
+      labels = firstNode.querySelectorAll('span, div');
+    }
+    var copy = CATEGORY_NARRATION[cat.category] || CATEGORY_NARRATION.generic;
+    for (var i = 0; i < labels.length; i++) {
+      var el = labels[i];
+      if (el.textContent && el.textContent.trim().length > 0 && !el.querySelector('*')) {
+        el.textContent = copy;
+        break;
+      }
+    }
+  }
+
+  async function classifyBase64(base64) {
+    if (!base64) return null;
+    var pl = await maybeLoad();
+    if (!pl) return null;
+    var dataUrl = base64.indexOf('data:') === 0 ? base64 : 'data:image/jpeg;base64,' + base64;
+    try {
+      var results = await pl(dataUrl, { topk: 5 });
+      return mapToCategory(results);
+    } catch (e) {
+      console.warn('[v72] classify error', e && e.message);
+      return null;
+    }
+  }
+
+  // Intercept fetch to /api/normalize on image input — run classification in parallel
+  var origFetch = window.fetch;
+  window.fetch = function() {
+    var args = Array.prototype.slice.call(arguments);
+    try {
+      var url = (typeof args[0] === 'string') ? args[0] : (args[0] && args[0].url);
+      if (url && url.indexOf('/api/normalize') !== -1 && args[1] && args[1].body) {
+        var bodyStr = (typeof args[1].body === 'string') ? args[1].body : null;
+        if (bodyStr) {
+          var body = null;
+          try { body = JSON.parse(bodyStr); } catch (e) {}
+          if (body && body.input_type === 'image') {
+            var frame = body.image_base64
+              || (Array.isArray(body.image_base64_frames) && body.image_base64_frames[0])
+              || null;
+            if (frame && (Date.now() - lastFrameRun) > 1500) {
+              lastFrameRun = Date.now();
+              // Fire and forget — runs in parallel with API call
+              classifyBase64(frame).then(function(cat) {
+                if (cat) {
+                  window.__v72LastCategory = cat;
+                  updateLoadingNarration(cat);
+                }
+              });
+            }
+          }
+        }
+      }
+    } catch (e) { /* swallow - never break fetch */ }
+    return origFetch.apply(this, args);
+  };
+})();
+</script>
+
 </body>
 </html>

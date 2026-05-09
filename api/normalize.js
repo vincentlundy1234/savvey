@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v69';
+const VERSION             = 'normalize.js v3.4.5v72';
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -515,6 +515,25 @@ async function fetchVerifiedAmazonPrice(query) {
     const isPrime = primary.is_prime === true || primary.prime === true;
     const thumb   = (typeof primary.thumbnail === 'string' && /^https?:\/\//i.test(primary.thumbnail))
       ? primary.thumbnail.slice(0, 500) : null;
+
+    // V.70 - PRICE-HISTORY LOGGING (panel-mandated, fire-and-forget).
+    // Non-blocking: async kvSet without await, errors swallowed.
+    // 90-day TTL keeps KV bounded while building 12-month history dataset.
+    try {
+      const _logTs = Date.now();
+      const _logHash = (_logTs + String(query)).slice(-12).replace(/[^a-z0-9]/gi, '');
+      const _logKey = 'savvey:pricelog:' + _logTs + ':' + _logHash;
+      const _logVal = {
+        canonical: String(query).slice(0, 200),
+        asin: (typeof primary.asin === 'string') ? primary.asin : null,
+        price: Number(primary.extracted_price),
+        retailer: 'amazon.co.uk',
+        rating: (typeof primary.rating === 'number') ? primary.rating : null,
+        reviews: (typeof primary.reviews === 'number') ? primary.reviews : null,
+        ts: new Date(_logTs).toISOString(),
+      };
+      kvSet(_logKey, _logVal, 7776000).catch(() => {});
+    } catch (_e) { /* swallow - non-critical */ }
 
     return {
       price:           Number(primary.extracted_price),

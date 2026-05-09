@@ -33,7 +33,9 @@
     "action": "/",
     "method": "GET",
     "params": {
-      "text": "q"
+      "title": "title",
+      "text": "q",
+      "url": "url"
     }
   }
 }
