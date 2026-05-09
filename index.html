@@ -1325,87 +1325,112 @@
   .v5-loading-screen { display: none; }
   .v5-loading-screen.active {
     display: flex;
-    min-height: calc(100dvh - 120px);
+    min-height: 100dvh;
     align-items: center;
     justify-content: center;
-    padding: 0 24px;
+    padding: 24px 24px 48px;
   }
+  /* V.77 — clean vertical rhythm: badge → 24px → timeline → 22px → narration
+     → 14px → footer trust line. No surprise gaps, no overlap. */
   .v5-loading-inner {
     width: 100%;
-    max-width: 360px;
+    max-width: 380px;
     display: flex; flex-direction: column;
     align-items: center;
     gap: 0;
+    text-align: center;
   }
-  /* Retailer orbit — central S badge with 5 retailer chips orbiting */
+  /* V.77 — Loading badge: gradient S with slow spinning ring + soft pulse.
+     Replaces the 5-chip rotation that suffered from transform conflicts.
+     Single source of motion = single source of bugs. */
   .v5-loading-orbit {
     position: relative;
-    width: 180px; height: 180px;
-    margin-bottom: 18px;
-    animation: v5-orbit-spin 8s linear infinite;
+    width: 160px; height: 160px;
+    margin-bottom: 24px;
+    display: flex; align-items: center; justify-content: center;
   }
-  @keyframes v5-orbit-spin {
+  /* Outer ring: dashed conic gradient that rotates slowly. Reads as
+     "thinking" without the busy retailer-pill noise. */
+  .v5-loading-orbit::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 999px;
+    background: conic-gradient(
+      from 0deg,
+      rgba(42,107,34,0.55) 0deg,
+      rgba(42,107,34,0.0) 90deg,
+      rgba(42,107,34,0.0) 180deg,
+      rgba(42,107,34,0.35) 270deg,
+      rgba(42,107,34,0.55) 360deg
+    );
+    -webkit-mask: radial-gradient(circle, transparent 64px, #000 65px, #000 76px, transparent 77px);
+            mask: radial-gradient(circle, transparent 64px, #000 65px, #000 76px, transparent 77px);
+    animation: v77-ring-spin 2.4s linear infinite;
+  }
+  /* Soft halo ring behind the badge — adds depth without motion */
+  .v5-loading-orbit::after {
+    content: "";
+    position: absolute;
+    inset: 12px;
+    border-radius: 999px;
+    background: radial-gradient(circle, rgba(95,180,85,0.18) 0%, rgba(95,180,85,0) 70%);
+    pointer-events: none;
+  }
+  @keyframes v77-ring-spin {
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
   }
+  /* The S badge itself — sits dead-centre, no rotation, gentle pulse */
   .v5-loading-core {
-    position: absolute;
-    left: 50%; top: 50%;
-    transform: translate(-50%, -50%);
-    width: 80px; height: 80px;
+    position: relative;
+    width: 96px; height: 96px;
     border-radius: 999px;
     background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green) 60%, var(--green-dark, #1d4a18) 100%);
     box-shadow:
-      0 1px 0 rgba(255,255,255,0.25) inset,
-      0 8px 22px rgba(42,107,34,0.32);
+      0 1px 0 rgba(255,255,255,0.30) inset,
+      0 -2px 0 rgba(0,0,0,0.18) inset,
+      0 12px 28px rgba(42,107,34,0.32);
     display: flex; align-items: center; justify-content: center;
-    animation: v5-orbit-counter-spin 8s linear infinite;
+    animation: v77-core-pulse 2.4s ease-in-out infinite;
+    z-index: 2;
   }
-  @keyframes v5-orbit-counter-spin {
-    from { transform: translate(-50%, -50%) rotate(0deg); }
-    to   { transform: translate(-50%, -50%) rotate(-360deg); }
+  @keyframes v77-core-pulse {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(0.97); }
   }
   .v5-loading-core-letter {
-    font-family: var(--font-body, 'Nunito');
-    font-size: 36px; font-weight: 800;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 44px; font-weight: 800;
     color: white;
     letter-spacing: -0.04em;
+    line-height: 1;
   }
-  .v5-orbit-chip {
-    position: absolute;
-    width: 32px; height: 32px;
-    border-radius: 999px;
-    background: white;
-    border: 1px solid rgba(20,32,26,0.08);
-    display: flex; align-items: center; justify-content: center;
-    font-family: var(--font-body, 'Nunito');
-    font-size: 11px; font-weight: 800;
-    color: var(--ink, #14201a);
-    box-shadow: 0 4px 10px rgba(20,32,26,0.08);
-    animation: v5-orbit-counter-spin 8s linear infinite;
-  }
-  .v5-orbit-chip--1 { top: 0; left: 50%; transform: translateX(-50%); }
-  .v5-orbit-chip--2 { top: 25%; right: 0; }
-  .v5-orbit-chip--3 { bottom: 25%; right: 0; font-size: 9.5px; }
-  .v5-orbit-chip--4 { bottom: 0; left: 50%; transform: translateX(-50%); font-size: 9.5px; }
-  .v5-orbit-chip--5 { top: 50%; left: 0; transform: translateY(-50%); }
+  /* V.77 — orbit chips deleted. The 5-letter abbreviations (A/C/JL/Ar/B)
+     read as junk and the transform-conflict made them wobble. The
+     ring + badge alone communicates "working" cleanly. */
+  .v5-orbit-chip { display: none !important; }
   @media (prefers-reduced-motion: reduce) {
-    .v5-loading-orbit, .v5-loading-core, .v5-orbit-chip { animation: none; }
+    .v5-loading-orbit::before { animation: none; }
+    .v5-loading-core { animation: none; }
   }
-  /* Horizontal phase timeline */
+  /* V.77 — Horizontal 4-phase timeline. Larger nodes, clearer hierarchy,
+     no clipping on narrow phones, label has fixed height so progress
+     bar doesn't shimmy as labels swap. */
   .v5-loading-timeline {
     width: 100%;
-    max-width: 320px;
+    max-width: 340px;
     display: flex; align-items: flex-start;
     justify-content: space-between;
     position: relative;
-    margin-top: 4px;
+    margin-top: 8px;
+    padding: 0 4px;
   }
   .v5-timeline-line {
     position: absolute;
-    left: 14px; right: 14px;
-    top: 9px; height: 2px;
-    background: rgba(42,107,34,0.10);
+    left: 18px; right: 18px;
+    top: 11px; height: 2px;
+    background: rgba(42,107,34,0.12);
     border-radius: 999px;
     z-index: 0;
   }
@@ -1413,39 +1438,41 @@
     right: auto;
     width: 0%;
     background: var(--green);
-    transition: width 320ms ease;
+    transition: width 420ms cubic-bezier(0.22, 1, 0.36, 1);
   }
   .v5-loading-timeline[data-phase="0"] .v5-timeline-line--progress { width: 0; }
-  .v5-loading-timeline[data-phase="1"] .v5-timeline-line--progress { width: calc((100% - 28px) * 0.333); }
-  .v5-loading-timeline[data-phase="2"] .v5-timeline-line--progress { width: calc((100% - 28px) * 0.666); }
-  .v5-loading-timeline[data-phase="3"] .v5-timeline-line--progress { width: calc(100% - 28px); }
+  .v5-loading-timeline[data-phase="1"] .v5-timeline-line--progress { width: calc((100% - 36px) * 0.333); }
+  .v5-loading-timeline[data-phase="2"] .v5-timeline-line--progress { width: calc((100% - 36px) * 0.666); }
+  .v5-loading-timeline[data-phase="3"] .v5-timeline-line--progress { width: calc(100% - 36px); }
   .v5-timeline-node {
     position: relative; z-index: 1;
-    flex: 1;
-    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    flex: 1 1 0;
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    min-width: 0;
   }
   .v5-timeline-circle {
-    width: 20px; height: 20px;
+    width: 24px; height: 24px;
     border-radius: 999px;
-    border: 2px solid var(--border-strong, rgba(20,32,26,0.14));
+    border: 2px solid rgba(20,32,26,0.14);
     background: white;
     display: flex; align-items: center; justify-content: center;
     transition: all 240ms;
+    flex-shrink: 0;
   }
   .v5-timeline-node--active .v5-timeline-circle {
     border-color: var(--green);
-    box-shadow: 0 0 0 4px rgba(95,180,85,0.22);
+    box-shadow: 0 0 0 5px rgba(95,180,85,0.22);
   }
   .v5-timeline-node--active .v5-timeline-circle::after {
     content: '';
-    width: 7px; height: 7px;
+    width: 9px; height: 9px;
     border-radius: 999px;
     background: var(--green);
-    animation: v5-node-pulse 1s ease-in-out infinite;
+    animation: v5-node-pulse 1.1s ease-in-out infinite;
   }
   @keyframes v5-node-pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
-    50%      { opacity: 0.6; transform: scale(0.8); }
+    50%      { opacity: 0.55; transform: scale(0.7); }
   }
   @media (prefers-reduced-motion: reduce) {
     .v5-timeline-node--active .v5-timeline-circle::after { animation: none; }
@@ -1456,36 +1483,53 @@
   }
   .v5-timeline-node--done .v5-timeline-circle::after {
     content: '';
-    width: 11px; height: 11px;
+    width: 13px; height: 13px;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") no-repeat center / contain;
   }
   .v5-timeline-label {
-    font-family: var(--font-body, 'Nunito');
-    font-size: 10.5px; font-weight: 600;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 11px; font-weight: 600;
     letter-spacing: -0.005em;
-    text-align: center; line-height: 1.25;
-    color: var(--ink-mute);
-    text-wrap: balance;
-    max-width: 72px;
-    opacity: 0.7;
+    text-align: center; line-height: 1.2;
+    color: var(--ink-mute, #7a857f);
+    /* fixed min-height keeps timeline from jumping when label text changes */
+    min-height: 28px;
+    max-width: 76px;
+    opacity: 0.75;
     transition: opacity .2s, font-weight .2s, color .2s;
+    word-break: keep-all;
+    overflow-wrap: break-word;
   }
   .v5-timeline-node--active .v5-timeline-label,
   .v5-timeline-node--done .v5-timeline-label {
-    color: var(--ink);
-    font-weight: 800;
+    color: var(--ink, #14201a);
+    font-weight: 700;
     opacity: 1;
   }
-  /* Witty subtitle (engine: loading-text repurposed) */
+  /* V.77 — narration line below timeline. Italic, mute, balanced wrap. */
   .v5-loading-witty {
-    margin-top: 16px;
-    font-family: var(--font-body, 'Nunito');
-    font-size: 12.5px; font-style: italic;
-    color: var(--ink-mute);
+    margin-top: 22px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 13px; font-style: italic;
+    font-weight: 500;
+    color: var(--ink-soft, #4a5550);
     text-align: center; line-height: 1.4;
-    max-width: 280px;
+    max-width: 300px;
+    /* fixed min-height so swapping phase text doesn't reflow layout */
+    min-height: 38px;
+    transition: opacity 220ms ease;
   }
   .v5-loading-sub-hidden { display: none; }
+  /* V.77 — footer trust line on loading screen */
+  .v5-loading-footer {
+    margin-top: 14px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 11.5px; font-weight: 600;
+    color: var(--ink-mute, #7a857f);
+    letter-spacing: 0.01em;
+    text-align: center;
+    opacity: 0.75;
+  }
 
   /* ═══════════════════════════════════════════════════════════════
      V.44 CONFIRM/DISAMBIG — display headline + best-value sorted
@@ -3280,7 +3324,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v76</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v77</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3391,46 +3435,42 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
-  <!-- v5 LOADING REBUILD (V.44) — 4-phase horizontal timeline + retailer orbit -->
+  <!-- V.77 LOADING REBUILD — gradient S badge + spinning ring + clean 4-phase timeline -->
   <div class="v5-loading-inner">
 
-    <!-- Retailer orbit spinner -->
+    <!-- Centre badge with subtle spinning ring (decorative) -->
     <div class="v5-loading-orbit" aria-hidden="true">
       <div class="v5-loading-core">
         <span class="v5-loading-core-letter">S</span>
       </div>
-      <span class="v5-orbit-chip v5-orbit-chip--1">A</span>
-      <span class="v5-orbit-chip v5-orbit-chip--2">C</span>
-      <span class="v5-orbit-chip v5-orbit-chip--3">JL</span>
-      <span class="v5-orbit-chip v5-orbit-chip--4">Ar</span>
-      <span class="v5-orbit-chip v5-orbit-chip--5">B</span>
     </div>
 
-    <!-- Horizontal phase timeline -->
+    <!-- Horizontal phase timeline (4 nodes) -->
     <div class="v5-loading-timeline" id="v5-loading-timeline" data-phase="0">
       <div class="v5-timeline-line"></div>
       <div class="v5-timeline-line v5-timeline-line--progress" id="v5-timeline-progress"></div>
       <div class="v5-timeline-node v5-timeline-node--active" data-phase="0">
         <div class="v5-timeline-circle"></div>
-        <div class="v5-timeline-label">Identifying the goods</div>
+        <div class="v5-timeline-label">Identifying</div>
       </div>
       <div class="v5-timeline-node" data-phase="1">
         <div class="v5-timeline-circle"></div>
-        <div class="v5-timeline-label">Checking UK prices</div>
+        <div class="v5-timeline-label">UK prices</div>
       </div>
       <div class="v5-timeline-node" data-phase="2">
         <div class="v5-timeline-circle"></div>
-        <div class="v5-timeline-label">Checking retailers</div>
+        <div class="v5-timeline-label">Retailers</div>
       </div>
       <div class="v5-timeline-node" data-phase="3">
         <div class="v5-timeline-circle"></div>
-        <div class="v5-timeline-label">Drafting verdict</div>
+        <div class="v5-timeline-label">Verdict</div>
       </div>
     </div>
 
-    <!-- Engine: keep loading-text + loading-sub IDs so JS can populate them -->
-    <p class="loading-text v5-loading-witty" id="loading-text">Usually under 4 seconds.</p>
-    <p class="loading-sub v5-loading-sub-hidden" id="loading-sub" hidden>~1-2 seconds</p>
+    <!-- Engine-populated narration line. JS owns this text. -->
+    <p class="loading-text v5-loading-witty" id="loading-text" aria-live="polite">Reading the label…</p>
+    <p class="loading-sub v5-loading-sub-hidden" id="loading-sub" hidden></p>
+    <p class="v5-loading-footer">Working for you, not the retailer.</p>
   </div>
 </div>
 
@@ -4315,23 +4355,13 @@ async function callNormalize(body) {
   // until the request completes, instead of killing it mid-flight and losing
   // the user's query (Gemini Tech Team flag, HIGH severity).
   window._savveyFetching = true;
-  // v3.4.1 Smart Loader (panel-mandated, 5 May 2026 PM): cache-miss path takes
-  // 4-6s end-to-end. Generic spinner reads as broken; progressive phases that
-  // communicate active consumer advocacy read as Savvey working FOR the user.
-  const phases = body.input_type === 'image'
-    ? ['Reading the box…', 'Identifying brand & model…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
-    : body.input_type === 'url'
-      ? ['Reading the link…', 'Extracting the product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
-      : body.input_type === 'barcode'
-        ? ['Decoding barcode…', 'Matching to UK product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…']
-        : ['Cleaning up your search…', 'Identifying the product…', 'Verifying live UK pricing…', 'Checking listing details…', 'Drafting your Savvey verdict…'];
-  document.getElementById('loading-text').textContent = phases[0];
-  document.getElementById('loading-sub').textContent = 'Working for you, not the retailer';
-  let phaseIdx = 0;
-  const phaseTimer = setInterval(() => {
-    phaseIdx = Math.min(phaseIdx + 1, phases.length - 1);
-    document.getElementById('loading-text').textContent = phases[phaseIdx];
-  }, 1200);
+  // V.77 — Phase narration is now owned by the QW2 IIFE (single source of
+  // truth). It listens for #screen-loading.active and runs setPhase()
+  // on a clean schedule, updating both the timeline node states AND the
+  // narration line. The old per-input-type phase arrays + setInterval
+  // here was duplicating that work and causing desync. We just leave a
+  // stub so the variable references below don't break.
+  let phaseTimer = null;
   const t0 = Date.now();
   // Wave BB: AbortController prevents UI hang if Vercel function exceeds 12s
   // V.75: register at module scope so show()/stopAllScanners() can abort on
@@ -4852,8 +4882,10 @@ async function disambigPick(idx, label, payload) {
     return;
   }
   show('loading');
-  document.getElementById('loading-text').textContent = 'Confirming…';
-  document.getElementById('loading-sub').textContent = 'Working for you, not the retailer';
+  // V.77 — disambig-pick path. QW2 narration owns loading-text; we just
+  // override to "Confirming…" since this isn't a phase-1 fresh start.
+  var _lt = document.getElementById('loading-text');
+  if (_lt) _lt.textContent = 'Confirming your pick…';
   const _ac = new AbortController();
   const _ato = setTimeout(() => _ac.abort(), 15000);
   try {
@@ -5485,11 +5517,14 @@ handleInbound();
 </nav>
 
 <script>
-/* V.64: v5 loading orbit replacement.
-   Listens for #screen-loading.active and injects the retailer-pill v5 layout.
-   Engine-safe: only mutates inside #screen-loading; doesn't touch the
-   loading-state JS that auto-advances after callNormalize completes. */
-(function v64LoadingOrbit() {
+/* V.77 — V.64 retailer-orbit IIFE NEUTERED. The V.64 implementation
+   was painting a broken 9-pill layout over the cleaner v5-loading
+   screen — mojibake delimiters, transform conflicts, off-screen pills
+   on narrow phones. The v5-loading DOM at #screen-loading already has
+   a polished gradient-S core + 4-phase timeline + narration line.
+   QW2 IIFE handles phase advancement. This early-return preserves the
+   IIFE wrapper so subsequent code positions don't shift. */
+(function v64LoadingOrbit_DISABLED() { return; if (false) {
   // V.74 — tightened orbit distances. Was 110-130 which clipped 'Very' and
   // 'John Lewis' on narrow phones; reduced to 84-94 so 9 pills sit inside the
   // 280px stage with proper margins. Angles redistributed for even spread.
@@ -5593,7 +5628,7 @@ handleInbound();
       if (ld.classList.contains('active')) paint();
     }
   }
-})();
+} /* close V.77 if-false guard */ })();
 
 /* V.64: Savvey Says block restructure. Adds prefix tag + combined Live Price
    row with embedded Buy on Amazon CTA. Reads existing live_amazon_price +
@@ -5979,26 +6014,23 @@ handleInbound();
     function setPhase(idx) {
       var timeline = $('v5-loading-timeline');
       if (!timeline) return;
+      // V.77 — single source of truth for phase. Set data-phase on the
+      // timeline so the CSS progress-bar width animates, and toggle
+      // node states. Update the narration line AS WELL so callNormalize
+      // doesn't need its own phaseTimer (was duplicating + desyncing).
+      timeline.setAttribute('data-phase', String(idx));
       var nodes = timeline.querySelectorAll('.v5-timeline-node');
       nodes.forEach(function(n, i) {
         n.classList.toggle('v5-timeline-node--active', i === idx);
         n.classList.toggle('v5-timeline-node--done', i < idx);
-        n.setAttribute('data-v71-phase', String(i));
-        var labels = n.querySelectorAll('.v5-timeline-label');
-        if (labels.length === 0) {
-          // Fallback: any text-bearing child
-          labels = n.querySelectorAll('span, div');
-        }
-        if (phaseLabels[i] && labels.length > 0) {
-          // Find the label-bearing element (the one that already has text)
-          for (var j = 0; j < labels.length; j++) {
-            if (labels[j].textContent && labels[j].textContent.trim().length > 0 && !labels[j].querySelector('*')) {
-              labels[j].textContent = phaseLabels[i];
-              break;
-            }
-          }
-        }
       });
+      // V.77 — drive the narration line from the same setPhase call.
+      // Static node labels (Identifying / UK prices / Retailers / Verdict)
+      // stay put; the italic line below changes per phase.
+      var narration = document.getElementById('loading-text');
+      if (narration && phaseLabels[idx]) {
+        narration.textContent = phaseLabels[idx];
+      }
     }
 
     function startNarration() {
@@ -6088,10 +6120,25 @@ handleInbound();
       strip.id = 'v71-recent-strip';
       strip.className = 'v71-recent-strip';
       var wrap = home.querySelector('.v5-home-wrap') || home;
-      // Insert after greeting, before first door
+      // V.77 — bug fix: insert ABOVE the doors block. The original code
+      // called wrap.insertBefore(strip, firstDoor) which threw NotFoundError
+      // because firstDoor is typically a grandchild (lives inside
+      // .v5-secondary-doors / .v5-doors-grid). Walk up the DOM to find the
+      // ancestor whose direct parent is wrap, then insert the strip
+      // before THAT element. End result: strip sits between greeting and
+      // the doors section, matching V.71 design intent. This was Vincent's
+      // pending finding #453 — strip never rendered on home.
       var firstDoor = wrap.querySelector('.v5-door, .door');
-      if (firstDoor) wrap.insertBefore(strip, firstDoor);
-      else wrap.appendChild(strip);
+      var anchor = firstDoor;
+      while (anchor && anchor.parentNode !== wrap) {
+        anchor = anchor.parentNode;
+      }
+      if (anchor && anchor.parentNode === wrap) {
+        wrap.insertBefore(strip, anchor);
+      } else {
+        // Fallback: append to wrap (won't sit above doors but won't crash)
+        wrap.appendChild(strip);
+      }
     }
 
     var top6 = list.slice(0, 6);
@@ -6193,9 +6240,19 @@ handleInbound();
       existing.id = 'v71-restocking-chip';
       existing.className = 'v71-restocking-chip';
       var wrap = home.querySelector('.v5-home-wrap') || home;
+      // V.77 — same bug as the recent-strip insertBefore: walk up to find
+      // the ancestor whose parent is wrap so insertBefore doesn't throw
+      // NotFoundError when firstDoor is a grandchild.
       var firstDoor = wrap.querySelector('.v5-door, .door');
-      if (firstDoor) wrap.insertBefore(existing, firstDoor);
-      else wrap.appendChild(existing);
+      var anchor = firstDoor;
+      while (anchor && anchor.parentNode !== wrap) {
+        anchor = anchor.parentNode;
+      }
+      if (anchor && anchor.parentNode === wrap) {
+        wrap.insertBefore(existing, anchor);
+      } else {
+        wrap.appendChild(existing);
+      }
     }
 
     existing.innerHTML =
