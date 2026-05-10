@@ -3191,6 +3191,27 @@
   .consent-banner-btn { background: var(--green); color: white; border: 0; border-radius: 999px; padding: 9px 16px; font-weight: 700; font-size: 13px; cursor: pointer; flex-shrink: 0; }
   .consent-banner-btn:active { transform: scale(.95); }
   body:has(.consent-banner.show) .bottom-nav { bottom: 64px; }
+  /* V.81 — Cheapest pill on the winning retailer chip when google_shopping
+     returned multiple priced retailers and we sorted cheapest first. */
+  .cta-cheapest-pill {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    background: var(--green, #2a6b22);
+    color: white;
+    border-radius: 999px;
+    vertical-align: middle;
+    line-height: 1.4;
+  }
+  /* V.80 — hide GDPR banner on camera screens. It was overlapping the Scan
+     hint and Snap zoom column in the May 10 beta zip. Users still see it on
+     home/result/welcome which are the right surfaces for first-visit consent. */
+  body:has(#screen-snap.active) .consent-banner,
+  body:has(#screen-barcode.active) .consent-banner { display: none !important; }
   /* Wave V.20 — accessibility pass per v5: focus-visible rings + tap-target audit */
   /* Modern browsers: focus-visible only shows ring on keyboard focus, not mouse click.
      Falls back gracefully on older browsers (no rule = browser default outline). */
@@ -3385,7 +3406,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v79</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v80</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5281,7 +5302,50 @@ function renderResult(displayName, payload) {
     'Home Bargains': 'homebargains.co.uk',
   };
   const _deepLinks = (payload && payload.retailer_deep_links && typeof payload.retailer_deep_links === 'object') ? payload.retailer_deep_links : {};
-  for (const r of list) {
+  // V.81 — when google_shopping returned price-bearing retailers, build the
+  // chip list from THAT data (sorted cheapest first) so users see real prices
+  // next to each retailer. The static CATEGORY_MAP list stays as fallback when
+  // no priced deep-links are available.
+  const _HOST_TO_RETAILER = {};
+  for (const _n in _RETAILER_NAME_TO_HOST) _HOST_TO_RETAILER[_RETAILER_NAME_TO_HOST[_n]] = _n;
+  const _pricedEntries = Object.keys(_deepLinks).filter(function(h){
+    return h && h.indexOf('amazon.') === -1 && _deepLinks[h] && _deepLinks[h].price && _deepLinks[h].url;
+  }).map(function(h){
+    var raw = String(_deepLinks[h].price || '');
+    var num = parseFloat(raw.replace(/[^0-9.]/g, ''));
+    return { host: h, info: _deepLinks[h], num: isFinite(num) ? num : Infinity };
+  }).sort(function(a,b){ return a.num - b.num; });
+  let renderList = list;
+  if (_pricedEntries.length >= 1) {
+    var _builtRows = [];
+    var _amzn = list.find(function(x){ return x.name === 'Amazon UK'; });
+    if (_amzn) _builtRows.push(_amzn);
+    for (var _i = 0; _i < Math.min(_pricedEntries.length, 4); _i++) {
+      var _e = _pricedEntries[_i];
+      var _matchedName = _HOST_TO_RETAILER[_e.host];
+      var _cfg = null;
+      if (_matchedName) {
+        for (var _k in RETAILERS) {
+          if (RETAILERS[_k].name === _matchedName) { _cfg = RETAILERS[_k]; break; }
+        }
+      }
+      if (!_cfg) {
+        // Synthesize a config for hosts not in our static brand-mark map
+        var _hostBase = _e.host.split('.')[0];
+        var _display = _hostBase.charAt(0).toUpperCase() + _hostBase.slice(1);
+        _cfg = {
+          name: _display,
+          mark: 'generic',
+          label: _display.length >= 2 ? _display.substr(0,2).toUpperCase() : _display.toUpperCase(),
+          url: function(_host){ return function(q){ return 'https://www.' + _host + '/'; }; }(_e.host),
+          sub: 'Tap to open this product'
+        };
+      }
+      _builtRows.push(Object.assign({}, _cfg, { _isCheapest: _i === 0 }));
+    }
+    renderList = _builtRows;
+  }
+  for (const r of renderList) {
     const q = (r.name === 'Amazon UK' && payload.amazon_search_query) ? payload.amazon_search_query : displayName;
     const _host = _RETAILER_NAME_TO_HOST[r.name];
     const _deep = (_host && _deepLinks[_host]) ? _deepLinks[_host] : null;
@@ -5297,7 +5361,7 @@ function renderResult(displayName, payload) {
     a.href = _resolvedHref;
     a.target = '_top';
     a.rel = 'external noopener';
-    a.className = 'cta' + (r.primary ? ' primary' : '');
+    a.className = 'cta' + ((r.primary && (r.name !== 'Amazon UK' || verifiedPriceStr)) ? ' primary' : '');
     let nameStr = r.name;
     let subStr  = r.sub;
     if (r.name === 'Amazon UK' && verifiedPriceStr) {
@@ -5317,7 +5381,7 @@ function renderResult(displayName, payload) {
       if (_deep.price) nameStr = `${r.name} · ${_deep.price}`;
       subStr = 'Tap to open this product on ' + r.name;
     }
-    a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
+    a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}${r._isCheapest ? ' <span class="cta-cheapest-pill">Cheapest</span>' : ''}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
     a.addEventListener('click', () => track('cta_tapped', {
       retailer: r.name, category: cat, query: q, door: _lastDoor,
       verified: r.name === 'Amazon UK' && !!verifiedPriceStr,
