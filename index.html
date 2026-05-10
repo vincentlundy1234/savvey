@@ -365,6 +365,110 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.105 — Camera viewport overhaul ===
+     100dvh viewport (iOS URL bar safe), black letterbox top+bottom,
+     concentric iOS shutter, zoom-tier pills, GPU-clean compositing. */
+  .screen.v5-cam-screen.active {
+    height: 100dvh !important;
+    height: 100svh !important;
+    padding: 0 !important;
+    background: #000 !important;
+    overflow: hidden !important;
+  }
+  /* Top chrome (X close, torch, zoom indicator) on black bar — not floating
+     on the live preview. */
+  .v5-cam-screen .v5-cam-topbar {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    height: 56px !important;
+    padding: max(env(safe-area-inset-top, 0px), 8px) 16px 0 16px !important;
+    background: linear-gradient(180deg, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0) 100%) !important;
+    z-index: 10 !important;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .v5-cam-screen .v5-cam-bottom-row {
+    position: absolute !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    padding: 16px 24px max(env(safe-area-inset-bottom, 0px), 24px) !important;
+    background: linear-gradient(0deg, rgba(0,0,0,0.92) 30%, rgba(0,0,0,0) 100%) !important;
+    z-index: 10 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+  .v5-cam-screen .v5-cam-video {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    background: #000 !important;
+    z-index: 1 !important;
+  }
+  /* Concentric iOS-style shutter — outer ring + inner disc, scale-on-press */
+  .v5-cam-screen .v5-cam-shutter {
+    width: 72px !important;
+    height: 72px !important;
+    border-radius: 50% !important;
+    background: transparent !important;
+    border: 4px solid #fff !important;
+    box-shadow: 0 0 0 2px rgba(0,0,0,0.5) inset !important;
+    position: relative !important;
+    cursor: pointer !important;
+    flex-shrink: 0 !important;
+    transition: transform .15s var(--sheet-ease) !important;
+    overflow: visible !important;
+  }
+  .v5-cam-screen .v5-cam-shutter::after {
+    content: '';
+    position: absolute;
+    inset: 6px;
+    border-radius: 50%;
+    background: #fff;
+    transition: transform .15s var(--sheet-ease);
+  }
+  .v5-cam-screen .v5-cam-shutter:active { transform: scale(0.94) !important; }
+  .v5-cam-screen .v5-cam-shutter:active::after { transform: scale(0.86); }
+  /* iOS zoom-tier pill rail — sits ~120px above shutter */
+  .v105-zoom-tiers {
+    position: absolute;
+    bottom: 124px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 6px;
+    background: rgba(0, 0, 0, 0.46);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    padding: 5px;
+    border-radius: 999px;
+    z-index: 11;
+  }
+  .v105-zoom-tier {
+    border: none;
+    background: transparent;
+    color: #fff;
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    font: 600 12px var(--font-sf-text, 'Inter', system-ui);
+    cursor: pointer;
+    transition: transform .15s var(--sheet-ease), background .15s ease, color .15s ease;
+    -webkit-tap-highlight-color: transparent;
+    padding: 0;
+  }
+  .v105-zoom-tier.active {
+    background: rgba(255, 255, 255, 0.20);
+    color: #ffd54a;
+    transform: scale(1.10);
+    font-weight: 700;
+  }
+  .v105-zoom-tier:active { transform: scale(0.92); }
+
   /* === V.104 — Tension freeze-frame loading state ===
      Captures the user's snap, paints full-bleed with dim + scan line.
      Replaces the abrupt camera→loading-screen swap. */
@@ -4132,7 +4236,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v104</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v105</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4217,6 +4321,16 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        Container kept for JS compat (setupZoomControls); zoom level surfaces
        via #zoom-indicator only when actively pinching. -->
   <div class="v5-cam-zoom-stack zoom-controls" id="zoom-controls" hidden></div>
+
+  <!-- V.105 — iOS-style zoom-tier pill rail. Tap to jump to a discrete tier
+       (matches iPhone Camera). Only renders if device's zoom range supports
+       it; otherwise stays hidden. Wired by v105ZoomTiers IIFE. -->
+  <div class="v105-zoom-tiers" id="v105-zoom-tiers" hidden role="group" aria-label="Camera zoom">
+    <button class="v105-zoom-tier" type="button" data-tier="0.5" aria-label="0.5x zoom">.5</button>
+    <button class="v105-zoom-tier active" type="button" data-tier="1" aria-label="1x zoom">1</button>
+    <button class="v105-zoom-tier" type="button" data-tier="2" aria-label="2x zoom">2</button>
+    <button class="v105-zoom-tier" type="button" data-tier="3" aria-label="3x zoom">3</button>
+  </div>
 
   <!-- Bottom row: roll thumbnail / shutter / flash (placeholders for now) -->
   <div class="v5-cam-bottom-row">
@@ -4886,17 +5000,52 @@ function setupCameraGestures() {
       _scheduleHwZoom(MIN_ZOOM);
     });
   })();
+
+  // V.105 \u2014 iOS-style zoom-tier pill rail. Tap to jump to a discrete tier.
+  // Reveals the rail when the camera stream is live (we have _zoomCap data).
+  (function v105WireZoomTiers(){
+    const tiersEl = document.getElementById('v105-zoom-tiers');
+    if (!tiersEl || tiersEl._v105Wired) return;
+    tiersEl._v105Wired = true;
+    // Show the rail once we know the device supports zoom (set by setupCameraZoom).
+    // We just unhide on camera screen activation; cap detection happens lazily.
+    const camScreen = document.getElementById('screen-camera');
+    if (camScreen) {
+      new MutationObserver(function() {
+        if (camScreen.classList.contains('active')) {
+          tiersEl.hidden = false;
+        } else {
+          tiersEl.hidden = true;
+        }
+      }).observe(camScreen, { attributes: true, attributeFilter: ['class'] });
+    }
+    tiersEl.addEventListener('click', function(e) {
+      const btn = e.target.closest && e.target.closest('.v105-zoom-tier');
+      if (!btn) return;
+      const tier = parseFloat(btn.getAttribute('data-tier'));
+      if (!isFinite(tier)) return;
+      if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e2) {}
+      // Use 1\u00D7\u20134\u00D7 CSS range; clamp 0.5 to MIN_ZOOM if device doesn't support sub-1.
+      const target = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, tier));
+      _applyCssZoom(target);
+      _scheduleHwZoom(target);
+      tiersEl.querySelectorAll('.v105-zoom-tier').forEach(function(b){
+        b.classList.toggle('active', b === btn);
+      });
+    });
+  })();
   function _scheduleHwZoom(zoom) {
-    // Debounce hardware zoom to avoid spamming applyConstraints during gesture
+    // V.105 — debounce dropped 120ms -> 40ms so hardware sensor zoom tracks
+    // the visible CSS zoom much more closely. Was lagging behind during fast
+    // pinches, breaking the "feels like one continuous gesture" illusion.
     if (_hwZoomTimer) clearTimeout(_hwZoomTimer);
     _hwZoomTimer = setTimeout(function(){
       if (_zoomCap && typeof applyCameraZoom === 'function') {
-        // Map CSS zoom range to hardware zoom range
         const hwTarget = _zoomCap.min + (zoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM) * (_zoomCap.max - _zoomCap.min);
         const hwClamped = Math.max(_zoomCap.min, Math.min(_zoomCap.max, hwTarget));
         try { applyCameraZoom(hwClamped); } catch (e) {}
       }
-    }, 120);
+    }, 40);
   }
   video.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) {
@@ -4909,7 +5058,11 @@ function setupCameraGestures() {
     if (_pinchActive && e.touches.length === 2) {
       const d = _dist(e.touches[0], e.touches[1]);
       const ratio = d / Math.max(_pinchStartDist, 1);
-      const target = _pinchStartZoom * ratio;
+      // V.105 — Logarithmic pinch curve. Linear (target = startZoom * ratio)
+      // makes pinch-out near 3x require fingers nearly touching to get to 1x.
+      // ratio^1.4 makes pinch-out faster than pinch-in at high zooms,
+      // matching the iOS Camera feel and fixing Vincent's "hard to zoom out".
+      const target = _pinchStartZoom * Math.pow(ratio, 1.4);
       const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, target));
       _applyCssZoom(clamped);
       _scheduleHwZoom(clamped);
