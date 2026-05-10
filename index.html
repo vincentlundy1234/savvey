@@ -4388,7 +4388,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v110</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v111</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5853,6 +5853,32 @@ async function callNormalize(body) {
           'That looks like something other than a product.',
           j.message || 'Try snapping the packaging or model number instead.'
         );
+        return;
+      }
+      // V.111 — NO DEAD-END no_match. When the backend couldn't identify but
+      // returned an amazon_search_fallback URL, build a minimal renderResult
+      // payload so the user lands on the result screen with the orange Amazon
+      // search CTA (V.103) instead of the generic error screen. Garden box,
+      // dishwasher, kettle etc all hit this path now and stay actionable.
+      if (j.error === 'no_match' && j.amazon_search_fallback) {
+        track('no_match_fallback_shown', { input_type: body.input_type, query: (j._v111_input_for_search || '').slice(0,80) });
+        var _v111Title = j._v111_input_for_search || (body.text || body.url || 'Your search');
+        var _v111Payload = {
+          canonical_search_string: _v111Title,
+          confidence: 'low',
+          confidence_score: 25,
+          category: 'generic',
+          amazon_search_query: _v111Title,
+          amazon_search_fallback: j.amazon_search_fallback,
+          savvey_says: { live_amazon_price: null, verdict: null, confidence: 'low' },
+          verified_amazon_price: null,
+          retailer_deep_links: null,
+          alternatives_array: [],
+          alternatives_meta: [],
+          _meta: { version: (j._meta||{}).version, source: 'no_match_fallback' }
+        };
+        lastResult = { ..._v111Payload, _input_type: body.input_type, _latency_ms: ms };
+        try { renderResult(_v111Title, _v111Payload); } catch (e) { showError("We couldn't identify that.", 'Try a clearer photo or paste a retailer link.'); }
         return;
       }
       showError(

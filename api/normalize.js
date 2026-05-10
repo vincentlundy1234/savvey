@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v110.1';
+const VERSION             = 'normalize.js v3.4.5v111';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1401,8 +1401,20 @@ export default async function handler(req, res) {
         console.warn(`[${VERSION}] V.90 no_match->visual_similar recovery error: ${err.message}`);
       }
     }
+    // V.111 — NO DEAD-END no_match. Even when Haiku fails to identify, build
+    // an Amazon UK search URL from the user's raw input + affiliate tag.
+    // Frontend renders this as primary CTA so user always has next-step.
+    const _v111Q = String(
+      (body && body.text) ||
+      (body && body.url) ||
+      (body && body.barcode) ||
+      'product'
+    ).slice(0, 150).trim() || 'product';
+    const _v111Fallback = `https://www.amazon.co.uk/s?k=${encodeURIComponent(_v111Q)}&tag=${encodeURIComponent(AMAZON_TAG)}`;
     return res.status(200).json({
       error: 'no_match',
+      amazon_search_fallback: _v111Fallback,
+      _v111_input_for_search: _v111Q,
       _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0 }
     });
   }
