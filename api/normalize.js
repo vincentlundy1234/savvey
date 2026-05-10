@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v95';
+const VERSION             = 'normalize.js v3.4.5v96';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -706,6 +706,9 @@ async function fetchVerifiedAmazonPrice(query) {
     let primary = null;
     let used    = null;
     let _skippedLexical = 0;
+    let _bestSoftMatch = null;     // V.96 - highest-overlap candidate when none clear strict guard
+    let _bestSoftScore = 0;
+    let _organicChecked = 0;        // V.96 - diagnostic counter
     for (const item of results) {
       const price = Number(item.extracted_price);
       if (!(price > 0)) continue;
@@ -717,10 +720,25 @@ async function fetchVerifiedAmazonPrice(query) {
         continue;
       }
       if (item.sponsored) continue; // skip top-of-list sponsored slots
+      _organicChecked++;
       // Lexical guard — only applies to candidates for `primary`.
       if (minTokensRequired > 0) {
         const titleNorm = _norm(title);
         const matched = canonicalTokens.filter(t => titleNorm.includes(t)).length;
+        // V.96 — track the best soft-match so we have a fallback when
+        // strict guard rejects everything (e.g. canonical contains a
+        // model number like "CFI-2000A01" that no real listing title
+        // includes verbatim, but the overall product clearly matches
+        // on brand+series tokens).
+        if (matched > _bestSoftScore && !_bestSoftMatch) {
+          // Greedy: capture the FIRST best-scoring item; SerpAPI organic
+          // ordering already correlates with relevance.
+          _bestSoftScore = matched;
+          _bestSoftMatch = item;
+        } else if (matched > _bestSoftScore) {
+          _bestSoftScore = matched;
+          _bestSoftMatch = item;
+        }
         if (matched < minTokensRequired) {
           _skippedLexical++;
           continue;
@@ -729,11 +747,24 @@ async function fetchVerifiedAmazonPrice(query) {
       if (!primary) primary = item;
       if (primary && used) break;
     }
-    if (_skippedLexical > 0) {
+    // V.96 — Diagnostic logging. Distinguishes "SerpAPI returned 0 organic"
+    // from "lexical guard rejected everything". Vincent's PS5/Bose/Kindle
+    // null-price bug surfaced because the guard was silently dropping
+    // all candidates; without these logs there was no way to see it.
+    if (!primary && _skippedLexical > 0 && _bestSoftMatch && _bestSoftScore >= 1) {
+      console.warn(`[${VERSION}] SerpAPI lexical guard soft-fallback: query="${query.slice(0,60)}" rejected=${_skippedLexical} bestOverlap=${_bestSoftScore}/${canonicalTokens.length} tokens. Using soft match "${String(_bestSoftMatch.title||'').slice(0,80)}"`);
+      primary = _bestSoftMatch;
+      _lastSerpStatus = 'soft_match';
+    }
+    if (!primary && _skippedLexical > 0) {
+      console.warn(`[${VERSION}] SerpAPI lexical guard rejected ALL ${_skippedLexical} organic candidates for "${query.slice(0,60)}" (canonicalTokens=${canonicalTokens.length} required=${minTokensRequired}). No fallback — bestOverlap was 0.`);
+    }
+    if (!primary && _skippedLexical === 0 && _organicChecked === 0) {
+      console.warn(`[${VERSION}] SerpAPI returned 0 usable organic results for "${query.slice(0,60)}" (results.length=${results.length}). Likely sponsored-only or zero matches.`);
     }
 
     if (!primary) {
-      _lastSerpStatus = 'no_amazon_match';
+      _lastSerpStatus = _lastSerpStatus || 'no_amazon_match';
       return null;
     }
 
