@@ -3721,7 +3721,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v99</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v100</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6745,23 +6745,73 @@ handleInbound();
 </script>
 
 <script>
-/* V.68 PREMIUM POLISH â€” haptics layer + screen-change side effects.
-   Mobile-only (navigator.vibrate is no-op on desktop, but harmless).
-   Patterns:
-     - Light  (8ms)        : door / retailer / nav tap, AI info icon
-     - Medium (14ms)       : Search submit, Snap capture, Buy on Amazon
-     - Pop    ([6,30,8])   : verdict reveal
-     - Notify ([10,40,10]) : error screen reveal
+/* V.100 HAPTIC FACADE (extends V.68) — premium iOS haptic journey map.
+   Single facade speaks to navigator.vibrate today + Capacitor.Haptics
+   when the wrapper ships. prefers-reduced-motion respected globally.
+
+   Full kit:
+     - light    : door/retailer/nav tap, info icon, sheet detent arrival
+     - medium   : Search submit, Snap shutter, Buy on Amazon, retailer chip
+     - heavy    : pinch-zoom max, long-press anchored decision
+     - success  : barcode decode success, BEST VALUE badge reveal
+     - warning  : check_elsewhere verdict, no-match empty state
+     - error    : hard error / network failure
+     - selection: disambig chip tap (lighter than impact)
+   Legacy aliases (back-compat with V.68 call sites):
+     - pop      = medium-success hybrid (verdict reveal)
+     - notify   = warning
 */
-(function v68Haptics() {
+(function v100Haptics() {
+  var Cap = (typeof window !== 'undefined' && window.Capacitor) || null;
+  var nativeOn = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
   var canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
-  function vib(p) { if (!canVibrate) return; try { navigator.vibrate(p); } catch (e) {} }
+  var reduced = false;
+  try {
+    var mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
+    reduced = !!(mq && mq.matches);
+    mq && mq.addEventListener && mq.addEventListener('change', function(e){ reduced = !!e.matches; });
+  } catch (e) {}
+
+  function vib(p) {
+    if (reduced || !canVibrate) return;
+    try { navigator.vibrate(p); } catch (e) {}
+  }
+  function nativeImpact(style) {
+    if (reduced || !nativeOn) return false;
+    try {
+      var H = Cap.Plugins && Cap.Plugins.Haptics;
+      if (H && H.impact) { H.impact({ style: style }); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function nativeNotify(type) {
+    if (reduced || !nativeOn) return false;
+    try {
+      var H = Cap.Plugins && Cap.Plugins.Haptics;
+      if (H && H.notification) { H.notification({ type: type }); return true; }
+    } catch (e) {}
+    return false;
+  }
+  function nativeSelection() {
+    if (reduced || !nativeOn) return false;
+    try {
+      var H = Cap.Plugins && Cap.Plugins.Haptics;
+      if (H && H.selectionChanged) { H.selectionChanged(); return true; }
+    } catch (e) {}
+    return false;
+  }
 
   var H = {
-    light:  function() { vib(8); },
-    medium: function() { vib(14); },
-    pop:    function() { vib([6, 30, 8]); },
-    notify: function() { vib([10, 40, 10]); }
+    light:     function() { if (!nativeImpact('LIGHT'))   vib(8);  },
+    medium:    function() { if (!nativeImpact('MEDIUM'))  vib(14); },
+    heavy:     function() { if (!nativeImpact('HEAVY'))   vib(25); },
+    success:   function() { if (!nativeNotify('SUCCESS')) vib([8, 30, 8]); },
+    warning:   function() { if (!nativeNotify('WARNING')) vib([12, 40, 12]); },
+    error:     function() { if (!nativeNotify('ERROR'))   vib([12, 50, 12, 50, 12]); },
+    selection: function() { if (!nativeSelection())       vib(4); },
+    /* Legacy aliases — keep working for V.68 call sites */
+    pop:       function() { H.success(); },
+    notify:    function() { H.warning(); }
   };
   window.savveyHaptics = H;
 
@@ -6778,17 +6828,58 @@ handleInbound();
     }
   }, true);
 
-  // Verdict reveal: when screen-result becomes active AND pill has tone class
+  // V.100 — Verdict reveal with tone-aware haptic. Different feeling for
+  // good_buy/fair (light landing) vs wait/check_elsewhere (warning notify).
+  var _lastVerdictHapticAt = 0;
   var srObs = new MutationObserver(function() {
     var sr = document.getElementById('screen-result');
     if (!sr || !sr.classList.contains('active')) return;
     var pill = document.getElementById('verdict-pill');
-    if (pill && (pill.classList.contains('show') || /good_buy|fair|wait|check_elsewhere/.test(pill.className))) {
-      setTimeout(H.pop, 320);
+    if (!pill) return;
+    var cn = pill.className || '';
+    if (!(pill.classList.contains('show') || /good_buy|fair|wait|check_elsewhere/.test(cn))) return;
+    var now = Date.now();
+    if (now - _lastVerdictHapticAt < 1200) return;  // debounce against re-render
+    _lastVerdictHapticAt = now;
+    if (/good_buy|fair/.test(cn)) {
+      setTimeout(H.light, 320);            // confident landing
+    } else if (/check_elsewhere|wait/.test(cn)) {
+      setTimeout(H.warning, 320);          // honest "this isn't ideal" tone
+    } else {
+      setTimeout(H.success, 320);          // fallback
     }
   });
   var sr = document.getElementById('screen-result');
   if (sr) srObs.observe(sr, { attributes: true, attributeFilter: ['class'] });
+
+  // V.100 — BEST VALUE badge appearance on disambig screen. Fires once per
+  // disambig render. Listens for the badge being added to any candidate.
+  var _bestValueFiredFor = null;
+  var cfObs = new MutationObserver(function(records) {
+    for (var i = 0; i < records.length; i++) {
+      var r = records[i];
+      if (r.type !== 'childList' && r.type !== 'attributes') continue;
+      var t = (r.target && r.target.nodeType === 1) ? r.target : null;
+      if (!t) continue;
+      var badge = t.querySelector && t.querySelector('.v5-confirm-best-badge, .best-value-badge, [data-best-value="1"]');
+      if (badge && _bestValueFiredFor !== badge) {
+        _bestValueFiredFor = badge;
+        setTimeout(H.success, 200);        // celebration moment
+        break;
+      }
+    }
+  });
+  var cf = document.getElementById('screen-confirm');
+  if (cf) cfObs.observe(cf, { childList: true, subtree: true, attributes: true, attributeFilter: ['class','data-best-value'] });
+
+  // V.100 — Disambig chip taps fire selectionChanged (lighter than impact —
+  // matches iOS Picker / Date wheel feel).
+  document.addEventListener('click', function(e) {
+    if (!e.target || !e.target.closest) return;
+    if (e.target.closest('.v5-confirm-btn, .confirm-btn, .v5-confirm-none, .ghost-btn')) {
+      H.selection();
+    }
+  }, true);
 
   // Error screen reveal
   var seObs = new MutationObserver(function() {
