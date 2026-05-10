@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v78.2';
+const VERSION             = 'normalize.js v3.4.5v78.3';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -38,19 +38,48 @@ const VERSION             = 'normalize.js v3.4.5v78.2';
 // John Lewis is INTENTIONALLY excluded — JL sells own-brand AND third-party
 // branded goods, so its products are usually verifiable on Amazon UK.
 const RETAILER_OWN_BRANDS = [
-  { rx: /^\s*habitat\b/i,                    brand: 'Habitat',    url: q => 'https://www.habitat.co.uk/search?q=' + encodeURIComponent(q.replace(/^habitat\s*/i, '')) },
-  { rx: /^\s*ikea\b/i,                       brand: 'IKEA',       url: q => 'https://www.ikea.com/gb/en/search/?q=' + encodeURIComponent(q.replace(/^ikea\s*/i, '')) },
-  { rx: /^\s*(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\b/i, brand: 'M&S Home', url: q => 'https://www.marksandspencer.com/l/home-and-furniture/search?q=' + encodeURIComponent(q.replace(/^(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\s*/i, '')) },
-  { rx: /^\s*dunelm\b/i,                     brand: 'Dunelm',     url: q => 'https://www.dunelm.com/search?searchTerm=' + encodeURIComponent(q.replace(/^dunelm\s*/i, '')) },
-  { rx: /^\s*argos\s*home\b/i,              brand: 'Argos Home', url: q => 'https://www.argos.co.uk/search/' + encodeURIComponent(q.replace(/^argos\s*home\s*/i, '')) },
-  { rx: /^\s*the\s*range\b/i,               brand: 'The Range',  url: q => 'https://www.therange.co.uk/search/?q=' + encodeURIComponent(q.replace(/^the\s*range\s*/i, '')) },
+  { rx: /^\s*habitat\b/i,
+    brand: 'Habitat',
+    home: 'https://www.habitat.co.uk/',
+    search: q => 'https://www.habitat.co.uk/search?q=' + encodeURIComponent(q),
+    strip: /^habitat\s*/i },
+  { rx: /^\s*ikea\b/i,
+    brand: 'IKEA',
+    home: 'https://www.ikea.com/gb/en/',
+    search: q => 'https://www.ikea.com/gb/en/search/?q=' + encodeURIComponent(q),
+    strip: /^ikea\s*/i },
+  { rx: /^\s*(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\b/i,
+    brand: 'M&S Home',
+    home: 'https://www.marksandspencer.com/l/home-and-furniture',
+    search: q => 'https://www.marksandspencer.com/l/home-and-furniture/search?q=' + encodeURIComponent(q),
+    strip: /^(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\s*/i },
+  { rx: /^\s*dunelm\b/i,
+    brand: 'Dunelm',
+    home: 'https://www.dunelm.com/',
+    search: q => 'https://www.dunelm.com/search?searchTerm=' + encodeURIComponent(q),
+    strip: /^dunelm\s*/i },
+  { rx: /^\s*argos\s*home\b/i,
+    brand: 'Argos Home',
+    home: 'https://www.argos.co.uk/',
+    search: q => 'https://www.argos.co.uk/search/' + encodeURIComponent(q),
+    strip: /^argos\s*home\s*/i },
+  { rx: /^\s*the\s*range\b/i,
+    brand: 'The Range',
+    home: 'https://www.therange.co.uk/',
+    search: q => 'https://www.therange.co.uk/search/?q=' + encodeURIComponent(q),
+    strip: /^the\s*range\s*/i },
 ];
 function detectRetailerOwn(canonical) {
   if (!canonical || typeof canonical !== 'string') return null;
   for (const r of RETAILER_OWN_BRANDS) {
     if (r.rx.test(canonical)) {
-      try { return { brand: r.brand, url: r.url(canonical.trim()) }; }
-      catch (e) { return { brand: r.brand, url: null }; }
+      try {
+        const stripped = canonical.trim().replace(r.strip, '').trim();
+        const url = stripped ? r.search(stripped) : r.home;
+        return { brand: r.brand, url };
+      } catch (e) {
+        return { brand: r.brand, url: r.home || null };
+      }
     }
   }
   return null;
