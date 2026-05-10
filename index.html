@@ -1956,6 +1956,67 @@
   .v5-result-back:hover { color: var(--ink); }
   .v5-result-back svg { stroke: currentColor; }
 
+  /* V.78 — Retailer-own card (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range).
+     Replaces verdict block + Savvey Says + retailer rows when canonical is a
+     UK retailer-own brand. Confident routing instead of "couldn't find" empty. */
+  .v5-retailer-own-card {
+    margin: 12px 0 16px;
+    padding: 28px 22px 24px;
+    border-radius: 22px;
+    background:
+      radial-gradient(80% 60% at 14% 14%, rgba(95,180,85,0.10) 0%, rgba(95,180,85,0) 70%),
+      linear-gradient(180deg, #fdfcf6 0%, #f6f1e2 100%);
+    border: 1px solid rgba(42,107,34,0.10);
+    box-shadow: 0 4px 14px rgba(20,32,26,0.04);
+  }
+  .v5-retailer-own-card[hidden] { display: none !important; }
+  .v5-ron-eyebrow {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: rgba(42,107,34,0.10);
+    color: var(--green, #2a6b22);
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 10.5px; font-weight: 800;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .v5-ron-title {
+    margin: 0 0 8px;
+    font-family: 'Nunito', system-ui, sans-serif;
+    font-size: 24px; line-height: 1.2; font-weight: 800;
+    color: var(--ink, #14201a); letter-spacing: -0.01em;
+  }
+  .v5-ron-title span#ron-brand { color: var(--green, #2a6b22); }
+  .v5-ron-sub {
+    margin: 0 0 18px;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 14px; line-height: 1.5;
+    color: var(--ink-soft, #4a5550);
+  }
+  .v5-ron-cta {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; min-height: 52px;
+    padding: 14px 18px; border-radius: 14px;
+    background: linear-gradient(180deg, var(--green-light, #5fb455) 0%, var(--green, #2a6b22) 70%, var(--green-dark, #1d4a18) 100%);
+    color: white;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 16px; font-weight: 700; text-decoration: none;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.25) inset,
+      0 -2px 0 rgba(0,0,0,0.18) inset,
+      0 8px 18px rgba(42,107,34,0.24);
+    transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1), filter 160ms ease;
+  }
+  .v5-ron-cta:active { transform: scale(0.97); filter: brightness(0.94); }
+  .v5-ron-aside {
+    margin: 14px 0 0;
+    font-family: 'Inter', system-ui, sans-serif;
+    font-size: 12.5px; line-height: 1.4;
+    color: var(--ink-mute, #7a857f);
+    text-align: center;
+  }
+
   /* Stale banner per v5 — clock icon container + 2-line text + Refresh CTA */
   .v5-stale-banner {
     display: flex; align-items: center; gap: 10px;
@@ -3324,7 +3385,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v77</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v78</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3532,6 +3593,26 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </svg>
     Home
   </button>
+
+  <!-- V.78 — Retailer-own short-circuit card. Hidden by default. Shown by
+       renderRetailerOwn() when canonical leads with Habitat/IKEA/M&S Home/
+       Dunelm/Argos Home/The Range. Replaces the standard verdict + savvey-says
+       blocks with a confident "Sold direct by [Brand]" CTA + outbound deep-link.
+       Outbound link uses target="_top" rel="external" per board mandate. -->
+  <div id="retailer-own-card" class="v5-retailer-own-card" hidden>
+    <div class="v5-ron-eyebrow" id="ron-eyebrow">Sold direct</div>
+    <h1 class="v5-ron-title">
+      <span id="ron-brand">Habitat</span> doesn't sell on Amazon UK.
+    </h1>
+    <p class="v5-ron-sub">We can't price-check own-brand items here. Tap below to browse the range on the brand's site — that's where to compare.</p>
+    <a id="ron-cta" class="v5-ron-cta" href="#" target="_top" rel="external noopener">
+      <span id="ron-cta-text">Browse on habitat.co.uk</span>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+      </svg>
+    </a>
+    <p class="v5-ron-aside">Got a model number or branded product instead? <a href="#" id="ron-try-other" style="color:var(--green);text-decoration:underline;">Search again</a>.</p>
+  </div>
 
   <!-- Stale banner (engine: stale-banner / stale-age / stale-refresh-btn) -->
   <div id="stale-banner" class="v5-stale-banner stale-banner" hidden>
@@ -3775,6 +3856,9 @@ function show(id, opts) {
   // V.75 — clear stale verdict object when returning to home so a late
   // re-render or back-button history pop can't resurface yesterday's result.
   if (id === 'home') { lastResult = null; }
+  // V.78 — when leaving the result screen, restore the standard result blocks
+  // so the next non-retailer-own query renders normally. Idempotent.
+  if (id !== 'result') { try { _restoreStandardResultBlocks(); } catch {} }
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   const _target = document.getElementById('screen-' + id);
   if (!_target) return;
@@ -4408,10 +4492,29 @@ async function callNormalize(body) {
     lastResult = { ...j, _input_type: body.input_type, _latency_ms: ms };
     track('normalize_ok', { input_type: body.input_type, confidence: j.confidence, category: j.category, ms, cache: j._meta && j._meta.cache });
     bumpCounter();
+    // V.78 — Retailer-own short-circuit. If backend stamped _meta.retailer_own
+    // (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range), skip Amazon-shaped
+    // verdict + disambig entirely and route to a confident "Sold direct by
+    // [Brand]" card with a deep-link. target="_top" rel="external" per board.
+    var _ron = j._meta && j._meta.retailer_own;
+    if (_ron && _ron.brand && _ron.url) {
+      track('retailer_own_routed', { brand: _ron.brand, canonical: String(j.canonical_search_string||'').slice(0,60), door: _lastDoor });
+      pushRecent(j);
+      renderRetailerOwn(j);
+      return;
+    }
     // v3.4.5w Wave W - Door 1 -> Door 2 fallback gate
     if (shouldBounceToType(j, body.input_type)) {
       track('vision_low_confidence_bounce', { canonical: String(j.canonical_search_string||'').slice(0,60), confidence: j.confidence });
-      bounceToType(j.canonical_search_string || '', 'Could not quite catch that. Edit and search again?');
+      // V.78 — context-aware bounce reason. If canonical is just one generic
+      // word ("mug", "pen"), nudge user to add a brand or model rather than
+      // the vague "Could not catch that". Preserves the canonical seed.
+      var _seed = j.canonical_search_string || '';
+      var _seedWords = _seed.trim().split(/\s+/).filter(Boolean);
+      var _bounceReason = (_seedWords.length <= 1)
+        ? 'Add a brand or model number for a clearer search.'
+        : 'Could not quite catch that. Edit and search again?';
+      bounceToType(_seed, _bounceReason);
       return;
     }
     // Wave GG — confidence-gated routing using the new `specificity` flag.
@@ -4430,7 +4533,17 @@ async function callNormalize(body) {
       (j.confidence !== 'high' && _hasDisambigOptions) ||
       (_isImageInput && _brandOnly && _hasDisambigOptions);
     if (_shouldDisambig) {
-      track('disambig_routed', { reason: _brandOnly ? 'brand_only' : 'low_confidence', door: _lastDoor });
+      // V.78 — Generic-noun nudge. If the user typed a single generic word
+      // ("mug", "pen", "shampoo"), Haiku's alternatives are biased to whatever
+      // is commercially popular on Amazon. Soften the disambig framing from
+      // "Which one?" (committed) to "Want to be more specific?" (suggestive).
+      var _typedText = (body.input_type === 'text') ? String(body.text || '').trim() : '';
+      var _typedWords = _typedText.split(/\s+/).filter(Boolean);
+      if (_typedWords.length <= 1 && _brandOnly && _typedText.length > 0) {
+        j._meta = j._meta || {};
+        j._meta.generic_noun_input = true;
+      }
+      track('disambig_routed', { reason: _brandOnly ? 'brand_only' : 'low_confidence', door: _lastDoor, generic_noun: !!(j._meta && j._meta.generic_noun_input) });
       renderConfirm(j.canonical_search_string, j.alternative_string, j);
     } else {
       pushRecent(j);
@@ -4592,6 +4705,56 @@ function showToast(msg, ms) {
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), ms || 3200);
 }
+// V.78 — renderRetailerOwn: short-circuit empty-state for UK retailer-own
+// brands (Habitat / IKEA / M&S Home / Dunelm / Argos Home / The Range).
+// Hides the standard verdict + Savvey Says + retailer rows on the result
+// screen and reveals the dedicated retailer-own card with a deep-link.
+// Outbound link uses target="_top" rel="external" per board mandate.
+function renderRetailerOwn(payload) {
+  show('result');
+  var ron = payload && payload._meta && payload._meta.retailer_own;
+  if (!ron || !ron.brand || !ron.url) return;
+  var toHide = ['v5-verdict-block', 'v5-hero-card', 'savvey-says', 'cta-list', 'v5-actions-row', 'v5-meta-disclaimer'];
+  toHide.forEach(function(id) {
+    var el = document.getElementById(id) || document.querySelector('.' + id);
+    if (el) el.style.display = 'none';
+  });
+  document.body.classList.remove('verdict-good_buy','verdict-fair','verdict-wait','verdict-check_elsewhere');
+  var card = document.getElementById('retailer-own-card');
+  if (!card) return;
+  card.removeAttribute('hidden'); card.style.display = '';
+  var brandEl = document.getElementById('ron-brand');
+  if (brandEl) brandEl.textContent = ron.brand;
+  var ctaTextEl = document.getElementById('ron-cta-text');
+  if (ctaTextEl) {
+    var hostMatch = ron.url.match(/^https?:\/\/(?:www\.)?([^\/]+)/i);
+    var host = hostMatch ? hostMatch[1] : ron.brand.toLowerCase();
+    ctaTextEl.textContent = 'Browse on ' + host;
+  }
+  var ctaA = document.getElementById('ron-cta');
+  if (ctaA) {
+    ctaA.href = ron.url;
+    ctaA.setAttribute('target', '_top');
+    ctaA.setAttribute('rel', 'external noopener');
+    ctaA.onclick = function() {
+      track('retailer_own_cta_tap', { brand: ron.brand, host: (ron.url.match(/^https?:\/\/(?:www\.)?([^\/]+)/i) || [])[1] });
+    };
+  }
+  var tryOther = document.getElementById('ron-try-other');
+  if (tryOther) { tryOther.onclick = function(e) { e.preventDefault(); goHome(); }; }
+}
+
+// V.78 — restore standard result blocks when leaving retailer-own state.
+function _restoreStandardResultBlocks() {
+  var card = document.getElementById('retailer-own-card');
+  if (card) { card.setAttribute('hidden', ''); card.style.display = ''; }
+  var ids = ['v5-verdict-block','v5-hero-card','savvey-says','cta-list','v5-actions-row','v5-meta-disclaimer'];
+  ids.forEach(function(id) {
+    var el = document.getElementById(id) || document.querySelector('.' + id);
+    if (el) el.style.display = '';
+  });
+}
+
 function bounceToType(seed, reason) {
   showToast(reason || 'Could not quite catch that. Edit and try again.');
   goHome();
@@ -4701,6 +4864,20 @@ function renderConfirm(a, b, payload) {
     generic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
   };
   const _confirmCat = (payload && payload.category) || 'generic';
+
+  // V.78 — Generic-noun nudge: if user typed a single generic word
+  // ("mug", "pen"), swap the headline copy from "Which one?" (committed)
+  // to "Want to be more specific?" (suggestive). Flag set by callNormalize.
+  const _genericNoun = !!(payload && payload._meta && payload._meta.generic_noun_input);
+  const _confirmTitle = document.querySelector('#screen-confirm .v5-confirm-title');
+  const _confirmSub   = document.getElementById('confirm-sub');
+  if (_genericNoun) {
+    if (_confirmTitle) _confirmTitle.textContent = 'Want to be more specific?';
+    if (_confirmSub)   _confirmSub.textContent   = 'A brand or model gets you a better answer. Or pick a category-leader below.';
+  } else {
+    if (_confirmTitle) _confirmTitle.textContent = 'Which one?';
+    if (_confirmSub)   _confirmSub.textContent   = 'Best value on top.';
+  }
 
   // Resolve candidates list. Wave HH: prefer the new structured array; fall
   // back to [a, b] for legacy responses. Wave KK: zip with disambig_candidates_meta

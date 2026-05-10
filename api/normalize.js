@@ -28,7 +28,33 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v74';
+const VERSION             = 'normalize.js v3.4.5v78';
+
+// V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
+// that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
+// Amazon UK won't have the listing and SerpAPI will whiff. Instead of letting
+// the user land on a "couldn't find" empty state, the frontend short-circuits
+// to a "Sold direct by [Brand]" card with a deep-link to the brand's own search.
+// John Lewis is INTENTIONALLY excluded — JL sells own-brand AND third-party
+// branded goods, so its products are usually verifiable on Amazon UK.
+const RETAILER_OWN_BRANDS = [
+  { rx: /^\s*habitat\b/i,                    brand: 'Habitat',    url: q => 'https://www.habitat.co.uk/search?q=' + encodeURIComponent(q.replace(/^habitat\s*/i, '')) },
+  { rx: /^\s*ikea\b/i,                       brand: 'IKEA',       url: q => 'https://www.ikea.com/gb/en/search/?q=' + encodeURIComponent(q.replace(/^ikea\s*/i, '')) },
+  { rx: /^\s*(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\b/i, brand: 'M&S Home', url: q => 'https://www.marksandspencer.com/l/home-and-furniture/search?q=' + encodeURIComponent(q.replace(/^(?:m\s*&\s*s\s*home|m&s\s*home|marks\s*(?:&|and)\s*spencer\s*home)\s*/i, '')) },
+  { rx: /^\s*dunelm\b/i,                     brand: 'Dunelm',     url: q => 'https://www.dunelm.com/search?searchTerm=' + encodeURIComponent(q.replace(/^dunelm\s*/i, '')) },
+  { rx: /^\s*argos\s*home\b/i,              brand: 'Argos Home', url: q => 'https://www.argos.co.uk/search/' + encodeURIComponent(q.replace(/^argos\s*home\s*/i, '')) },
+  { rx: /^\s*the\s*range\b/i,               brand: 'The Range',  url: q => 'https://www.therange.co.uk/search/?q=' + encodeURIComponent(q.replace(/^the\s*range\s*/i, '')) },
+];
+function detectRetailerOwn(canonical) {
+  if (!canonical || typeof canonical !== 'string') return null;
+  for (const r of RETAILER_OWN_BRANDS) {
+    if (r.rx.test(canonical)) {
+      try { return { brand: r.brand, url: r.url(canonical.trim()) }; }
+      catch (e) { return { brand: r.brand, url: null }; }
+    }
+  }
+  return null;
+}
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
@@ -1212,6 +1238,14 @@ export default async function handler(req, res) {
     }
   }
 
+  // V.78 — retailer-own detection. If canonical leads with a UK retailer-own
+  // brand (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range), stamp _meta
+  // so the frontend can short-circuit to a "Sold direct by [Brand]" empty
+  // state instead of a frustrating "couldn't find on Amazon UK" message.
+  // Only fires when specificity is brand_only — if the canonical has a real
+  // model number we still try Amazon first.
+  const _retailerOwn = (_specificity === 'brand_only') ? detectRetailerOwn(parsed.canonical_search_string) : null;
+
   const responseBody = {
     ...parsed,
     specificity: _specificity,
@@ -1225,6 +1259,7 @@ export default async function handler(req, res) {
       input_type: inputType,
       latency_ms: Date.now() - t0,
       cache: 'miss',
+      retailer_own: _retailerOwn, // V.78 — null or { brand, url }
     }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
