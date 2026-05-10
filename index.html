@@ -365,6 +365,57 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.107 — Polish bundle: tap-spring, primary CTA elevation, glass cards ===
+     Universal tap-spring: scales 0.96 on :active with the iOS spring curve,
+     gentle overshoot on release. Apply via .tap-spring class (auto-applied
+     by v107-tap-spring delegation script on DOMContentLoaded). */
+  .tap-spring {
+    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1) !important;
+    will-change: transform;
+  }
+  .tap-spring:active {
+    transform: scale(0.96) !important;
+  }
+  .tap-spring:not(:active) {
+    transition-duration: .25s !important;
+    transition-timing-function: cubic-bezier(0.5, 1.4, 0.5, 1) !important;
+  }
+  /* Buy on Amazon hero CTA — Apple Pay style elevation */
+  .v5-savvey-buy-cta,
+  a.cta-row.cta-amazon,
+  a.cta-row[data-retailer="Amazon UK"] {
+    background: linear-gradient(180deg, var(--green) 0%, var(--green-dark) 100%) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 4px 12px rgba(42,107,34,.30),
+      0 12px 28px rgba(42,107,34,.18) !important;
+    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1),
+                box-shadow .15s ease !important;
+  }
+  .v5-savvey-buy-cta:active,
+  a.cta-row.cta-amazon:active,
+  a.cta-row[data-retailer="Amazon UK"]:active {
+    transform: scale(0.97) !important;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.18) inset,
+      0 2px 6px rgba(42,107,34,.40) !important;
+  }
+  /* Glass treatment for the result hero + disambig sheet header
+     when the V.99 token block is in :root. Lightweight — only one
+     blurred layer at a time per paint. */
+  @supports (backdrop-filter: blur(1px)) {
+    .v5-confirm-card,
+    .savvey-says-wrap {
+      background: var(--glass-regular-bg) !important;
+      backdrop-filter: var(--glass-regular-blur) !important;
+      -webkit-backdrop-filter: var(--glass-regular-blur) !important;
+      border: 1px solid rgba(255,255,255,0.32) !important;
+      box-shadow: var(--shadow-card) !important;
+    }
+  }
+
   /* === V.106 — Premium barcode scanner overlay ===
      SVG mask darkens 62% outside the cutout, breathing pulse on border,
      single amber scanline sweeps with edge-fade + drop-shadow glow. */
@@ -4284,7 +4335,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v106</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v107</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -8595,6 +8646,71 @@ handleInbound();
 </script>
 
 <script>
+/* V.107 — Tap-spring + delegated tap haptics. Single delegated pointerdown
+   listener fires haptic.light() on every tappable element, and a one-time
+   class adoption pass adds .tap-spring to standard interactive selectors
+   so they all get the iOS scale-on-press behaviour without per-component
+   boilerplate. */
+(function v107TapSpring() {
+  var TAP_SELECTORS = [
+    'button',
+    '[role="button"]',
+    '.v5-door',
+    '.v5-hero-snap',
+    '.v5-confirm-btn',
+    '.v5-result-action',
+    '.savvey-sheet-card',
+    '.v102-door-mini',
+    '.v102-type-bar-go',
+    '.v105-zoom-tier',
+    '.v5-cam-shutter',
+    '.cta-row',
+    '.v103-amazon-fallback-cta',
+    '.savvey-sheet-none',
+    '.recent-chip',
+    '.confirm-btn'
+  ];
+  function adopt() {
+    try {
+      TAP_SELECTORS.forEach(function(sel) {
+        document.querySelectorAll(sel).forEach(function(el) {
+          if (!el.classList.contains('tap-spring')) el.classList.add('tap-spring');
+        });
+      });
+    } catch (e) {}
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', adopt);
+  } else {
+    adopt();
+  }
+  // Re-adopt when new tappable elements are added to result/disambig screens
+  var mo = new MutationObserver(function(records) {
+    var added = false;
+    for (var i = 0; i < records.length; i++) {
+      if (records[i].addedNodes && records[i].addedNodes.length) { added = true; break; }
+    }
+    if (added) adopt();
+  });
+  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+  else document.addEventListener('DOMContentLoaded', function(){ mo.observe(document.body, { childList: true, subtree: true }); });
+
+  // Delegated tap-down haptic — fires light haptic on every tappable element.
+  // V.100 facade respects prefers-reduced-motion + Capacitor/PWA branching.
+  var _lastHapticAt = 0;
+  document.addEventListener('pointerdown', function(e) {
+    if (!e.target || !e.target.closest) return;
+    var hit = TAP_SELECTORS.some(function(sel) {
+      try { return e.target.closest(sel); } catch (err) { return false; }
+    });
+    if (!hit) return;
+    var now = Date.now();
+    if (now - _lastHapticAt < 120) return; // debounce against rapid double-fire
+    _lastHapticAt = now;
+    if (window.savveyHaptics) try { window.savveyHaptics.light(); } catch (e2) {}
+  }, { passive: true, capture: true });
+})();
+
 /* V.103 — Mock engine. URL params bypass /api/normalize and render the
    target screen with hand-crafted payloads, so design + animation can be
    tested without burning SerpAPI quota or relying on network state.
