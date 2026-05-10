@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v96';
+const VERSION             = 'normalize.js v3.4.5v96.1';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1649,6 +1649,7 @@ export default async function handler(req, res) {
       latency_ms: Date.now() - t0,
       cache: 'miss',
       retailer_own: _retailerOwn, // V.78 — null or { brand, url }
+      serpapi_status: _lastSerpStatus, // V.96.1 - bubble for diagnosis
     }
   };
   kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
