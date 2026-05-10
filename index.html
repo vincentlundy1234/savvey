@@ -365,20 +365,55 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
-  /* === V.107 — Polish bundle: tap-spring, primary CTA elevation, glass cards ===
-     Universal tap-spring: scales 0.96 on :active with the iOS spring curve,
-     gentle overshoot on release. Apply via .tap-spring class (auto-applied
-     by v107-tap-spring delegation script on DOMContentLoaded). */
-  .tap-spring {
-    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  /* === V.108 — Tap-spring as PURE CSS (no MutationObserver) ===
+     Panel veto on V.107 JS class adoption. The tap-spring scale-on-press
+     now applies via direct selector matching — no JS, no MO, no class
+     mutation. Same 16 selectors the haptic listener uses, kept in sync.
+
+     iOS spring curve: cubic-bezier(0.32, 0.72, 0, 1) for press,
+     gentle overshoot cubic-bezier(0.5, 1.4, 0.5, 1) for release. */
+  .v5-door,
+  .v5-hero-snap,
+  .v5-confirm-btn,
+  .confirm-btn,
+  .v5-result-action,
+  .savvey-sheet-card,
+  .v102-door-mini,
+  .v102-type-bar-go,
+  .v105-zoom-tier,
+  .v5-cam-shutter,
+  .cta-row,
+  .v103-amazon-fallback-cta,
+  .savvey-sheet-none,
+  .recent-chip {
+    transition: transform .25s cubic-bezier(0.5, 1.4, 0.5, 1);
     will-change: transform;
   }
-  .tap-spring:active {
-    transform: scale(0.96) !important;
+  .v5-door:active,
+  .v5-hero-snap:active,
+  .v5-confirm-btn:active,
+  .confirm-btn:active,
+  .v5-result-action:active,
+  .savvey-sheet-card:active,
+  .v102-door-mini:active,
+  .v102-type-bar-go:active,
+  .v105-zoom-tier:active,
+  .v5-cam-shutter:active,
+  .cta-row:active,
+  .v103-amazon-fallback-cta:active,
+  .savvey-sheet-none:active,
+  .recent-chip:active {
+    transform: scale(0.96);
+    transition: transform .12s cubic-bezier(0.32, 0.72, 0, 1);
   }
-  .tap-spring:not(:active) {
-    transition-duration: .25s !important;
-    transition-timing-function: cubic-bezier(0.5, 1.4, 0.5, 1) !important;
+  /* Legacy .tap-spring class kept as alias so any external code adding
+     it still works. CSS-only path is preferred. */
+  .tap-spring {
+    transition: transform .25s cubic-bezier(0.5, 1.4, 0.5, 1);
+  }
+  .tap-spring:active {
+    transform: scale(0.96);
+    transition: transform .12s cubic-bezier(0.32, 0.72, 0, 1);
   }
   /* Buy on Amazon hero CTA — Apple Pay style elevation */
   .v5-savvey-buy-cta,
@@ -4335,7 +4370,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v107</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v108</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4889,6 +4924,16 @@ function show(id, opts) {
   if (id === 'result') { _resultEnteredAt = Date.now(); }
   // V.104 — any screen change dismisses the tension freeze-frame overlay.
   if (id !== 'loading') { try { if (typeof hideV104Tension === 'function') hideV104Tension(); } catch (e) {} }
+  // V.108 — Belt-and-braces camera lifecycle: any screen change AWAY from
+  // camera/barcode/loading explicitly stops MediaStreamTracks. The goX
+  // wrappers (goHome, navSnap, navScan) already do this, but show() is
+  // called from history pops, swipe gestures, and inside renderResult —
+  // call sites that don't always go through goX. Now no matter HOW the
+  // screen changes, the camera releases. Idempotent (stopAllScanners
+  // is a no-op when there's nothing to stop).
+  if (id !== 'camera' && id !== 'barcode' && id !== 'loading') {
+    try { if (typeof stopAllScanners === 'function') stopAllScanners(); } catch (e) {}
+  }
   // V.75 — clear stale verdict object when returning to home so a late
   // re-render or back-button history pop can't resurface yesterday's result.
   if (id === 'home') { lastResult = null; }
@@ -5143,9 +5188,13 @@ function setupCameraGestures() {
     });
   })();
   function _scheduleHwZoom(zoom) {
-    // V.105 — debounce dropped 120ms -> 40ms so hardware sensor zoom tracks
-    // the visible CSS zoom much more closely. Was lagging behind during fast
-    // pinches, breaking the "feels like one continuous gesture" illusion.
+    // V.108 — Panel veto on V.105's 40ms. Sensor applyConstraints calls at
+    // 40ms during a pinch were saturating the hardware layer on some devices.
+    // Bumped to 100ms — honest middle ground vs the panel's 150ms suggestion
+    // (which would create capture-time mismatch between visible CSS zoom and
+    // actual sensor crop). 100ms is the floor before sensor jitter; the
+    // user-visible CSS scale stays instant via _applyCssZoom() so the gesture
+    // still feels continuous.
     if (_hwZoomTimer) clearTimeout(_hwZoomTimer);
     _hwZoomTimer = setTimeout(function(){
       if (_zoomCap && typeof applyCameraZoom === 'function') {
@@ -5153,7 +5202,7 @@ function setupCameraGestures() {
         const hwClamped = Math.max(_zoomCap.min, Math.min(_zoomCap.max, hwTarget));
         try { applyCameraZoom(hwClamped); } catch (e) {}
       }
-    }, 40);
+    }, 100);
   }
   video.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) {
@@ -7614,7 +7663,16 @@ handleInbound();
 (function v100Haptics() {
   var Cap = (typeof window !== 'undefined' && window.Capacitor) || null;
   var nativeOn = !!(Cap && Cap.isNativePlatform && Cap.isNativePlatform());
-  var canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
+  // V.108 — Strict gate per panel veto. iOS Safari + iOS WKWebView don't
+  // expose navigator.vibrate at all — typeof check is the right guard.
+  // Without this, a typo elsewhere ("navigator.vibrate(8)" raw) would
+  // throw TypeError and could surface in error-tracking even if try/caught.
+  var canVibrate = (
+    typeof window !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    navigator &&
+    typeof navigator.vibrate === 'function'
+  );
   var reduced = false;
   try {
     var mq = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -8646,13 +8704,16 @@ handleInbound();
 </script>
 
 <script>
-/* V.107 — Tap-spring + delegated tap haptics. Single delegated pointerdown
-   listener fires haptic.light() on every tappable element, and a one-time
-   class adoption pass adds .tap-spring to standard interactive selectors
-   so they all get the iOS scale-on-press behaviour without per-component
-   boilerplate. */
-(function v107TapSpring() {
-  var TAP_SELECTORS = [
+/* V.108 — Panel rollback: MutationObserver DELETED.
+   The V.107 MO + class adoption pass is gone. The .tap-spring styling now
+   lives on a CSS rule that selects the same 16 elements directly — no JS
+   needed. See the .tap-spring + selectors block in the iOS token CSS.
+
+   Delegated tap-down haptic is preserved. It's a single passive
+   pointerdown listener (not a MO), and is the standard pattern for
+   universal tap-feedback without per-element wiring. */
+(function v108DelegatedHaptic() {
+  var TAP_HAPTIC_SELECTORS = [
     'button',
     '[role="button"]',
     '.v5-door',
@@ -8670,42 +8731,15 @@ handleInbound();
     '.recent-chip',
     '.confirm-btn'
   ];
-  function adopt() {
-    try {
-      TAP_SELECTORS.forEach(function(sel) {
-        document.querySelectorAll(sel).forEach(function(el) {
-          if (!el.classList.contains('tap-spring')) el.classList.add('tap-spring');
-        });
-      });
-    } catch (e) {}
-  }
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', adopt);
-  } else {
-    adopt();
-  }
-  // Re-adopt when new tappable elements are added to result/disambig screens
-  var mo = new MutationObserver(function(records) {
-    var added = false;
-    for (var i = 0; i < records.length; i++) {
-      if (records[i].addedNodes && records[i].addedNodes.length) { added = true; break; }
-    }
-    if (added) adopt();
-  });
-  if (document.body) mo.observe(document.body, { childList: true, subtree: true });
-  else document.addEventListener('DOMContentLoaded', function(){ mo.observe(document.body, { childList: true, subtree: true }); });
-
-  // Delegated tap-down haptic — fires light haptic on every tappable element.
-  // V.100 facade respects prefers-reduced-motion + Capacitor/PWA branching.
   var _lastHapticAt = 0;
   document.addEventListener('pointerdown', function(e) {
     if (!e.target || !e.target.closest) return;
-    var hit = TAP_SELECTORS.some(function(sel) {
+    var hit = TAP_HAPTIC_SELECTORS.some(function(sel) {
       try { return e.target.closest(sel); } catch (err) { return false; }
     });
     if (!hit) return;
     var now = Date.now();
-    if (now - _lastHapticAt < 120) return; // debounce against rapid double-fire
+    if (now - _lastHapticAt < 120) return;
     _lastHapticAt = now;
     if (window.savveyHaptics) try { window.savveyHaptics.light(); } catch (e2) {}
   }, { passive: true, capture: true });
