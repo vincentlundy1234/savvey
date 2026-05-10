@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v111';
+const VERSION             = 'normalize.js v3.4.5v112-diag';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -890,11 +890,28 @@ function parseAndDefault(rawText) {
     console.warn(`[${VERSION}] JSON parse failed: ${e.message}; raw-first-200="${rawText.slice(0, 200)}"`);
     return null;
   }
-  if (!parsed || typeof parsed !== 'object') return null;
+  if (!parsed || typeof parsed !== 'object') {
+    console.warn(`[${VERSION}] V.112-DIAG parsed-not-object; raw-first-300=${String(rawText).slice(0, 300).replace(/\n/g,'\\n')}`);
+    return null;
+  }
 
   const canonical = (typeof parsed.canonical_search_string === 'string' && parsed.canonical_search_string.trim())
     ? parsed.canonical_search_string.trim().slice(0, 200) : null;
-  if (!canonical) return null;
+  if (!canonical) {
+    // V.112 — diagnostic: when Haiku returns JSON but with no/empty canonical_search_string,
+    // log the keys + a stringified preview so we can see exactly what shape it's returning.
+    // This reveals whether Haiku is (a) emitting {"error":...} (b) emitting null canonical
+    // (c) emitting a confidence:low payload that should be passed through anyway, etc.
+    try {
+      const _keys = Object.keys(parsed).join(',');
+      const _canonRaw = JSON.stringify(parsed.canonical_search_string);
+      const _conf = JSON.stringify(parsed.confidence);
+      const _alts = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : null;
+      const _preview = JSON.stringify(parsed).slice(0, 400).replace(/\n/g,'\\n');
+      console.warn(`[${VERSION}] V.112-DIAG no-canonical; keys=[${_keys}] canonical=${_canonRaw} confidence=${_conf} alts_len=${_alts} parsed-first-400=${_preview}`);
+    } catch (_) { /* never break the parse path on a logging error */ }
+    return null;
+  }
 
   const confidence = ['high','medium','low'].includes(parsed.confidence) ? parsed.confidence : 'low';
   // V.110 — confidence_score 0-100. Defensive: derive from enum when missing
