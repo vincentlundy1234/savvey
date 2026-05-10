@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v103';
+const VERSION             = 'normalize.js v3.4.5v109';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -93,12 +93,16 @@ const MAX_TOKENS_TEXT     = 320; // Wave II
 const RATE_LIMIT_PER_HOUR = 60;
 const MAX_IMAGE_BYTES     = 4 * 1024 * 1024;
 const KV_TTL_SECONDS      = 86400;        // 24h - per-query cache (cKey)
-const CANONICAL_TTL_SECONDS = 604800;     // V.97 — 7 days for canonical-keyed entries.
-                                          // Different input phrasings ("ps5"/"PS5 console"/
-                                          // "PlayStation 5") collapse to the same canonical,
-                                          // and canonical-level data (verified Amazon ASIN +
-                                          // retailer chip URLs) doesn't change daily.
-                                          // Cuts SerpAPI burn ~5x on repeat queries.
+const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.97).
+                                          // Vincent flagged 10 May: PS5 Pro showing £749.99
+                                          // in Savvey vs £784.99 actual on Amazon. £35 stale
+                                          // because V.97's 7-day TTL was too aggressive on
+                                          // verified prices. £35/£750 = 4.5% gap = credibility
+                                          // breaker on a "verified live UK price" promise.
+                                          // 6h is the honest floor: prices rarely change
+                                          // intraday, but never older than half a working day.
+                                          // SerpAPI Starter quota is fine for this — we'd
+                                          // rather burn searches than serve wrong numbers.
 const KV_TIMEOUT_MS       = 1500;
 
 let _kv = null;
@@ -163,7 +167,10 @@ function cacheKey(inputType, payload) {
   // specificity flag and retailer_deep_links populated.
   // V.103 cache prefix bump — flushes pre-intent-disambig entries so the new
   // alternatives_meta (intent_label + rationale + est_price_range) populates.
-  return 'savvey:normalize:v3_103:' + h.digest('hex').slice(0, 24);
+  // V.109 cache prefix bump v3_103 -> v3_109 — flushes every entry cached
+  // under the V.97 7-day TTL so PS5 Pro (and others) re-fetch with fresh
+  // SerpAPI verified prices instead of stale £749.99.
+  return 'savvey:normalize:v3_109:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -1390,7 +1397,7 @@ export default async function handler(req, res) {
   // Wave II — canonical-keyed cache lookup. Different input phrasings that
   // resolve to the SAME canonical hit one shared cache entry, skipping
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
-  const _canonicalKey = `savvey:canonical:v4:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v5:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
