@@ -2888,12 +2888,16 @@
   body.verdict-check_elsewhere .v5-verdict-block { background: var(--red-soft, #fde0e0); }
 
   .v5-verdict-watermark {
-    position: absolute; right: -12px; top: -6px;
+    position: absolute; right: -8px; top: -4px;
     font-family: var(--font-display, 'Nunito');
-    font-size: 70px; font-weight: 800;
-    color: var(--green); opacity: 0.10;
-    transform: rotate(-12deg);
-    letter-spacing: -0.04em;
+    /* V.114 — Gemini panel polish: dethrone the watermark from 70px hero
+       weight to 56px subordinate decorative element; bump opacity 0.10 → 0.14
+       for slightly stronger brand presence without competing with the pill +
+       price for attention. Tighter letter-spacing for typographic confidence. */
+    font-size: 56px; font-weight: 800;
+    color: var(--green); opacity: 0.14;
+    transform: rotate(-10deg);
+    letter-spacing: -0.045em;
     pointer-events: none;
     text-transform: capitalize;
   }
@@ -2917,7 +2921,12 @@
     text-transform: none;
     width: fit-content; max-width: 100%;
     animation: v5-verdict-pop 320ms cubic-bezier(.2,.8,.4,1.2);
+    /* V.114 — Gemini panel polish: tactile press feedback on the verdict pill
+       so it feels like a physical button. 96ms is below the perceptual
+       threshold for "delay" but enough to register a confirmation. */
+    transition: transform 96ms ease-out;
   }
+  .v5-verdict-pill:active { transform: scale(0.965); }
   .v5-verdict-pill.show { display: inline-flex; }
   body.verdict-good_buy .v5-verdict-pill { background: linear-gradient(180deg, var(--green) 0%, var(--green-dark) 100%); box-shadow: 0 1px 0 rgba(255,255,255,0.2) inset, 0 6px 16px rgba(42,107,34,0.33); }
   body.verdict-fair .v5-verdict-pill,
@@ -4388,7 +4397,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v113</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v114</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
