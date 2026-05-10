@@ -3385,7 +3385,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v78</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v78.1</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4714,7 +4714,10 @@ function renderRetailerOwn(payload) {
   show('result');
   var ron = payload && payload._meta && payload._meta.retailer_own;
   if (!ron || !ron.brand || !ron.url) return;
-  var toHide = ['v5-verdict-block', 'v5-hero-card', 'savvey-says', 'cta-list', 'v5-actions-row', 'v5-meta-disclaimer'];
+  // V.78.1 — corrected hide list (V.78 used non-existent classes). Real surfaces:
+  // v5-product-header (hero+title+sub), savvey-says, cta-list (retailer rows),
+  // v5-affiliate-line, v5-result-actions, v5-wrong-product, stale-banner.
+  var toHide = ['v5-verdict-block', 'v5-product-header', 'savvey-says', 'cta-list', 'v5-affiliate-line', 'v5-result-actions', 'v5-wrong-product', 'stale-banner'];
   toHide.forEach(function(id) {
     var el = document.getElementById(id) || document.querySelector('.' + id);
     if (el) el.style.display = 'none';
@@ -4748,7 +4751,8 @@ function renderRetailerOwn(payload) {
 function _restoreStandardResultBlocks() {
   var card = document.getElementById('retailer-own-card');
   if (card) { card.setAttribute('hidden', ''); card.style.display = ''; }
-  var ids = ['v5-verdict-block','v5-hero-card','savvey-says','cta-list','v5-actions-row','v5-meta-disclaimer'];
+  // V.78.1 — match the corrected hide list in renderRetailerOwn.
+  var ids = ['v5-verdict-block','v5-product-header','savvey-says','cta-list','v5-affiliate-line','v5-result-actions','v5-wrong-product','stale-banner'];
   ids.forEach(function(id) {
     var el = document.getElementById(id) || document.querySelector('.' + id);
     if (el) el.style.display = '';
