@@ -3640,7 +3640,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v92</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v95</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3743,11 +3743,10 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </button>
   </div>
 
-  <!-- GDPR mini-pill (one-promise) -->
-  <div class="v5-cam-gdpr" id="v5-cam-gdpr">
-    <span>Photos stay on your phone.</span>
-    <button onclick="document.getElementById('v5-cam-gdpr').remove();try{localStorage.setItem('savvey-gdpr-dismissed','1')}catch(e){}" type="button">Got it</button>
-  </div>
+  <!-- V.95 — GDPR pill removed from camera. Privacy is surfaced in the
+       AI-info modal + welcome trust-line; the camera frame should be free
+       of chrome that isn't capture-related. -->
+  <div class="v5-cam-gdpr" id="v5-cam-gdpr" hidden></div>
 
   <!-- Mode indicator dots — 3 nav tabs after V.83 (Home/Snap/Scan) -->
   <div class="v5-cam-mode-dots" aria-hidden="true">
@@ -4356,10 +4355,15 @@ function setupCameraGestures() {
       _pinchActive = false;
       // Final hardware zoom snap so capture-time matches visual
       _scheduleHwZoom(_currentCssZoom);
+      // V.95 — Hide zoom pill faster (was 1500ms). Premium cameras don't
+      // dwell on transient indicators. Also hide when at 1.0× regardless.
       setTimeout(function(){
         const ind = document.getElementById('zoom-indicator');
-        if (ind && !_pinchActive) ind.hidden = true;
-      }, 1500);
+        if (ind && !_pinchActive) {
+          ind.hidden = true;
+          ind.classList.remove('zooming');
+        }
+      }, 700);
     }
   }, { passive: true });
   // Double-tap reset to 1x
@@ -4398,11 +4402,12 @@ function setupCameraGestures() {
     }
   });
 
-  // ── Auto-fade "Frame it." hint after 2s ────────────────────
+  // ── V.95 — Auto-fade "Frame it." hint after 1.2s (was 2s) ──
+  // Premium cameras don't nag. Hint-then-disappear is the iOS Camera idiom.
   const hint = document.getElementById('cam-hint');
   if (hint) {
     hint.classList.remove('fade-out');
-    setTimeout(function(){ hint.classList.add('fade-out'); }, 2000);
+    setTimeout(function(){ hint.classList.add('fade-out'); }, 1200);
   }
 
   // ── Show torch button if supported ─────────────────────────

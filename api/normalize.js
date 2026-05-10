@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v92';
+const VERSION             = 'normalize.js v3.4.5v95';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1570,16 +1570,32 @@ export default async function handler(req, res) {
     }
   }
 
-  // V.87 — Visual similarity. Only on low-confidence Snap (image input where
-  // Haiku was uncertain about the brand/exact product). Renders as a "Find
-  // similar" carousel in the result screen instead of a frustrating empty state.
+  // V.87 — Visual similarity. Originally only fired on confidence=='low'.
+  // V.95 broadens the trigger: ALSO fire when an image produced empty
+  // retailer_deep_links AND null verified_amazon_price — i.e. Haiku felt
+  // confident enough to set medium/high but the downstream lookup found
+  // nothing useful (Vincent's garden-storage-box case: Haiku says
+  // "garden storage box plastic", SerpAPI returns no Amazon match + no
+  // retailer PDP, user gets dead result. Now they get a Find Similar rail).
   let visual_matches = null;
-  if (inputType === 'image' && parsed.confidence === 'low') {
+  const _retailerLinkCount = retailer_deep_links && typeof retailer_deep_links === 'object'
+    ? Object.keys(retailer_deep_links).length
+    : 0;
+  const _v87LowConfTrigger = (parsed.confidence === 'low');
+  const _v87EmptyResultTrigger = (
+    parsed.specificity !== 'specific'
+    && verified_amazon_price === null
+    && _retailerLinkCount === 0
+  );
+  if (inputType === 'image' && (_v87LowConfTrigger || _v87EmptyResultTrigger)) {
     try {
       const framesIn = Array.isArray(body.image_base64_frames) ? body.image_base64_frames : null;
       const reusePayload = framesIn && framesIn.length > 0 ? framesIn.slice(0, 3) : (body.image_base64 || null);
       const mediaType = body.media_type || 'image/jpeg';
       visual_matches = await describeAndSearchSimilar(reusePayload, mediaType);
+      if (visual_matches && visual_matches.matches && Object.keys(visual_matches.matches).length > 0) {
+        console.log(`[${VERSION}] V.95 V.87-broadened recovery fired (lowConf=${_v87LowConfTrigger} emptyResult=${_v87EmptyResultTrigger}, ${Object.keys(visual_matches.matches).length} matches)`);
+      }
     } catch (err) {
       console.warn(`[${VERSION}] V.87 visual-similarity error: ${err.message}`);
     }
