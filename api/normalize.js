@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v89';
+const VERSION             = 'normalize.js v3.4.5v90';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1218,6 +1218,46 @@ export default async function handler(req, res) {
           disambig_candidates_meta: null,
           _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0, cache: 'miss', retailer_own: ron, source: 'no_match_retailer_own_recovery' }
         });
+      }
+    }
+    // V.90 — Image inputs that no_match: try V.87 visual similarity before
+    // failing. The blue-pot scenario: user snaps an unbranded item, Haiku
+    // can't identify it, but Vision can still describe it well enough to
+    // generate a useful similar-products query. Returns synthetic 200 with
+    // visual_matches populated so frontend renders "Find similar" instead
+    // of bouncing to Type with a vague "couldn't quite catch that" toast.
+    if (inputType === 'image') {
+      try {
+        const framesIn = Array.isArray(body.image_base64_frames) ? body.image_base64_frames : null;
+        const reusePayload = framesIn && framesIn.length > 0 ? framesIn.slice(0, 3) : (body.image_base64 || null);
+        const mediaType = body.media_type || 'image/jpeg';
+        const vm = await describeAndSearchSimilar(reusePayload, mediaType);
+        if (vm && vm.matches && Object.keys(vm.matches).length > 0) {
+          console.log(`[${VERSION}] no_match -> V.87 visual_similar recovery for image (${Object.keys(vm.matches).length} matches)`);
+          return res.status(200).json({
+            canonical_search_string: vm.visual_summary || vm.category || 'Similar items',
+            confidence: 'low',
+            specificity: 'category_only',
+            category: vm.category || 'home',
+            alternative_string: null,
+            alternatives_array: [],
+            alternatives_meta: [],
+            mpn: null,
+            amazon_search_query: vm.search_query,
+            savvey_says: { typical_price_range: null, live_amazon_price: null, used_amazon_price: null, amazon_rating: null, price_take: null, verdict: null, timing_advice: null, consensus: null, confidence: 'low' },
+            verified_amazon_price: null,
+            alternative_amazon_price: null,
+            retailer_deep_links: null,
+            disambig_candidates: null,
+            disambig_candidates_meta: null,
+            visual_matches: vm,
+            recommendations: null,
+            review_synthesis: null,
+            _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0, cache: 'miss', source: 'no_match_visual_similar_recovery' }
+          });
+        }
+      } catch (err) {
+        console.warn(`[${VERSION}] V.90 no_match->visual_similar recovery error: ${err.message}`);
       }
     }
     return res.status(200).json({

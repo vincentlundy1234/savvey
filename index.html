@@ -1720,6 +1720,22 @@
   }
   .v5-cam-x:active { transform: scale(.95); }
   .v5-cam-x .cam-cancel-text { display: none; }
+  /* V.90 — premium zoom indicator polish */
+  .v5-cam-zoom-pill.zooming {
+    animation: v90-zoom-pulse 0.18s ease-out;
+  }
+  @keyframes v90-zoom-pulse {
+    0% { transform: translateY(0) scale(1); }
+    50% { transform: translateY(-1px) scale(1.06); }
+    100% { transform: translateY(0) scale(1); }
+  }
+  /* Smooth video element scaling — V.90 baseline transition for nudge between gestures */
+  .v5-cam-video {
+    transition: transform 0.08s linear;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+  }
+  .v5-cam-video.no-transition { transition: none !important; }
   .v5-cam-zoom-pill {
     padding: 5px 10px;
     border-radius: 999px;
@@ -3624,7 +3640,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v89</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v90</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4265,41 +4281,97 @@ function setupCameraGestures() {
   if (video.dataset.v82Wired === '1') return;
   video.dataset.v82Wired = '1';
 
-  // ── Pinch-to-zoom ───────────────────────────────────────────
+  // ── Pinch-to-zoom (V.90 rebuild) ────────────────────────────
+  // iOS Safari hardware zoom is jumpy/stepped. We use CSS transform: scale(N)
+  // on the video element for buttery-smooth visual scaling, AND drive the
+  // MediaTrack zoom constraint in the background so capture-time uses hardware
+  // zoom (better captured-image quality). Range: 1x to 4x. Doesn't depend on
+  // _zoomCap presence — works on devices without MediaTrack.zoom support too.
+  const MIN_ZOOM = 1;
+  const MAX_ZOOM = 4;
   let _pinchStartDist = 0;
   let _pinchStartZoom = 1;
+  let _currentCssZoom = 1;
   let _pinchActive = false;
+  let _hwZoomTimer = null;
   function _dist(t0, t1) {
     const dx = t0.clientX - t1.clientX;
     const dy = t0.clientY - t1.clientY;
     return Math.sqrt(dx*dx + dy*dy);
   }
+  // V.90 premium polish: GPU-accelerated transform, haptic on integer zoom
+  // crossings (1x→2x→3x→4x), zoom indicator pulse animation.
+  let _lastIntegerZoom = 1;
+  function _applyCssZoom(zoom) {
+    _currentCssZoom = zoom;
+    video.style.transformOrigin = 'center center';
+    video.style.willChange = 'transform';
+    video.style.transform = 'translate3d(0,0,0) scale(' + zoom + ')';
+    const ind = document.getElementById('zoom-indicator');
+    if (ind) {
+      ind.hidden = false;
+      ind.classList.add('zooming');
+      ind.textContent = (zoom < 10 ? zoom.toFixed(1).replace(/\.0$/,'') : Math.round(zoom)) + '\u00D7';
+    }
+    // Haptic on integer crossings (only fires once per crossing)
+    const intZoom = Math.round(zoom);
+    if (intZoom !== _lastIntegerZoom && Math.abs(zoom - intZoom) < 0.08) {
+      _lastIntegerZoom = intZoom;
+      if (navigator.vibrate) {
+        try { navigator.vibrate(8); } catch (e) {}
+      }
+    }
+  }
+  function _scheduleHwZoom(zoom) {
+    // Debounce hardware zoom to avoid spamming applyConstraints during gesture
+    if (_hwZoomTimer) clearTimeout(_hwZoomTimer);
+    _hwZoomTimer = setTimeout(function(){
+      if (_zoomCap && typeof applyCameraZoom === 'function') {
+        // Map CSS zoom range to hardware zoom range
+        const hwTarget = _zoomCap.min + (zoom - MIN_ZOOM) / (MAX_ZOOM - MIN_ZOOM) * (_zoomCap.max - _zoomCap.min);
+        const hwClamped = Math.max(_zoomCap.min, Math.min(_zoomCap.max, hwTarget));
+        try { applyCameraZoom(hwClamped); } catch (e) {}
+      }
+    }, 120);
+  }
   video.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2 && _zoomCap) {
+    if (e.touches.length === 2) {
       _pinchActive = true;
       _pinchStartDist = _dist(e.touches[0], e.touches[1]);
-      _pinchStartZoom = _zoomCurrent || _zoomCap.min || 1;
-      const ind = document.getElementById('zoom-indicator');
-      if (ind) ind.hidden = false;
+      _pinchStartZoom = _currentCssZoom;
     }
   }, { passive: true });
   video.addEventListener('touchmove', function(e) {
-    if (_pinchActive && e.touches.length === 2 && _zoomCap) {
+    if (_pinchActive && e.touches.length === 2) {
       const d = _dist(e.touches[0], e.touches[1]);
       const ratio = d / Math.max(_pinchStartDist, 1);
       const target = _pinchStartZoom * ratio;
-      const clamped = Math.max(_zoomCap.min, Math.min(_zoomCap.max, target));
-      applyCameraZoom(clamped);
+      const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, target));
+      _applyCssZoom(clamped);
+      _scheduleHwZoom(clamped);
     }
   }, { passive: true });
   video.addEventListener('touchend', function(e) {
     if (_pinchActive && e.touches.length < 2) {
       _pinchActive = false;
-      // Auto-hide indicator after 1.2s
+      // Final hardware zoom snap so capture-time matches visual
+      _scheduleHwZoom(_currentCssZoom);
       setTimeout(function(){
         const ind = document.getElementById('zoom-indicator');
         if (ind && !_pinchActive) ind.hidden = true;
-      }, 1200);
+      }, 1500);
+    }
+  }, { passive: true });
+  // Double-tap reset to 1x
+  let _lastTapAt = 0;
+  video.addEventListener('touchend', function(e) {
+    if (e.touches.length === 0 && e.changedTouches.length === 1 && !_pinchActive) {
+      const now = Date.now();
+      if (now - _lastTapAt < 300 && _currentCssZoom !== MIN_ZOOM) {
+        _applyCssZoom(MIN_ZOOM);
+        _scheduleHwZoom(MIN_ZOOM);
+      }
+      _lastTapAt = now;
     }
   }, { passive: true });
 
