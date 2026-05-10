@@ -3640,7 +3640,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v96</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v98</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4115,6 +4115,10 @@ let _savveyCameraStarting = false;
 // looks broken. Track the last activation timestamp per screen and short-circuit
 // the animation reset if the same screen reactivates within 400ms. Bug D.
 const _savveyLastShownAt = Object.create(null);
+// V.98 — Track result-screen entry timestamp so we can fire result_dwell_time
+// on exit (proxy for "did the user trust + linger on the verdict?"). Filled by
+// show('result') and consumed when leaving for any other screen.
+let _resultEnteredAt = null;
 function show(id, opts) {
   // V.75 — if we're navigating AWAY from the loading screen (i.e. the user
   // gave up or hit back), cancel the in-flight /api/normalize request so a
@@ -4124,6 +4128,19 @@ function show(id, opts) {
     try { _savveyActiveAbort.abort(); } catch {}
     _savveyActiveAbort = null;
   }
+  // V.98 — fire result_dwell_time when leaving the result screen. Bucket the
+  // ms into coarse buckets so PostHog property cardinality stays sensible.
+  if (id !== 'result' && _resultEnteredAt) {
+    const _dwellMs = Date.now() - _resultEnteredAt;
+    let _bucket = 'lt_2s';
+    if (_dwellMs >= 30000)      _bucket = 'gte_30s';
+    else if (_dwellMs >= 10000) _bucket = '10_30s';
+    else if (_dwellMs >= 5000)  _bucket = '5_10s';
+    else if (_dwellMs >= 2000)  _bucket = '2_5s';
+    try { track('result_dwell_time', { dwell_ms: _dwellMs, bucket: _bucket, exit_to: id, door: window._lastDoor || null }); } catch (e) {}
+    _resultEnteredAt = null;
+  }
+  if (id === 'result') { _resultEnteredAt = Date.now(); }
   // V.75 — clear stale verdict object when returning to home so a late
   // re-render or back-button history pop can't resurface yesterday's result.
   if (id === 'home') { lastResult = null; }
@@ -6043,9 +6060,19 @@ async function shareResult() {
   const url = `https://savvey.me/?q=${encodeURIComponent(product)}`;
   const title = `${product} — Savvey`;
   const text  = `Quick UK price check on Savvey: ${product}`;
+  // V.98 — share_initiated fires the moment the user taps the share button,
+  // BEFORE the native share sheet opens. Lets us measure the cancel/abort
+  // rate (people who tap share but then bail out of the system sheet).
+  // Existing 'shared' event still fires on completion only.
+  try { track('share_initiated', { door: window._lastDoor || null, product_len: product.length }); } catch (e) {}
   if (navigator.share) {
     try { await navigator.share({ title, text, url }); track('shared', { method: 'native' }); return; }
-    catch (err) { if (err && err.name === 'AbortError') return; }
+    catch (err) {
+      if (err && err.name === 'AbortError') {
+        try { track('share_aborted', { stage: 'native_sheet' }); } catch (e) {}
+        return;
+      }
+    }
   }
   const combined = `${text} ${url}`;
   try {
