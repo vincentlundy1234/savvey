@@ -1216,7 +1216,7 @@
   }
 
   /* ═══════════════════════════════════════════════════════════════
-     V.45 v5 BOTTOM NAV — 4-column grid: Home | Snap-hero | Scan | Type
+     V.45 v5 BOTTOM NAV — 3-column grid (V.86 update): Home | Snap-hero | Scan
      Snap is a raised gradient pill, others are flat icon+label
      ═══════════════════════════════════════════════════════════════ */
   .v5-bottom-nav {
@@ -1225,7 +1225,7 @@
     -webkit-backdrop-filter: none;
     border-top: 1px solid rgba(42,107,34,0.10);
     display: grid !important;
-    grid-template-columns: 1fr auto 1fr 1fr;
+    grid-template-columns: 1fr auto 1fr;
     align-items: end;
     gap: 4px;
     padding: 10px 12px calc(26px + env(safe-area-inset-bottom));
@@ -1854,8 +1854,8 @@
     transform: translateY(-50%);
   }
   @keyframes v5-scan {
-    0%, 100% { top: 18%; }
-    50%      { top: 82%; }
+    0%, 100% { top: 24%; }
+    50%      { top: 76%; }
   }
   @media (prefers-reduced-motion: reduce) {
     .v5-cam-scanline { animation: none; }
@@ -3458,7 +3458,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v82</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v86</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3496,9 +3496,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <!-- Bottom hint -->
   <p class="v5-cam-bottom-hint">Hold steady. Decode triggers automatically.</p>
 
-  <!-- Mode indicator dots -->
+  <!-- Mode indicator dots — 3 nav tabs after V.83 (Home/Snap/Scan) -->
   <div class="v5-cam-mode-dots" aria-hidden="true">
-    <span></span><span class="active"></span><span></span><span></span>
+    <span></span><span></span><span class="active"></span>
   </div>
 </div>
 
@@ -3567,9 +3567,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <button onclick="document.getElementById('v5-cam-gdpr').remove();try{localStorage.setItem('savvey-gdpr-dismissed','1')}catch(e){}" type="button">Got it</button>
   </div>
 
-  <!-- Mode indicator dots -->
+  <!-- Mode indicator dots — 3 nav tabs after V.83 (Home/Snap/Scan) -->
   <div class="v5-cam-mode-dots" aria-hidden="true">
-    <span class="active"></span><span></span><span></span><span></span>
+    <span></span><span></span><span class="active"></span>
   </div>
 </div>
 
@@ -5506,7 +5506,12 @@ function renderResult(displayName, payload) {
           sub: 'Tap to open this product'
         };
       }
-      _builtRows.push(Object.assign({}, _cfg, { _isCheapest: _i === 0 }));
+      _builtRows.push(Object.assign({}, _cfg, {
+        _isCheapest: _i === 0,
+        _v81Price: _e.info.price,
+        _v81Url: _e.info.url,
+        _v81Host: _e.host
+      }));
     }
     renderList = _builtRows;
   }
@@ -5522,6 +5527,7 @@ function renderResult(displayName, payload) {
     let _resolvedHref;
     if (r.name === 'Amazon UK' && verifiedAmazonLink) _resolvedHref = verifiedAmazonLink;
     else if (_deep && _deep.url) _resolvedHref = _deep.url;
+    else if (r._v81Url) _resolvedHref = r._v81Url;
     else _resolvedHref = r.url(q);
     a.href = _resolvedHref;
     a.target = '_top';
@@ -5544,6 +5550,13 @@ function renderResult(displayName, payload) {
       // google_shopping price hint when present, plus a "tap to open" copy
       // that signals this is a real product page, not a search.
       if (_deep.price) nameStr = `${r.name} · ${_deep.price}`;
+      subStr = 'Tap to open this product on ' + r.name;
+    } else if (r._v81Price) {
+      // V.85 hotfix — V.81 dynamic-build path. Synthesized retailer configs
+      // (Ocado/Asda/Waitrose etc. not in the static RETAILERS map) carry
+      // price + url inline rather than via the _deepLinks lookup. Render
+      // them the same way as the Wave GG branch.
+      nameStr = `${r.name} · ${r._v81Price}`;
       subStr = 'Tap to open this product on ' + r.name;
     }
     a.innerHTML = `<div class="cta-mark ${r.mark}">${r.label}</div><div class="cta-body"><p class="cta-name">${escapeHtml(nameStr)}${r._isCheapest ? ' <span class="cta-cheapest-pill">Cheapest</span>' : ''}</p><p class="cta-sub">${escapeHtml(subStr)}</p></div><div class="cta-arrow">→</div>`;
