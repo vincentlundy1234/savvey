@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v112-diag';
+const VERSION             = 'normalize.js v3.4.5v112b';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1428,10 +1428,31 @@ export default async function handler(req, res) {
       'product'
     ).slice(0, 150).trim() || 'product';
     const _v111Fallback = `https://www.amazon.co.uk/s?k=${encodeURIComponent(_v111Q)}&tag=${encodeURIComponent(AMAZON_TAG)}`;
+    // V.112b — surface the raw Haiku output in the response body so we can
+    // see exactly what shape Haiku produced when parseAndDefault rejected it.
+    // Truncated to 800 chars + newlines escaped. Internal-only field (frontend
+    // ignores _-prefixed keys). REMOVE once V.112 root-cause fix lands.
+    let _v112_haiku_raw = null;
+    let _v112_haiku_keys = null;
+    try {
+      if (typeof rawText === 'string' && rawText.length > 0) {
+        _v112_haiku_raw = rawText.slice(0, 800).replace(/\n/g, '\\n');
+        // Try one more parse to surface keys+canonical even when parseAndDefault rejected.
+        try {
+          const _cleaned = rawText.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+          const _p = JSON.parse(_cleaned);
+          if (_p && typeof _p === 'object') {
+            _v112_haiku_keys = Object.keys(_p).join(',');
+          }
+        } catch (_) { /* leave keys null when parse fails */ }
+      }
+    } catch (_) { /* never break the fallback path on a diag error */ }
     return res.status(200).json({
       error: 'no_match',
       amazon_search_fallback: _v111Fallback,
       _v111_input_for_search: _v111Q,
+      _v112_haiku_raw,
+      _v112_haiku_keys,
       _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0 }
     });
   }
