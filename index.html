@@ -365,6 +365,54 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.106 — Premium barcode scanner overlay ===
+     SVG mask darkens 62% outside the cutout, breathing pulse on border,
+     single amber scanline sweeps with edge-fade + drop-shadow glow. */
+  .v106-bc-overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 5;
+  }
+  .v106-bc-cutout-frame {
+    transform-origin: 50% 50%;
+    transform-box: fill-box;
+    animation: v106-bc-breathe 1.4s ease-in-out infinite;
+  }
+  @keyframes v106-bc-breathe {
+    0%, 100% { transform: scale(1); opacity: 0.55; }
+    50%      { transform: scale(1.018); opacity: 0.85; }
+  }
+  .v106-bc-scanline {
+    position: absolute;
+    top: calc(50% - 0.75px);
+    left: 14%;
+    right: 14%;
+    height: 1.5px;
+    background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(255, 180, 40, 0) 8%,
+      rgba(255, 180, 40, 0.85) 50%,
+      rgba(255, 180, 40, 0) 92%,
+      transparent 100%);
+    filter: drop-shadow(0 0 6px rgba(255, 180, 40, 0.65));
+    animation: v106-bc-sweep 1.6s linear infinite;
+    pointer-events: none;
+    z-index: 6;
+  }
+  @keyframes v106-bc-sweep {
+    0%   { transform: translateY(-180%); opacity: 0; }
+    18%  { opacity: 0.95; }
+    82%  { opacity: 0.95; }
+    100% { transform: translateY(180%); opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v106-bc-cutout-frame { animation: none; opacity: 0.7; }
+    .v106-bc-scanline     { animation: none; opacity: 0.55; transform: none; }
+  }
+
   /* === V.105 — Camera viewport overhaul ===
      100dvh viewport (iOS URL bar safe), black letterbox top+bottom,
      concentric iOS shutter, zoom-tier pills, GPU-clean compositing. */
@@ -4236,7 +4284,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v105</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v106</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4259,14 +4307,23 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <!-- Auto-fade hint -->
   <div class="v5-cam-hint v5-cam-hint--barcode">Point at the barcode.</div>
 
-  <!-- Cutout: 280x110 horizontal frame for barcode + amber scan line -->
-  <div class="v5-cam-cutout v5-cam-cutout--barcode">
-    <span class="v5-cam-corner v5-cam-tl"></span>
-    <span class="v5-cam-corner v5-cam-tr"></span>
-    <span class="v5-cam-corner v5-cam-bl"></span>
-    <span class="v5-cam-corner v5-cam-br"></span>
-    <div class="v5-cam-scanline"></div>
-  </div>
+  <!-- V.106 — premium SVG-mask barcode overlay. Darkens everything outside
+       the cutout 62%, breathing pulse on cutout border, single amber scan
+       line sweeps top-to-bottom with edge-fade + glow. -->
+  <svg class="v106-bc-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+    <defs>
+      <mask id="v106-bc-cut">
+        <rect width="100" height="100" fill="white"/>
+        <rect x="14" y="42" width="72" height="16" rx="2" fill="black"/>
+      </mask>
+    </defs>
+    <rect width="100" height="100" fill="rgba(0,0,0,0.62)" mask="url(#v106-bc-cut)"/>
+    <rect class="v106-bc-cutout-frame" x="14" y="42" width="72" height="16" rx="2"
+          fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.32"/>
+  </svg>
+  <div class="v106-bc-scanline" aria-hidden="true"></div>
+  <!-- Legacy mount preserved for engine bindings -->
+  <div class="v5-cam-cutout v5-cam-cutout--barcode" hidden></div>
 
   <!-- Barcode reader mount (engine: barcode-reader) — invisible but live -->
   <div id="barcode-reader" class="v5-barcode-mount"></div>
