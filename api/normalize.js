@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v78';
+const VERSION             = 'normalize.js v3.4.5v78.2';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1012,6 +1012,36 @@ export default async function handler(req, res) {
 
   const parsed = parseAndDefault(rawText);
   if (!parsed) {
+    // V.78.2 — Haiku said "no match", but if the user typed a UK retailer-own
+    // brand (Habitat / IKEA / M&S Home / Dunelm / Argos Home / The Range),
+    // we know exactly why: those don't sell on Amazon UK. Route to the
+    // retailer-own card instead of the generic error screen. Only applies
+    // to text input (other doors don't have a clean text seed to match on).
+    if (inputType === 'text') {
+      const userText = String((body && body.text) || '').trim();
+      const ron = detectRetailerOwn(userText);
+      if (ron) {
+        console.log(`[${VERSION}] no_match -> retailer_own short-circuit for "${userText.slice(0, 80)}"`);
+        return res.status(200).json({
+          canonical_search_string: userText.slice(0, 200),
+          confidence: 'low',
+          specificity: 'brand_only',
+          category: 'home',
+          alternative_string: null,
+          alternatives_array: [],
+          alternatives_meta: [],
+          mpn: null,
+          amazon_search_query: userText,
+          savvey_says: { typical_price_range: null, live_amazon_price: null, used_amazon_price: null, amazon_rating: null, price_take: null, verdict: null, timing_advice: null, consensus: null, confidence: 'low' },
+          verified_amazon_price: null,
+          alternative_amazon_price: null,
+          retailer_deep_links: null,
+          disambig_candidates: null,
+          disambig_candidates_meta: null,
+          _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0, cache: 'miss', retailer_own: ron, source: 'no_match_retailer_own_recovery' }
+        });
+      }
+    }
     return res.status(200).json({
       error: 'no_match',
       _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0 }
