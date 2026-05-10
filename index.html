@@ -3245,6 +3245,48 @@
   body:has(.consent-banner.show) .bottom-nav { bottom: 64px; }
   /* V.81 — Cheapest pill on the winning retailer chip when google_shopping
      returned multiple priced retailers and we sorted cheapest first. */
+  /* V.89 — Honest review synthesis (love + gripe) */
+  .v5-review-synth {
+    display: block;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(46,107,38,0.12);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 4px 0 16px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 14px rgba(20,32,26,0.04);
+  }
+  .v5-review-synth-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--green, #2a6b22);
+    margin-bottom: 10px;
+  }
+  .v5-review-synth-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 4px 0;
+  }
+  .v5-review-icon {
+    flex: 0 0 auto;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 800;
+    font-size: 13px;
+    line-height: 1;
+  }
+  .v5-review-love .v5-review-icon { background: rgba(46,107,38,0.18); color: var(--green, #2a6b22); }
+  .v5-review-gripe .v5-review-icon { background: rgba(214,137,16,0.18); color: var(--amber-deep, #a06a08); }
+  .v5-review-text {
+    flex: 1;
+    font-size: 13px;
+    line-height: 1.42;
+    color: var(--ink);
+  }
+
   /* V.88 — Budget recommendations (Top picks under £X) */
   .v5-budget-header { padding: 0 4px 12px; }
   .v5-budget-eyebrow {
@@ -3582,7 +3624,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v88</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v89</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3888,6 +3930,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <!-- V.88 — Top picks under £X for budget queries -->
   <div id="v5-budget-section" hidden></div>
+
+  <!-- V.89 — Honest review synthesis (love/gripe pair) -->
+  <div id="v5-review-synth" class="v5-review-synth" hidden></div>
 
   <!-- Affiliate disclosure -->
   <p class="v5-affiliate-line">Amazon link is an affiliate link — same price for you. Helps keep Savvey free.</p>
@@ -5785,6 +5830,31 @@ function renderResult(displayName, payload) {
     container.hidden = false;
     if (typeof track === 'function') {
       try { track('budget_recs_shown', { budget: rec.budget_gbp, count: rec.items.length, query: rec.category_query }); } catch (e) {}
+    }
+  })();
+  // V.89 — render review synthesis (love/gripe) when present.
+  (function renderV89Reviews(){
+    var container = document.getElementById('v5-review-synth');
+    if (!container) return;
+    var rs = payload && payload.review_synthesis;
+    if (!rs || !rs.love || !rs.gripe) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    var html = '<div class="v5-review-synth-eyebrow">What real reviewers say</div>'
+      + '<div class="v5-review-synth-row v5-review-love">'
+        + '<span class="v5-review-icon">+</span>'
+        + '<span class="v5-review-text">' + escapeHtml(rs.love) + '</span>'
+      + '</div>'
+      + '<div class="v5-review-synth-row v5-review-gripe">'
+        + '<span class="v5-review-icon">−</span>'
+        + '<span class="v5-review-text">' + escapeHtml(rs.gripe) + '</span>'
+      + '</div>';
+    container.innerHTML = html;
+    container.hidden = false;
+    if (typeof track === 'function') {
+      try { track('review_synth_shown', { tone: rs.verdict_tone||null }); } catch (e) {}
     }
   })();
   const heroWrap = document.getElementById('hero-img-wrap');

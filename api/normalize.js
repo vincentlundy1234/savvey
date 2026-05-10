@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v88';
+const VERSION             = 'normalize.js v3.4.5v89';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -461,6 +461,55 @@ Be UK-specific (mention UK retailers, UK availability). Be honest — if budget 
         why: String(it.why||'').slice(0, 80)
       })),
       headline_advice: String(parsed.headline_advice||'').slice(0, 160)
+    };
+  } catch (err) {
+    clearTimeout(timer);
+    return null;
+  }
+}
+
+// V.89 — Honest review synthesis. When we have a confidently-identified product
+// with verified Amazon rating + reviews, ask Haiku for a 6-10 word "what people
+// love" + "what people gripe about" pair. This is synthesis from training-data
+// knowledge of the specific product, not RAG over scraped reviews. Output is
+// punchy, scannable, and adds defensible content nobody else surfaces.
+async function generateReviewSynthesis(canonicalName, ratingNum, reviewsNum) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  if (!canonicalName) return null;
+  const prompt = `Product: "${canonicalName}". Amazon UK rating: ${ratingNum||'?'}/5 from ${reviewsNum||'?'} reviews. Output ONLY this JSON, no preamble:
+{
+  "love": "6-10 words capturing what UK reviewers consistently praise (specific, not generic)",
+  "gripe": "6-10 words capturing the most common complaint (be honest - if no real complaints, say 'minor niggles only')",
+  "verdict_tone": "one of: 'crowd-pleaser' | 'love-it-or-hate-it' | 'solid' | 'flawed-but-popular' | 'niche-fit'"
+}
+Be specific. "Comfortable, great battery" is bad. "All-day wear, 30hr battery in real use" is good.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 200,
+        system: prompt,
+        messages: [{ role: 'user', content: 'Return the JSON now.' }],
+      }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (!parsed || !parsed.love || !parsed.gripe) return null;
+    return {
+      love: String(parsed.love).slice(0, 100),
+      gripe: String(parsed.gripe).slice(0, 100),
+      verdict_tone: String(parsed.verdict_tone||'solid').slice(0, 24)
     };
   } catch (err) {
     clearTimeout(timer);
@@ -1405,6 +1454,23 @@ export default async function handler(req, res) {
   // model number we still try Amazon first.
   const _retailerOwn = (_specificity === 'brand_only') ? detectRetailerOwn(parsed.canonical_search_string) : null;
 
+  // V.89 — Honest review synthesis. Only when we have a confidently-identified
+  // product with rating + reviews. Cost: 1 extra Haiku call. Latency: +500-700ms
+  // but parallelisable with other calls in the future. Skipped for low-conf or
+  // missing-rating to avoid hallucination.
+  let review_synthesis = null;
+  if (verified_amazon_price && verified_amazon_price.rating && verified_amazon_price.reviews && parsed.confidence !== 'low') {
+    try {
+      review_synthesis = await generateReviewSynthesis(
+        parsed.canonical_search_string,
+        verified_amazon_price.rating,
+        verified_amazon_price.reviews
+      );
+    } catch (err) {
+      console.warn(`[${VERSION}] V.89 review-synth error: ${err.message}`);
+    }
+  }
+
   // V.88 — Budget recommendation. Detects "under £X" / "below £X" patterns in
   // text input and generates 3-4 ranked specific picks via Haiku. Only fires
   // for text inputs (not image/barcode/url) with a clear budget signal.
@@ -1445,6 +1511,7 @@ export default async function handler(req, res) {
     disambig_candidates_meta, // Wave KK — parallel array with typical_price_gbp + pack_size + tier_label per candidate
     visual_matches, // V.87 - low-conf snap visual similarity, null otherwise
     recommendations, // V.88 - budget-pattern Haiku recommendations, null otherwise
+    review_synthesis, // V.89 - honest love/gripe pair, null otherwise
     _meta: {
       version: VERSION,
       input_type: inputType,
