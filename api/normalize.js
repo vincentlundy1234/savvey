@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v97';
+const VERSION             = 'normalize.js v3.4.5v103';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -161,7 +161,9 @@ function cacheKey(inputType, payload) {
   }
   // Wave FF cache key bump: ensures pre-FF cached entries miss + re-fetch with
   // specificity flag and retailer_deep_links populated.
-  return 'savvey:normalize:v3_kk2:' + h.digest('hex').slice(0, 24);
+  // V.103 cache prefix bump — flushes pre-intent-disambig entries so the new
+  // alternatives_meta (intent_label + rationale + est_price_range) populates.
+  return 'savvey:normalize:v3_103:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -171,9 +173,9 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
   "alternative_string": "Ninja AF300UK" | null,
   "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"] | [],
   "alternatives_meta": [
-    {"typical_price_gbp": 24.99, "pack_size": "1.7L", "tier_label": "Mid-tier"},
-    {"typical_price_gbp": 169.00, "pack_size": "1.5L", "tier_label": "Premium"},
-    {"typical_price_gbp": 19.99, "pack_size": "1.7L", "tier_label": "Budget"}
+    {"intent_label": "Best Value",     "rationale": "Cheapest reliable option with rapid 100°C boil.", "typical_price_gbp": 24.99,  "est_price_range": "£20-£30",   "pack_size": "1.7L", "tier_label": "Budget"},
+    {"intent_label": "Top Reviewed",   "rationale": "UK high-street standard. Quiet, durable.",        "typical_price_gbp": 49.00,  "est_price_range": "£40-£55",   "pack_size": "1.7L", "tier_label": "Mid-tier"},
+    {"intent_label": "Premium Choice", "rationale": "Iconic design, lifetime build quality.",          "typical_price_gbp": 169.00, "est_price_range": "£150-£180", "pack_size": "1.5L", "tier_label": "Premium"}
   ] | [],
   "category": "tech" | "home" | "toys" | "diy" | "beauty" | "grocery" | "health" | "generic",
   "mpn": "AF400UK" | "QC45" | null,
@@ -194,10 +196,19 @@ Field rules:
   (b) LOW confidence on a vague brand+category query: list 3 POPULAR UK products in that category. Use concrete model names a UK shopper would recognise. Example: canonical "Logitech mouse" -> alternatives_array ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"]. Example: canonical "Kettle" -> alternatives_array ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"].
   Empty array [] ONLY when you genuinely can't suggest anything useful (very obscure category, no UK retail presence). Total disambiguation pool capped at 4 items.
 - alternatives_meta: parallel array (same length as alternatives_array). For each candidate provide:
+  - intent_label: V.103 — REQUIRED on case (b) low-confidence vague category queries. Exactly ONE of:
+      "Best Value"     (cheapest reliable option in the category)
+      "Top Reviewed"   (consensus mainstream pick, best-reviewed for typical buyer)
+      "Premium Choice" (high-end, longest-lasting, best features for power users)
+    On case (b) vague queries: ALWAYS produce exactly 3 candidates spanning ALL THREE intents in this exact order [Best Value, Top Reviewed, Premium Choice]. The user is choosing intent, not brand.
+    On case (a) variant disambig: leave intent_label null — variants of the same product don't have intent split.
+    On high-confidence (no disambig): N/A.
+  - rationale: V.103 — REQUIRED on case (b) low-confidence vague queries. ONE short sentence (max 12 words) explaining WHY this product fits its intent slot. Example for Best Value Kettle: "Cheapest reliable option with rapid boil." Example for Premium Choice: "Iconic design, lifetime build quality." This is the user's "why" — the AI doing the heavy lifting. Null on case (a) variants and high-confidence.
   - typical_price_gbp: typical UK retail price as a number, no currency symbol. Ballpark from your training. Use null if you have no idea.
+  - est_price_range: V.103 — string like "£200-£250" or "£700-£850". Bands the typical UK retail spread for this candidate at typical_price_gbp. Always populate when typical_price_gbp is set. The disambig card displays this prominently next to the product name.
   - pack_size: descriptor of unit count or volume — examples: "9 Pack", "500ml", "415g", "1 unit", "4 Pack", "1.7L". Use null if pack/unit context doesn't apply (e.g. electronics, single-item products).
-  - tier_label: ONE of "Premium", "Mid-tier", "Budget" — your read of the brand/product position in the UK market. Use null if you can't classify.
-  This metadata powers the disambig screen's cost-per-unit + tier badges. Empty array [] when alternatives_array is empty.
+  - tier_label: ONE of "Premium", "Mid-tier", "Budget" — your read of the brand/product position in the UK market. Maps roughly to intent_label (Budget=Best Value, Mid-tier=Top Reviewed, Premium=Premium Choice) but stays as a separate brand-tier hint for cost-per-unit ranking.
+  This metadata powers the V.103 intent-categorized disambig screen. Empty array [] when alternatives_array is empty.
 - category — STRICT enum: tech | home | toys | diy | beauty | grocery | health | generic.
   - tech: phones, laptops, headphones, gaming, computer accessories, smart-home electronics.
   - home: kitchen appliances, furniture, bedding, larger household items.
@@ -219,9 +230,13 @@ Field rules:
 
 EXAMPLES (showing exact JSON output shape for typical inputs):
 
-Example 1 — vague brand+category (low conf, populate alternatives_array with popular UK options):
+Example 1 — vague category (low conf, V.103 intent-categorized 3-option):
 INPUT: "kettle"
-OUTPUT: {"canonical_search_string": "Kettle", "confidence": "low", "alternative_string": null, "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"], "category": "home", "mpn": null, "amazon_search_query": "kettle", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+OUTPUT: {"canonical_search_string": "Kettle", "confidence": "low", "alternative_string": null, "alternatives_array": ["Russell Hobbs Velocity 26480", "Tefal Avanti Classic 1.7L", "Smeg KLF03"], "alternatives_meta": [{"intent_label":"Best Value","rationale":"Cheapest reliable option with rapid boil.","typical_price_gbp":24.99,"est_price_range":"£20-£30","pack_size":"1.7L","tier_label":"Budget"},{"intent_label":"Top Reviewed","rationale":"UK high-street standard. Quiet, durable.","typical_price_gbp":49.00,"est_price_range":"£40-£55","pack_size":"1.7L","tier_label":"Mid-tier"},{"intent_label":"Premium Choice","rationale":"Iconic design, lifetime build quality.","typical_price_gbp":169.00,"est_price_range":"£150-£180","pack_size":"1.5L","tier_label":"Premium"}], "category": "home", "mpn": null, "amazon_search_query": "kettle", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+
+Example 1b — vague category Dishwasher (same intent pattern):
+INPUT: "dishwasher"
+OUTPUT: {"canonical_search_string": "Dishwasher", "confidence": "low", "alternative_string": null, "alternatives_array": ["Beko DVN05320W", "Bosch Series 4 SMS4EKW09G", "Miele G 5210 SC"], "alternatives_meta": [{"intent_label":"Best Value","rationale":"Cheapest reliable option, fast wash cycle.","typical_price_gbp":229,"est_price_range":"£200-£250","pack_size":null,"tier_label":"Budget"},{"intent_label":"Top Reviewed","rationale":"UK high-street standard. Quiet and bulletproof.","typical_price_gbp":399,"est_price_range":"£350-£450","pack_size":null,"tier_label":"Mid-tier"},{"intent_label":"Premium Choice","rationale":"Built to last 20 years. Best drying.","typical_price_gbp":779,"est_price_range":"£700-£850","pack_size":null,"tier_label":"Premium"}], "category": "home", "mpn": null, "amazon_search_query": "dishwasher", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 
 Example 2 — specific high-confidence:
 INPUT: "Bose QC45"
@@ -883,8 +898,21 @@ function parseAndDefault(rawText) {
           ? Number(m.typical_price_gbp.toFixed(2)) : null;
         const pack = (typeof m.pack_size === 'string' && m.pack_size.trim()) ? m.pack_size.trim().slice(0, 40) : null;
         const tier = ['Premium','Mid-tier','Budget'].includes(m.tier_label) ? m.tier_label : null;
-        if (!price && !pack && !tier) return null;
-        return { typical_price_gbp: price, pack_size: pack, tier_label: tier };
+        // V.103 — extract intent_label, rationale, est_price_range
+        const intent = ['Best Value','Top Reviewed','Premium Choice'].includes(m.intent_label) ? m.intent_label : null;
+        const rationale = (typeof m.rationale === 'string' && m.rationale.trim())
+          ? m.rationale.trim().slice(0, 140) : null;
+        const range = (typeof m.est_price_range === 'string' && m.est_price_range.trim())
+          ? m.est_price_range.trim().slice(0, 24) : null;
+        if (!price && !pack && !tier && !intent && !rationale && !range) return null;
+        return {
+          intent_label: intent,
+          rationale: rationale,
+          typical_price_gbp: price,
+          est_price_range: range,
+          pack_size: pack,
+          tier_label: tier
+        };
       });
     }
   }
@@ -1638,6 +1666,15 @@ export default async function handler(req, res) {
     }
   }
 
+  // V.103 — amazon_search_fallback: Every response gets a tagged Amazon UK
+  // search URL, so the frontend can ALWAYS surface a clickable CTA — even
+  // when verified_amazon_price + retailer_deep_links + visual_matches all
+  // come back empty. No blank screens, ever. Garden-box no longer dead-ends.
+  const _amazonFallbackQ = (parsed.amazon_search_query || parsed.canonical_search_string || '').slice(0, 150);
+  const amazon_search_fallback = _amazonFallbackQ
+    ? `https://www.amazon.co.uk/s?k=${encodeURIComponent(_amazonFallbackQ)}&tag=${encodeURIComponent(AMAZON_TAG)}`
+    : null;
+
   const responseBody = {
     ...parsed,
     specificity: _specificity,
@@ -1646,6 +1683,7 @@ export default async function handler(req, res) {
     retailer_deep_links,
     disambig_candidates, // Wave HH
     disambig_candidates_meta, // Wave KK — parallel array with typical_price_gbp + pack_size + tier_label per candidate
+    amazon_search_fallback, // V.103 — never-blank-screens guarantee
     visual_matches, // V.87 - low-conf snap visual similarity, null otherwise
     recommendations, // V.88 - budget-pattern Haiku recommendations, null otherwise
     review_synthesis, // V.89 - honest love/gripe pair, null otherwise

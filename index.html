@@ -365,6 +365,80 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.103 — Intent disambig badges + card layout ===
+     Each disambig candidate becomes an iOS-style card with an intent badge
+     in the top corner, prominent name + price range, and a muted rationale.
+     The .confirm-btn parent already provides the card frame; we restructure
+     the inner span layout via flex column. */
+  .v5-confirm-btn .v5-confirm-text {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 4px !important;
+    text-align: left !important;
+    width: 100%;
+  }
+  .v103-intent {
+    display: inline-flex;
+    align-items: center;
+    height: 22px;
+    padding: 0 10px;
+    border-radius: 999px;
+    font: 700 11px var(--font-sf-text);
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    align-self: flex-start;
+  }
+  .v103-intent--value    { background: var(--green); color: #fff; }
+  .v103-intent--reviewed { background: rgba(74,85,80,0.10); color: var(--ink); border: 1px solid rgba(74,85,80,0.18); }
+  .v103-intent--premium  { background: linear-gradient(135deg, #d4a943 0%, #b88820 100%); color: #fff; box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset; }
+  .v103-confirm-name {
+    font: 700 16px var(--font-sf-display);
+    color: var(--ink);
+    line-height: 1.25;
+    letter-spacing: -0.2px;
+  }
+  .v103-confirm-price {
+    font: 700 15px var(--font-sf-text);
+    color: var(--green);
+    letter-spacing: 0.1px;
+  }
+  .v103-confirm-rationale {
+    font: 400 13px var(--font-sf-text);
+    color: var(--ink-mute);
+    line-height: 1.35;
+    margin-top: 2px;
+  }
+  /* V.103 — Amazon search fallback CTA — surfaces when retailer chips empty */
+  .v103-amazon-fallback-cta {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 16px 20px;
+    margin-top: var(--s-3);
+    background: linear-gradient(180deg, #ff9900 0%, #e88800 100%);
+    color: #111;
+    font: 700 16px var(--font-sf-display);
+    text-decoration: none;
+    border-radius: 14px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,0.22) inset,
+      0 4px 12px rgba(255,153,0,0.30),
+      0 12px 28px rgba(255,153,0,0.18);
+    transition: transform .15s var(--sheet-ease);
+  }
+  .v103-amazon-fallback-cta:active { transform: scale(0.97); }
+  .v103-amazon-fallback-cta-sub {
+    display: block;
+    font: 500 12px var(--font-sf-text);
+    color: rgba(0,0,0,0.6);
+    margin-top: 2px;
+    letter-spacing: 0.1px;
+  }
+
   /* === V.102 ZOOM PILL — tappable reset to 1× ===
      Was a static <div>; now a <button>. Visible only when zoom > 1.05.
      Tap to snap back to 1×. Pulse animation on first reveal as discovery hint. */
@@ -3983,7 +4057,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v102</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v103</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5671,14 +5745,28 @@ function _costPerUnit(priceGbp, units) {
   return null;
 }
 function _buildDisambigDetails(label, meta) {
-  // Returns { priceStr, perUnitStr, tierLabel, perUnitValue } where any/all may be null.
-  // priceStr is what to display next to the title; perUnitStr below; tierLabel as a chip.
-  const out = { priceStr: null, perUnitStr: null, tierLabel: null, perUnitValue: null };
+  // Returns { priceStr, perUnitStr, tierLabel, perUnitValue, intentLabel, rationale, priceRangeStr } where any/all may be null.
+  // V.103 — extended with intent_label, rationale, est_price_range so the disambig
+  // card can show "why" the AI picked this option in each intent slot.
+  const out = {
+    priceStr: null, perUnitStr: null, tierLabel: null, perUnitValue: null,
+    intentLabel: null, rationale: null, priceRangeStr: null
+  };
   if (!meta) return out;
   if (typeof meta.typical_price_gbp === 'number' && meta.typical_price_gbp > 0) {
     out.priceStr = '~£' + meta.typical_price_gbp.toFixed(2);
   }
   if (typeof meta.tier_label === 'string') out.tierLabel = meta.tier_label;
+  // V.103 — new fields
+  if (typeof meta.intent_label === 'string' && meta.intent_label.trim()) {
+    out.intentLabel = meta.intent_label.trim();
+  }
+  if (typeof meta.rationale === 'string' && meta.rationale.trim()) {
+    out.rationale = meta.rationale.trim();
+  }
+  if (typeof meta.est_price_range === 'string' && meta.est_price_range.trim()) {
+    out.priceRangeStr = meta.est_price_range.trim();
+  }
   const units = _extractPackUnits(label, meta.pack_size);
   const cpu = _costPerUnit(meta.typical_price_gbp, units);
   if (cpu) {
@@ -5803,11 +5891,38 @@ function renderConfirm(a, b, payload) {
 
   const aText = candidates[0] || '';
   const bText = candidates[1] || '';
-  // Wave KK — augment the static button labels with price + per-unit + tier + BEST VALUE.
+  // V.103 — intent-categorized label. Each candidate gets an intent badge
+  // (Best Value / Top Reviewed / Premium Choice) + product name + visible
+  // price range + rationale ("why this pick"). Falls back to Wave KK price
+  // + per-unit + tier rendering when intent metadata is absent (specific-product
+  // disambig / variant disambig).
   function _formatConfirmLabel(idx, baseText) {
     if (idx >= candidateRows.length) return baseText;
     const row = candidateRows[idx];
     const d = row.details;
+
+    // V.103 INTENT PATH — when intent_label is present, render the new layout:
+    // intent badge (top), product name + price range (line1), rationale (muted line2)
+    if (d.intentLabel) {
+      const intentClass =
+        d.intentLabel === 'Best Value'     ? 'v103-intent v103-intent--value' :
+        d.intentLabel === 'Top Reviewed'   ? 'v103-intent v103-intent--reviewed' :
+        d.intentLabel === 'Premium Choice' ? 'v103-intent v103-intent--premium' :
+        'v103-intent';
+      let html = '';
+      html += '<span class="' + intentClass + '">' + escapeHtml(d.intentLabel) + '</span>';
+      html += '<span class="v103-confirm-name">' + escapeHtml(baseText) + '</span>';
+      if (d.priceRangeStr || d.priceStr) {
+        const range = d.priceRangeStr || d.priceStr;
+        html += '<span class="v103-confirm-price">' + escapeHtml(range) + '</span>';
+      }
+      if (d.rationale) {
+        html += '<span class="v103-confirm-rationale">' + escapeHtml(d.rationale) + '</span>';
+      }
+      return html;
+    }
+
+    // Wave KK legacy path — price + per-unit + tier + BEST VALUE flag.
     let line1 = baseText;
     if (d.priceStr) line1 += '   ' + d.priceStr;
     let line2parts = [];
@@ -6220,6 +6335,46 @@ function renderResult(displayName, payload) {
     }));
     ctaWrap.appendChild(a);
   }
+  // V.103 — Amazon search fallback CTA. When NO retailer chips rendered AND
+  // no verified Amazon price, surface a tagged Amazon UK search URL so the
+  // user always has an actionable next step. Garden-box never dead-ends.
+  // Backend always provides amazon_search_fallback; we defensively build it
+  // here too in case of stale-cached responses missing the field.
+  (function renderV103Fallback(){
+    if (!ctaWrap) return;
+    var hasRetailerChips = ctaWrap.children && ctaWrap.children.length > 0;
+    var hasVerifiedPrice = !!(payload && payload.verified_amazon_price && payload.verified_amazon_price.price > 0);
+    if (hasRetailerChips || hasVerifiedPrice) return; // already actionable
+    var fallbackUrl = (payload && payload.amazon_search_fallback) || null;
+    if (!fallbackUrl) {
+      // Defensive build for stale-cached pre-V.103 responses
+      var qFallback = (payload && (payload.amazon_search_query || payload.canonical_search_string)) || displayName || '';
+      if (qFallback && AMAZON_TAG) {
+        fallbackUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(qFallback) + '&tag=' + encodeURIComponent(AMAZON_TAG);
+      }
+    }
+    if (!fallbackUrl) return;
+    var category = (payload && payload.category) || 'product';
+    var categoryNoun = category === 'home'    ? 'home item'
+                     : category === 'tech'    ? 'gadget'
+                     : category === 'beauty'  ? 'beauty item'
+                     : category === 'grocery' ? 'grocery item'
+                     : category === 'health'  ? 'health item'
+                     : category === 'diy'     ? 'DIY item'
+                     : category === 'toys'    ? 'toy'
+                     : 'product';
+    var aFallback = document.createElement('a');
+    aFallback.className = 'v103-amazon-fallback-cta';
+    aFallback.href = fallbackUrl;
+    aFallback.target = '_top';
+    aFallback.rel = 'external noopener';
+    aFallback.innerHTML = '<span><strong>We saw a ' + escapeHtml(categoryNoun) + '.</strong> Browse on Amazon UK <span aria-hidden="true">→</span><span class="v103-amazon-fallback-cta-sub">Tagged search · always actionable</span></span>';
+    aFallback.addEventListener('click', function() {
+      try { track('cta_tapped', { retailer: 'Amazon UK (search fallback)', category: cat, query: displayName, door: _lastDoor, verified: false, fallback: true }); } catch (e) {}
+      if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e) {}
+    });
+    ctaWrap.appendChild(aFallback);
+  })();
   // V.87 — render "Find similar" carousel when low-conf Snap returned visual_matches.
   (function renderV87Similar(){
     var container = document.getElementById('v5-similar-section');
@@ -8094,6 +8249,146 @@ handleInbound();
     return origFetch.apply(this, args);
   };
   window.__v73Wrapped = true;
+})();
+</script>
+
+<script>
+/* V.103 — Mock engine. URL params bypass /api/normalize and render the
+   target screen with hand-crafted payloads, so design + animation can be
+   tested without burning SerpAPI quota or relying on network state.
+
+   Triggers:
+     ?mock=ninja       → renders the result screen with Ninja Air Fryer AF100UK
+     ?mock=dishwasher  → renders the disambig screen with intent-categorized 3-option (Beko/Bosch/Miele)
+     ?mock=kettle      → same shape, kettle category (Russell Hobbs / Tefal / Smeg)
+*/
+(function v103Mock() {
+  try {
+    var url = new URL(location.href);
+    var mock = url.searchParams.get('mock');
+    if (!mock) return;
+
+    function buildNinjaPayload() {
+      // Ninja Air Fryer AF100UK final-result mock — matches /api/normalize shape.
+      return {
+        canonical_search_string: 'Ninja Air Fryer AF100UK',
+        confidence: 'high',
+        specificity: 'specific',
+        category: 'home',
+        mpn: 'AF100UK',
+        amazon_search_query: 'Ninja AF100UK',
+        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=Ninja+AF100UK&tag=savvey-21',
+        savvey_says: {
+          live_amazon_price: '£99.00',
+          used_amazon_price: null,
+          amazon_rating: '4.7 · 12,453 reviews',
+          price_take: 'Solid mid-range buy. Typical UK band: £99-£130.',
+          verdict: 'good_buy',
+          timing_advice: 'Buy now — price is stable.',
+          consensus: 'Loud but cooks chips perfectly.',
+          confidence: 'high'
+        },
+        verified_amazon_price: {
+          price: 99,
+          price_str: '£99.00',
+          currency: 'GBP',
+          source: 'amazon.co.uk',
+          source_type: 'organic',
+          asin: 'B08F5Z4H2P',
+          title: 'Ninja Air Fryer 3.8L AF100UK Single Drawer Black/Grey',
+          link: 'https://www.amazon.co.uk/dp/B08F5Z4H2P?tag=savvey-21',
+          thumbnail: null,
+          rating: 4.7,
+          reviews: 12453
+        },
+        retailer_deep_links: {},
+        disambig_candidates: null,
+        disambig_candidates_meta: null,
+        visual_matches: null,
+        recommendations: null,
+        review_synthesis: null,
+        _meta: { version: 'mock:ninja', input_type: 'text', latency_ms: 0, cache: 'mock' }
+      };
+    }
+
+    function buildDishwasherPayload() {
+      return {
+        canonical_search_string: 'Dishwasher',
+        confidence: 'low',
+        specificity: 'category_only',
+        category: 'home',
+        mpn: null,
+        amazon_search_query: 'dishwasher',
+        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=dishwasher&tag=savvey-21',
+        alternatives_array: ['Beko DVN05320W', 'Bosch Series 4 SMS4EKW09G', 'Miele G 5210 SC'],
+        alternatives_meta: [
+          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option, fast wash cycle.', typical_price_gbp: 229, est_price_range: '£200-£250', pack_size: null, tier_label: 'Budget' },
+          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet and bulletproof.', typical_price_gbp: 399, est_price_range: '£350-£450', pack_size: null, tier_label: 'Mid-tier' },
+          { intent_label: 'Premium Choice', rationale: 'Built to last 20 years. Best drying.', typical_price_gbp: 779, est_price_range: '£700-£850', pack_size: null, tier_label: 'Premium' }
+        ],
+        disambig_candidates: ['Beko DVN05320W', 'Bosch Series 4 SMS4EKW09G', 'Miele G 5210 SC'],
+        disambig_candidates_meta: [
+          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option, fast wash cycle.', typical_price_gbp: 229, est_price_range: '£200-£250', pack_size: null, tier_label: 'Budget' },
+          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet and bulletproof.', typical_price_gbp: 399, est_price_range: '£350-£450', pack_size: null, tier_label: 'Mid-tier' },
+          { intent_label: 'Premium Choice', rationale: 'Built to last 20 years. Best drying.', typical_price_gbp: 779, est_price_range: '£700-£850', pack_size: null, tier_label: 'Premium' }
+        ],
+        savvey_says: { live_amazon_price: null, used_amazon_price: null, amazon_rating: null, price_take: null, verdict: null, timing_advice: null, consensus: null, confidence: 'low' },
+        verified_amazon_price: null,
+        retailer_deep_links: null,
+        visual_matches: null,
+        recommendations: null,
+        review_synthesis: null,
+        _meta: { version: 'mock:dishwasher', input_type: 'text', latency_ms: 0, cache: 'mock' }
+      };
+    }
+
+    function buildKettlePayload() {
+      return {
+        canonical_search_string: 'Kettle',
+        confidence: 'low',
+        specificity: 'category_only',
+        category: 'home',
+        amazon_search_query: 'kettle',
+        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=kettle&tag=savvey-21',
+        alternatives_array: ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
+        alternatives_meta: [
+          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option with rapid boil.', typical_price_gbp: 24.99, est_price_range: '£20-£30', pack_size: '1.7L', tier_label: 'Budget' },
+          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet, durable.', typical_price_gbp: 49.00, est_price_range: '£40-£55', pack_size: '1.7L', tier_label: 'Mid-tier' },
+          { intent_label: 'Premium Choice', rationale: 'Iconic design, lifetime build quality.', typical_price_gbp: 169.00, est_price_range: '£150-£180', pack_size: '1.5L', tier_label: 'Premium' }
+        ],
+        disambig_candidates: ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
+        disambig_candidates_meta: [
+          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option with rapid boil.', typical_price_gbp: 24.99, est_price_range: '£20-£30', pack_size: '1.7L', tier_label: 'Budget' },
+          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet, durable.', typical_price_gbp: 49.00, est_price_range: '£40-£55', pack_size: '1.7L', tier_label: 'Mid-tier' },
+          { intent_label: 'Premium Choice', rationale: 'Iconic design, lifetime build quality.', typical_price_gbp: 169.00, est_price_range: '£150-£180', pack_size: '1.5L', tier_label: 'Premium' }
+        ],
+        savvey_says: { live_amazon_price: null, verdict: null, confidence: 'low' },
+        verified_amazon_price: null, retailer_deep_links: null, visual_matches: null, recommendations: null, review_synthesis: null,
+        _meta: { version: 'mock:kettle', input_type: 'text', latency_ms: 0, cache: 'mock' }
+      };
+    }
+
+    setTimeout(function() {
+      try {
+        if (mock === 'ninja') {
+          var p = buildNinjaPayload();
+          window.lastResult = p;
+          if (typeof renderResult === 'function') renderResult(p.canonical_search_string, p);
+          if (typeof show === 'function') show('result');
+          console.log('[V.103 mock] rendered Ninja Air Fryer AF100UK result');
+        } else if (mock === 'dishwasher' || mock === 'kettle') {
+          var p2 = mock === 'dishwasher' ? buildDishwasherPayload() : buildKettlePayload();
+          window.lastResult = p2;
+          if (typeof renderConfirm === 'function') {
+            renderConfirm(p2.disambig_candidates[0], p2.disambig_candidates[1], p2);
+          }
+          console.log('[V.103 mock] rendered ' + mock + ' disambig with intent-categorized options');
+        }
+      } catch (e) {
+        console.warn('[V.103 mock] render error', e);
+      }
+    }, 500);
+  } catch (e) { /* swallow */ }
 })();
 </script>
 
