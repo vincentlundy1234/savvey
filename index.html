@@ -3245,6 +3245,73 @@
   body:has(.consent-banner.show) .bottom-nav { bottom: 64px; }
   /* V.81 — Cheapest pill on the winning retailer chip when google_shopping
      returned multiple priced retailers and we sorted cheapest first. */
+  /* V.87 — Find similar carousel (low-conf snaps with visual_matches) */
+  .v5-similar-section { display: block; margin: 4px 0 16px; }
+  .v5-similar-header { padding: 0 4px 10px; }
+  .v5-similar-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: var(--green, #2a6b22);
+    margin-bottom: 4px;
+  }
+  .v5-similar-summary {
+    font-size: 13px;
+    color: var(--ink-soft);
+    line-height: 1.4;
+  }
+  .v5-similar-rail {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 4px 12px;
+    scroll-snap-type: x mandatory;
+  }
+  .v5-similar-rail::-webkit-scrollbar { display: none; }
+  .v5-similar-card {
+    flex: 0 0 160px;
+    background: rgba(255,255,255,0.92);
+    border: 1px solid rgba(46,107,38,0.12);
+    border-radius: 14px;
+    padding: 12px 14px;
+    text-decoration: none;
+    color: var(--ink);
+    scroll-snap-align: start;
+    transition: transform .12s ease, box-shadow .15s ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 14px rgba(20,32,26,0.04);
+  }
+  .v5-similar-card:hover { transform: translateY(-1px); box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 8px 22px rgba(20,32,26,0.07); }
+  .v5-similar-card:active { transform: scale(0.98); }
+  .v5-similar-retailer {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--green, #2a6b22);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    margin-bottom: 4px;
+  }
+  .v5-similar-title {
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.3;
+    color: var(--ink);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 6px;
+    min-height: 34px;
+  }
+  .v5-similar-price {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--ink);
+  }
+  @media (prefers-color-scheme: dark) and (max-width: 1px) {
+    .v5-similar-card { background: #1a1d22; border-color: rgba(255,255,255,0.08); }
+  }
   .cta-cheapest-pill {
     display: inline-block;
     margin-left: 6px;
@@ -3458,7 +3525,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v86</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v87</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3758,6 +3825,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <!-- Retailer rows — Amazon first (rendered as v5 split row), then alternatives (engine: cta-list) -->
   <div class="v5-retailer-rows cta-list" id="cta-list"></div>
+
+  <!-- V.87 — Find similar carousel for low-confidence snaps -->
+  <div id="v5-similar-section" hidden></div>
 
   <!-- Affiliate disclosure -->
   <p class="v5-affiliate-line">Amazon link is an affiliate link — same price for you. Helps keep Savvey free.</p>
@@ -5568,6 +5638,61 @@ function renderResult(displayName, payload) {
     }));
     ctaWrap.appendChild(a);
   }
+  // V.87 — render "Find similar" carousel when low-conf Snap returned visual_matches.
+  (function renderV87Similar(){
+    var container = document.getElementById('v5-similar-section');
+    if (!container) return;
+    var vm = payload && payload.visual_matches;
+    if (!vm || !vm.matches || typeof vm.matches !== 'object') {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    var entries = Object.keys(vm.matches).filter(function(h){
+      return h && h.indexOf('amazon.') === -1 && vm.matches[h] && vm.matches[h].url;
+    }).map(function(h){
+      var info = vm.matches[h];
+      var num = parseFloat(String(info.price||'').replace(/[^0-9.]/g,''));
+      return { host: h, info: info, num: isFinite(num) ? num : Infinity };
+    }).sort(function(a,b){ return a.num - b.num; }).slice(0, 6);
+    if (entries.length === 0) {
+      container.hidden = true;
+      container.innerHTML = '';
+      return;
+    }
+    var summary = vm.visual_summary || ('Similar to your ' + (vm.category || 'snap'));
+    var html = '<div class="v5-similar-header">'
+      + '<div class="v5-similar-eyebrow">Find similar</div>'
+      + '<div class="v5-similar-summary">' + escapeHtml(summary) + '</div>'
+      + '</div>'
+      + '<div class="v5-similar-rail">';
+    entries.forEach(function(e, idx){
+      var hostName = e.host.split('.')[0];
+      var display = hostName.charAt(0).toUpperCase() + hostName.slice(1);
+      var title = (e.info.title || display).slice(0, 70);
+      var price = e.info.price || '';
+      html += '<a class="v5-similar-card" href="' + e.info.url + '" target="_top" rel="external noopener" data-idx="'+idx+'">'
+        + '<div class="v5-similar-retailer">' + escapeHtml(display) + '</div>'
+        + '<div class="v5-similar-title">' + escapeHtml(title) + '</div>'
+        + '<div class="v5-similar-price">' + escapeHtml(price) + '</div>'
+        + '</a>';
+    });
+    html += '</div>';
+    container.innerHTML = html;
+    container.hidden = false;
+    // PostHog event for visibility
+    if (typeof track === 'function') {
+      try { track('visual_similar_shown', { count: entries.length, category: vm.category||null, query: vm.search_query||null }); } catch (e) {}
+    }
+    // Click tracking on each card
+    container.querySelectorAll('.v5-similar-card').forEach(function(el){
+      el.addEventListener('click', function(){
+        if (typeof track === 'function') {
+          try { track('visual_similar_tapped', { idx: el.getAttribute('data-idx'), retailer: el.querySelector('.v5-similar-retailer')?.textContent }); } catch (e) {}
+        }
+      });
+    });
+  })();
   const heroWrap = document.getElementById('hero-img-wrap');
   const heroImg = document.getElementById('hero-img');
   heroWrap.classList.add('empty');

@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v86';
+const VERSION             = 'normalize.js v3.4.5v87';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -366,6 +366,39 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
     const j = await r.json();
     return ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
   } finally { clearTimeout(timer); }
+}
+
+// V.87 — Visual similarity for low-confidence Snaps (Vincent's blue-pot fix).
+// When Vision returns confidence:low on a Snap, fire a SECOND Haiku Vision call
+// asking for a rich descriptive search query, then use that query against
+// google_shopping to return UK-retailer visual matches with prices.
+// Cost ~$0.002, latency +800-1200ms, only on the low-conf path.
+async function describeAndSearchSimilar(framesOrSingle, mediaType) {
+  if (!framesOrSingle) return null;
+  try {
+    const describePrompt = "You are looking at a photo a UK shopper took. They want to find similar items to buy. Output ONLY this JSON, no preamble or markdown:\n{\n  \"category\": \"short category like 'plant pot' or 'sofa cushion'\",\n  \"search_query\": \"5-10 words capturing colour, material, style, size, finish - what someone would type to find similar items at a UK retailer. Be specific (e.g. 'blue ribbed ceramic outdoor planter' not just 'plant pot').\",\n  \"visual_summary\": \"one short sentence describing what the photo shows\"\n}";
+    const rawText = await callHaikuVision(describePrompt, framesOrSingle, mediaType);
+    if (!rawText) return null;
+    let parsed = null;
+    try {
+      const m = rawText.match(/\{[\s\S]*\}/);
+      parsed = m ? JSON.parse(m[0]) : null;
+    } catch (e) { return null; }
+    if (!parsed || !parsed.search_query || typeof parsed.search_query !== 'string') return null;
+    const query = parsed.search_query.slice(0, 150);
+    const cKey = 'similar_' + query.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
+    const matches = await fetchGoogleShoppingDeepLinks(query, cKey);
+    if (!matches || Object.keys(matches).length === 0) return null;
+    return {
+      category: parsed.category || null,
+      search_query: query,
+      visual_summary: parsed.visual_summary || null,
+      matches
+    };
+  } catch (err) {
+    console.warn(`[${VERSION}] describeAndSearchSimilar error: ${err.message}`);
+    return null;
+  }
 }
 
 const SERPAPI_TIMEOUT_MS = 2000; // V.69 - was 4000ms; SerpAPI p95 ~1.4s
@@ -1305,6 +1338,21 @@ export default async function handler(req, res) {
   // model number we still try Amazon first.
   const _retailerOwn = (_specificity === 'brand_only') ? detectRetailerOwn(parsed.canonical_search_string) : null;
 
+  // V.87 — Visual similarity. Only on low-confidence Snap (image input where
+  // Haiku was uncertain about the brand/exact product). Renders as a "Find
+  // similar" carousel in the result screen instead of a frustrating empty state.
+  let visual_matches = null;
+  if (inputType === 'image' && parsed.confidence === 'low') {
+    try {
+      const framesIn = Array.isArray(body.image_base64_frames) ? body.image_base64_frames : null;
+      const reusePayload = framesIn && framesIn.length > 0 ? framesIn.slice(0, 3) : (body.image_base64 || null);
+      const mediaType = body.media_type || 'image/jpeg';
+      visual_matches = await describeAndSearchSimilar(reusePayload, mediaType);
+    } catch (err) {
+      console.warn(`[${VERSION}] V.87 visual-similarity error: ${err.message}`);
+    }
+  }
+
   const responseBody = {
     ...parsed,
     specificity: _specificity,
@@ -1313,6 +1361,7 @@ export default async function handler(req, res) {
     retailer_deep_links,
     disambig_candidates, // Wave HH
     disambig_candidates_meta, // Wave KK — parallel array with typical_price_gbp + pack_size + tier_label per candidate
+    visual_matches, // V.87 - low-conf snap visual similarity, null otherwise
     _meta: {
       version: VERSION,
       input_type: inputType,
