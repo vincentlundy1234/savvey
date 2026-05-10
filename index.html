@@ -126,6 +126,131 @@
   @media (prefers-reduced-motion: reduce) {
     .sk { animation: none; background: rgba(60,67,78,0.09); }
   }
+
+  /* === V.101 SAVVEY SHEET — Apple Pay / Maps physics ===
+     Fixed dimension, only transform animates (60fps composited).
+     `.snap` class enables CSS spring; removed during pointer drag. */
+  .savvey-sheet {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 88vh;
+    max-height: 88dvh;
+    border-radius: var(--sheet-radius) var(--sheet-radius) 0 0;
+    background: var(--glass-thick-bg);
+    backdrop-filter: var(--glass-thick-blur);
+    -webkit-backdrop-filter: var(--glass-thick-blur);
+    box-shadow: var(--shadow-sheet);
+    transform: translate3d(0, 100%, 0);
+    touch-action: none;
+    z-index: 90;
+    padding: 8px var(--s-5) calc(env(safe-area-inset-bottom, 0px) + var(--s-5));
+    display: flex;
+    flex-direction: column;
+    gap: var(--s-3);
+    color: var(--ink);
+  }
+  .savvey-sheet[hidden] { display: none; }
+  .savvey-sheet.snap   { transition: transform .48s var(--sheet-ease); }
+  .savvey-sheet.peek   { transform: translate3d(0, 55%, 0); }
+  .savvey-sheet.full   { transform: translate3d(0, 0,   0); }
+  .savvey-sheet.dismiss{ transform: translate3d(0, 100%, 0); }
+
+  .savvey-sheet-handle {
+    width: 36px; height: 5px;
+    border-radius: 999px;
+    background: rgba(60, 60, 67, .28);
+    margin: 0 auto var(--s-2);
+    flex-shrink: 0;
+  }
+  .savvey-sheet-header { flex-shrink: 0; }
+  .savvey-sheet-title  {
+    margin: 0 0 var(--s-1);
+    font: var(--type-title3);
+    letter-spacing: -0.4px;
+  }
+  .savvey-sheet-sub {
+    margin: 0;
+    font: var(--type-subhead);
+    color: var(--ink-soft);
+  }
+  .savvey-sheet-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: grid;
+    gap: var(--s-2);
+    padding-top: var(--s-2);
+    padding-bottom: var(--s-3);
+  }
+  .savvey-sheet-card {
+    display: grid;
+    grid-template-columns: 56px 1fr auto;
+    gap: var(--s-3);
+    align-items: center;
+    padding: var(--s-3);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    box-shadow: var(--shadow-flat);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform .2s var(--sheet-ease), box-shadow .2s var(--sheet-ease);
+  }
+  .savvey-sheet-card:active { transform: scale(0.985); box-shadow: var(--shadow-pressed); }
+  .savvey-sheet-card-thumb {
+    width: 56px; height: 56px;
+    border-radius: 10px;
+    background: var(--bg-cream);
+    object-fit: cover;
+  }
+  .savvey-sheet-card-text  {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .savvey-sheet-card-title {
+    font: var(--type-callout);
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .savvey-sheet-card-meta {
+    font: var(--type-footnote);
+    color: var(--ink-mute);
+  }
+  .savvey-sheet-card-best {
+    background: var(--green);
+    color: #fff;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font: var(--type-caption);
+    font-weight: 700;
+    letter-spacing: 0.5px;
+  }
+  .savvey-sheet-footer { flex-shrink: 0; }
+  .savvey-sheet-none {
+    width: 100%;
+    padding: var(--s-3) var(--s-4);
+    font: var(--type-callout);
+    color: var(--ink-soft);
+    background: transparent;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+  }
+
+  .savvey-sheet-scrim {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0);
+    z-index: 89;
+    transition: background .3s var(--sheet-ease);
+  }
+  .savvey-sheet-scrim[hidden] { display: none; }
+  .savvey-sheet-scrim.show { background: rgba(0, 0, 0, 0.32); }
+  @media (prefers-reduced-motion: reduce) {
+    .savvey-sheet.snap { transition: none; }
+  }
   @media (prefers-color-scheme: dark) and (max-width: 1px) {
     /* Wave V — proper tone-mapped slate dark mode (not navy fill).
        Per v5 design pushback: re-painted, not tinted. */
@@ -3721,7 +3846,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v100</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v101</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3922,6 +4047,24 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
   <button class="v5-confirm-startover ghost-btn" type="button" onclick="goHome()">&larr; Start over</button>
 </div>
+
+<!-- V.101 — Disambig sheet (Apple Pay / Maps physics).
+     Preview-mode only by default; activate with ?sheet=v2 URL param.
+     V.102 will rewire the production disambig flow to use this. -->
+<div class="savvey-sheet" id="savvey-sheet" hidden role="dialog" aria-modal="true" aria-label="Pick the right product">
+  <div class="savvey-sheet-handle" aria-hidden="true"></div>
+  <div class="savvey-sheet-header">
+    <h2 class="savvey-sheet-title">Which one?</h2>
+    <p class="savvey-sheet-sub">Tap the closest match. Best value on top.</p>
+  </div>
+  <div class="savvey-sheet-body" id="savvey-sheet-body">
+    <!-- Candidates injected by JS -->
+  </div>
+  <div class="savvey-sheet-footer">
+    <button class="savvey-sheet-none ghost-btn" type="button" id="savvey-sheet-none">None of these — let me type it</button>
+  </div>
+</div>
+<div class="savvey-sheet-scrim" id="savvey-sheet-scrim" hidden></div>
 
 <div class="screen" id="screen-result" style="position:relative;">
   <!-- v5 RESULT REBUILD (V.41) — DOM rewrite matching Claude Design v5 ResultScreen -->
@@ -6904,6 +7047,181 @@ handleInbound();
   function markReady() {
     if (document.body) document.body.classList.add('v68-ready');
   }
+  // V.101 — Savvey Sheet physics + facade. Pointer-driven, three detents,
+  // velocity-aware projection, rubber-band above full. Cancellation contract:
+  // window.savveySheet.cancel() snaps to dismiss in one transform write.
+  (function v101Sheet() {
+    var sheet = document.getElementById('savvey-sheet');
+    var scrim = document.getElementById('savvey-sheet-scrim');
+    var noneBtn = document.getElementById('savvey-sheet-none');
+    if (!sheet) return;
+    var FULL = 0.0, PEEK = 0.55, OUT = 1.0;
+    var startY = 0, currentY = OUT, draggingFromY = OUT;
+    var lastT = 0, lastY = 0, velocity = 0;
+    var activeId = null;
+    var onPickFn = null, onDismissFn = null;
+    var detentTracker = null;
+
+    function setY(y) {
+      sheet.classList.remove('snap');
+      sheet.style.transform = 'translate3d(0,' + (y * 100).toFixed(2) + '%,0)';
+      currentY = y;
+      if (scrim) {
+        var op = Math.max(0, Math.min(1, 1 - y / PEEK));
+        scrim.style.background = 'rgba(0,0,0,' + (op * 0.32).toFixed(3) + ')';
+      }
+    }
+    function snapTo(y, hapticOnArrival) {
+      sheet.classList.add('snap');
+      sheet.style.transform = 'translate3d(0,' + (y * 100).toFixed(2) + '%,0)';
+      currentY = y;
+      if (y >= 0.99) {
+        // Dismissing — fade scrim, hide on transition end
+        if (scrim) {
+          scrim.classList.remove('show');
+          scrim.style.background = 'rgba(0,0,0,0)';
+        }
+        setTimeout(function(){ sheet.hidden = true; if (scrim) scrim.hidden = true; }, 480);
+        if (onDismissFn) try { onDismissFn(); } catch (e) {}
+      } else if (hapticOnArrival && window.savveyHaptics) {
+        try { window.savveyHaptics.light(); } catch (e) {}
+      }
+    }
+    function project(v0) {
+      // iOS-style decay: distance the sheet would travel under finger inertia
+      var decel = 0.998;
+      return v0 / (1 - decel) / window.innerHeight;
+    }
+
+    sheet.addEventListener('pointerdown', function(e) {
+      // Only own drags from the handle area + header (top 80px). Cards stay tappable.
+      var rect = sheet.getBoundingClientRect();
+      if (e.clientY - rect.top > 80) return;
+      if (activeId !== null) return;
+      activeId = e.pointerId;
+      try { sheet.setPointerCapture(activeId); } catch (e2) {}
+      startY = e.clientY;
+      draggingFromY = currentY;
+      lastT = e.timeStamp; lastY = e.clientY; velocity = 0;
+      sheet.classList.remove('snap');
+    }, { passive: true });
+
+    sheet.addEventListener('pointermove', function(e) {
+      if (e.pointerId !== activeId) return;
+      var dy = (e.clientY - startY) / window.innerHeight;
+      var target = draggingFromY + dy;
+      if (target < FULL) target = FULL + (target - FULL) * 0.32; // rubber-band above full
+      if (target > OUT) target = OUT;
+      setY(target);
+      var dt = e.timeStamp - lastT;
+      if (dt > 0) velocity = (e.clientY - lastY) / dt;
+      lastT = e.timeStamp; lastY = e.clientY;
+    }, { passive: true });
+
+    function finish(e) {
+      if (e && e.pointerId !== activeId) return;
+      activeId = null;
+      var projected = currentY + project(velocity);
+      var target;
+      if (Math.abs(velocity) > 0.5) {
+        target = velocity > 0 ? (projected > 0.8 ? OUT : PEEK) : FULL;
+      } else {
+        var d = [FULL, PEEK, OUT];
+        target = d.reduce(function(a, b){ return Math.abs(b - currentY) < Math.abs(a - currentY) ? b : a; });
+      }
+      snapTo(target, target !== OUT);
+    }
+    sheet.addEventListener('pointerup',     finish);
+    sheet.addEventListener('pointercancel', finish);
+
+    // Card delegation — taps inside the body fire onPick
+    var body = document.getElementById('savvey-sheet-body');
+    if (body) {
+      body.addEventListener('click', function(e) {
+        var card = e.target.closest && e.target.closest('.savvey-sheet-card');
+        if (!card) return;
+        var idx = parseInt(card.getAttribute('data-idx') || '0', 10);
+        if (window.savveyHaptics) try { window.savveyHaptics.selection(); } catch (e2) {}
+        if (onPickFn) try { onPickFn(idx, card); } catch (e3) {}
+      });
+    }
+    if (noneBtn) {
+      noneBtn.addEventListener('click', function() {
+        if (window.savveyHaptics) try { window.savveyHaptics.light(); } catch (e) {}
+        snapTo(OUT, false);
+      });
+    }
+    // Scrim tap dismisses
+    if (scrim) {
+      scrim.addEventListener('click', function(){ snapTo(OUT, false); });
+    }
+
+    // Public API
+    window.savveySheet = {
+      show: function(opts) {
+        opts = opts || {};
+        var candidates = opts.candidates || [];
+        onPickFn = opts.onPick || null;
+        onDismissFn = opts.onDismiss || null;
+        // Render cards
+        if (body) {
+          body.innerHTML = candidates.map(function(c, i) {
+            var thumb = c.thumb ? '<img class="savvey-sheet-card-thumb" src="' + c.thumb + '" alt="">' : '<div class="savvey-sheet-card-thumb"></div>';
+            var meta = c.meta ? '<div class="savvey-sheet-card-meta">' + c.meta + '</div>' : '';
+            var best = c.best ? '<span class="savvey-sheet-card-best">BEST VALUE</span>' : '<span aria-hidden="true"></span>';
+            return '<div class="savvey-sheet-card" data-idx="' + i + '" role="button" tabindex="0"' + (c.best ? ' data-best-value="1"' : '') + '>' +
+              thumb +
+              '<div class="savvey-sheet-card-text">' +
+                '<div class="savvey-sheet-card-title">' + (c.title || '') + '</div>' +
+                meta +
+              '</div>' +
+              best +
+            '</div>';
+          }).join('');
+        }
+        sheet.hidden = false;
+        if (scrim) { scrim.hidden = false; }
+        // Force reflow then transition in
+        void sheet.offsetWidth;
+        sheet.classList.add('snap');
+        if (scrim) requestAnimationFrame(function(){ scrim.classList.add('show'); });
+        snapTo(opts.startDetent === 'peek' ? PEEK : FULL, true);
+      },
+      cancel: function() {
+        sheet.classList.add('snap');
+        sheet.style.transform = 'translate3d(0,100%,0)';
+        if (scrim) {
+          scrim.classList.remove('show');
+          scrim.style.background = 'rgba(0,0,0,0)';
+          setTimeout(function(){ scrim.hidden = true; }, 480);
+        }
+        setTimeout(function(){ sheet.hidden = true; }, 480);
+        activeId = null;
+      }
+    };
+
+    // Preview-mode trigger: ?sheet=v2 auto-opens the sheet with mock data on load
+    try {
+      var url = new URL(location.href);
+      if (url.searchParams.get('sheet') === 'v2') {
+        setTimeout(function() {
+          window.savveySheet.show({
+            candidates: [
+              { title: 'Bose QuietComfort 45 — Triple Black', meta: 'Wireless · Active Noise Cancelling', best: true },
+              { title: 'Bose QuietComfort 45 SE',             meta: 'Limited edition · Special Edition' },
+              { title: 'Bose QuietComfort Ultra Headphones',  meta: 'Premium · Spatial Audio' },
+              { title: 'Bose QuietComfort Earbuds II',        meta: 'In-ear · Noise cancelling' }
+            ],
+            onPick: function(idx) {
+              console.log('[savvey-sheet preview] picked', idx);
+              window.savveySheet.cancel();
+            }
+          });
+        }, 600);
+      }
+    } catch (e) {}
+  })();
+
   // First user interaction enables the screen-enter animation
   var firstInteraction = function() {
     markReady();
