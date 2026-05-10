@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v91';
+const VERSION             = 'normalize.js v3.4.5v92';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -609,6 +609,51 @@ Verified Amazon UK price: ${price_str}` +
 // Switched from engine=google_shopping (returned Google `aclk` redirect URLs
 // that broke affiliate-tag propagation and didn't deep-link to actual
 // listings) to engine=amazon with amazon_domain=amazon.co.uk.
+
+// V.92 — Defensive rating/reviews coercion. SerpAPI's Amazon engine has been
+// observed returning rating as a string ("4.5", "4.5 out of 5 stars") rather
+// than a number for some products, and reviews count under various field names
+// (reviews / review_count / rating_count / reviews_count / ratings_total).
+// V.89 review synthesis was failing silently because the strict typeof === 'number'
+// gate dropped these. These helpers accept both numeric and string forms.
+function _coerceRating(v) {
+  if (typeof v === 'number' && v > 0 && v <= 5) return Number(v.toFixed(1));
+  if (typeof v === 'string') {
+    const m = v.match(/(\d+(?:\.\d+)?)/);
+    if (m) {
+      const n = parseFloat(m[1]);
+      if (n > 0 && n <= 5) return Number(n.toFixed(1));
+    }
+  }
+  return null;
+}
+function _coerceReviews(v) {
+  if (typeof v === 'number' && v > 0 && isFinite(v)) return Math.floor(v);
+  if (typeof v === 'string') {
+    const cleaned = v.replace(/[^0-9]/g, '');
+    if (!cleaned) return null;
+    const n = parseInt(cleaned, 10);
+    if (n > 0 && isFinite(n)) return n;
+  }
+  return null;
+}
+function _extractAmazonRating(item) {
+  // Try documented field first, then known alternates seen in practice
+  return _coerceRating(item.rating)
+      || _coerceRating(item.rating_value)
+      || _coerceRating(item.rating_score)
+      || _coerceRating(item.stars)
+      || null;
+}
+function _extractAmazonReviews(item) {
+  // Multiple field names seen across SerpAPI Amazon engine responses
+  return _coerceReviews(item.reviews)
+      || _coerceReviews(item.review_count)
+      || _coerceReviews(item.rating_count)
+      || _coerceReviews(item.reviews_count)
+      || _coerceReviews(item.ratings_total)
+      || null;
+}
 // Native Amazon search returns ASIN + price + rating directly, so we can
 // build canonical /dp/ASIN URLs with the affiliate tag baked in — no
 // redirect-chasing, no Google middleware.
@@ -712,10 +757,9 @@ async function fetchVerifiedAmazonPrice(query) {
     // SerpAPI-returned product thumbnail. All defensive (nullable). These build
     // trust without adding any extra API call cost — they're already in the
     // organic_results we just fetched.
-    const ratingVal = (typeof primary.rating === 'number' && primary.rating > 0 && primary.rating <= 5)
-      ? Number(primary.rating.toFixed(1)) : null;
-    const reviewsVal = (typeof primary.reviews === 'number' && primary.reviews > 0)
-      ? Math.floor(primary.reviews) : null;
+    // V.92 — defensive extraction supports string-rating + alternate field names
+    const ratingVal = _extractAmazonRating(primary);
+    const reviewsVal = _extractAmazonReviews(primary);
     const isPrime = primary.is_prime === true || primary.prime === true;
     const thumb   = (typeof primary.thumbnail === 'string' && /^https?:\/\//i.test(primary.thumbnail))
       ? primary.thumbnail.slice(0, 500) : null;
@@ -732,8 +776,8 @@ async function fetchVerifiedAmazonPrice(query) {
         asin: (typeof primary.asin === 'string') ? primary.asin : null,
         price: Number(primary.extracted_price),
         retailer: 'amazon.co.uk',
-        rating: (typeof primary.rating === 'number') ? primary.rating : null,
-        reviews: (typeof primary.reviews === 'number') ? primary.reviews : null,
+        rating: ratingVal, // V.92 - was raw primary.rating; now uses coerced value
+        reviews: reviewsVal, // V.92 - same
         ts: new Date(_logTs).toISOString(),
       };
       kvSet(_logKey, _logVal, 7776000).catch(() => {});
