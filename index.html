@@ -365,6 +365,24 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.110 — Market status badge ===
+     Subtle subtitle on the result screen for non-current products.
+     Replaced=amber, Discontinued=red-tinted, Pre-release=blue. */
+  .v110-market-status {
+    display: inline-flex;
+    align-items: center;
+    margin: 4px 0 8px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font: 600 12px var(--font-sf-text, 'Inter', system-ui);
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+  }
+  .v110-market-replaced     { background: rgba(214,137,16,0.14); color: var(--amber-deep, #a06a08); border: 1px solid rgba(214,137,16,0.28); }
+  .v110-market-discontinued { background: rgba(204,68,68,0.12);  color: var(--red-deep, #8a2a2a);   border: 1px solid rgba(204,68,68,0.24); }
+  .v110-market-prerelease   { background: rgba(74,128,200,0.12); color: #2a4a78;                   border: 1px solid rgba(74,128,200,0.24); }
+  .v110-market-neutral      { background: rgba(74,85,80,0.10);   color: var(--ink-soft);            border: 1px solid rgba(74,85,80,0.18); }
+
   /* === V.108 — Tap-spring as PURE CSS (no MutationObserver) ===
      Panel veto on V.107 JS class adoption. The tap-spring scale-on-press
      now applies via direct selector matching — no JS, no MO, no class
@@ -4370,7 +4388,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v109</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v110</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6941,16 +6959,42 @@ function renderResult(displayName, payload) {
   // v3.4.5e — fire verdict_shown AFTER the result screen is revealed (panel
   // mandate). requestAnimationFrame ensures the next paint has happened, so
   // we're measuring "user actually saw the pill" not "DOM was mutated".
+  // V.110 — wire confidence_score (0-100) into PostHog so we can correlate
+  // verdict accuracy + abandon rate with Haiku self-rated confidence.
+  var _v110score = (payload && typeof payload.confidence_score === 'number') ? payload.confidence_score : null;
   if (v && ['good_buy','fair','wait','check_elsewhere'].includes(v)) {
-    requestAnimationFrame(() => track('verdict_shown', { verdict: v, door: _lastDoor }));
+    requestAnimationFrame(() => track('verdict_shown', { verdict: v, door: _lastDoor, confidence_score: _v110score }));
   } else {
-    // v3.4.5h — Confidence Baseline event (panel-mandated 5 May 2026 PM). Fires
-    // when the result lacks a verdict pill — i.e. the user landed on the
-    // 'Best guess · check retailer' fallback. Beta-data trigger: if >30% of
-    // normalize_ok events fire this, refine the Haiku prompt to force a
-    // category-level insight rather than a total blank.
-    requestAnimationFrame(() => track('low_confidence_shown', { confidence: conf || null, category: cat, door: _lastDoor, query_len: (displayName || '').length }));
+    requestAnimationFrame(() => track('low_confidence_shown', { confidence: conf || null, confidence_score: _v110score, category: cat, door: _lastDoor, query_len: (displayName || '').length }));
   }
+  // V.110 — render market_status badge. Only shows for non-current products.
+  // Protects users from buying superseded models thinking they're current.
+  (function renderV110MarketStatus(){
+    var ms = payload && payload.market_status;
+    if (!ms || ms === 'Current Model') {
+      var existing = document.getElementById('v110-market-status');
+      if (existing) existing.remove();
+      return;
+    }
+    var titleEl = document.getElementById('result-title');
+    if (!titleEl) return;
+    var existing = document.getElementById('v110-market-status');
+    if (existing) existing.remove();
+    var badge = document.createElement('div');
+    badge.id = 'v110-market-status';
+    badge.className = 'v110-market-status v110-market-' + (
+      ms === 'Replaced'      ? 'replaced' :
+      ms === 'Discontinued'  ? 'discontinued' :
+      ms === 'Pre-release'   ? 'prerelease' : 'neutral'
+    );
+    var labelMap = {
+      'Replaced':    'Replaced by newer model',
+      'Discontinued':'Discontinued',
+      'Pre-release': 'Pre-release — not yet shipping'
+    };
+    badge.textContent = labelMap[ms] || ms;
+    titleEl.parentNode.insertBefore(badge, titleEl.nextSibling);
+  })();
   // v3.3.3 — prefer the SerpAPI-returned product thumbnail (verified from the
   // exact Amazon listing) over the /api/image lookup which sometimes returns
   // mismatched/stale images. Falls back to the existing hero search if absent.

@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v109';
+const VERSION             = 'normalize.js v3.4.5v110';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -170,13 +170,15 @@ function cacheKey(inputType, payload) {
   // V.109 cache prefix bump v3_103 -> v3_109 — flushes every entry cached
   // under the V.97 7-day TTL so PS5 Pro (and others) re-fetch with fresh
   // SerpAPI verified prices instead of stale £749.99.
-  return 'savvey:normalize:v3_109:' + h.digest('hex').slice(0, 24);
+  return 'savvey:normalize:v3_110:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
 {
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "confidence": "high" | "medium" | "low",
+  "confidence_score": 95 | 73 | 22,
+  "market_status": "Current Model" | "Replaced" | "Discontinued" | "Pre-release" | null,
   "alternative_string": "Ninja AF300UK" | null,
   "alternatives_array": ["Russell Hobbs Velocity 26480", "Smeg KLF03", "Tefal Avanti Classic 1.7L"] | [],
   "alternatives_meta": [
@@ -197,6 +199,14 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 Field rules:
 - canonical_search_string: cleanest brand + family + model.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
+- confidence_score: V.110 — numeric 0-100 self-rating of YOUR certainty about the canonical_search_string. Calibration: 95-100 = exact MPN match (Bose QC45 -> "Bose QuietComfort 45"). 80-94 = brand+series clear, slight model ambiguity. 60-79 = brand clear, multiple plausible models. 40-59 = category clear, brand+model uncertain. 20-39 = category guess only. 0-19 = junk/blurry/unintelligible. Be honest — under-rate rather than over-rate. The frontend uses this for analytics + future routing tuning.
+- market_status: V.110 — UK market lifecycle of the canonical product. ONE of:
+    "Current Model"  — actively sold by major UK retailers as the current SKU.
+    "Replaced"       — superseded by a newer model in the same series (e.g. iPhone 14 once 15 ships).
+    "Discontinued"   — no longer manufactured; only used / refurb / clearance.
+    "Pre-release"    — announced but not yet shipping (e.g. iPhone 17 in mid-2026).
+  NULL if the product is generic/grocery/no-name where lifecycle isn't meaningful.
+  This becomes a small subtitle badge on the result screen — protects users from buying superseded models thinking they're current.
 - alternative_string: ONLY when confidence < high. NULL when high.
 - alternatives_array: 0-3 ADDITIONAL plausible product candidates. Two cases:
   (a) MEDIUM confidence on a specific product: list specific variants of the canonical (different model numbers, sizes, sub-families). Example: canonical "Apple iPhone 15 128GB" -> alternatives_array ["Apple iPhone 15 Plus", "Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"].
@@ -887,6 +897,19 @@ function parseAndDefault(rawText) {
   if (!canonical) return null;
 
   const confidence = ['high','medium','low'].includes(parsed.confidence) ? parsed.confidence : 'low';
+  // V.110 — confidence_score 0-100. Defensive: derive from enum when missing
+  // (high≈92, medium≈65, low≈30) so cached pre-V.110 responses still have a number.
+  const _scoreFromEnum = confidence === 'high' ? 92 : confidence === 'medium' ? 65 : 30;
+  const confidence_score = (typeof parsed.confidence_score === 'number'
+    && parsed.confidence_score >= 0
+    && parsed.confidence_score <= 100)
+    ? Math.round(parsed.confidence_score)
+    : _scoreFromEnum;
+  // V.110 — market_status. Strict enum; null is the honest "doesn't apply" answer
+  // (grocery, no-name, generic items where lifecycle is meaningless).
+  const market_status = ['Current Model','Replaced','Discontinued','Pre-release'].includes(parsed.market_status)
+    ? parsed.market_status
+    : null;
   const alternative = (confidence !== 'high' && typeof parsed.alternative_string === 'string' && parsed.alternative_string.trim())
     ? parsed.alternative_string.trim().slice(0, 200) : null;
   // Wave HH — extract alternatives_array (0-2 extra candidates) when low/medium confidence
@@ -972,6 +995,8 @@ function parseAndDefault(rawText) {
   return {
     canonical_search_string: canonical,
     confidence,
+    confidence_score, // V.110 — numeric 0-100, defensively derived from enum if Haiku omitted it
+    market_status,    // V.110 — Current Model | Replaced | Discontinued | Pre-release | null
     alternative_string: alternative,
     alternatives_array, // Wave HH
     alternatives_meta, // Wave KK — typical_price_gbp + pack_size + tier_label per candidate
