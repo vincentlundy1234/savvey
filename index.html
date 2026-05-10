@@ -251,6 +251,139 @@
   @media (prefers-reduced-motion: reduce) {
     .savvey-sheet.snap { transition: none; }
   }
+
+  /* === V.102 HOME REBALANCE ===
+     Hero Snap stays as king (unchanged). Below it: Scan + Paste sit as a
+     small two-column pair (secondary). Type becomes a large bottom search
+     bar (primary input — what most users actually want). */
+  .v102-secondary-row {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--s-3);
+    margin-bottom: var(--s-3);
+  }
+  .v102-door-mini {
+    min-height: 64px !important;
+    padding: var(--s-3) var(--s-3) !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: var(--s-2) !important;
+    background: var(--card) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: 14px !important;
+    box-shadow: var(--shadow-flat);
+    cursor: pointer;
+    transition: transform .18s var(--sheet-ease), box-shadow .18s var(--sheet-ease);
+  }
+  .v102-door-mini:active { transform: scale(0.985); box-shadow: var(--shadow-pressed); }
+  .v102-door-mini .v5-door-icon {
+    width: 32px !important;
+    height: 32px !important;
+    flex: 0 0 32px;
+    color: var(--ink-soft);
+  }
+  .v102-door-mini .v5-door-icon svg { width: 22px; height: 22px; }
+  .v102-door-mini-text { line-height: 1.15; }
+  .v102-door-mini-text .v5-door-title {
+    font: var(--type-callout) !important;
+    color: var(--ink) !important;
+    font-size: 15px !important;
+  }
+  .v102-door-mini-text .v5-door-sub {
+    font: var(--type-footnote) !important;
+    color: var(--ink-mute) !important;
+    font-size: 12px !important;
+  }
+  /* Paste door inner button — clean override of the legacy door wrapper */
+  .v102-door-mini-btn {
+    all: unset;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--s-2);
+    width: 100%;
+    cursor: pointer;
+  }
+  /* Hide the inline paste-input row — focusing the main hero opens it */
+  .v102-paste-input { display: none !important; }
+
+  /* TYPE BAR — primary input at bottom of home */
+  .v102-type-bar {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: var(--s-2) !important;
+    width: 100%;
+    min-height: 60px !important;
+    padding: var(--s-2) var(--s-2) var(--s-2) var(--s-4) !important;
+    background: var(--card) !important;
+    border: 1.5px solid var(--border-strong) !important;
+    border-radius: 18px !important;
+    box-shadow: var(--shadow-card);
+    transition: border-color .2s ease, box-shadow .2s ease;
+    margin-top: var(--s-2);
+  }
+  .v102-type-bar:focus-within {
+    border-color: var(--green);
+    box-shadow: 0 0 0 4px rgba(42, 107, 34, 0.12), var(--shadow-card);
+  }
+  .v102-type-bar-icon {
+    width: 22px; height: 22px;
+    flex: 0 0 22px;
+    color: var(--ink-mute);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .v102-type-bar-icon svg { width: 22px; height: 22px; }
+  .v102-type-bar-input {
+    flex: 1 1 auto;
+    border: none;
+    outline: none;
+    background: transparent;
+    font: var(--type-callout);
+    font-size: 16px;          /* prevents iOS zoom-on-focus */
+    color: var(--ink);
+    padding: var(--s-2) 0;
+    min-width: 0;
+  }
+  .v102-type-bar-input::placeholder { color: var(--ink-mute); }
+  .v102-type-bar-go {
+    flex: 0 0 44px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    background: var(--green);
+    color: #fff;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 6px rgba(42, 107, 34, 0.30);
+    transition: transform .15s ease, background .15s ease;
+  }
+  .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
+
+  /* === V.102 ZOOM PILL — tappable reset to 1× ===
+     Was a static <div>; now a <button>. Visible only when zoom > 1.05.
+     Tap to snap back to 1×. Pulse animation on first reveal as discovery hint. */
+  .v5-cam-zoom-pill.zoom-indicator {
+    cursor: pointer;
+    border: none;
+    pointer-events: auto !important;   /* override the static-display rule */
+    user-select: none;
+    -webkit-user-select: none;
+    transition: transform .18s var(--sheet-ease), background .18s ease;
+  }
+  .v5-cam-zoom-pill.zoom-indicator:active { transform: scale(0.94); background: rgba(0,0,0,.78); }
+  @keyframes v102-zoom-pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(255,255,255,0.45); }
+    50%      { transform: scale(1.08); box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+  }
+  .v5-cam-zoom-pill.zoom-indicator.zooming.first-show {
+    animation: v102-zoom-pulse 1.4s ease-in-out 2;
+  }
   @media (prefers-color-scheme: dark) and (max-width: 1px) {
     /* Wave V — proper tone-mapped slate dark mode (not navy fill).
        Per v5 design pushback: re-painted, not tinted. */
@@ -3790,53 +3923,57 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <input id="photo-upload" type="file" accept="image/*" hidden onchange="handlePhotoUpload(event)">
     <input id="photo-fallback" type="file" accept="image/*" capture="environment" hidden onchange="handlePhotoUpload(event)">
 
-    <!-- 3 secondary doors per v5 — single quiet palette, 76px min-height, 42x42 icon container -->
-    <div class="v5-secondary-doors">
-      <button class="v5-door" onclick="goBarcode()" type="button">
+    <!-- V.102 home rebalance — Snap=king (above), then small Scan+Paste pair
+         (secondary tools), then a large Type search bar at the bottom (the
+         primary input role for users who already know what they want). -->
+    <div class="v5-secondary-doors v102-secondary-row">
+      <button class="v5-door v102-door-mini" onclick="goBarcode()" type="button" aria-label="Scan a barcode">
         <div class="v5-door-icon">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
             <rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/>
           </svg>
         </div>
-        <div class="v5-door-text">
-          <div class="v5-door-title">Scan a barcode</div>
-          <div class="v5-door-sub">Any side of the box</div>
+        <div class="v5-door-text v102-door-mini-text">
+          <div class="v5-door-title">Scan</div>
+          <div class="v5-door-sub">Barcode</div>
         </div>
       </button>
 
-      <div class="v5-door v5-door--input" id="paste-door">
-        <div class="v5-door-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-            <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-          </svg>
-        </div>
-        <div class="v5-door-text">
-          <div class="v5-door-title">Paste a link</div>
-          <div class="v5-door-sub">From any UK retailer</div>
-        </div>
-        <div class="v5-door-input-row">
+      <div class="v5-door v102-door-mini" id="paste-door">
+        <button class="v102-door-mini-btn" type="button" onclick="(function(){var el=document.getElementById('url-input'); if(el){el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'});}})()" aria-label="Paste a link">
+          <div class="v5-door-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
+              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
+            </svg>
+          </div>
+          <div class="v5-door-text v102-door-mini-text">
+            <div class="v5-door-title">Paste</div>
+            <div class="v5-door-sub">A link</div>
+          </div>
+        </button>
+        <div class="v5-door-input-row v102-paste-input">
           <input id="url-input" type="url" inputmode="url" placeholder="https://www.argos.co.uk/...">
           <button onclick="goUrl()" type="button">Go</button>
         </div>
       </div>
+    </div>
 
-      <div class="v5-door v5-door--input" id="type-door">
-        <div class="v5-door-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <circle cx="11" cy="11" r="7"/>
-            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-        </div>
-        <div class="v5-door-text">
-          <div class="v5-door-title">Type a name</div>
-          <div class="v5-door-sub">"Bose QC45", "AF400UK"…</div>
-        </div>
-        <div class="v5-door-input-row">
-          <input id="text-input" type="text" inputmode="search" enterkeyhint="search" placeholder="Bose QC45, AF400UK, iPhone 15…">
-          <button onclick="goText()" type="button">Search</button>
-        </div>
+    <!-- V.102 — Type a name. Promoted to primary search role at the bottom.
+         Real input width, larger height, prominent placeholder. -->
+    <div class="v5-door v102-type-bar" id="type-door">
+      <div class="v102-type-bar-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
       </div>
+      <input id="text-input" class="v102-type-bar-input" type="text" inputmode="search" enterkeyhint="search" placeholder="Type a product — Bose QC45, iPhone 15, Yankee Candle…">
+      <button class="v102-type-bar-go" onclick="goText()" type="button" aria-label="Search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+        </svg>
+      </button>
     </div>
 
     <!-- V.76 — savings counter (vanity metric) + legacy text-chip recents
@@ -3846,7 +3983,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v101</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v102</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -3911,7 +4048,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <path d="M18 7c0-2-1-3-3-3H9c-2 0-3 1-3 3v2c0 1 .5 1.5 1 2l1 1v8c0 1 1 2 2 2h4c1 0 2-1 2-2v-8l1-1c.5-.5 1-1 1-2z"/>
       </svg>
     </button>
-    <div class="v5-cam-zoom-pill zoom-indicator" id="zoom-indicator" hidden>1.0×</div>
+    <button class="v5-cam-zoom-pill zoom-indicator" id="zoom-indicator" type="button" hidden aria-label="Reset zoom to 1×">1.0×</button>
   </div>
 
   <!-- Auto-fade hint (engine: cam-hint) -->
@@ -3942,11 +4079,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       </svg>
     </button>
     <button class="v5-cam-shutter cam-shutter" onclick="captureFrame()" aria-label="Capture"></button>
-    <button class="v5-cam-aux v5-cam-aux--flash" type="button" aria-label="Flash">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-      </svg>
-    </button>
+    <!-- V.102 — bottom-right flash button removed. It was a placeholder
+         with no handler (Vincent flagged "lightning does nothing"). The
+         working torch toggle lives in the top-right (#cam-torch-btn) when
+         the device supports it. Empty spacer keeps shutter centred. -->
+    <span class="v5-cam-aux" aria-hidden="true" style="visibility:hidden"></span>
   </div>
 
   <!-- V.95 — GDPR pill removed from camera. Privacy is surfaced in the
@@ -4549,19 +4686,41 @@ function setupCameraGestures() {
     video.style.transform = 'translate3d(0,0,0) scale(' + zoom + ')';
     const ind = document.getElementById('zoom-indicator');
     if (ind) {
-      ind.hidden = false;
-      ind.classList.add('zooming');
+      // V.102 \u2014 auto-hide pill at rest. Only show during/after pinch (>1.05x).
+      if (zoom > 1.05) {
+        ind.hidden = false;
+        ind.classList.add('zooming');
+        if (!ind._v102FirstShown) {
+          ind.classList.add('first-show');
+          ind._v102FirstShown = true;
+          setTimeout(function(){ ind.classList.remove('first-show'); }, 3000);
+        }
+      } else {
+        ind.hidden = true;
+        ind.classList.remove('zooming');
+      }
       ind.textContent = (zoom < 10 ? zoom.toFixed(1).replace(/\.0$/,'') : Math.round(zoom)) + '\u00D7';
     }
     // Haptic on integer crossings (only fires once per crossing)
     const intZoom = Math.round(zoom);
     if (intZoom !== _lastIntegerZoom && Math.abs(zoom - intZoom) < 0.08) {
       _lastIntegerZoom = intZoom;
-      if (navigator.vibrate) {
-        try { navigator.vibrate(8); } catch (e) {}
-      }
+      if (window.savveyHaptics) try { window.savveyHaptics.light(); } catch (e) {}
+      else if (navigator.vibrate) try { navigator.vibrate(8); } catch (e) {}
     }
   }
+  // V.102 \u2014 Tap zoom pill to reset to 1\u00D7. Wires once.
+  (function v102WireZoomReset(){
+    const ind = document.getElementById('zoom-indicator');
+    if (!ind || ind._v102Wired) return;
+    ind._v102Wired = true;
+    ind.addEventListener('click', function(e) {
+      e.preventDefault(); e.stopPropagation();
+      if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e2) {}
+      _applyCssZoom(MIN_ZOOM);
+      _scheduleHwZoom(MIN_ZOOM);
+    });
+  })();
   function _scheduleHwZoom(zoom) {
     // Debounce hardware zoom to avoid spamming applyConstraints during gesture
     if (_hwZoomTimer) clearTimeout(_hwZoomTimer);
