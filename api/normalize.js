@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v87';
+const VERSION             = 'normalize.js v3.4.5v88';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -397,6 +397,73 @@ async function describeAndSearchSimilar(framesOrSingle, mediaType) {
     };
   } catch (err) {
     console.warn(`[${VERSION}] describeAndSearchSimilar error: ${err.message}`);
+    return null;
+  }
+}
+
+// V.88 — Recommendation under constraints. When a Type query contains a budget
+// ("stand mixer under £200", "headphones below £100"), fire a dedicated Haiku
+// call that returns 3-5 ranked specific products with brand/model + ballpark
+// price + one-line reasoning. Cost: ~1 extra Haiku text call. Latency: +600ms.
+function detectBudgetIntent(text) {
+  if (!text || typeof text !== 'string') return null;
+  // Match patterns: "under £150", "below 200", "max £80", "less than £300", "for under 50"
+  const m = text.match(/(?:under|below|max|maximum|less than|cheaper than|for under|for less than)\s*(?:GBP|£)?\s*(\d{1,4})(?:[.,]\d{1,2})?/i);
+  if (!m) return null;
+  const budget = parseInt(m[1], 10);
+  if (!isFinite(budget) || budget < 5 || budget > 5000) return null;
+  // Strip the budget phrase from the query to recover the category
+  const stripped = text.replace(m[0], '').replace(/\s+/g, ' ').trim();
+  if (!stripped || stripped.length < 3) return null;
+  return { budget_gbp: budget, category_query: stripped };
+}
+
+async function generateBudgetRecommendations(categoryQuery, budgetGbp) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  const prompt = `A UK shopper wants: "${categoryQuery}" under £${budgetGbp}. Recommend the 3-4 BEST specific products in this category at this budget, ranked best-overall first. Output ONLY this JSON, no preamble:
+{
+  "items": [
+    {"name": "specific brand + model (e.g. 'Bose QuietComfort 45')", "approx_price_gbp": 199, "why": "5-10 word honest reason this is the pick"},
+    ...
+  ],
+  "headline_advice": "one sentence 8-15 words capturing the trade-off at this budget"
+}
+Be UK-specific (mention UK retailers, UK availability). Be honest — if budget is too low for this category, say so in headline_advice.`;
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 400,
+        system: prompt,
+        messages: [{ role: 'user', content: 'Return the JSON now.' }],
+      }),
+      signal: ac.signal,
+    });
+    clearTimeout(timer);
+    if (!r.ok) return null;
+    const j = await r.json();
+    const txt = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const m = txt.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    const parsed = JSON.parse(m[0]);
+    if (!parsed || !Array.isArray(parsed.items) || parsed.items.length === 0) return null;
+    return {
+      budget_gbp: budgetGbp,
+      category_query: categoryQuery,
+      items: parsed.items.slice(0, 4).map(it => ({
+        name: String(it.name||'').slice(0, 80),
+        approx_price_gbp: typeof it.approx_price_gbp === 'number' ? it.approx_price_gbp : null,
+        why: String(it.why||'').slice(0, 80)
+      })),
+      headline_advice: String(parsed.headline_advice||'').slice(0, 160)
+    };
+  } catch (err) {
+    clearTimeout(timer);
     return null;
   }
 }
@@ -1338,6 +1405,21 @@ export default async function handler(req, res) {
   // model number we still try Amazon first.
   const _retailerOwn = (_specificity === 'brand_only') ? detectRetailerOwn(parsed.canonical_search_string) : null;
 
+  // V.88 — Budget recommendation. Detects "under £X" / "below £X" patterns in
+  // text input and generates 3-4 ranked specific picks via Haiku. Only fires
+  // for text inputs (not image/barcode/url) with a clear budget signal.
+  let recommendations = null;
+  if (inputType === 'text' && body && typeof body.text === 'string') {
+    try {
+      const intent = detectBudgetIntent(body.text);
+      if (intent) {
+        recommendations = await generateBudgetRecommendations(intent.category_query, intent.budget_gbp);
+      }
+    } catch (err) {
+      console.warn(`[${VERSION}] V.88 budget-rec error: ${err.message}`);
+    }
+  }
+
   // V.87 — Visual similarity. Only on low-confidence Snap (image input where
   // Haiku was uncertain about the brand/exact product). Renders as a "Find
   // similar" carousel in the result screen instead of a frustrating empty state.
@@ -1362,6 +1444,7 @@ export default async function handler(req, res) {
     disambig_candidates, // Wave HH
     disambig_candidates_meta, // Wave KK — parallel array with typical_price_gbp + pack_size + tier_label per candidate
     visual_matches, // V.87 - low-conf snap visual similarity, null otherwise
+    recommendations, // V.88 - budget-pattern Haiku recommendations, null otherwise
     _meta: {
       version: VERSION,
       input_type: inputType,
