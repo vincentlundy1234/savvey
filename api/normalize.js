@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v96.1';
+const VERSION             = 'normalize.js v3.4.5v97';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -92,7 +92,13 @@ const MAX_TOKENS_VISION   = 380; // Wave II
 const MAX_TOKENS_TEXT     = 320; // Wave II
 const RATE_LIMIT_PER_HOUR = 60;
 const MAX_IMAGE_BYTES     = 4 * 1024 * 1024;
-const KV_TTL_SECONDS      = 86400;
+const KV_TTL_SECONDS      = 86400;        // 24h - per-query cache (cKey)
+const CANONICAL_TTL_SECONDS = 604800;     // V.97 — 7 days for canonical-keyed entries.
+                                          // Different input phrasings ("ps5"/"PS5 console"/
+                                          // "PlayStation 5") collapse to the same canonical,
+                                          // and canonical-level data (verified Amazon ASIN +
+                                          // retailer chip URLs) doesn't change daily.
+                                          // Cuts SerpAPI burn ~5x on repeat queries.
 const KV_TIMEOUT_MS       = 1500;
 
 let _kv = null;
@@ -1652,11 +1658,23 @@ export default async function handler(req, res) {
       serpapi_status: _lastSerpStatus, // V.96.1 - bubble for diagnosis
     }
   };
-  kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
-  // Wave II — also write to canonical-keyed cache so different input
-  // phrasings resolving to the same canonical share the cached response.
-  if (_canonicalKey && _canonicalKey.length > 22) {
-    kvSet(_canonicalKey, responseBody, KV_TTL_SECONDS).catch(() => {});
+  // V.97 — Don't cache failure responses when SerpAPI returned 429 (quota).
+  // Otherwise we'd serve stale-empty for the full TTL after the quota refills.
+  // Empty fail = no verified price, no retailer chips, no visual matches.
+  const _isQuotaFail = (_lastSerpStatus === 429 || _lastSerpStatus === 'fetch_error')
+                       && !verified_amazon_price
+                       && (!retailer_deep_links || Object.keys(retailer_deep_links).length === 0)
+                       && !visual_matches;
+  if (!_isQuotaFail) {
+    kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
+    // Wave II — also write to canonical-keyed cache so different input
+    // phrasings resolving to the same canonical share the cached response.
+    // V.97 - canonical writes use 7-day TTL since canonical-level data is stable.
+    if (_canonicalKey && _canonicalKey.length > 22) {
+      kvSet(_canonicalKey, responseBody, CANONICAL_TTL_SECONDS).catch(() => {});
+    }
+  } else {
+    console.warn(`[${VERSION}] V.97 skipping cache write — SerpAPI quota fail (status=${_lastSerpStatus}). Lets next request retry fresh.`);
   }
   return res.status(200).json(responseBody);
 }
