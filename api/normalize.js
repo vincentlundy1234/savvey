@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v112';
+const VERSION             = 'normalize.js v3.4.5v113';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1594,9 +1594,12 @@ export default async function handler(req, res) {
     return words.slice(0, n).join(' ').replace(/[.,;:!?]+$/, '') + '…';
   };
   if (parsed.savvey_says && typeof parsed.savvey_says === 'object') {
-    if (parsed.savvey_says.price_take)       parsed.savvey_says.price_take       = _capWords(parsed.savvey_says.price_take);
-    if (parsed.savvey_says.timing_advice)    parsed.savvey_says.timing_advice    = _capWords(parsed.savvey_says.timing_advice);
-    if (parsed.savvey_says.review_consensus) parsed.savvey_says.review_consensus = _capWords(parsed.savvey_says.review_consensus);
+    if (parsed.savvey_says.price_take)    parsed.savvey_says.price_take    = _capWords(parsed.savvey_says.price_take);
+    if (parsed.savvey_says.timing_advice) parsed.savvey_says.timing_advice = _capWords(parsed.savvey_says.timing_advice);
+    // V.113 — fix V.85e typo: was capping `review_consensus` (which doesn't exist)
+    // instead of `consensus` (the actual field). Caused PS5 Pro to return 14-word
+    // ramble breaking the 10-word brand-honesty promise. Audit-found 10 May 2026.
+    if (parsed.savvey_says.consensus)     parsed.savvey_says.consensus     = _capWords(parsed.savvey_says.consensus);
   }
 
   // Wave FF — emit specificity flag + retailer_deep_links on the response
