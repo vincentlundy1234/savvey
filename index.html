@@ -44,6 +44,87 @@
     --r-sm: 10px; --r-md: 16px; --r-lg: 22px;
     --font-display: 'Nunito', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     --font-body: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+
+    /* === V.99 iOS PREMIUM TOKENS (additive, don't override Wave V) === */
+    /* Glass materials calibrated against iOS 17 — saturate(180%) is the
+       "alive" lift, blur radius alone reads dead. Use ONLY one or two
+       blurred layers per paint or mobile Safari drops frames. */
+    --glass-ultra-thin-bg:    rgba(248, 247, 243, 0.55);
+    --glass-ultra-thin-blur:  blur(8px) saturate(180%);
+    --glass-regular-bg:       rgba(248, 247, 243, 0.72);
+    --glass-regular-blur:     blur(20px) saturate(180%);
+    --glass-thick-bg:         rgba(248, 247, 243, 0.85);
+    --glass-thick-blur:       blur(40px) saturate(180%);
+    --glass-dark-bg:          rgba(20, 22, 24, 0.66);
+    --glass-dark-blur:        blur(24px) saturate(180%) brightness(0.9);
+
+    /* Shadow hierarchy — diffuse + tight contact pair, never one big blob */
+    --shadow-flat:    0 1px 2px rgba(0,0,0,.04);
+    --shadow-card:    0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+    --shadow-raised:  0 1px 2px rgba(0,0,0,.05), 0 12px 36px rgba(0,0,0,.10);
+    --shadow-sheet:   0 -2px 6px rgba(0,0,0,.04), 0 -16px 48px rgba(0,0,0,.10);
+    --shadow-modal:   0 1px 2px rgba(0,0,0,.06), 0 24px 56px rgba(0,0,0,.18);
+    --shadow-pressed: inset 0 1px 1px rgba(0,0,0,.06);
+
+    /* SF native + Inter fallback — separate display + text + rounded stacks */
+    --font-sf-display:  -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Display", system-ui, sans-serif;
+    --font-sf-text:     -apple-system, BlinkMacSystemFont, "SF Pro Text",    "Inter",          system-ui, sans-serif;
+    --font-sf-rounded:  ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif;
+
+    /* iOS HIG type scale — sizes/leading 1:1, tracking tuned per role */
+    --type-caption:   500 12px/16px var(--font-sf-text);
+    --type-footnote:  500 13px/18px var(--font-sf-text);
+    --type-subhead:   500 15px/22px var(--font-sf-text);
+    --type-body:      400 17px/24px var(--font-sf-text);
+    --type-callout:   600 17px/24px var(--font-sf-text);
+    --type-headline:  600 20px/26px var(--font-sf-display);
+    --type-title3:    600 24px/32px var(--font-sf-display);
+    --type-title1:    700 32px/40px var(--font-sf-display);
+    --type-display:   800 40px/44px var(--font-sf-display);
+
+    /* 4pt grid spacing — pair with existing --r-sm/md/lg radii */
+    --s-1:  4px;  --s-2:  8px;  --s-3: 12px;  --s-4: 16px;
+    --s-5: 20px;  --s-6: 24px;  --s-8: 32px;  --s-10: 40px;
+
+    /* Sheet physics tokens — used by V.101 disambig sheet (planned) */
+    --sheet-ease:        cubic-bezier(0.32, 0.72, 0, 1);
+    --sheet-ease-back:   cubic-bezier(0.5, 1.4, 0.5, 1);
+    --sheet-radius:      18px;
+  }
+
+  /* === V.99 SKELETON LOADER (additive, available for future adoption) ===
+     Single shimmer animation across all blocks, 1.4s cycle, 8% lift.
+     Animate background-position only — never width/height/opacity. */
+  @keyframes v99-sk-shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position:  200% 0; }
+  }
+  .skeleton-result {
+    padding: var(--s-5);
+    display: grid;
+    gap: var(--s-3);
+  }
+  .sk {
+    background: linear-gradient(90deg,
+      rgba(60, 67, 78, 0.07) 0%,
+      rgba(60, 67, 78, 0.13) 50%,
+      rgba(60, 67, 78, 0.07) 100%);
+    background-size: 200% 100%;
+    border-radius: 8px;
+    animation: v99-sk-shimmer 1.4s linear infinite;
+    will-change: background-position;
+  }
+  .sk-pill        { width: 88px;  height: 26px; border-radius: 999px; }
+  .sk-title       { width: 70%;   height: 28px; }
+  .sk-subtitle    { width: 40%;   height: 16px; margin-bottom: var(--s-2); }
+  .sk-rows        { display: grid; gap: var(--s-2); }
+  .sk-row         { width: 100%;  height: 14px; }
+  .sk-row-short   { width: 60%; }
+  .sk-cta         { width: 100%;  height: 52px; border-radius: 14px; margin-top: var(--s-3); }
+  .sk-chips       { display: flex; gap: var(--s-2); }
+  .sk-chip        { width: 86px;  height: 36px; border-radius: 12px; }
+  @media (prefers-reduced-motion: reduce) {
+    .sk { animation: none; background: rgba(60,67,78,0.09); }
   }
   @media (prefers-color-scheme: dark) and (max-width: 1px) {
     /* Wave V — proper tone-mapped slate dark mode (not navy fill).
@@ -3640,7 +3721,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v98</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v99</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
