@@ -365,6 +365,81 @@
   }
   .v102-type-bar-go:active { transform: scale(0.92); background: var(--green-dark); }
 
+  /* === V.104 — Tension freeze-frame loading state ===
+     Captures the user's snap, paints full-bleed with dim + scan line.
+     Replaces the abrupt camera→loading-screen swap. */
+  .v104-tension {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    background: #000;
+    overflow: hidden;
+    animation: v104-tension-in .25s var(--sheet-ease, cubic-bezier(0.32, 0.72, 0, 1)) both;
+  }
+  .v104-tension[hidden] { display: none; }
+  .v104-tension-frame {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    object-fit: cover;
+  }
+  .v104-tension-dim {
+    position: absolute; inset: 0;
+    background: rgba(8, 12, 10, 0.42);
+    pointer-events: none;
+  }
+  .v104-tension-scanline {
+    position: absolute;
+    left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      transparent 0%, rgba(255,180,40,0) 8%,
+      rgba(255,180,40,0.85) 50%,
+      rgba(255,180,40,0) 92%, transparent 100%);
+    filter: drop-shadow(0 0 12px rgba(255,180,40,0.65));
+    animation: v104-tension-sweep 1.6s linear infinite;
+    pointer-events: none;
+  }
+  .v104-tension-text {
+    position: absolute;
+    left: 0; right: 0;
+    bottom: max(env(safe-area-inset-bottom, 0px), 24px);
+    text-align: center;
+    color: #fff;
+    pointer-events: none;
+    text-shadow: 0 1px 12px rgba(0,0,0,0.6);
+    padding: 0 24px;
+  }
+  .v104-tension-label {
+    font: 700 22px var(--font-sf-display, 'Nunito', system-ui);
+    letter-spacing: -0.3px;
+    margin-bottom: 6px;
+    animation: v104-tension-pulse 1.4s ease-in-out infinite;
+  }
+  .v104-tension-sub {
+    font: 500 14px var(--font-sf-text, 'Inter', system-ui);
+    color: rgba(255,255,255,0.78);
+    letter-spacing: 0.2px;
+  }
+  @keyframes v104-tension-in {
+    from { opacity: 0; transform: scale(1.02); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  @keyframes v104-tension-sweep {
+    0%   { top: 8%;  opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { top: 92%; opacity: 0; }
+  }
+  @keyframes v104-tension-pulse {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0.78; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v104-tension-scanline { animation: none; top: 50%; opacity: 0.65; }
+    .v104-tension-label { animation: none; }
+    .v104-tension       { animation: none; }
+  }
+
   /* === V.103 — Intent disambig badges + card layout ===
      Each disambig candidate becomes an iOS-style card with an intent badge
      in the top corner, prominent name + price range, and a muted rationale.
@@ -4057,7 +4132,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v103</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v104</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4168,6 +4243,20 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <!-- Mode indicator dots — 3 nav tabs after V.83 (Home/Snap/Scan) -->
   <div class="v5-cam-mode-dots" aria-hidden="true">
     <span></span><span></span><span class="active"></span>
+  </div>
+</div>
+
+<!-- V.104 — Tension freeze-frame overlay. Shown immediately after Snap shutter
+     fires; the captured frame is painted full-bleed, dimmed, with an amber
+     scan line sweeping over it. Replaces the abrupt camera→loading swap.
+     Hidden on result/disambig render. -->
+<div class="v104-tension" id="v104-tension" hidden aria-hidden="true">
+  <img class="v104-tension-frame" id="v104-tension-frame" alt="">
+  <div class="v104-tension-dim"></div>
+  <div class="v104-tension-scanline"></div>
+  <div class="v104-tension-text">
+    <div class="v104-tension-label">Savvey is verifying…</div>
+    <div class="v104-tension-sub">Working for you, not the retailer.</div>
   </div>
 </div>
 
@@ -4576,6 +4665,8 @@ function show(id, opts) {
     _resultEnteredAt = null;
   }
   if (id === 'result') { _resultEnteredAt = Date.now(); }
+  // V.104 — any screen change dismisses the tension freeze-frame overlay.
+  if (id !== 'loading') { try { if (typeof hideV104Tension === 'function') hideV104Tension(); } catch (e) {} }
   // V.75 — clear stale verdict object when returning to home so a late
   // re-render or back-button history pop can't resurface yesterday's result.
   if (id === 'home') { lastResult = null; }
@@ -5170,14 +5261,17 @@ function _frameToBase64(canvas) {
 async function captureFrame() {
   const v = document.getElementById('cam-video');
   if (!v || !v.videoWidth) return;
+  // V.104 — haptic + flash feedback on shutter press
+  if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e) {}
   const sw = v.videoWidth, sh = v.videoHeight;
-  // Capture 3 frames: t=0, t=120ms, t=240ms. Each is centre-cropped to 60%.
   const frames = [];
   const firstCanvas = _cropCentreSquare(v, sw, sh);
   frames.push(_frameToBase64(firstCanvas));
-  // Save the first centre-cropped frame as the user's "your snap" reference for
-  // disambig screens. Same crop as what Haiku saw, so disambig matches reality.
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
+  // V.104 — Tension state. Show freeze frame immediately after capture so
+  // user feels the shutter "land" before the loading screen fires. The
+  // captured snap stays on screen with a sweeping scan line + dim.
+  showV104Tension(_lastSnapDataUrl);
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) frames.push(_frameToBase64(_cropCentreSquare(v, v.videoWidth, v.videoHeight)));
   await new Promise(r => setTimeout(r, 120));
@@ -5187,6 +5281,44 @@ async function captureFrame() {
   track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });
   await callNormalize({ input_type: 'image', image_base64_frames: frames, media_type: 'image/jpeg' });
 }
+
+// V.104 — Tension overlay show/hide. Hide is wired into show() so any
+// screen change (result, confirm, error, home) automatically dismisses it.
+function showV104Tension(dataUrl) {
+  try {
+    const el = document.getElementById('v104-tension');
+    const img = document.getElementById('v104-tension-frame');
+    if (!el || !img) return;
+    if (dataUrl) img.src = dataUrl;
+    el.hidden = false;
+  } catch (e) {}
+}
+function hideV104Tension() {
+  try {
+    const el = document.getElementById('v104-tension');
+    if (el && !el.hidden) {
+      el.hidden = true;
+      const img = document.getElementById('v104-tension-frame');
+      if (img) img.removeAttribute('src');
+    }
+  } catch (e) {}
+}
+
+// V.104 — Camera lifecycle hardening. visibilitychange + pagehide release
+// MediaStreamTracks the moment the user backgrounds the PWA. Without this,
+// iOS Safari leaves the green dot on for several seconds after tab switch,
+// which kills user trust on a privacy-sensitive app.
+(function v104CameraLifecycle() {
+  function release() {
+    try { if (typeof stopAllScanners === 'function') stopAllScanners(); } catch (e) {}
+    try { hideV104Tension(); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function() {
+    if (document.hidden) release();
+  });
+  window.addEventListener('pagehide', release);
+  window.addEventListener('beforeunload', release);
+})();
 
 async function handlePhotoUpload(event) {
   const file = event.target.files && event.target.files[0];
