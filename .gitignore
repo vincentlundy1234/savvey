@@ -35,3 +35,6 @@ APPLY*.ps1
 _wave_*/
 _staging_*/
 COMMIT_MSG.txt
+
+# Watcher v2 marker file — never commit
+.commit-msg.txt
