@@ -4541,6 +4541,132 @@
   }
   /* ================== END V.123 BARCODE CUTOUT ================== */
 
+  /* ═════════════════════════ V.125 BRUTE FORCE ═════════════════════════
+     Panel-mandated after Founder's iPhone V.124 retest:
+       The CSS variables (--sav-*) were correctly served and resolved in
+       my Chrome MCP probe — but the founder's iOS Safari still showed
+       MVP-era flat visuals. Possible causes specific to iOS WebKit:
+         (a) custom-property cascade getting crushed by a higher-
+             specificity rule on physical Safari that desktop Chrome
+             dev-tools doesn't surface
+         (b) home-screen PWA shell hashing the CSS-variable rule out
+             of its parsed-stylesheet cache
+         (c) cascade-layer interaction with the V.107 / V.115 historical
+             rules using !important on box-shadow
+     Whatever the root cause: this block bypasses ALL of it. Literal
+     values, no var(), every declaration ends with !important. This is
+     the last rule block in <style> so it wins specificity ties.
+     ═════════════════════════════════════════════════════════════════ */
+
+  body {
+    background-color: #F2F2F7 !important;
+    background: #F2F2F7 !important;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    -webkit-font-smoothing: antialiased !important;
+  }
+
+  .v5-door {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(20, 32, 26, 0.06) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10), 0 8px 10px -6px rgba(0, 0, 0, 0.10) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  .v5-savvey-says,
+  #savvey-says {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(20, 32, 26, 0.06) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10), 0 8px 10px -6px rgba(0, 0, 0, 0.10) !important;
+  }
+
+  /* Primary CTA (Buy on Amazon hero) — keep brand green, force pill radius + elevation */
+  .cta.primary,
+  a.cta-row.cta-amazon,
+  a.cta-row[data-retailer="Amazon UK"],
+  .v5-savvey-buy-cta {
+    border-radius: 24px !important;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset, 0 10px 25px -5px rgba(42, 107, 34, 0.30), 0 8px 10px -6px rgba(42, 107, 34, 0.20) !important;
+  }
+
+  /* Non-primary CTA cards (alt retailer rows, search-Amazon-UK fallback) */
+  .cta:not(.primary),
+  .cta-row:not(.cta-amazon):not([data-retailer="Amazon UK"]),
+  .v5-confirm-card,
+  .recent-chip {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+    border: 1px solid rgba(20, 32, 26, 0.06) !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10), 0 8px 10px -6px rgba(0, 0, 0, 0.10) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Search inputs — iOS HIG-native */
+  #text-input,
+  #url-input,
+  .v102-type-bar-input,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"] {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+    border: 1px solid #E5E5EA !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    font-size: 17px !important;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    color: #14201a !important;
+    box-shadow: none !important;
+    outline: none !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  #text-input:focus,
+  #url-input:focus,
+  .v102-type-bar-input:focus,
+  input[type="text"]:focus,
+  input[type="url"]:focus,
+  input[type="search"]:focus {
+    border-color: #2a6b22 !important;
+    box-shadow: 0 0 0 4px rgba(42, 107, 34, 0.12) !important;
+  }
+
+  /* Dark-mode parallel block — keep contrast on dark systemGroupedBg */
+  @media (prefers-color-scheme: dark) {
+    body {
+      background-color: #000000 !important;
+      background: #000000 !important;
+    }
+    .v5-door,
+    .v5-savvey-says, #savvey-says,
+    .cta:not(.primary),
+    .cta-row:not(.cta-amazon):not([data-retailer="Amazon UK"]),
+    .v5-confirm-card,
+    .recent-chip {
+      background-color: #1C1C1E !important;
+      background: #1C1C1E !important;
+      border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    }
+    #text-input,
+    #url-input,
+    .v102-type-bar-input,
+    input[type="text"], input[type="url"], input[type="search"] {
+      background-color: #1C1C1E !important;
+      border-color: rgba(255, 255, 255, 0.18) !important;
+      color: #FFFFFF !important;
+    }
+  }
+  /* ═════════════════════════ END V.125 BRUTE FORCE ═════════════════════════ */
+
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
      showed radius=18px and old soft shadow). Forcing the Panel-mandated
@@ -4702,7 +4828,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v124</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v125</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6267,11 +6393,30 @@ async function _v123CropVisibleSquare(video) {
   const sx = innerX + (innerW - sq) / 2;
   const sy = innerY + (innerH - sq) / 2;
 
-  // Step 4 — draw to canvas. Target size respects the existing SNAP_MAX_WIDTH cap.
+  // Step 4 — draw to canvas. V.125 — DPR-aware backing store.
+  // Panel-mandated after Founder's iPhone V.124 retest showed capture
+  // still over-zoomed. iOS WebKit canvases honour devicePixelRatio
+  // differently than desktop Chrome: a 280px backing store on a 3x
+  // retina iPhone gets visually expanded to 840 device pixels, and
+  // (we now suspect) iOS scales the SOURCE region of drawImage in the
+  // process. The fix recommended by Apple's WebKit team:
+  //   canvas.width  = target * DPR
+  //   canvas.height = target * DPR
+  //   ctx.scale(DPR, DPR)
+  // Then drawImage destination dimensions stay in CSS pixels while
+  // the backing store fills the device-pixel grid.
   const target = Math.min(Math.floor(sq), SNAP_MAX_WIDTH);
+  const _v125Dpr = Math.max(1, Math.min(4, Number(window.devicePixelRatio) || 1));
   const c = document.createElement('canvas');
-  c.width = target; c.height = target;
-  c.getContext('2d').drawImage(video, sx, sy, sq, sq, 0, 0, target, target);
+  c.width = Math.floor(target * _v125Dpr);
+  c.height = Math.floor(target * _v125Dpr);
+  // Optional: explicit CSS sizing so any DOM mounting of the canvas
+  // (we never mount it, but defensive) reads the CSS-pixel size.
+  c.style.width = target + 'px';
+  c.style.height = target + 'px';
+  const _ctx = c.getContext('2d');
+  _ctx.scale(_v125Dpr, _v125Dpr);
+  _ctx.drawImage(video, sx, sy, sq, sq, 0, 0, target, target);
   // V.124 — diagnostic capture. Surface the computed crop rect so Safari
   // Web Inspector on Vincent's iPhone can read it after each shutter press.
   // Helps diagnose any residual zoom mismatch without round-tripping logs.
@@ -6284,8 +6429,9 @@ async function _v123CropVisibleSquare(video) {
       zoom_factor: zoom,
       zoomed_inner: { x: Math.round(innerX), y: Math.round(innerY), w: Math.round(innerW), h: Math.round(innerH) },
       bracket_square: { x: Math.round(sx), y: Math.round(sy), size: Math.round(sq) },
-      canvas_out: { size: target },
+      canvas_out: { css_size: target, backing_store: Math.floor(target * _v125Dpr) },
       device_pixel_ratio: window.devicePixelRatio || 1,
+      dpr_applied: _v125Dpr,
     };
   } catch (e) {}
   return c;
