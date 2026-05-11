@@ -4761,138 +4761,77 @@
   }
   /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
 
-  /* ═════════════════════════ V.132 APPLE-GRADE LOADING ═══════════════════
-     Panel mandate: kill the V.104 black "Savvey is verifying..." scrim.
-     Replace with an Apple-style frosted overlay that surrounds the
-     bracket region while leaving the framed product crisp inside.
-     Plus a CSS-only native iOS spinner.
+  /* ═════════════════════════ V.134 SAFE LOADING ROLLBACK ═════════════════
+     V.132/V.133 attempted a frosted-glass overlay with the paused live
+     video showing through a bracket-shaped hole. Founder iPhone test
+     proved iOS Safari drops paused-video frames to black (memory
+     pressure path) — the hole rendered solid black. Panel mandated
+     full rollback to the standard #screen-loading routing.
 
-     Geometry: brackets are 240×280 portrait, centred. We tile four
-     blur panels around them — top, bottom, left, right — each
-     covering one side of the screen up to the bracket edge. The
-     bracket interior stays un-blurred (no panel covers it), so the
-     paused live video frame shows the framed product crisp.
+     This block adds Phase A polish (16px radius + diffused shadow) to
+     #screen-loading's inner card, hides the V.77 .v5-loading-orbit
+     S-badge spinner, and inserts a CSS-only iOS-native circular
+     spinner in its place. Result: clean white card, native iOS
+     spinner, no video freeze, no memory-pressure black-out.
+     ═════════════════════════════════════════════════════════════════ */
+  /* Phase A polish on the loading card */
+  body .v5-loading-screen.active .v5-loading-inner {
+    background: #FFFFFF !important;
+    border-radius: 16px !important;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10),
+                0 8px 10px -6px rgba(0, 0, 0, 0.10) !important;
+    border: 1px solid rgba(20, 32, 26, 0.06) !important;
+    padding: 32px 24px !important;
+    max-width: 380px !important;
+  }
+  /* Dark-mode parallel */
+  @media (prefers-color-scheme: dark) {
+    body .v5-loading-screen.active .v5-loading-inner {
+      background: #1C1C1E !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+  }
+  /* Hide the V.77 orbit/core S-badge — replaced by the iOS spinner */
+  .v5-loading-orbit { display: none !important; }
 
-     The V.132 path is gated by body.v132-loading (set by
-     showV104Tension, cleared by hideV104Tension). When inactive the
-     overlay element itself is `hidden` so nothing renders.
-     ═══════════════════════════════════════════════════════════════ */
-
-  /* Top blur: full width, top edge to top-of-bracket */
-  body.v132-loading .v132-blur-top {
-    position: absolute;
-    top: 0; left: 0; right: 0;
-    height: calc(50% - 140px);
-    background: rgba(0, 0, 0, 0.40);
-    backdrop-filter: blur(15px) saturate(140%);
-    -webkit-backdrop-filter: blur(15px) saturate(140%);
-    pointer-events: none;
-  }
-  body.v132-loading .v132-blur-bottom {
-    position: absolute;
-    bottom: 0; left: 0; right: 0;
-    height: calc(50% - 140px);
-    background: rgba(0, 0, 0, 0.40);
-    backdrop-filter: blur(15px) saturate(140%);
-    -webkit-backdrop-filter: blur(15px) saturate(140%);
-    pointer-events: none;
-  }
-  /* Left/right blur: only the band that's level with the bracket region,
-     covering the screen edge inward to the bracket left/right edge */
-  body.v132-loading .v132-blur-left {
-    position: absolute;
-    top: calc(50% - 140px);
-    bottom: calc(50% - 140px);
-    left: 0;
-    width: calc(50% - 120px);
-    background: rgba(0, 0, 0, 0.40);
-    backdrop-filter: blur(15px) saturate(140%);
-    -webkit-backdrop-filter: blur(15px) saturate(140%);
-    pointer-events: none;
-  }
-  body.v132-loading .v132-blur-right {
-    position: absolute;
-    top: calc(50% - 140px);
-    bottom: calc(50% - 140px);
-    right: 0;
-    width: calc(50% - 120px);
-    background: rgba(0, 0, 0, 0.40);
-    backdrop-filter: blur(15px) saturate(140%);
-    -webkit-backdrop-filter: blur(15px) saturate(140%);
-    pointer-events: none;
-  }
-  /* Default (when not v132-loading) — all four blur panels invisible */
-  .v132-blur { display: none; }
-  body.v132-loading .v132-blur { display: block; }
-
-  /* iOS-native circular spinner: thin ring with a brighter top arc that
-     spins. CSS-only, GPU-accelerated transform. */
-  .v132-spinner {
-    position: absolute;
-    top: calc(50% + 140px + 32px);  /* 32px below the bracket */
-    left: 50%;
-    width: 32px; height: 32px;
-    margin-left: -16px;
+  /* iOS-native circular spinner — repurposed from the (deleted) V.132
+     CSS. Rendered INSIDE the loading card now, not as a full-screen
+     overlay. Sized 36px so it reads at glance distance. */
+  .v134-loading-spinner {
+    width: 36px; height: 36px;
+    margin: 0 auto 18px;
     border-radius: 50%;
-    border: 3px solid rgba(255, 255, 255, 0.22);
-    border-top-color: rgba(255, 255, 255, 0.95);
-    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
-    animation: v132-spin 0.9s linear infinite;
-    pointer-events: none;
-    display: none;
+    border: 3px solid rgba(20, 32, 26, 0.12);
+    border-top-color: var(--green, #2a6b22);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+    animation: v134-spin 0.9s linear infinite;
+    will-change: transform;
   }
-  body.v132-loading .v132-spinner { display: block; }
-  @keyframes v132-spin {
+  @media (prefers-color-scheme: dark) {
+    .v134-loading-spinner {
+      border-color: rgba(255, 255, 255, 0.16);
+      border-top-color: #FFFFFF;
+    }
+  }
+  @keyframes v134-spin {
     to { transform: rotate(360deg); }
   }
-  /* Spinner caption — heavy weight, minimal text, centered under spinner */
-  .v132-verify-text {
-    position: absolute;
-    top: calc(50% + 140px + 32px + 48px);
-    left: 0; right: 0;
-    text-align: center;
-    font: 800 17px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    letter-spacing: -0.01em;
-    color: #fff;
-    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
-    pointer-events: none;
-    display: none;
+  @media (prefers-reduced-motion: reduce) {
+    .v134-loading-spinner {
+      animation-duration: 2.4s;
+    }
   }
-  body.v132-loading .v132-verify-text { display: block; }
-  /* The legacy V.104 dim/scanline/text are no longer rendered (DOM was
-     replaced in V.132). Defensive: hide them if any cached HTML survives. */
-  body.v132-loading .v104-tension-dim,
-  body.v132-loading .v104-tension-scanline,
-  body.v132-loading .v104-tension-text { display: none !important; }
-  /* V.132 — also override the legacy .v104-tension black background so the
-     blur panels are the only opaque thing on screen. */
-  body.v132-loading .v104-tension {
-    background: transparent !important;
+  /* Loading narration text — use V.122 system stack at 800 weight per
+     the Panel directive. */
+  .v5-loading-screen .v5-loading-witty,
+  .v5-loading-screen #loading-text {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    color: var(--ink, #14201a) !important;
+    margin-top: 4px;
   }
-  /* V.133 — Panel-mandated photobomb fix. While the V.132 tension overlay
-     is up, the bracket interior is a transparent "hole" that reveals
-     whatever sits behind. The hole was showing the loading-screen
-     "Comparing UK retailers" card because callNormalize() calls
-     show('loading') which activates #screen-loading. Suppress every
-     non-camera screen + the bottom nav while v132-loading is on body. */
-  body.v132-loading #screen-loading,
-  body.v132-loading #screen-result,
-  body.v132-loading #screen-confirm,
-  body.v132-loading #screen-error,
-  body.v132-loading #screen-home,
-  body.v132-loading .bottom-nav,
-  body.v132-loading .v5-bottom-nav,
-  body.v132-loading .topbar {
-    display: none !important;
-    visibility: hidden !important;
-  }
-  /* The camera screen itself MUST stay visible (it holds the paused
-     <video> that the user sees through the bracket hole). */
-  body.v132-loading #screen-camera {
-    display: block !important;
-    visibility: visible !important;
-  }
-  /* ═════════════════════════ END V.132 APPLE-GRADE LOADING ═══════════════ */
+  /* ═════════════════════════ END V.134 SAFE LOADING ROLLBACK ═════════════ */
 
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
@@ -4957,8 +4896,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v133';
-  var V126_GUARD          = 'savvey_v133_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v134';
+  var V126_GUARD          = 'savvey_v134_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5047,7 +4986,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.133 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.134 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5193,7 +5132,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v133</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v134</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5337,26 +5276,24 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
      fires; the captured frame is painted full-bleed, dimmed, with an amber
      scan line sweeping over it. Replaces the abrupt camera→loading swap.
      Hidden on result/disambig render. -->
-<div class="v104-tension" id="v104-tension" hidden aria-hidden="true">
-  <!-- V.132 — legacy <img> stays for back-compat but NEVER gets a src,
-       so it renders as nothing. The visible UI is now the four blur
-       panels (frame around the bracket region) + the iOS-native spinner
-       + the minimal "Verifying…" text. The live video pause keeps the
-       framed product crisp inside the bracket region. -->
+<!-- V.134 — V.132 frosted-glass DOM physically deleted. The element ID is
+     kept so any legacy code that looks up #v104-tension or
+     #v104-tension-frame doesn't crash, but the structure is empty and
+     the element is permanently hidden. -->
+<div class="v104-tension" id="v104-tension" hidden aria-hidden="true" style="display:none !important;">
   <img class="v104-tension-frame" id="v104-tension-frame" alt="" hidden>
-  <div class="v132-blur v132-blur-top"></div>
-  <div class="v132-blur v132-blur-bottom"></div>
-  <div class="v132-blur v132-blur-left"></div>
-  <div class="v132-blur v132-blur-right"></div>
-  <div class="v132-spinner" aria-hidden="true"></div>
-  <div class="v132-verify-text">Verifying…</div>
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
   <!-- V.77 LOADING REBUILD — gradient S badge + spinning ring + clean 4-phase timeline -->
   <div class="v5-loading-inner">
 
-    <!-- Centre badge with subtle spinning ring (decorative) -->
+    <!-- V.134 — iOS-native circular spinner, replaces the V.77 orbit/S-badge.
+         Repurposed CSS from V.132 (.v134-loading-spinner). The legacy
+         .v5-loading-orbit DOM stays for back-compat but is hidden via CSS. -->
+    <div class="v134-loading-spinner" aria-hidden="true"></div>
+
+    <!-- Centre badge with subtle spinning ring (decorative — V.134 hidden) -->
     <div class="v5-loading-orbit" aria-hidden="true">
       <div class="v5-loading-core">
         <span class="v5-loading-core-letter">S</span>
@@ -7131,39 +7068,23 @@ async function captureFrame() {
 
 // V.104 — Tension overlay show/hide. Hide is wired into show() so any
 // screen change (result, confirm, error, home) automatically dismisses it.
-function showV104Tension(dataUrl) {
-  try {
-    // V.132 — Panel mandate: do NOT paint the cropped frame full-bleed.
-    // Instead pause the LIVE video so the viewfinder freezes exactly
-    // where the user framed it. The V.132 frosted-blur overlay then
-    // sits ON TOP with a hole over the bracket region, so the framed
-    // product stays crisp while everything else is blurred.
-    try {
-      const vid = document.getElementById('cam-video');
-      if (vid && typeof vid.pause === 'function') vid.pause();
-    } catch (e) {}
-    const el = document.getElementById('v104-tension');
-    if (!el) return;
-    // V.132 — img element stays empty (legacy V.104 path painted dataUrl
-    // here and stretched it via object-fit:cover, which made the cropped
-    // 567×662 capture fill the 390×844 viewport = "zoomed in" complaint).
-    const img = document.getElementById('v104-tension-frame');
-    if (img) { img.removeAttribute('src'); img.hidden = true; }
-    el.hidden = false;
-    document.body.classList.add('v129-tensing');
-    document.body.classList.add('v132-loading');
-  } catch (e) {}
-}
+// V.134 — Panel-mandated rollback. The V.132 frosted-glass overlay +
+// video.pause() approach triggered iOS Safari's memory-pressure path
+// (it drops paused-video frames to black), making the loading state
+// completely unusable on physical iPhones. Rolled back entirely.
+// These functions stay as no-ops so any historical caller that still
+// invokes them doesn't throw. The real loading UX is now the standard
+// #screen-loading card (V.77) with Phase A polish + iOS spinner.
+function showV104Tension(/* dataUrl */) { /* V.134 no-op */ }
 function hideV104Tension() {
+  // V.134 — defensively clear any legacy body classes if they were set
+  // during a V.132/V.133-era session (e.g. served from a stale cached
+  // page that briefly loaded the old logic).
   try {
-    const el = document.getElementById('v104-tension');
-    if (el && !el.hidden) {
-      el.hidden = true;
-      const img = document.getElementById('v104-tension-frame');
-      if (img) img.removeAttribute('src');
-    }
     document.body.classList.remove('v129-tensing');
     document.body.classList.remove('v132-loading');
+    const el = document.getElementById('v104-tension');
+    if (el) el.hidden = true;
   } catch (e) {}
 }
 
