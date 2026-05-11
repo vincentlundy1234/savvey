@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v116';
+const VERSION             = 'normalize.js v3.4.5v118';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -651,6 +651,85 @@ Verified Amazon UK price: ${price_str}` +
   } finally { clearTimeout(timer); }
 }
 
+// V.118 (11 May 2026) — Haiku-validates-top-5 SerpAPI listing picker.
+// Replaces the V.96 lexical-overlap heuristic with semantic validation.
+// Panel mandate after Crucible Test surfaced wrong-listing bias: SerpAPI's
+// top organic result is ~70% trustworthy on fresh queries — Haiku picks
+// the correct match from the top 5 instead of taking #1 blindly.
+//
+// Input shape: { canonical, candidates: [{ index, title, price, asin, rating, reviews }] }
+// Output: { index: 0-4 | null, reason: string }
+//   - index === null when NONE of the 5 candidates is the canonical product
+//     (decoy listings only: replacement parts, multi-packs, wrong variants).
+//   - index 0-4 picks the best semantic match.
+//
+// Latency budget: 4000ms with abort. Falls through to V.96 lexical guard
+// on null / timeout / parse error so we never lose the safety net.
+async function callHaikuListingPicker({ canonical, candidates }) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY) return null;
+  if (!canonical || !Array.isArray(candidates) || candidates.length === 0) return null;
+
+  const sys = `You are a UK retail product matcher. Given a canonical product query and up to 5 Amazon UK listing candidates, pick the ONE listing that best matches the canonical product, or reject all of them.
+
+REJECT a candidate if it is:
+- A replacement part, accessory, or component (e.g. "Dyson V15 brush head" when canonical is "Dyson V15 Detect")
+- A multi-pack when the canonical implies single unit (or vice versa)
+- A wrong colour, size, or variant of the same family
+- A used / refurb / renewed listing
+- A different model in the same range (e.g. canonical "Sony WH-1000XM5" but title is "WH-1000XM4")
+- A bundle that primarily sells something else
+
+ACCEPT a candidate if:
+- The brand, model identifier, and variant tokens in the canonical appear in the title
+- The price is plausible for that product family in UK retail
+- It is the headline product, not an accessory to it
+
+Output JSON ONLY, no preamble:
+{"index": 0 | 1 | 2 | 3 | 4 | null, "reason": "short justification, max 20 words"}
+
+If NONE of the candidates is the canonical product, return index=null. Better to reject all than return a decoy.`;
+
+  const userMsg = `Canonical: ${String(canonical).slice(0, 200)}
+
+Candidates:
+${candidates.map((c, i) => `[${i}] £${Number(c.price).toFixed(2)} — ${String(c.title || '').slice(0, 180)}`).join('\n')}
+
+Pick the index or return null. Produce the JSON.`;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000);
+  try {
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 120,
+        system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[${VERSION}] callHaikuListingPicker HTTP ${r.status}`);
+      return null;
+    }
+    const j = await r.json();
+    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); } catch { return null; }
+    const idx = parsed && (parsed.index === null ? null
+      : (Number.isInteger(parsed.index) && parsed.index >= 0 && parsed.index < candidates.length ? parsed.index : null));
+    const reason = (parsed && typeof parsed.reason === 'string') ? parsed.reason.slice(0, 200) : '';
+    return { index: idx, reason };
+  } catch (e) {
+    console.warn(`[${VERSION}] callHaikuListingPicker error: ${e.message}`);
+    return null;
+  } finally { clearTimeout(timer); }
+}
+
 // SerpAPI Amazon engine (v3.3.2 — 5 May 2026).
 // Switched from engine=google_shopping (returned Google `aclk` redirect URLs
 // that broke affiliate-tag propagation and didn't deep-link to actual
@@ -755,6 +834,52 @@ async function fetchVerifiedAmazonPrice(query) {
     let _bestSoftMatch = null;     // V.96 - highest-overlap candidate when none clear strict guard
     let _bestSoftScore = 0;
     let _organicChecked = 0;        // V.96 - diagnostic counter
+
+    // V.118 — Haiku-validates-top-5. Collect first 5 non-sponsored, non-used
+    // organic candidates with valid prices, pass to Haiku for semantic selection.
+    // If Haiku picks an index, use it as `primary` and SKIP the lexical loop.
+    // If Haiku returns null (all decoys) or fails, fall through to V.96 lexical.
+    const _v118TopCandidates = [];
+    for (const it of results) {
+      if (_v118TopCandidates.length >= 5) break;
+      const p = Number(it.extracted_price);
+      if (!(p > 0)) continue;
+      if (it.sponsored) continue;
+      const c = String(it.condition || '').toLowerCase();
+      const t = String(it.title || '').toLowerCase();
+      if (/(used|refurb|renewed|open[\s-]?box|pre[\s-]?owned)/i.test(c + ' ' + t)) continue;
+      _v118TopCandidates.push({
+        title: String(it.title || '').slice(0, 200),
+        price: p,
+        asin: (typeof it.asin === 'string') ? it.asin : null,
+        _ref: it,
+      });
+    }
+    let _v118Picked = null;
+    let _v118Reason = '';
+    if (_v118TopCandidates.length > 0) {
+      try {
+        const picker = await callHaikuListingPicker({
+          canonical: query,
+          candidates: _v118TopCandidates,
+        });
+        if (picker && Number.isInteger(picker.index) && picker.index >= 0 && picker.index < _v118TopCandidates.length) {
+          _v118Picked = _v118TopCandidates[picker.index]._ref;
+          _v118Reason = picker.reason || '';
+          primary = _v118Picked;
+          console.log(`[${VERSION}] V.118 Haiku picked candidate ${picker.index}/${_v118TopCandidates.length-1} for "${query.slice(0,60)}" — reason: ${_v118Reason.slice(0,100)}`);
+        } else if (picker && picker.index === null) {
+          console.warn(`[${VERSION}] V.118 Haiku REJECTED all ${_v118TopCandidates.length} candidates for "${query.slice(0,60)}" — reason: ${(picker.reason||'').slice(0,100)}. Falling through to V.96 lexical guard.`);
+        }
+      } catch (e) {
+        console.warn(`[${VERSION}] V.118 picker exception: ${e.message}. Falling through to V.96.`);
+      }
+    }
+
+    // If V.118 didn't pick (Haiku returned null, failed, or no candidates),
+    // run the V.96 lexical guard as the safety net. If V.118 DID pick, this
+    // loop still runs to find `used` and to populate diagnostics, but `primary`
+    // is already set so the lexical guard won't overwrite it.
     for (const item of results) {
       const price = Number(item.extracted_price);
       if (!(price > 0)) continue;
@@ -1447,11 +1572,25 @@ export default async function handler(req, res) {
   // Wave KK — Layer 2 safety block. Short-circuit before any caching/SerpAPI
   // when canonical matches the blacklist. Frontend handles 'safety_block' as
   // a clean redirect to home with a friendly toast.
+  // V.117 — NO DEAD-END on safety_block either. Stanley FatMax utility knife
+  // is a legitimate tradesman tool — we don't endorse/verify the listing, but
+  // we still hand the user an Amazon UK search URL so they can find it
+  // themselves. Crucible Test surfaced this as a true dead-end. Panel mandate.
   if (_shouldSafetyBlock(parsed.canonical_search_string)) {
     console.log(`[${VERSION}] Layer 2 safety block fired: "${(parsed.canonical_search_string||'').slice(0,80)}"`);
+    const _v117Q = String(
+      (body && body.text) ||
+      (body && body.url) ||
+      (body && body.barcode) ||
+      parsed.canonical_search_string ||
+      'product'
+    ).slice(0, 150).trim() || 'product';
+    const _v117Fallback = `https://www.amazon.co.uk/s?k=${encodeURIComponent(_v117Q)}&tag=${encodeURIComponent(AMAZON_TAG)}`;
     return res.status(200).json({
       error: 'safety_block',
-      message: 'That does not look like a product. Try snapping the packaging.',
+      message: 'We can\'t verify pricing on that category — search Amazon UK directly:',
+      amazon_search_fallback: _v117Fallback,
+      _v117_input_for_search: _v117Q,
       _meta: { version: VERSION, input_type: inputType, latency_ms: Date.now() - t0 }
     });
   }
