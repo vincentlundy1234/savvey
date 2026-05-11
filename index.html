@@ -4367,6 +4367,17 @@
     font-weight: var(--sav-weight-subtitle);
   }
 
+  /* V.122 — explicit Intel Box override. The .v5-door !important shadow
+     rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
+     showed radius=18px and old soft shadow). Forcing the Panel-mandated
+     values here with !important so the cascade can't undo it. */
+  .v5-savvey-says,
+  #savvey-says.v5-savvey-says {
+    border-radius: var(--sav-radius-card) !important;
+    box-shadow: var(--sav-shadow-elev-card) !important;
+    border: 1px solid rgba(20,32,26,0.06) !important;
+  }
+
   /* V.122 camera zoom-layer wrapper — single transform origin so the
      video, brackets, and barcode SVG all scale together. Eliminates
      the V.116-deferred bracket-drift bug. The CSS variable is written
