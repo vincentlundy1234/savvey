@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v120a';
+const VERSION             = 'normalize.js v3.4.5v121';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v120a-1';
+const CACHE_PREFIX = 'sav-v121-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -178,9 +178,9 @@ function cacheKey(inputType, payload) {
   // V.109 cache prefix bump v3_103 -> v3_109 — flushes every entry cached
   // under the V.97 7-day TTL so PS5 Pro (and others) re-fetch with fresh
   // SerpAPI verified prices instead of stale £749.99.
-  // V.120a cache prefix bump — flushes V.118 entries so the new preservation
-  // rule (multi-pack/weight/colour/modifier) re-resolves canonical strings.
-  return 'savvey:normalize:v3_120a:' + h.digest('hex').slice(0, 24);
+  // V.121 cache prefix bump — flushes V.120a entries so the V.96-soft-match
+  // purge takes effect (rejected canonicals re-resolve, no decoy serving).
+  return 'savvey:normalize:v3_121:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -572,7 +572,7 @@ Be specific. "Comfortable, great battery" is bad. "All-day wear, 30hr battery in
   }
 }
 
-const SERPAPI_TIMEOUT_MS = 2000; // V.69 - was 4000ms; SerpAPI p95 ~1.4s
+const SERPAPI_TIMEOUT_MS = 4000; // V.121 - reverted 2000→4000. Panel mandate after V.120a observed Pukka + Tefal queries fetch_error on the 2000ms cap.
 const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
 
@@ -718,7 +718,10 @@ Pick the index or return null. Produce the JSON.`;
       headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 120,
+        // V.121 — bumped 120→250. V.120a Yankee Candle trace showed Haiku's
+        // reason field overflowed 120 tokens and produced truncated JSON →
+        // picker.parse_error → soft-match override → wrong listing.
+        max_tokens: 250,
         system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userMsg }],
       }),
@@ -839,35 +842,17 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
     const results = Array.isArray(j.organic_results) ? j.organic_results : [];
     if (trace) trace.push({step:'serpapi.results', total: results.length, sponsored_skipped: results.filter(it => it.sponsored).length});
 
-    // Find first organic (non-sponsored) listing with a valid price.
-    // Used / refurbished items are surfaced separately for savvey_says.
-    // v3.4.5 — lexical accessory guard. Tokenise the canonical query and
-    // skip any organic result whose title doesn't share enough tokens with
-    // the canonical product. Stops accessory listings (e.g. "Dyson V15 Brush
-    // Head") from reaching Haiku/CTA when the user searched "Dyson V15 Detect".
-    // v3.4.5c — both tokens and title are normalised by stripping ALL
-    // non-alphanumeric chars (including spaces), so "24cm" matches "24 cm"
-    // in real Amazon titles. Threshold unchanged at 50% per panel verdict.
-    const _norm = s => String(s).toLowerCase().replace(/[^a-z0-9]/g, '');
-    const canonicalTokens = String(query).toLowerCase()
-      .replace(/[^a-z0-9\s]/g, ' ')
-      .split(/\s+/)
-      .filter(t => t.length >= 3)
-      .map(t => _norm(t));
-    const minTokensRequired = canonicalTokens.length >= 2
-      ? Math.ceil(canonicalTokens.length * 0.5)
-      : 0;
+    // V.121 — `primary` is set ONLY by the V.118 Haiku picker. No lexical/soft
+    // -match fallback. `used` is collected by a separate slim loop further down
+    // for the used_amazon_price field. The V.96-era token-overlap heuristic
+    // has been purged per Panel mandate.
     let primary = null;
     let used    = null;
-    let _skippedLexical = 0;
-    let _bestSoftMatch = null;     // V.96 - highest-overlap candidate when none clear strict guard
-    let _bestSoftScore = 0;
-    let _organicChecked = 0;        // V.96 - diagnostic counter
+    let _organicChecked = 0; // diagnostic counter retained
 
     // V.118 — Haiku-validates-top-5. Collect first 5 non-sponsored, non-used
     // organic candidates with valid prices, pass to Haiku for semantic selection.
-    // If Haiku picks an index, use it as `primary` and SKIP the lexical loop.
-    // If Haiku returns null (all decoys) or fails, fall through to V.96 lexical.
+    // If Haiku picks an index, use it as `primary`. Otherwise we return null.
     const _v118TopCandidates = [];
     for (const it of results) {
       if (_v118TopCandidates.length >= 5) break;
@@ -884,8 +869,15 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
         _ref: it,
       });
     }
+    // V.121 — picker is now AUTHORITATIVE. `primary` is set only by V.118.
+    // V.96 lexical/soft-match for `primary` is REMOVED. Panel mandate after
+    // V.120a observed soft-match overriding explicit picker rejections
+    // (Aldi Manuka → NZ Honey Co., Brompton bike → £22.99 wheels, etc).
+    // _v118Decision values: 'matched' | 'rejected_all' | 'error' | 'no_candidates'.
     let _v118Picked = null;
     let _v118Reason = '';
+    let _v118Decision = 'no_candidates';
+    let _v118PickedIdx = null;
     if (_v118TopCandidates.length > 0) {
       if (trace) trace.push({step:'picker.candidates_built', count: _v118TopCandidates.length, titles: _v118TopCandidates.map(c => ({t: c.title.slice(0,120), p: c.price}))});
       try {
@@ -897,86 +889,58 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
         if (picker && Number.isInteger(picker.index) && picker.index >= 0 && picker.index < _v118TopCandidates.length) {
           _v118Picked = _v118TopCandidates[picker.index]._ref;
           _v118Reason = picker.reason || '';
+          _v118PickedIdx = picker.index;
           primary = _v118Picked;
+          _v118Decision = 'matched';
           console.log(`[${VERSION}] V.118 Haiku picked candidate ${picker.index}/${_v118TopCandidates.length-1} for "${query.slice(0,60)}" — reason: ${_v118Reason.slice(0,100)}`);
         } else if (picker && picker.index === null) {
-          console.warn(`[${VERSION}] V.118 Haiku REJECTED all ${_v118TopCandidates.length} candidates for "${query.slice(0,60)}" — reason: ${(picker.reason||'').slice(0,100)}. Falling through to V.96 lexical guard.`);
+          _v118Decision = 'rejected_all';
+          console.warn(`[${VERSION}] V.121: V.118 Haiku REJECTED all ${_v118TopCandidates.length} candidates for "${query.slice(0,60)}" — reason: ${(picker.reason||'').slice(0,100)}. Returning null (V.96 soft-match purged).`);
+        } else {
+          // picker returned null entirely (http/parse/exception inside the picker call)
+          _v118Decision = 'error';
+          console.warn(`[${VERSION}] V.121: V.118 picker returned null (http/parse/timeout). Returning null. (V.96 soft-match purged.)`);
         }
       } catch (e) {
-        console.warn(`[${VERSION}] V.118 picker exception: ${e.message}. Falling through to V.96.`);
+        _v118Decision = 'error';
+        console.warn(`[${VERSION}] V.121: V.118 picker outer exception: ${e.message}. Returning null.`);
         if (trace) trace.push({step:'picker.outer_exception', message: String(e.message||e).slice(0,160)});
       }
     } else {
-      if (trace) trace.push({step:'picker.no_candidates', reason:'no priced non-sponsored non-used organic results'});
+      _v118Decision = 'no_candidates';
+      if (trace) trace.push({step:'picker.no_candidates', reason:'no priced non-sponsored non-used organic results', total_organic: results.length});
     }
 
-    // If V.118 didn't pick (Haiku returned null, failed, or no candidates),
-    // run the V.96 lexical guard as the safety net. If V.118 DID pick, this
-    // loop still runs to find `used` and to populate diagnostics, but `primary`
-    // is already set so the lexical guard won't overwrite it.
+    // V.121 — slim `used`-only collection loop. Replaces the V.96 lexical
+    // primary-finding loop. The Panel mandate forbids any path that lets an
+    // organic result become `primary` without going through the picker, so
+    // here we ONLY look for the first used/refurb listing to populate
+    // used_amazon_price for the savvey_says block downstream.
     for (const item of results) {
       const price = Number(item.extracted_price);
       if (!(price > 0)) continue;
+      if (item.sponsored) continue;
       const cond  = String(item.condition || '').toLowerCase();
       const title = String(item.title     || '').toLowerCase();
       const isUsed = /(used|refurb|renewed|open[\s-]?box|pre[\s-]?owned)/i.test(cond + ' ' + title);
-      if (isUsed) {
-        if (!used) used = item;
-        continue;
+      if (isUsed && !used) {
+        used = item;
+        if (primary) break;
       }
-      if (item.sponsored) continue; // skip top-of-list sponsored slots
       _organicChecked++;
-      // Lexical guard — only applies to candidates for `primary`.
-      if (minTokensRequired > 0) {
-        const titleNorm = _norm(title);
-        const matched = canonicalTokens.filter(t => titleNorm.includes(t)).length;
-        // V.96 — track the best soft-match so we have a fallback when
-        // strict guard rejects everything (e.g. canonical contains a
-        // model number like "CFI-2000A01" that no real listing title
-        // includes verbatim, but the overall product clearly matches
-        // on brand+series tokens).
-        if (matched > _bestSoftScore && !_bestSoftMatch) {
-          // Greedy: capture the FIRST best-scoring item; SerpAPI organic
-          // ordering already correlates with relevance.
-          _bestSoftScore = matched;
-          _bestSoftMatch = item;
-        } else if (matched > _bestSoftScore) {
-          _bestSoftScore = matched;
-          _bestSoftMatch = item;
-        }
-        if (matched < minTokensRequired) {
-          _skippedLexical++;
-          continue;
-        }
-      }
-      if (!primary) primary = item;
-      if (primary && used) break;
-    }
-    // V.96 — Diagnostic logging. Distinguishes "SerpAPI returned 0 organic"
-    // from "lexical guard rejected everything". Vincent's PS5/Bose/Kindle
-    // null-price bug surfaced because the guard was silently dropping
-    // all candidates; without these logs there was no way to see it.
-    if (!primary && _skippedLexical > 0 && _bestSoftMatch && _bestSoftScore >= 1) {
-      console.warn(`[${VERSION}] SerpAPI lexical guard soft-fallback: query="${query.slice(0,60)}" rejected=${_skippedLexical} bestOverlap=${_bestSoftScore}/${canonicalTokens.length} tokens. Using soft match "${String(_bestSoftMatch.title||'').slice(0,80)}"`);
-      primary = _bestSoftMatch;
-      _lastSerpStatus = 'soft_match';
-      if (trace) trace.push({step:'lexical.soft_match', rejected: _skippedLexical, best_overlap: _bestSoftScore, tokens_required: minTokensRequired, soft_title: String(_bestSoftMatch.title||'').slice(0,120)});
-    }
-    if (!primary && _skippedLexical > 0) {
-      console.warn(`[${VERSION}] SerpAPI lexical guard rejected ALL ${_skippedLexical} organic candidates for "${query.slice(0,60)}" (canonicalTokens=${canonicalTokens.length} required=${minTokensRequired}). No fallback — bestOverlap was 0.`);
-      if (trace) trace.push({step:'lexical.rejected_all', rejected: _skippedLexical, canonical_tokens: canonicalTokens.length, tokens_required: minTokensRequired, best_overlap: _bestSoftScore});
-    }
-    if (!primary && _skippedLexical === 0 && _organicChecked === 0) {
-      console.warn(`[${VERSION}] SerpAPI returned 0 usable organic results for "${query.slice(0,60)}" (results.length=${results.length}). Likely sponsored-only or zero matches.`);
-      if (trace) trace.push({step:'serpapi.no_usable_results', total_results: results.length, organic_checked: 0});
     }
 
+    // V.121 — strict pipeline gate. If V.118 didn't pick, return null. No exceptions.
     if (!primary) {
-      _lastSerpStatus = _lastSerpStatus || 'no_amazon_match';
-      if (trace) trace.push({step:'serpapi.final', outcome:'no_match', last_status: _lastSerpStatus});
+      _lastSerpStatus = (_v118Decision === 'rejected_all') ? 'picker_rejected'
+                      : (_v118Decision === 'error') ? 'picker_error'
+                      : (_v118Decision === 'no_candidates') ? 'no_usable_candidates'
+                      : (_lastSerpStatus || 'no_amazon_match');
+      if (trace) trace.push({step:'serpapi.final', outcome:'no_match', v118_decision: _v118Decision, last_status: _lastSerpStatus});
+      console.warn(`[${VERSION}] V.121 final no_match: v118_decision=${_v118Decision}, last_status=${_lastSerpStatus}, organic_checked=${_organicChecked}, total_results=${results.length}`);
       return null;
     }
-    if (trace) trace.push({step:'serpapi.final', outcome:'matched', last_status: _lastSerpStatus, source: _v118Picked ? 'v118_haiku_picker' : (_bestSoftMatch === primary ? 'v96_soft_match' : 'v96_lexical_or_first_pass'), picked_title: String(primary.title||'').slice(0,120), picked_price: Number(primary.extracted_price)});
+    if (trace) trace.push({step:'serpapi.final', outcome:'matched', v118_decision: _v118Decision, v118_picked_idx: _v118PickedIdx, last_status: _lastSerpStatus, source: 'v118_haiku_picker', picked_title: String(primary.title||'').slice(0,120), picked_price: Number(primary.extracted_price)});
 
     const asin = (typeof primary.asin === 'string' && /^[A-Z0-9]{8,12}$/i.test(primary.asin)) ? primary.asin : null;
 
@@ -1048,7 +1012,11 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
   } catch (err) {
     clearTimeout(timeout);
     _lastSerpStatus = 'fetch_error';
-    console.warn(`[${VERSION}] SerpAPI fetch error for "${query.slice(0, 60)}":`, err.message);
+    const msg = String(err && err.message || err).slice(0, 200);
+    const isAbort = (err && (err.name === 'AbortError' || /aborted|timeout/i.test(msg)));
+    console.warn(`[${VERSION}] SerpAPI fetch error for "${query.slice(0, 60)}":`, msg);
+    // V.121 — explicit trace entry. Panel mandate: no silent swallowing.
+    if (trace) trace.push({step:'serpapi.fetch_error', message: msg, reason: isAbort ? 'timeout_or_abort' : 'network_or_other', timeout_ms: SERPAPI_TIMEOUT_MS});
     return null;
   }
 }
@@ -1637,10 +1605,9 @@ export default async function handler(req, res) {
   // Wave II — canonical-keyed cache lookup. Different input phrasings that
   // resolve to the SAME canonical hit one shared cache entry, skipping
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
-  // V.120a — bumped canonical cache key to v120a so V.118 cached payloads (which
-  // lack debug_trace and were keyed on the over-stripped canonical) don't shadow
-  // the new preserved-canonical lookups.
-  const _canonicalKey = `savvey:canonical:v120a:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
+  // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
+  const _canonicalKey = `savvey:canonical:v121:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
