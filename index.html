@@ -60,7 +60,12 @@
 
     /* Shadow hierarchy — diffuse + tight contact pair, never one big blob */
     --shadow-flat:    0 1px 2px rgba(0,0,0,.04);
-    --shadow-card:    0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.06);
+    /* V.122 — upgraded from soft "0 1px 2px .04 + 0 8px 24px .06" pair to
+       the Panel-mandated diffused-iOS pair. Wider readership of
+       --shadow-card means every consumer (door tiles, glass cards, generic
+       boxes) inherits the new depth in one place. */
+    --shadow-card:    0 10px 25px -5px rgba(0,0,0,.10),
+                      0 8px 10px -6px rgba(0,0,0,.10);
     --shadow-raised:  0 1px 2px rgba(0,0,0,.05), 0 12px 36px rgba(0,0,0,.10);
     --shadow-sheet:   0 -2px 6px rgba(0,0,0,.04), 0 -16px 48px rgba(0,0,0,.10);
     --shadow-modal:   0 1px 2px rgba(0,0,0,.06), 0 24px 56px rgba(0,0,0,.18);
@@ -90,6 +95,29 @@
     --sheet-ease:        cubic-bezier(0.32, 0.72, 0, 1);
     --sheet-ease-back:   cubic-bezier(0.5, 1.4, 0.5, 1);
     --sheet-radius:      18px;
+
+    /* === V.122 design tokens — Panel-mandated native-iOS standard.
+       Authoritative for all new work; legacy values are upgraded in place
+       below so consumers of --shadow-card inherit the new depth. === */
+    --sav-font-stack-system: system-ui, -apple-system, BlinkMacSystemFont,
+                              "Segoe UI", Roboto, sans-serif;
+    --sav-weight-title:      800;
+    --sav-weight-subtitle:   600;
+    --sav-radius-card:       16px;
+    --sav-radius-pill:       24px;
+    --sav-shadow-elev-card:  0 10px 25px -5px rgba(0,0,0,.10),
+                              0 8px 10px -6px rgba(0,0,0,.10);
+    /* Camera zoom factor — written by the FSM pinch / zoom-pill handler,
+       read by #cam-zoom-layer transform so video + brackets + barcode SVG
+       all scale from one source of truth (fixes V.116 bracket-drift bug). */
+    --sav-cam-zoom:          1;
+  }
+  /* V.122 — universal system-font + heavier title hierarchy. Scoped to
+     html/body so iOS HIG-typed tokens above still cascade where used. */
+  html, body {
+    font-family: var(--sav-font-stack-system);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   /* === V.99 SKELETON LOADER (additive, available for future adoption) ===
@@ -430,8 +458,9 @@
     transition: transform .25s cubic-bezier(0.5, 1.4, 0.5, 1);
   }
   .tap-spring:active {
-    transform: scale(0.96);
-    transition: transform .12s cubic-bezier(0.32, 0.72, 0, 1);
+    /* V.122 — Panel-mandated 0.95 (was 0.96). Same easing curve. */
+    transform: scale(0.95);
+    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1);
   }
   /* Buy on Amazon hero CTA — Apple Pay style elevation */
   .v5-savvey-buy-cta,
@@ -3032,14 +3061,18 @@
     margin: 0; line-height: 1.4;
   }
 
-  /* Savvey Says block — wordmark + says label header */
+  /* Savvey Says block — wordmark + says label header.
+     V.122 — adopt --sav-radius-card (16px) + Panel-mandated diffused
+     elevation. Previous 18px radius + soft 0 2px 8px shadow looked
+     flat next to the result hero; new pair gives the "lifted card"
+     read at glance without competing with the verdict pill. */
   .v5-savvey-says {
     background: var(--card, #fff);
-    border: 1px solid rgba(20,32,26,0.08);
-    border-radius: 18px;
+    border: 1px solid rgba(20,32,26,0.06);
+    border-radius: var(--sav-radius-card);
     padding: 4px 14px 12px;
     margin: 16px 0 18px;
-    box-shadow: 0 2px 8px rgba(20,32,26,0.04);
+    box-shadow: var(--sav-shadow-elev-card);
   }
   .v5-savvey-says.empty { display: none; }
   .v5-savvey-says-head {
@@ -4289,6 +4322,68 @@
   .swipe-hint.show { opacity: 1; }
   .screen.swiping { transition: none !important; }
   @media (prefers-reduced-motion: reduce) { .screen.swiping { transition: none; transform: none !important; } }
+
+  /* === V.122 DESIGN OVERHAUL — Panel-mandated mathematical layer.
+     Additive, sits at the bottom of the cascade so it wins without
+     rewriting any historical rule blocks. Three concerns: radii,
+     pill CTAs, and the cam-zoom-layer transform anchor. === */
+
+  /* All primary actionable rows adopt the 24px pill radius. .cta.primary
+     keeps its V.115 elevation; only the corner shape changes. */
+  .cta.primary,
+  .v5-savvey-buy-cta,
+  a.cta-row.cta-amazon,
+  a.cta-row[data-retailer="Amazon UK"],
+  .v103-amazon-fallback-cta,
+  .v5-verdict-pill {
+    border-radius: var(--sav-radius-pill) !important;
+  }
+
+  /* Card surfaces — door tiles, alt retailer rows, disambig candidate
+     cards, the result hero. All adopt the 16px card radius. !important
+     handles the historical .cta border-radius: var(--r-md) defaults. */
+  .cta:not(.primary),
+  .cta-row:not(.cta-amazon):not([data-retailer="Amazon UK"]),
+  .v5-confirm-card,
+  .v5-confirm-candidate,
+  .savvey-says-wrap,
+  .recent-chip {
+    border-radius: var(--sav-radius-card) !important;
+  }
+
+  /* V.122 — primary heading hierarchy. Title elements that don't already
+     own a font-weight get the heavy 800; "label" / sub-text gets 600. */
+  .v5-result-product-name,
+  .v5-confirm-title,
+  .v5-savvey-says-head,
+  .v5-verdict-word,
+  h1.title, h2.title {
+    font-weight: var(--sav-weight-title) !important;
+    letter-spacing: -0.02em;
+  }
+  .v5-confirm-sub,
+  .v5-savvey-says-label,
+  .cta-sub {
+    font-weight: var(--sav-weight-subtitle);
+  }
+
+  /* V.122 camera zoom-layer wrapper — single transform origin so the
+     video, brackets, and barcode SVG all scale together. Eliminates
+     the V.116-deferred bracket-drift bug. The CSS variable is written
+     by the camera FSM's pinch + zoom-pill handlers. */
+  #cam-zoom-layer {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transform-origin: center center;
+    transform: scale(var(--sav-cam-zoom, 1));
+    transition: transform .12s cubic-bezier(0.32, 0.72, 0, 1);
+    will-change: transform;
+    pointer-events: none;
+  }
+  #cam-zoom-layer > * { pointer-events: auto; }
+
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -4422,7 +4517,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v119</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v122</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4480,6 +4575,13 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="v5-cam-bg" aria-hidden="true"></div>
   <div class="v5-cam-glow" aria-hidden="true"></div>
 
+  <!-- V.122 — zoom-layer wrapper. Single transform anchor for the video
+       and the targeting brackets so they scale together when the user
+       pinches. CSS uses transform: scale(var(--sav-cam-zoom)). The
+       _applyCssZoom() handler writes the CSS variable via _v122SetCamZoom;
+       it no longer writes the transform directly on the <video> element.
+       Bracket-drift-on-zoom (V.116 deferred bug) ends here. -->
+  <div id="cam-zoom-layer">
   <!-- Live feed -->
   <video id="cam-video" class="v5-cam-video" autoplay playsinline muted></video>
 
@@ -4511,6 +4613,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <span class="v5-cam-reticle" aria-hidden="true"></span>
     <span class="v5-cam-focus-ring" id="cam-focus-ring" aria-hidden="true"></span>
   </div>
+  </div><!-- /#cam-zoom-layer (V.122) -->
 
   <!-- V.82 — stepped 1x/2x/3x removed in favour of smooth pinch-to-zoom.
        Container kept for JS compat (setupZoomControls); zoom level surfaces
@@ -4926,6 +5029,179 @@ let _barcodeScanner = null;
 let _html5QrcodeLoaded = null;
 let _barcodeDetectorEvt = null;
 
+// ─────────────────────────────────────────────────────────────────────
+// V.122 — Camera Finite State Machine (Panel-mandated).
+//
+// Single source of truth for camera lifecycle. The FSM doesn't replace
+// the existing goSnap / goBarcode / stopAllScanners scaffolding; it
+// sits alongside them as a state tracker + teardown enforcer + listener
+// map. Two integration points:
+//   - stopAllScanners() (above) now delegates to __camFsm._teardownInternal()
+//   - goSnap() (below, V.122 patch) sets state PERMISSION_PENDING on entry
+//   - global visibilitychange / pagehide / beforeunload listeners auto-
+//     fire teardown so the iOS green dot can't persist across nav.
+//
+// States: IDLE → PERMISSION_PENDING → INITIALIZING → ACTIVE
+//                                                  → CAPTURING → TEARING_DOWN → RELEASED → IDLE
+//         (any state except IDLE/RELEASED) → TEARING_DOWN on hide/pagehide
+//
+// Diagnostic: window.__camFsm.state, .history (last 20 transitions).
+// ─────────────────────────────────────────────────────────────────────
+window.__camFsm = (function(){
+  const STATES = Object.freeze({
+    IDLE:'IDLE', PERMISSION_PENDING:'PERMISSION_PENDING',
+    PERMISSION_DENIED:'PERMISSION_DENIED',
+    INITIALIZING:'INITIALIZING', ACTIVE:'ACTIVE',
+    CAPTURING:'CAPTURING', TEARING_DOWN:'TEARING_DOWN',
+    RELEASED:'RELEASED', ERROR:'ERROR'
+  });
+  const ALLOWED = {
+    IDLE:                ['PERMISSION_PENDING'],
+    PERMISSION_PENDING:  ['INITIALIZING','PERMISSION_DENIED','ERROR','TEARING_DOWN'],
+    PERMISSION_DENIED:   ['IDLE','TEARING_DOWN'],
+    INITIALIZING:        ['ACTIVE','ERROR','TEARING_DOWN'],
+    ACTIVE:              ['CAPTURING','TEARING_DOWN','ERROR'],
+    CAPTURING:           ['ACTIVE','TEARING_DOWN','ERROR'],
+    ERROR:               ['TEARING_DOWN','IDLE'],
+    TEARING_DOWN:        ['RELEASED'],
+    RELEASED:            ['IDLE'],
+  };
+  let _state = STATES.IDLE;
+  const _history = [];                  // last 20 { from, to, reason, ts }
+  const _listeners = [];                // [{target, type, fn, opts}]
+  const _timers = new Set();            // pending setTimeouts we own
+
+  function _push(rec){ _history.push(rec); if (_history.length > 20) _history.shift(); }
+  function transition(next, reason){
+    const allowed = ALLOWED[_state] || [];
+    if (!allowed.includes(next)) {
+      // Illegal transition — log to PostHog but DON'T throw. State machine
+      // must never crash the UI thread; bad transitions become diagnostics.
+      try { if (typeof track === 'function') track('cam_fsm_invalid_transition', { from:_state, to:next, reason: String(reason||'') }); } catch {}
+      _push({ from:_state, to:next, reason:'INVALID_'+(reason||''), ts:Date.now(), invalid:true });
+      return false;
+    }
+    const rec = { from:_state, to:next, reason:String(reason||''), ts:Date.now() };
+    _state = next;
+    _push(rec);
+    try { if (typeof track === 'function') track('cam_fsm_transition', rec); } catch {}
+    return true;
+  }
+  function addListener(target, type, fn, opts){
+    try { target.addEventListener(type, fn, opts); _listeners.push({target,type,fn,opts}); } catch (e) {}
+  }
+  function _detachAll(){
+    while (_listeners.length) {
+      const L = _listeners.pop();
+      try { L.target.removeEventListener(L.type, L.fn, L.opts); } catch {}
+    }
+  }
+  function setTimer(fn, ms){
+    const id = setTimeout(()=>{ _timers.delete(id); fn(); }, ms);
+    _timers.add(id);
+    return id;
+  }
+  function _clearTimers(){
+    for (const id of _timers) { try { clearTimeout(id); } catch {} }
+    _timers.clear();
+  }
+  // The 7-step teardown sequence — called by stopAllScanners() above
+  // OR by visibilitychange / pagehide listeners below. Idempotent; safe
+  // to call from any state (no-ops when already IDLE/RELEASED).
+  function _teardownInternal(){
+    if (_state === STATES.IDLE || _state === STATES.RELEASED || _state === STATES.TEARING_DOWN) {
+      // Still run the resource release defensively even if FSM thinks
+      // we're idle — covers the case where camStream survived a hot reload.
+      _hardRelease();
+      return;
+    }
+    transition(STATES.TEARING_DOWN, 'teardown_requested');
+    _hardRelease();
+    transition(STATES.RELEASED, 'teardown_complete');
+    // microtask back to IDLE so subsequent goSnap can fire cleanly
+    Promise.resolve().then(()=> transition(STATES.IDLE, 'released'));
+  }
+  function _hardRelease(){
+    // (1) cancel pending FSM-owned timers
+    _clearTimers();
+    // (2) stop every track
+    try {
+      if (typeof camStream !== 'undefined' && camStream) {
+        try { camStream.getTracks().forEach(t => { try { t.stop(); } catch {} }); } catch {}
+        camStream = null;
+      }
+    } catch {}
+    // (3) detach the <video> element and force iOS to release the device.
+    //     Without these three lines iOS keeps the green camera dot on.
+    try {
+      const vid = document.getElementById('cam-video');
+      if (vid) {
+        try { vid.pause(); } catch {}
+        try { vid.srcObject = null; } catch {}
+        try { vid.removeAttribute('src'); } catch {}
+        try { vid.load(); } catch {}
+      }
+    } catch {}
+    // (4) detach FSM-tracked listeners (pinch, zoom-pill, etc)
+    _detachAll();
+    // (5) hide tension overlay if visible
+    try { if (typeof hideV104Tension === 'function') hideV104Tension(); } catch {}
+    // (6) barcode scanner shutdown (existing behavior)
+    try {
+      if (typeof _barcodeScanner !== 'undefined' && _barcodeScanner) {
+        try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(()=>{}); } catch {}
+        _barcodeScanner = null;
+      }
+      if (typeof _barcodeDetectorEvt !== 'undefined' && _barcodeDetectorEvt) {
+        try { _barcodeDetectorEvt.stop(); } catch {}
+        _barcodeDetectorEvt = null;
+      }
+    } catch {}
+    // (7) (state transitions handled by _teardownInternal caller)
+  }
+  // Auto-wire app-state teardown triggers. These are GLOBAL listeners
+  // intentionally outside the per-session _listeners map so they survive
+  // teardown and fire on the NEXT session too.
+  try {
+    document.addEventListener('visibilitychange', function(){
+      if (document.hidden && _state !== STATES.IDLE && _state !== STATES.RELEASED && _state !== STATES.TEARING_DOWN) {
+        _teardownInternal();
+      }
+    });
+    window.addEventListener('pagehide', function(){
+      if (_state !== STATES.IDLE && _state !== STATES.RELEASED) _teardownInternal();
+    });
+    window.addEventListener('beforeunload', function(){
+      if (_state !== STATES.IDLE && _state !== STATES.RELEASED) _teardownInternal();
+    });
+  } catch (e) { /* SSR safety; no-op */ }
+  return {
+    STATES,
+    get state(){ return _state; },
+    get history(){ return _history.slice(); },
+    transition,
+    addListener,
+    setTimer,
+    requestTeardown: _teardownInternal,
+    _teardownInternal,           // called by stopAllScanners
+    // Helpers used by V.122-patched goSnap (sets state on entry/success/fail).
+    markPermissionPending(){ return transition(STATES.PERMISSION_PENDING,'goSnap_entry'); },
+    markInitializing(){      return transition(STATES.INITIALIZING,'stream_obtained'); },
+    markActive(){            return transition(STATES.ACTIVE,'video_ready'); },
+    markCapturing(){         return transition(STATES.CAPTURING,'shutter_pressed'); },
+    markPermissionDenied(reason){ return transition(STATES.PERMISSION_DENIED, reason || 'NotAllowedError'); },
+    markError(reason){       return transition(STATES.ERROR, reason || 'unknown_error'); },
+  };
+})();
+// Convenience CSS-variable writer for the V.122 zoom-layer wrapper.
+// Pinch + zoom-pill handlers should call this instead of writing the
+// CSS var directly so the value is clamped and the transform stays well-formed.
+function _v122SetCamZoom(z){
+  const v = Math.max(0.5, Math.min(6, Number(z) || 1));
+  try { document.documentElement.style.setProperty('--sav-cam-zoom', String(v)); } catch (e) {}
+  return v;
+}
+
 let _navInternal = false;
 // v3.4.5e — door tracking for PostHog segmentation (panel-mandated). Captures
 // which input door fired the most recent /api/normalize call so verdict_shown
@@ -5012,7 +5288,30 @@ function show(id, opts) {
   }
 }
 function stopAllScanners() {
+  // V.122 — Panel-mandated teardown sequence. The old V.121 implementation
+  // stopped the tracks but left video.srcObject pointing at the dead stream,
+  // which iOS Safari interprets as "paused" — keeping the green camera dot
+  // active and refusing to release the device for the next session. That
+  // caused the PWA-freeze-on-reopen bug. The new sequence:
+  //   (1) cancel any pending debounce timers
+  //   (2) stop every track
+  //   (3) detach + force-release the <video> element (iOS quirk)
+  //   (4) detach FSM-tracked listeners
+  //   (5) hide the tension overlay if visible
+  //   (6) null the module-level stream reference for GC
+  //   (7) transition the FSM to RELEASED, then IDLE
+  try {
+    if (typeof window !== 'undefined' && window.__camFsm) {
+      window.__camFsm._teardownInternal();
+      return;
+    }
+  } catch (e) { /* fall through to legacy path */ }
+  // Legacy path (only used if the FSM hasn't loaded yet, e.g. unit test).
   if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch {} camStream = null; }
+  try {
+    const vid = document.getElementById('cam-video');
+    if (vid) { try { vid.pause(); } catch {} vid.srcObject = null; vid.removeAttribute('src'); try { vid.load(); } catch {} }
+  } catch {}
   if (_barcodeScanner) {
     try { _barcodeScanner.stop().then(() => _barcodeScanner && _barcodeScanner.clear()).catch(() => {}); } catch {}
     _barcodeScanner = null;
@@ -5165,9 +5464,14 @@ function setupCameraGestures() {
   let _lastIntegerZoom = 1;
   function _applyCssZoom(zoom) {
     _currentCssZoom = zoom;
+    // V.122 — single transform source. The #cam-zoom-layer wrapper reads
+    // --sav-cam-zoom and applies the scale to the video + brackets together.
+    // The legacy `video.style.transform = scale(N)` line was REMOVED here
+    // because it compounded with the wrapper transform → double-scale.
+    // Brackets-track-zoom (V.116 deferred bug) closes here.
+    try { if (typeof _v122SetCamZoom === 'function') _v122SetCamZoom(zoom); } catch (e) {}
     video.style.transformOrigin = 'center center';
     video.style.willChange = 'transform';
-    video.style.transform = 'translate3d(0,0,0) scale(' + zoom + ')';
     const ind = document.getElementById('zoom-indicator');
     if (ind) {
       // V.102 \u2014 auto-hide pill at rest. Only show during/after pinch (>1.05x).
@@ -5553,29 +5857,88 @@ function downscaleImageToBase64(source, sourceWidth, sourceHeight) {
 }
 
 async function goSnap() {
-  // V.75 — reentrancy guard. A rapid double-tap on the Snap door fires
-  // getUserMedia() twice in parallel and leaves an orphan MediaStream
-  // draining battery + holding the camera light on. Bug B in the sweep.
+  // V.122 — FSM-gated entry. The FSM IS the reentrancy guard now (legacy
+  // _savveyCameraStarting boolean kept for back-compat with any external
+  // code path that flips it, but the FSM check below is authoritative).
+  if (window.__camFsm && window.__camFsm.state !== 'IDLE' && window.__camFsm.state !== 'ERROR' && window.__camFsm.state !== 'PERMISSION_DENIED') {
+    // Already in some pre-active or active state — show the camera screen
+    // (in case it was occluded) and bail without re-acquiring.
+    show('camera');
+    return;
+  }
   if (_savveyCameraStarting) return;
-  // If a stream is already live (user re-tapped from camera screen), short-circuit.
   if (camStream && camStream.getTracks && camStream.getTracks().some(t => t.readyState === 'live')) {
     show('camera');
     return;
   }
   _savveyCameraStarting = true;
+  if (window.__camFsm) window.__camFsm.markPermissionPending();
   show('camera');
+  // V.122 — ordered constraint fallback chain. Stops the "OverconstrainedError
+  // on older iPhones / desktop dev boxes" silent failure path.
+  const _v122ConstraintChain = [
+    { video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 30 } }, audio: false },
+    { video: { facingMode: 'environment' }, audio: false },
+    { video: { facingMode: 'user' }, audio: false },
+    { video: true, audio: false },
+  ];
+  let _stream = null, _lastErr = null, _fallbackIdx = -1;
   try {
-    camStream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } },
-      audio: false
-    });
-    document.getElementById('cam-video').srcObject = camStream;
-    setupCameraZoom(camStream);
-    track('snap_started');
+    for (let i = 0; i < _v122ConstraintChain.length; i++) {
+      try {
+        _stream = await navigator.mediaDevices.getUserMedia(_v122ConstraintChain[i]);
+        _fallbackIdx = i;
+        if (i > 0) {
+          try { track('camera_fallback_used', { idx: i, constraint_label: i === 1 ? 'env_loose' : (i === 2 ? 'user' : 'any') }); } catch (e) {}
+        }
+        break;
+      } catch (e) {
+        _lastErr = e;
+        const name = String(e && e.name || '');
+        // Permission denial is terminal — don't try fallbacks (user blocked).
+        if (name === 'NotAllowedError' || name === 'SecurityError') { throw e; }
+      }
+    }
+    if (!_stream) throw (_lastErr || new Error('all_constraints_failed'));
+    camStream = _stream;
+    if (window.__camFsm) window.__camFsm.markInitializing();
+    const _vid = document.getElementById('cam-video');
+    _vid.srcObject = camStream;
+    // Transition to ACTIVE once metadata loads (best signal that the
+    // stream is renderable). 5s watchdog raises ERROR if loadedmetadata
+    // never fires (rare iOS quirk on backgrounded permission grant).
+    let _activated = false;
+    const _markActive = () => {
+      if (_activated) return;
+      _activated = true;
+      if (window.__camFsm) window.__camFsm.markActive();
+    };
+    if (_vid.readyState >= 1) {
+      _markActive();
+    } else {
+      _vid.addEventListener('loadedmetadata', _markActive, { once: true });
+      if (window.__camFsm) {
+        window.__camFsm.setTimer(() => {
+          if (!_activated && window.__camFsm.state === 'INITIALIZING') {
+            window.__camFsm.markError('loadedmetadata_timeout_5s');
+          }
+        }, 5000);
+      }
+    }
+    try { setupCameraZoom(camStream); } catch (e) {}
+    track('snap_started', { fallback_idx: _fallbackIdx });
   } catch (err) {
-    track('snap_camera_denied', { reason: String(err && err.name || err).slice(0, 40) });
+    const name = String(err && err.name || err).slice(0, 40);
+    if (window.__camFsm) {
+      if (name === 'NotAllowedError' || name === 'SecurityError') {
+        window.__camFsm.markPermissionDenied(name);
+      } else {
+        window.__camFsm.markError(name);
+      }
+    }
+    track('snap_camera_denied', { reason: name });
     goHome();
-    document.getElementById('photo-fallback').click();
+    try { document.getElementById('photo-fallback').click(); } catch {}
   } finally {
     _savveyCameraStarting = false;
   }
@@ -5610,6 +5973,12 @@ function _frameToBase64(canvas) {
 async function captureFrame() {
   const v = document.getElementById('cam-video');
   if (!v || !v.videoWidth) return;
+  // V.122 — FSM transition: ACTIVE → CAPTURING. Stops a stray shutter
+  // tap during the loading screen from re-firing capture.
+  if (window.__camFsm) {
+    if (window.__camFsm.state !== 'ACTIVE') return;
+    window.__camFsm.markCapturing();
+  }
   // V.104 — haptic + flash feedback on shutter press
   if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e) {}
   const sw = v.videoWidth, sh = v.videoHeight;
