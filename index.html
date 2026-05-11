@@ -4488,6 +4488,59 @@
   }
   /* ================== END V.122b iOS REALITY CHECK ================== */
 
+  /* === V.123 — barcode cutout (pure CSS, no SVG) ===
+     A fixed-size 280x80 box. Surround dim is a massive 9999px outset
+     box-shadow at 50% alpha. Cutout edge is a 1.5px white stroke @ 0.55a
+     with a breathing animation. Inside, a horizontally-anchored 1px
+     amber laser sweeps top→bottom. No SVG, no viewBox, no preserve-
+     AspectRatio — alignment can't drift because there is only ONE
+     element with known dimensions. */
+  .v123-bc-cutout {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 280px;
+    height: 80px;
+    transform: translate(-50%, -50%);
+    border-radius: 12px;
+    border: 1.5px solid rgba(255,255,255,0.55);
+    background: transparent;
+    /* Massive outset shadow = darkened surround. Inset:0 isn't enough
+       because we need it to cover the full viewport regardless of size. */
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    pointer-events: none;
+    z-index: 5;
+    animation: v123-bc-breathe 1.4s ease-in-out infinite;
+    /* V.123 — touch-action: none here too so iOS doesn't reclaim the
+       gesture if the user touches near the cutout edge. */
+    touch-action: none !important;
+  }
+  @keyframes v123-bc-breathe {
+    0%, 100% { border-color: rgba(255,255,255,0.55); }
+    50%      { border-color: rgba(255,255,255,0.85); }
+  }
+  .v123-bc-laser {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1.5px;
+    background: linear-gradient(90deg,
+      transparent 0%, rgba(255,189,79,0.95) 50%, transparent 100%);
+    box-shadow: 0 0 6px rgba(255,189,79,0.7);
+    top: 0;
+    animation: v123-bc-laser-sweep 1.6s linear infinite;
+    will-change: transform;
+  }
+  @keyframes v123-bc-laser-sweep {
+    0%   { transform: translateY(2px);   opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translateY(76px);  opacity: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .v123-bc-cutout, .v123-bc-laser { animation: none; }
+  }
+  /* ================== END V.123 BARCODE CUTOUT ================== */
+
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
      showed radius=18px and old soft shadow). Forcing the Panel-mandated
@@ -4649,7 +4702,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v122b</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v123</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -4672,21 +4725,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <!-- Auto-fade hint -->
   <div class="v5-cam-hint v5-cam-hint--barcode">Point at the barcode.</div>
 
-  <!-- V.106 — premium SVG-mask barcode overlay. Darkens everything outside
-       the cutout 62%, breathing pulse on cutout border, single amber scan
-       line sweeps top-to-bottom with edge-fade + glow. -->
-  <svg class="v106-bc-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-    <defs>
-      <mask id="v106-bc-cut">
-        <rect width="100" height="100" fill="white"/>
-        <rect x="14" y="42" width="72" height="16" rx="2" fill="black"/>
-      </mask>
-    </defs>
-    <rect width="100" height="100" fill="rgba(0,0,0,0.62)" mask="url(#v106-bc-cut)"/>
-    <rect class="v106-bc-cutout-frame" x="14" y="42" width="72" height="16" rx="2"
-          fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="0.32"/>
-  </svg>
-  <div class="v106-bc-scanline" aria-hidden="true"></div>
+  <!-- V.123 — replaced SVG mask with pure-CSS box-shadow cutout. The SVG
+       approach drifted against iOS dvh swings (URL bar show/hide); the
+       cutout coordinates were % of viewBox, the SVG element was % of
+       parent, and stacking those two layers of relative units produced
+       visible misalignment as the viewport changed. The new approach is
+       a fixed-size div positioned with top:50%/left:50%/translate(-50%);
+       its surround is darkened by a massive outset box-shadow. Survives
+       any rotation / dvh change because there's exactly ONE element with
+       known dimensions. -->
+  <div class="v123-bc-cutout" aria-hidden="true">
+    <div class="v123-bc-laser" aria-hidden="true"></div>
+  </div>
   <!-- Legacy mount preserved for engine bindings -->
   <div class="v5-cam-cutout v5-cam-cutout--barcode" hidden></div>
 
@@ -5294,10 +5344,49 @@ window.__camFsm = (function(){
   // Auto-wire app-state teardown triggers. These are GLOBAL listeners
   // intentionally outside the per-session _listeners map so they survive
   // teardown and fire on the NEXT session too.
+  function _v123ResumeReset(){
+    // V.123 — when the PWA becomes visible again after backgrounding,
+    // iOS often leaves CSS animations in a corrupted "stuck mid-keyframe"
+    // state. Force-restart any camera-UI animation by toggling display
+    // and triggering a reflow. The toggle pattern is the only reliable
+    // way to nuke iOS animation state — `animationPlayState` resets are
+    // ignored more often than they work.
+    const selectors = [
+      '.v123-bc-cutout',
+      '.v123-bc-laser',
+      '.v106-bc-scanline',           // legacy, in case any cached HTML still has it
+      '.v106-bc-cutout-frame',
+      '.v5-cam-corner',
+      '.v5-cam-reticle',
+      '.v5-cam-focus-ring',
+      '.v104-tension-scanline',
+      '.v105-zoom-tier'
+    ];
+    for (const sel of selectors) {
+      const els = document.querySelectorAll(sel);
+      for (const el of els) {
+        const prev = el.style.animation;
+        try {
+          el.style.animation = 'none';
+          // Force reflow so the engine commits the "no animation" state.
+          // void-cast prevents linters from stripping it.
+          void el.offsetWidth;
+          el.style.animation = prev || '';
+        } catch (e) {}
+      }
+    }
+  }
   try {
     document.addEventListener('visibilitychange', function(){
-      if (document.hidden && _state !== STATES.IDLE && _state !== STATES.RELEASED && _state !== STATES.TEARING_DOWN) {
-        _teardownInternal();
+      if (document.hidden) {
+        if (_state !== STATES.IDLE && _state !== STATES.RELEASED && _state !== STATES.TEARING_DOWN) {
+          _teardownInternal();
+        }
+      } else {
+        // V.123 — resume hard-reset. The visible branch runs even when the
+        // FSM was already IDLE (e.g. tab switched mid-result-screen), so it
+        // also rescues animations on non-camera screens.
+        _v123ResumeReset();
       }
     });
     window.addEventListener('pagehide', function(){
@@ -5702,15 +5791,22 @@ function setupCameraGestures() {
   // SAME functions (_applyCssZoom/_scheduleHwZoom) as the V.105 path. No
   // state divergence — there is now exactly ONE pinch path.
   const camScreenEl = document.getElementById('screen-camera') || video;
+  // V.123 — { passive: false } + e.preventDefault() on 2-touch events.
+  // touch-action: none alone is NOT enough on iOS Safari — it stops the
+  // default scroll/pinch, but the OS still claims the gesture as a system
+  // event unless JS *actively* preventDefaults it. Panel-mandated fix
+  // after V.122b iPhone test confirmed pinch still dead.
   camScreenEl.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) {
+      try { e.preventDefault(); } catch (_) {}
       _pinchActive = true;
       _pinchStartDist = _dist(e.touches[0], e.touches[1]);
       _pinchStartZoom = _currentCssZoom;
     }
-  }, { passive: true });
+  }, { passive: false });
   camScreenEl.addEventListener('touchmove', function(e) {
     if (_pinchActive && e.touches.length === 2) {
+      try { e.preventDefault(); } catch (_) {}
       const d = _dist(e.touches[0], e.touches[1]);
       const ratio = d / Math.max(_pinchStartDist, 1);
       // V.105 — Logarithmic pinch curve. Linear (target = startZoom * ratio)
@@ -5722,7 +5818,7 @@ function setupCameraGestures() {
       _applyCssZoom(clamped);
       _scheduleHwZoom(clamped);
     }
-  }, { passive: true });
+  }, { passive: false });
   camScreenEl.addEventListener('touchend', function(e) {
     if (_pinchActive && e.touches.length < 2) {
       _pinchActive = false;
@@ -6087,7 +6183,11 @@ function cancelCamera() {
 //       might miss. All three sent to Haiku in a SINGLE API call, so no
 //       latency hit beyond the ~240ms client-side capture window.
 function _cropCentreSquare(source, sw, sh) {
-  // Crop the centre 60% square of the source image. Returns a canvas.
+  // V.123 — DEPRECATED in favour of _v123CropVisibleSquare(). Kept only as
+  // a defensive fallback when the video DOM element rect is unavailable
+  // (extremely rare; would mean the camera screen is detached when capture
+  // fires). The new path is the one that closes the iPhone capture-zoom
+  // mismatch bug.
   const minSide = Math.min(sw, sh);
   const cropSize = Math.floor(minSide * 0.6);
   const sx = Math.floor((sw - cropSize) / 2);
@@ -6096,6 +6196,82 @@ function _cropCentreSquare(source, sw, sh) {
   const c = document.createElement('canvas');
   c.width = targetSize; c.height = targetSize;
   c.getContext('2d').drawImage(source, sx, sy, cropSize, cropSize, 0, 0, targetSize, targetSize);
+  return c;
+}
+
+// V.123 — capture-time math that matches what the user SEES in the viewfinder.
+//
+// The Bug: the viewfinder uses `object-fit: cover` on <video> and a CSS
+// transform: scale(var(--sav-cam-zoom)) on #cam-zoom-layer. The raw video
+// track is typically 1920x1080 landscape; the screen-camera <video> element
+// is portrait full-bleed. object-fit:cover crops the raw video horizontally
+// AND vertically depending on aspect-ratio mismatch, AND the CSS scale
+// further crops in proportionally to zoom. The OLD _cropCentreSquare took
+// the centre 60% of the RAW videoWidth × videoHeight — which is a much
+// wider crop than what the user actually frames inside the brackets.
+//
+// The Fix:
+//   (1) Compute the visible-to-user source rect from the cover math:
+//       elementRatio = clientW / clientH
+//       videoRatio   = videoWidth / videoHeight
+//       If videoRatio > elementRatio → video wider; crop horizontally
+//       Else                          → video taller; crop vertically
+//   (2) Apply the CSS zoom factor: user only sees the centre 1/zoom of step 1
+//   (3) Within that visible rect, take the centre 60% square (the brackets)
+//   (4) Draw to canvas
+async function _v123CropVisibleSquare(video) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+  let elementW = 0, elementH = 0;
+  try {
+    const r = video.getBoundingClientRect();
+    elementW = r.width; elementH = r.height;
+  } catch (e) {}
+  // Defensive: if we couldn't measure the DOM element (detached?), fall
+  // back to the OLD path so capture still works.
+  if (!elementW || !elementH) return _cropCentreSquare(video, vw, vh);
+
+  // Step 1 — object-fit: cover visible source rect
+  const elementRatio = elementW / elementH;
+  const videoRatio   = vw / vh;
+  let visW, visH, visX, visY;
+  if (videoRatio > elementRatio) {
+    // raw video is wider than the element → cropped horizontally
+    visH = vh;
+    visW = vh * elementRatio;
+    visX = (vw - visW) / 2;
+    visY = 0;
+  } else {
+    // raw video is taller / square-er → cropped vertically
+    visW = vw;
+    visH = vw / elementRatio;
+    visX = 0;
+    visY = (vh - visH) / 2;
+  }
+
+  // Step 2 — CSS zoom factor. Read the current --sav-cam-zoom variable.
+  let zoom = 1;
+  try {
+    const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sav-cam-zoom'));
+    if (Number.isFinite(z) && z >= 0.5 && z <= 6) zoom = z;
+  } catch (e) {}
+  const innerW = visW / zoom;
+  const innerH = visH / zoom;
+  const innerX = visX + (visW - innerW) / 2;
+  const innerY = visY + (visH - innerH) / 2;
+
+  // Step 3 — centre 60% square (the targeting brackets aspect ratio).
+  const sideRatio = 0.6;
+  const minSide = Math.min(innerW, innerH);
+  const sq = minSide * sideRatio;
+  const sx = innerX + (innerW - sq) / 2;
+  const sy = innerY + (innerH - sq) / 2;
+
+  // Step 4 — draw to canvas. Target size respects the existing SNAP_MAX_WIDTH cap.
+  const target = Math.min(Math.floor(sq), SNAP_MAX_WIDTH);
+  const c = document.createElement('canvas');
+  c.width = target; c.height = target;
+  c.getContext('2d').drawImage(video, sx, sy, sq, sq, 0, 0, target, target);
   return c;
 }
 function _frameToBase64(canvas) {
@@ -6115,7 +6291,11 @@ async function captureFrame() {
   if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e) {}
   const sw = v.videoWidth, sh = v.videoHeight;
   const frames = [];
-  const firstCanvas = _cropCentreSquare(v, sw, sh);
+  // V.123 — visible-source crop. Replaces _cropCentreSquare (which fed the
+  // RAW video frame; on iPhone full-bleed portrait viewfinder + CSS zoom
+  // that produced wildly-over-zoomed captures because the raw 1920x1080
+  // is much wider than the user sees inside the targeting brackets).
+  const firstCanvas = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, sw, sh);
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
   // V.104 — Tension state. Show freeze frame immediately after capture so
@@ -6123,9 +6303,15 @@ async function captureFrame() {
   // captured snap stays on screen with a sweeping scan line + dim.
   showV104Tension(_lastSnapDataUrl);
   await new Promise(r => setTimeout(r, 120));
-  if (v.videoWidth) frames.push(_frameToBase64(_cropCentreSquare(v, v.videoWidth, v.videoHeight)));
+  if (v.videoWidth) {
+    const c2 = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
+    frames.push(_frameToBase64(c2));
+  }
   await new Promise(r => setTimeout(r, 120));
-  if (v.videoWidth) frames.push(_frameToBase64(_cropCentreSquare(v, v.videoWidth, v.videoHeight)));
+  if (v.videoWidth) {
+    const c3 = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
+    frames.push(_frameToBase64(c3));
+  }
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   const totalBytes = frames.reduce((s, f) => s + Math.floor(f.length * 0.75), 0);
   track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });

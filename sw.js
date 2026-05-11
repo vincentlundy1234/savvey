@@ -24,7 +24,7 @@
 // shell. This bump invalidates the old cache, forces clients.claim(), and
 // posts SW_UPDATED to controlled clients so the frontend can soft-reload
 // to pick up the new shell.
-const STATIC_VER    = 'savvey-static-v345v122b';
+const STATIC_VER    = 'savvey-static-v345v123';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
