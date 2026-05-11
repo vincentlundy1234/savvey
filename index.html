@@ -4422,7 +4422,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v118</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v119</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5256,14 +5256,24 @@ function setupCameraGestures() {
       }
     }, 100);
   }
-  video.addEventListener('touchstart', function(e) {
+  // V.119 — Attach pinch to #screen-camera (whole camera screen) instead of
+  // the <video> element. iOS Safari doesn't reliably fire multi-touch events
+  // on <video> elements (the system intercepts them for native video
+  // controls). The V.116 commit disabled the only working handler thinking
+  // it was a duplicate; Vincent's real-device test on V.118 confirmed zero
+  // zoom. V.119 restores the screen-level attachment but uses the SAME state
+  // vars (_pinchActive/_pinchStartDist/_pinchStartZoom/_currentCssZoom) and
+  // SAME functions (_applyCssZoom/_scheduleHwZoom) as the V.105 path. No
+  // state divergence — there is now exactly ONE pinch path.
+  const camScreenEl = document.getElementById('screen-camera') || video;
+  camScreenEl.addEventListener('touchstart', function(e) {
     if (e.touches.length === 2) {
       _pinchActive = true;
       _pinchStartDist = _dist(e.touches[0], e.touches[1]);
       _pinchStartZoom = _currentCssZoom;
     }
   }, { passive: true });
-  video.addEventListener('touchmove', function(e) {
+  camScreenEl.addEventListener('touchmove', function(e) {
     if (_pinchActive && e.touches.length === 2) {
       const d = _dist(e.touches[0], e.touches[1]);
       const ratio = d / Math.max(_pinchStartDist, 1);
@@ -5277,7 +5287,7 @@ function setupCameraGestures() {
       _scheduleHwZoom(clamped);
     }
   }, { passive: true });
-  video.addEventListener('touchend', function(e) {
+  camScreenEl.addEventListener('touchend', function(e) {
     if (_pinchActive && e.touches.length < 2) {
       _pinchActive = false;
       // Final hardware zoom snap so capture-time matches visual
@@ -5293,10 +5303,13 @@ function setupCameraGestures() {
       }, 700);
     }
   }, { passive: true });
-  // Double-tap reset to 1x
+  // Double-tap reset to 1x (also moved to camera screen for iOS reliability)
   let _lastTapAt = 0;
-  video.addEventListener('touchend', function(e) {
+  camScreenEl.addEventListener('touchend', function(e) {
     if (e.touches.length === 0 && e.changedTouches.length === 1 && !_pinchActive) {
+      // Skip double-tap reset if the tap landed on a button (shutter, X,
+      // zoom pill, tier button, aux) — those have their own handlers.
+      if (e.target && e.target.closest && e.target.closest('button')) return;
       const now = Date.now();
       if (now - _lastTapAt < 300 && _currentCssZoom !== MIN_ZOOM) {
         _applyCssZoom(MIN_ZOOM);
