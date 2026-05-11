@@ -4702,7 +4702,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v123</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v124</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6272,6 +6272,22 @@ async function _v123CropVisibleSquare(video) {
   const c = document.createElement('canvas');
   c.width = target; c.height = target;
   c.getContext('2d').drawImage(video, sx, sy, sq, sq, 0, 0, target, target);
+  // V.124 — diagnostic capture. Surface the computed crop rect so Safari
+  // Web Inspector on Vincent's iPhone can read it after each shutter press.
+  // Helps diagnose any residual zoom mismatch without round-tripping logs.
+  try {
+    window.__lastV124Crop = {
+      ts: Date.now(),
+      raw_video: { w: vw, h: vh, ratio: Number(videoRatio.toFixed(4)) },
+      element:   { w: elementW, h: elementH, ratio: Number(elementRatio.toFixed(4)) },
+      cover_visible: { x: Math.round(visX), y: Math.round(visY), w: Math.round(visW), h: Math.round(visH) },
+      zoom_factor: zoom,
+      zoomed_inner: { x: Math.round(innerX), y: Math.round(innerY), w: Math.round(innerW), h: Math.round(innerH) },
+      bracket_square: { x: Math.round(sx), y: Math.round(sy), size: Math.round(sq) },
+      canvas_out: { size: target },
+      device_pixel_ratio: window.devicePixelRatio || 1,
+    };
+  } catch (e) {}
   return c;
 }
 function _frameToBase64(canvas) {
@@ -7976,26 +7992,66 @@ if ('serviceWorker' in navigator) {
     // call is in flight, so the user's search isn't lost when the new SW
     // activates mid-session. Hard 10s timeout fallback so a stuck flag
     // doesn't permanently block the upgrade.
+    // V.124 — surface an "App Updated" toast BEFORE the reload so the user
+    // gets visible confirmation the new shell has landed (the silent reload
+    // was indistinguishable from a regular refresh and left users wondering
+    // whether the update actually took on iOS PWAs).
     let _swReloadGuard = false;
-    const reload = () => {
+    function _v124ShowUpdateToast(version, purgedCount) {
+      try {
+        if (document.getElementById('v124-update-toast')) return;
+        const t = document.createElement('div');
+        t.id = 'v124-update-toast';
+        const v = (version || '').replace(/^savvey-static-/, '').replace(/^v345/, 'v3.4.5');
+        t.textContent = 'Savvey updated to ' + (v || 'latest') + ' — refreshing...';
+        t.style.cssText = [
+          'position:fixed','top:max(20px,env(safe-area-inset-top))',
+          'left:50%','transform:translateX(-50%) translateY(-8px)',
+          'background:rgba(20,32,26,0.96)','color:#fff',
+          'padding:12px 18px','border-radius:24px',
+          'font:600 14px/1.2 system-ui,-apple-system,BlinkMacSystemFont,sans-serif',
+          'box-shadow:0 10px 25px -5px rgba(0,0,0,.30), 0 8px 10px -6px rgba(0,0,0,.20)',
+          'z-index:10000','max-width:calc(100vw - 32px)','text-align:center',
+          'opacity:0','transition:opacity .25s ease, transform .25s ease',
+          'pointer-events:none'
+        ].join(';');
+        document.body.appendChild(t);
+        // Force a paint so the transition fires
+        requestAnimationFrame(() => {
+          t.style.opacity = '1';
+          t.style.transform = 'translateX(-50%) translateY(0)';
+        });
+      } catch (e) { /* swallow — toast is non-critical */ }
+    }
+    const reload = (meta) => {
       if (_swReloadGuard) return;
-      if (window._savveyFetching) {
-        const startedAt = Date.now();
-        const poll = setInterval(() => {
-          const stuck = Date.now() - startedAt > 10000;
-          if (!window._savveyFetching || stuck) {
-            clearInterval(poll);
-            if (!_swReloadGuard) { _swReloadGuard = true; window.location.reload(); }
+      const doToastThenReload = () => {
+        _v124ShowUpdateToast(meta && meta.version, meta && meta.purged_count);
+        // 1.5s dwell so the user actually reads the toast before reload.
+        // If a /api/normalize is mid-flight, defer up to 10s extra.
+        setTimeout(() => {
+          if (window._savveyFetching) {
+            const startedAt = Date.now();
+            const poll = setInterval(() => {
+              const stuck = Date.now() - startedAt > 10000;
+              if (!window._savveyFetching || stuck) {
+                clearInterval(poll);
+                if (!_swReloadGuard) { _swReloadGuard = true; window.location.reload(); }
+              }
+            }, 400);
+            return;
           }
-        }, 400);
-        return;
-      }
-      _swReloadGuard = true;
-      window.location.reload();
+          _swReloadGuard = true;
+          window.location.reload();
+        }, 1500);
+      };
+      doToastThenReload();
     };
-    navigator.serviceWorker.addEventListener('controllerchange', reload);
+    navigator.serviceWorker.addEventListener('controllerchange', () => reload({}));
     navigator.serviceWorker.addEventListener('message', (e) => {
-      if (e.data && e.data.type === 'SW_UPDATED') reload();
+      if (e.data && e.data.type === 'SW_UPDATED') {
+        reload({ version: e.data.version, purged_count: e.data.purged_count });
+      }
     });
   });
 }
