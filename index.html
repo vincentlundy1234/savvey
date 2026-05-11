@@ -2567,14 +2567,20 @@
   @media (prefers-reduced-motion: reduce) {
     .v5-cam-hint { animation: none; opacity: 0.65; }
   }
-  /* Cutout — 4 corners + optional scan line */
+  /* Cutout — 4 corners + optional scan line.
+     V.130 — rigid min-width/min-height prevent layout collapse during the
+     V.104 tension transition. getComputedStyle now always returns 240×280
+     regardless of ancestor visibility. */
   .v5-cam-cutout {
     position: absolute;
     left: 50%; top: 50%;
     transform: translate(-50%, -50%);
     width: 240px; height: 280px;
+    min-width: 240px; min-height: 280px;
+    box-sizing: border-box;
     pointer-events: none;
     z-index: 5;
+    display: block;
   }
   .v5-cam-cutout--barcode {
     width: 280px; height: 110px;
@@ -4497,53 +4503,59 @@
   }
   /* ================== END V.122b iOS REALITY CHECK ================== */
 
-  /* === V.123 — barcode cutout (pure CSS, no SVG) ===
-     A fixed-size 280x80 box. Surround dim is a massive 9999px outset
-     box-shadow at 50% alpha. Cutout edge is a 1.5px white stroke @ 0.55a
-     with a breathing animation. Inside, a horizontally-anchored 1px
-     amber laser sweeps top→bottom. No SVG, no viewBox, no preserve-
-     AspectRatio — alignment can't drift because there is only ONE
-     element with known dimensions. */
+  /* === V.130 — Barcode cutout rewrite per Panel spec (replaces V.123).
+     Founder's iPhone test of V.129 showed the V.123 cutout as overlapping
+     white pill borders. Root cause: too thin (80px high), too narrow-
+     bordered, plus laser could bleed when wrapper transform applied.
+     New spec: width 80% (viewport-relative, scales with screen size),
+     height 150px, border-radius 16px, box-shadow 0 0 0 4000px darkens
+     EVERYTHING outside the cutout, overflow:hidden contains the laser. */
   .v123-bc-cutout {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 280px;
-    height: 80px;
+    width: 80%;
+    height: 150px;
     transform: translate(-50%, -50%);
-    border-radius: 12px;
-    border: 1.5px solid rgba(255,255,255,0.55);
+    border-radius: 16px;
+    /* Subtle inner stroke so the user can see the edge of the cutout */
+    border: 1.5px solid rgba(255, 255, 255, 0.55);
     background: transparent;
-    /* Massive outset shadow = darkened surround. Inset:0 isn't enough
-       because we need it to cover the full viewport regardless of size. */
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.60); /* V.127 alpha bump per Panel */
+    /* Massive outset shadow = dark surround everywhere except inside */
+    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6);
+    /* CRITICAL: clip the laser line so it can never bleed outside */
+    overflow: hidden;
     pointer-events: none;
     z-index: 5;
-    animation: v123-bc-breathe 1.4s ease-in-out infinite;
-    /* V.123 — touch-action: none here too so iOS doesn't reclaim the
-       gesture if the user touches near the cutout edge. */
+    animation: v130-bc-breathe 1.4s ease-in-out infinite;
     touch-action: none !important;
   }
-  @keyframes v123-bc-breathe {
-    0%, 100% { border-color: rgba(255,255,255,0.55); }
-    50%      { border-color: rgba(255,255,255,0.85); }
+  @keyframes v130-bc-breathe {
+    0%, 100% { border-color: rgba(255, 255, 255, 0.55); }
+    50%      { border-color: rgba(255, 255, 255, 0.90); }
   }
+  /* Laser: 1px amber line. translateY animation from 0 to 100% of the
+     cutout's interior. overflow:hidden on the parent guarantees it
+     never appears outside. */
   .v123-bc-laser {
     position: absolute;
-    left: 0; right: 0;
+    left: 0;
+    right: 0;
+    top: 0;
     height: 1.5px;
     background: linear-gradient(90deg,
-      transparent 0%, rgba(255,189,79,0.95) 50%, transparent 100%);
-    box-shadow: 0 0 6px rgba(255,189,79,0.7);
-    top: 0;
-    animation: v123-bc-laser-sweep 1.6s linear infinite;
+      transparent 0%,
+      rgba(255, 189, 79, 0.95) 50%,
+      transparent 100%);
+    box-shadow: 0 0 8px rgba(255, 189, 79, 0.7);
+    animation: v130-bc-laser-sweep 1.8s linear infinite;
     will-change: transform;
   }
-  @keyframes v123-bc-laser-sweep {
-    0%   { transform: translateY(2px);   opacity: 0; }
-    10%  { opacity: 1; }
-    90%  { opacity: 1; }
-    100% { transform: translateY(76px);  opacity: 0; }
+  @keyframes v130-bc-laser-sweep {
+    0%   { transform: translateY(0);     opacity: 0; }
+    8%   { opacity: 1; }
+    92%  { opacity: 1; }
+    100% { transform: translateY(148px); opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .v123-bc-cutout, .v123-bc-laser { animation: none; }
@@ -4762,8 +4774,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v129';
-  var V126_GUARD          = 'savvey_v129_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v130';
+  var V126_GUARD          = 'savvey_v130_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4844,7 +4856,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.129 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.130 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -4990,7 +5002,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v129</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v130</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6732,26 +6744,34 @@ async function _v129CropToBrackets(video) {
   const elementH = vRect ? vRect.height : 0;
   if (!elementW || !elementH) return _cropCentreSquare(video, vw, vh);
 
-  // ── Step 1: measure the brackets (real DOM, not assumed geometry) ──────
+  // ── Step 1: measure the brackets (LAYOUT, not visual) ─────────────────
+  // V.130 — Panel-mandated fix after V.129 banner caught bracket=1×1
+  // on iOS during CAPTURING state. getBoundingClientRect returns the
+  // VISUAL rect, which can collapse to 0×0 if any ancestor is briefly
+  // display:none during the capture transition. getComputedStyle returns
+  // the LAYOUT box, unaffected by transforms or ancestor display state.
+  // We also fall back to the CSS-spec'd 240×280 constants if the
+  // computed style yields nonsense.
+  const CUTOUT_NOMINAL_W = 240;
+  const CUTOUT_NOMINAL_H = 280;
   const cutoutEl = document.querySelector('.v5-cam-cutout');
-  let bracketCssX, bracketCssY, bracketCssW, bracketCssH;
+  let bracketCssW = CUTOUT_NOMINAL_W;
+  let bracketCssH = CUTOUT_NOMINAL_H;
   if (cutoutEl) {
-    const cRect = cutoutEl.getBoundingClientRect();
-    bracketCssX = cRect.left - vRect.left;
-    bracketCssY = cRect.top  - vRect.top;
-    bracketCssW = cRect.width;
-    bracketCssH = cRect.height;
-  } else {
-    // Defensive: if cutout DOM missing, fall back to a centred 60% square
-    bracketCssW = Math.min(elementW, elementH) * 0.6;
-    bracketCssH = bracketCssW;
-    bracketCssX = (elementW - bracketCssW) / 2;
-    bracketCssY = (elementH - bracketCssH) / 2;
+    try {
+      const cs = getComputedStyle(cutoutEl);
+      const w = parseFloat(cs.width);
+      const h = parseFloat(cs.height);
+      if (isFinite(w) && w >= 10) bracketCssW = w;
+      if (isFinite(h) && h >= 10) bracketCssH = h;
+    } catch (e) {}
   }
-  // Clamp to the video element box. Brackets can technically extend beyond
-  // (e.g. at high zoom levels the wrapper-scale makes them overflow), but
-  // we only capture intrinsic pixels that actually correspond to in-element
-  // coords, so clamping here keeps the math defined.
+  // Bracket is centered in #screen-camera (via top:50%/left:50%/translate),
+  // which has the same dimensions as the video element. So the bracket's
+  // top-left corner in element-local coords is (elementW-w)/2, (elementH-h)/2.
+  let bracketCssX = (elementW - bracketCssW) / 2;
+  let bracketCssY = (elementH - bracketCssH) / 2;
+  // Clamp defensively
   bracketCssX = Math.max(0, Math.min(elementW - 1, bracketCssX));
   bracketCssY = Math.max(0, Math.min(elementH - 1, bracketCssY));
   bracketCssW = Math.max(1, Math.min(elementW - bracketCssX, bracketCssW));
