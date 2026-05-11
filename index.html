@@ -4713,6 +4713,114 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </head>
 <body>
 
+<!-- ═════════════════════════ V.126 ON-SCREEN DEBUGGER ═════════════════════════
+     Panel-mandated after 25 waves of false-positive Chrome MCP probes.
+     This panel prints the GROUND TRUTH of what iOS Safari is actually
+     rendering — version, computed styles, FSM state, SW controller URL.
+     If the values shown here disagree with what Claude thinks landed,
+     the disconnect is finally visible. Tap to dismiss.
+     ════════════════════════════════════════════════════════════════════ -->
+<div id="v126-debug" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d00000;color:#fff;font:600 11px/1.4 -apple-system,BlinkMacSystemFont,system-ui,monospace;padding:8px 12px 8px 12px;text-align:left;-webkit-user-select:text;user-select:text;box-shadow:0 2px 8px rgba(0,0,0,.3);">
+  <button id="v126-debug-close" type="button" style="position:absolute;top:4px;right:6px;background:#fff;color:#d00000;border:none;border-radius:50%;width:22px;height:22px;font:bold 14px/22px system-ui;padding:0;cursor:pointer;">×</button>
+  <div id="v126-debug-body">V.126 DEBUG · booting…</div>
+</div>
+<script>
+(function(){
+  // ── V.126 hard cache-buster (one-shot, sessionStorage-guarded) ──────────
+  // EXPECTED is the cache key the current deploy SHOULD have written.
+  // If we don't see it AND we have stale savvey-static-* caches lying
+  // around, nuke EVERYTHING and force-reload once.
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v126';
+  var V126_GUARD          = 'savvey_v126_nuke_done';
+  if ('serviceWorker' in navigator && 'caches' in window) {
+    try {
+      caches.keys().then(function(keys){
+        var hasExpected = keys.indexOf(V126_EXPECTED_CACHE) !== -1;
+        var hasStaleSavvey = keys.some(function(k){
+          return /^savvey-static-/.test(k) && k !== V126_EXPECTED_CACHE;
+        });
+        if (!hasExpected || hasStaleSavvey) {
+          if (sessionStorage.getItem(V126_GUARD)) return; // no loops
+          sessionStorage.setItem(V126_GUARD, '1');
+          console.warn('[V.126] Cache mismatch — nuking. Found:', keys);
+          Promise.all(keys.map(function(k){ return caches.delete(k); }))
+            .then(function(){
+              return navigator.serviceWorker.getRegistrations();
+            })
+            .then(function(regs){
+              return Promise.all(regs.map(function(r){
+                return r.unregister().catch(function(){ return null; });
+              }));
+            })
+            .then(function(){
+              console.warn('[V.126] Cache + SW nuked. Force-reloading.');
+              window.location.reload();
+            });
+        } else {
+          console.log('[V.126] Cache OK:', V126_EXPECTED_CACHE);
+        }
+      }).catch(function(e){ console.warn('[V.126] caches.keys failed:', e && e.message); });
+    } catch (e) { /* swallow */ }
+  }
+  // ── V.126 debug-panel live updater ──────────────────────────────────────
+  function v126Update(){
+    var dbg = document.getElementById('v126-debug-body');
+    if (!dbg) return;
+    var versionTag = document.getElementById('version-tag');
+    var footer = versionTag ? (versionTag.textContent||'').trim() : '(no #version-tag)';
+    var door = document.querySelector('.v5-door');
+    var doorRadius = door ? getComputedStyle(door).borderRadius : '(no .v5-door)';
+    var doorShadowRaw = door ? (getComputedStyle(door).boxShadow || '') : '';
+    var doorShadowShort = doorShadowRaw.slice(0,80);
+    var doorBg = door ? getComputedStyle(door).backgroundColor : '(no door)';
+    var bodyBg = getComputedStyle(document.body).backgroundColor;
+    var savvey = document.querySelector('.v5-savvey-says');
+    var savveyRadius = savvey ? getComputedStyle(savvey).borderRadius : '(no .v5-savvey-says)';
+    var savveyShadow = savvey ? (getComputedStyle(savvey).boxShadow||'').slice(0,40) : '';
+    var fsmState = (window.__camFsm && window.__camFsm.state) || '(no fsm)';
+    var swCtl = '(no SW)';
+    try {
+      if ('serviceWorker' in navigator) {
+        var c = navigator.serviceWorker.controller;
+        swCtl = c ? (c.scriptURL.split('/').pop() + ' · ' + c.state) : '(no controller)';
+      }
+    } catch (e) {}
+    var dpr = window.devicePixelRatio || '?';
+    var ua = (navigator.userAgent||'').slice(0,40);
+    var crop = window.__lastV124Crop ? JSON.stringify({
+      dpr: window.__lastV124Crop.dpr_applied,
+      backing: window.__lastV124Crop.canvas_out && window.__lastV124Crop.canvas_out.backing_store,
+      bracket: window.__lastV124Crop.bracket_square && window.__lastV124Crop.bracket_square.size
+    }) : '(no capture yet)';
+    dbg.innerHTML =
+      'V.126 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
+      + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
+      + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
+      + 'body bg: <b>' + bodyBg + '</b> · FSM: <b>' + fsmState + '</b><br>'
+      + 'SW: ' + swCtl + '<br>'
+      + 'crop: ' + crop;
+  }
+  function v126AttachClose(){
+    var btn = document.getElementById('v126-debug-close');
+    if (btn && !btn._v126Wired) {
+      btn._v126Wired = true;
+      btn.addEventListener('click', function(){
+        var panel = document.getElementById('v126-debug');
+        if (panel && panel.parentNode) panel.parentNode.removeChild(panel);
+      });
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function(){ v126Update(); v126AttachClose(); });
+  } else {
+    v126Update(); v126AttachClose();
+  }
+  window.addEventListener('load', v126Update);
+  setInterval(v126Update, 2000);
+})();
+</script>
+
 <noscript><div style="padding:32px 16px;text-align:center;font-family:system-ui;"><h1>Savvey needs JavaScript</h1><p>Please enable JavaScript to use this app.</p></div></noscript>
 
 <div class="topbar">
@@ -4828,7 +4936,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v125</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v126</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
