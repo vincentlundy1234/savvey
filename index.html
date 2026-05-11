@@ -4367,6 +4367,127 @@
     font-weight: var(--sav-weight-subtitle);
   }
 
+  /* ===================== V.122b iOS REALITY CHECK =====================
+     Urgent panel-mandated fixes after Founder's iPhone test:
+       (1) WebKit was eating pinch gestures because no element had
+           `touch-action: none`. iOS treats the gesture as native page
+           zoom and never delivers touchmove with multiple touches.
+       (2) The whole app looked flat because the body background was
+           cream (#faf7f0) and the cards were white — virtually no
+           contrast for shadows to read against.
+       (3) Text/URL inputs used browser-default styling and read as
+           a generic web form, not an iOS-native field.
+     Fixes below, all forced with !important so historical cascade
+     can't undo them. ================================================== */
+
+  /* (1) — Touch-action gates: stop iOS Safari from claiming pinch.
+     `none` disables ALL native browser gestures on these elements
+     (pan, pinch, double-tap zoom). Touch events still fire on JS
+     listeners. Must be set on EVERY element in the gesture's hit
+     ancestry — that's why we list the screen, the wrapper, the
+     video, and the cutout. */
+  #screen-camera,
+  #cam-zoom-layer,
+  #cam-video,
+  .v5-cam-cutout,
+  .v5-cam-cutout--barcode,
+  .v106-bc-overlay {
+    touch-action: none !important;
+    -ms-touch-action: none !important;
+  }
+
+  /* (2) — Native iOS systemGroupedBackground + white card contrast.
+     #F2F2F7 is Apple HIG iOS-17 system grouped background. The
+     V.122 diffused shadow now has somewhere to read against. */
+  body {
+    background-color: #F2F2F7 !important;
+  }
+  /* Door tiles, the Intel Box, and CTA cards force white so the
+     shadow has something to lift OFF of. The pre-existing .v5-door
+     rule at line ~1009 used rgba(255,255,255,0.72) + backdrop-blur,
+     designed against the cream backdrop — on gray it looks washed.
+     Force solid white and re-apply the V.122 elevation shadow. */
+  .v5-door,
+  .cta:not(.primary),
+  .v5-savvey-says,
+  .v5-confirm-card,
+  .recent-chip {
+    background-color: #FFFFFF !important;
+    background: #FFFFFF !important;
+  }
+  /* (2b) — Apply the panel-mandated diffused shadow to the 4 Door
+     tiles. The previous .v5-door !important shadow was the soft
+     "0 1px 0 inset, 0 2px 6px .04" pair — invisible on cream and
+     barely there on gray. Replace with the full elevation pair. */
+  .v5-door {
+    box-shadow: var(--sav-shadow-elev-card) !important;
+    border-radius: var(--sav-radius-card) !important;
+    border: 1px solid rgba(20,32,26,0.06) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* (3) — Apple HIG text input styling for the Type bar + URL bar.
+     - appearance: none kills the WebKit default look (inset shadow,
+       rounded corners that don't match iOS native form fields)
+     - 17px font-size matches iOS body text AND prevents the
+       auto-zoom-on-focus behaviour iOS applies to inputs under 16px
+     - 12px border-radius is the iOS native input radius
+     - Light border + white bg + brand-green focus ring */
+  #text-input,
+  #url-input,
+  .v102-type-bar-input,
+  input[type="text"],
+  input[type="url"],
+  input[type="search"],
+  textarea {
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    background-color: #FFFFFF !important;
+    border: 1px solid #E5E5EA !important;
+    border-radius: 12px !important;
+    padding: 14px 16px !important;
+    font-size: 17px !important;
+    font-family: var(--sav-font-stack-system) !important;
+    color: #14201a !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transition: border-color .15s ease, box-shadow .15s ease !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  #text-input:focus,
+  #url-input:focus,
+  .v102-type-bar-input:focus,
+  input[type="text"]:focus,
+  input[type="url"]:focus,
+  input[type="search"]:focus,
+  textarea:focus {
+    border-color: var(--green, #2a6b22) !important;
+    box-shadow: 0 0 0 4px rgba(42, 107, 34, 0.12) !important;
+  }
+  /* Dark-mode preservation — keep the V.122b values legible if the
+     OS switches to dark. iOS systemGroupedBackground (dark) = #000. */
+  @media (prefers-color-scheme: dark) {
+    body { background-color: #000000 !important; }
+    .v5-door,
+    .cta:not(.primary),
+    .v5-savvey-says,
+    .v5-confirm-card,
+    .recent-chip {
+      background-color: #1C1C1E !important;
+      background: #1C1C1E !important;
+      border-color: rgba(255,255,255,0.08) !important;
+    }
+    #text-input, #url-input, .v102-type-bar-input,
+    input[type="text"], input[type="url"], input[type="search"], textarea {
+      background-color: #1C1C1E !important;
+      border-color: rgba(255,255,255,0.18) !important;
+      color: #FFFFFF !important;
+    }
+  }
+  /* ================== END V.122b iOS REALITY CHECK ================== */
+
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
      showed radius=18px and old soft shadow). Forcing the Panel-mandated
@@ -4528,7 +4649,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v122</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v122b</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
