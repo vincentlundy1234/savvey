@@ -4395,6 +4395,15 @@
     touch-action: none !important;
     -ms-touch-action: none !important;
   }
+  /* V.128 — Panel-mandated user-select lockdown on the top-level camera
+     container. iOS Safari occasionally treats long-press during pinch as
+     a text-selection gesture and swallows the touchmove sequence;
+     blocking selection here keeps the gesture purely as pointer events. */
+  #screen-camera {
+    user-select: none !important;
+    -webkit-user-select: none !important;
+    -webkit-touch-callout: none !important;
+  }
 
   /* (2) — Native iOS systemGroupedBackground + white card contrast.
      #F2F2F7 is Apple HIG iOS-17 system grouped background. The
@@ -4507,7 +4516,7 @@
     background: transparent;
     /* Massive outset shadow = darkened surround. Inset:0 isn't enough
        because we need it to cover the full viewport regardless of size. */
-    box-shadow: 0 0 0 9999px rgba(0,0,0,0.55);
+    box-shadow: 0 0 0 9999px rgba(0,0,0,0.60); /* V.127 alpha bump per Panel */
     pointer-events: none;
     z-index: 5;
     animation: v123-bc-breathe 1.4s ease-in-out infinite;
@@ -4730,8 +4739,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v126';
-  var V126_GUARD          = 'savvey_v126_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v128';
+  var V126_GUARD          = 'savvey_v128_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4787,19 +4796,27 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     } catch (e) {}
     var dpr = window.devicePixelRatio || '?';
     var ua = (navigator.userAgent||'').slice(0,40);
-    var crop = window.__lastV124Crop ? JSON.stringify({
-      dpr: window.__lastV124Crop.dpr_applied,
-      backing: window.__lastV124Crop.canvas_out && window.__lastV124Crop.canvas_out.backing_store,
-      bracket: window.__lastV124Crop.bracket_square && window.__lastV124Crop.bracket_square.size
-    }) : '(no capture yet)';
+    var c = window.__lastV124Crop;
+    var cropTxt = c
+      ? ('DPR=<b>' + c.dpr_applied + '</b> · backing=<b>' + (c.canvas_out && c.canvas_out.backing_store) + 'px</b> · css=<b>' + (c.canvas_out && c.canvas_out.css_size) + 'px</b><br>'
+        + 'raw video <b>' + (c.raw_video && c.raw_video.w) + '×' + (c.raw_video && c.raw_video.h) + '</b> · element <b>' + Math.round(c.element && c.element.w) + '×' + Math.round(c.element && c.element.h) + '</b> · zoom <b>' + c.zoom_factor + '</b><br>'
+        + 'bracket source: <b>' + (c.bracket_square && c.bracket_square.size) + 'px</b> @ (' + (c.bracket_square && c.bracket_square.x) + ',' + (c.bracket_square && c.bracket_square.y) + ')')
+      : '(no capture yet)';
+    var pinchTxt = '(no pinch yet)';
+    if (window.__v128Pinch) {
+      try {
+        pinchTxt = 'active=' + window.__v128Pinch.isActive() + ' · last=' + window.__v128Pinch.lastScale().toFixed(2) + '× · init=' + JSON.stringify(window.__v128Pinch.initial());
+      } catch (e) {}
+    }
     dbg.innerHTML =
-      'V.126 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.128 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
       + 'body bg: <b>' + bodyBg + '</b> · FSM: <b>' + fsmState + '</b><br>'
       + 'SW: ' + swCtl + '<br>'
-      + 'crop: ' + crop;
+      + 'pinch: ' + pinchTxt + '<br>'
+      + 'crop: ' + cropTxt;
   }
   function v126AttachClose(){
     var btn = document.getElementById('v126-debug-close');
@@ -4818,6 +4835,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   }
   window.addEventListener('load', v126Update);
   setInterval(v126Update, 2000);
+  // V.128 — expose for captureFrame() to call after every shutter press
+  window.v126Update = v126Update;
 })();
 </script>
 
@@ -4936,7 +4955,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v126</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v128</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5657,6 +5676,119 @@ function _v122SetCamZoom(z){
   return v;
 }
 
+// ═════════════════════════ V.128 STRICT GEOMETRIC PINCH ═════════════════════════
+// Panel-mandated rewrite after V.122b–V.125 pinch listeners were repeatedly
+// reported dead on real iOS device despite touch-action: none + {passive: false}
+// + preventDefault. Rip-and-replace approach: own pinch state ourselves at the
+// top level, attach listeners as early as DOM parse allows, drive both the CSS
+// wrapper transform AND (when available) the hardware zoom.
+//
+// Protocol (vanilla, no closures from setupCameraZoom):
+//   state:       _v128Active, _v128InitialDist, _v128InitialScale
+//   touchstart:  if e.touches.length === 2 → e.preventDefault();
+//                _v128InitialDist = Math.hypot(dx, dy)
+//                _v128InitialScale = readCssVar('--sav-cam-zoom') || 1
+//                _v128Active = true
+//   touchmove:   if _v128Active && e.touches.length === 2 → e.preventDefault();
+//                newScale = _v128InitialScale * (currentDist / _v128InitialDist)
+//                clamp 1.0–3.0
+//                write --sav-cam-zoom (via window._v128SetZoom if exposed
+//                by setupCameraZoom, else direct CSS var write)
+//   touchend:    _v128Active = false; window._v128OnPinchEnd(finalScale)
+// ═══════════════════════════════════════════════════════════════════════════════
+(function v128InitPinch(){
+  var _active = false;
+  var _initialDist = 0;
+  var _initialScale = 1;
+  var _lastScale = 1;
+  function _readScale(){
+    try {
+      var v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sav-cam-zoom'));
+      if (isFinite(v) && v >= 0.5 && v <= 6) return v;
+    } catch (e) {}
+    return 1;
+  }
+  function _writeScale(z){
+    var v = Math.max(1.0, Math.min(3.0, Number(z) || 1));
+    _lastScale = v;
+    if (typeof window._v128SetZoom === 'function') {
+      // Will write --sav-cam-zoom AND drive _scheduleHwZoom via the
+      // bridge exposed by setupCameraZoom (V.128).
+      try { window._v128SetZoom(v); return v; } catch (e) {}
+    }
+    // Fallback: write CSS var directly. Works even if setupCameraZoom
+    // hasn't finished initialising yet (rare race on slow networks).
+    try { document.documentElement.style.setProperty('--sav-cam-zoom', String(v)); } catch (e) {}
+    return v;
+  }
+  function _onStart(e){
+    if (!e.touches || e.touches.length !== 2) return;
+    try { e.preventDefault(); } catch (_) {}
+    var dx = e.touches[0].pageX - e.touches[1].pageX;
+    var dy = e.touches[0].pageY - e.touches[1].pageY;
+    _initialDist = Math.hypot(dx, dy) || 1;
+    _initialScale = _readScale();
+    _active = true;
+    // Surface the zoom indicator immediately so the user gets feedback
+    var ind = document.getElementById('zoom-indicator');
+    if (ind) { ind.hidden = false; ind.classList.add('zooming'); }
+  }
+  function _onMove(e){
+    if (!_active) return;
+    if (!e.touches || e.touches.length !== 2) return;
+    try { e.preventDefault(); } catch (_) {}
+    var dx = e.touches[0].pageX - e.touches[1].pageX;
+    var dy = e.touches[0].pageY - e.touches[1].pageY;
+    var curDist = Math.hypot(dx, dy) || 1;
+    var ratio = curDist / _initialDist;
+    var newScale = _initialScale * ratio;
+    var applied = _writeScale(newScale);
+    // Update the zoom-indicator text live
+    var ind = document.getElementById('zoom-indicator');
+    if (ind) ind.textContent = applied.toFixed(1) + '×';
+  }
+  function _onEnd(e){
+    if (!_active) return;
+    if (e.touches && e.touches.length >= 2) return;
+    _active = false;
+    if (typeof window._v128OnPinchEnd === 'function') {
+      try { window._v128OnPinchEnd(_lastScale); } catch (e) {}
+    } else {
+      // Defensive indicator-hide if the bridge isn't attached yet.
+      setTimeout(function(){
+        var ind = document.getElementById('zoom-indicator');
+        if (ind) { ind.hidden = true; ind.classList.remove('zooming'); }
+      }, 700);
+    }
+  }
+  function _attach(){
+    var el = document.getElementById('screen-camera');
+    if (!el) {
+      // DOM not ready yet — retry after a tick. setupCameraZoom listeners
+      // would attach later than this anyway, so being early is safe.
+      return setTimeout(_attach, 200);
+    }
+    if (el._v128Wired) return;
+    el._v128Wired = true;
+    el.addEventListener('touchstart', _onStart, { passive: false });
+    el.addEventListener('touchmove',  _onMove,  { passive: false });
+    el.addEventListener('touchend',   _onEnd,   { passive: false });
+    el.addEventListener('touchcancel',_onEnd,   { passive: false });
+    // Diagnostic: expose state for the V.126 debug banner
+    window.__v128Pinch = {
+      isActive: function(){ return _active; },
+      lastScale: function(){ return _lastScale; },
+      initial:   function(){ return { dist:_initialDist, scale:_initialScale }; }
+    };
+    console.log('[V.128] pinch listeners attached to #screen-camera');
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', _attach);
+  } else {
+    _attach();
+  }
+})();
+
 let _navInternal = false;
 // v3.4.5e — door tracking for PostHog segmentation (panel-mandated). Captures
 // which input door fired the most recent /api/normalize call so verdict_shown
@@ -6024,51 +6156,28 @@ function setupCameraGestures() {
   // vars (_pinchActive/_pinchStartDist/_pinchStartZoom/_currentCssZoom) and
   // SAME functions (_applyCssZoom/_scheduleHwZoom) as the V.105 path. No
   // state divergence — there is now exactly ONE pinch path.
+  // V.128 — RIPPED OUT V.123 listeners here. The new pinch handler lives
+  // in a top-level IIFE at the end of the script and uses the strict
+  // geometric protocol mandated by the Panel. We expose the CSS+HW
+  // zoom write path as a window-level function so the new pinch can
+  // drive both layers without needing access to setupCameraZoom's closure.
+  window._v128SetZoom = function(z){
+    try { _applyCssZoom(z); } catch (e) {}
+    try { _scheduleHwZoom(z); } catch (e) {}
+    _currentCssZoom = z;
+  };
+  // V.128 — first touchend handler removed. Pinch lifecycle (start/move/end)
+  // is now owned entirely by the top-level V.128 pinch IIFE further down.
+  // Expose a finaliser so V.128 can request the HW-zoom snap + indicator
+  // hide that previously lived here.
   const camScreenEl = document.getElementById('screen-camera') || video;
-  // V.123 — { passive: false } + e.preventDefault() on 2-touch events.
-  // touch-action: none alone is NOT enough on iOS Safari — it stops the
-  // default scroll/pinch, but the OS still claims the gesture as a system
-  // event unless JS *actively* preventDefaults it. Panel-mandated fix
-  // after V.122b iPhone test confirmed pinch still dead.
-  camScreenEl.addEventListener('touchstart', function(e) {
-    if (e.touches.length === 2) {
-      try { e.preventDefault(); } catch (_) {}
-      _pinchActive = true;
-      _pinchStartDist = _dist(e.touches[0], e.touches[1]);
-      _pinchStartZoom = _currentCssZoom;
-    }
-  }, { passive: false });
-  camScreenEl.addEventListener('touchmove', function(e) {
-    if (_pinchActive && e.touches.length === 2) {
-      try { e.preventDefault(); } catch (_) {}
-      const d = _dist(e.touches[0], e.touches[1]);
-      const ratio = d / Math.max(_pinchStartDist, 1);
-      // V.105 — Logarithmic pinch curve. Linear (target = startZoom * ratio)
-      // makes pinch-out near 3x require fingers nearly touching to get to 1x.
-      // ratio^1.4 makes pinch-out faster than pinch-in at high zooms,
-      // matching the iOS Camera feel and fixing Vincent's "hard to zoom out".
-      const target = _pinchStartZoom * Math.pow(ratio, 1.4);
-      const clamped = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, target));
-      _applyCssZoom(clamped);
-      _scheduleHwZoom(clamped);
-    }
-  }, { passive: false });
-  camScreenEl.addEventListener('touchend', function(e) {
-    if (_pinchActive && e.touches.length < 2) {
-      _pinchActive = false;
-      // Final hardware zoom snap so capture-time matches visual
-      _scheduleHwZoom(_currentCssZoom);
-      // V.95 — Hide zoom pill faster (was 1500ms). Premium cameras don't
-      // dwell on transient indicators. Also hide when at 1.0× regardless.
-      setTimeout(function(){
-        const ind = document.getElementById('zoom-indicator');
-        if (ind && !_pinchActive) {
-          ind.hidden = true;
-          ind.classList.remove('zooming');
-        }
-      }, 700);
-    }
-  }, { passive: true });
+  window._v128OnPinchEnd = function(finalScale){
+    try { _scheduleHwZoom(finalScale != null ? finalScale : _currentCssZoom); } catch (e) {}
+    setTimeout(function(){
+      const ind = document.getElementById('zoom-indicator');
+      if (ind) { ind.hidden = true; ind.classList.remove('zooming'); }
+    }, 700);
+  };
   // Double-tap reset to 1x (also moved to camera screen for iOS reliability)
   let _lastTapAt = 0;
   camScreenEl.addEventListener('touchend', function(e) {
@@ -6568,6 +6677,9 @@ async function captureFrame() {
   const firstCanvas = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, sw, sh);
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
+  // V.128 — kick the on-screen debug banner so `crop:` updates immediately
+  // after shutter instead of waiting for the 2s poller. Panel-mandated.
+  try { if (typeof v126Update === 'function') v126Update(); } catch (e) {}
   // V.104 — Tension state. Show freeze frame immediately after capture so
   // user feels the shutter "land" before the loading screen fires. The
   // captured snap stays on screen with a sweeping scan line + dim.
