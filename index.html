@@ -4725,30 +4725,152 @@
      We keep #barcode-reader and its video (needed for scanning) but
      visually nuke the library's overlay so only our V.130 .v123-bc-cutout
      shows. ═══════════════════════════════════════════════════════════════ */
+  /* V.132 — Panel-mandated BRUTE FORCE. The V.131 polite-CSS approach
+     left an orange laser line floating outside the cutout (html5-qrcode
+     injects this via inline JS). Nuke EVERY div inside the mount, then
+     explicitly unhide the video element. */
+  #barcode-reader div { display: none !important; }
+  #barcode-reader video {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    background: #000 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  /* Defensive ID-based kill in case html5-qrcode wraps the video element
+     and the wrapper-div display:none would otherwise hide our video too.
+     We also force any direct-child div CONTAINING a video to display:block. */
+  #barcode-reader > div:has(video) {
+    display: block !important;
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    position: absolute !important;
+    inset: 0 !important;
+  }
   #qr-shaded-region,
-  #barcode-reader [id^="qr-"]:not(:has(video)) {
+  #barcode-reader [id^="qr-"]:not(:has(video)),
+  #barcode-reader > svg,
+  #barcode-reader canvas {
     display: none !important;
     visibility: hidden !important;
     opacity: 0 !important;
   }
-  /* Strip every border / shadow / background from anything html5-qrcode
-     injects, since the library inline-styles corner brackets. The video
-     and canvas children are immune (they don't have borders by default). */
-  #barcode-reader,
-  #barcode-reader > * {
-    border: none !important;
-    box-shadow: none !important;
+  /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
+
+  /* ═════════════════════════ V.132 APPLE-GRADE LOADING ═══════════════════
+     Panel mandate: kill the V.104 black "Savvey is verifying..." scrim.
+     Replace with an Apple-style frosted overlay that surrounds the
+     bracket region while leaving the framed product crisp inside.
+     Plus a CSS-only native iOS spinner.
+
+     Geometry: brackets are 240×280 portrait, centred. We tile four
+     blur panels around them — top, bottom, left, right — each
+     covering one side of the screen up to the bracket edge. The
+     bracket interior stays un-blurred (no panel covers it), so the
+     paused live video frame shows the framed product crisp.
+
+     The V.132 path is gated by body.v132-loading (set by
+     showV104Tension, cleared by hideV104Tension). When inactive the
+     overlay element itself is `hidden` so nothing renders.
+     ═══════════════════════════════════════════════════════════════ */
+
+  /* Top blur: full width, top edge to top-of-bracket */
+  body.v132-loading .v132-blur-top {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: calc(50% - 140px);
+    background: rgba(0, 0, 0, 0.40);
+    backdrop-filter: blur(15px) saturate(140%);
+    -webkit-backdrop-filter: blur(15px) saturate(140%);
+    pointer-events: none;
+  }
+  body.v132-loading .v132-blur-bottom {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: calc(50% - 140px);
+    background: rgba(0, 0, 0, 0.40);
+    backdrop-filter: blur(15px) saturate(140%);
+    -webkit-backdrop-filter: blur(15px) saturate(140%);
+    pointer-events: none;
+  }
+  /* Left/right blur: only the band that's level with the bracket region,
+     covering the screen edge inward to the bracket left/right edge */
+  body.v132-loading .v132-blur-left {
+    position: absolute;
+    top: calc(50% - 140px);
+    bottom: calc(50% - 140px);
+    left: 0;
+    width: calc(50% - 120px);
+    background: rgba(0, 0, 0, 0.40);
+    backdrop-filter: blur(15px) saturate(140%);
+    -webkit-backdrop-filter: blur(15px) saturate(140%);
+    pointer-events: none;
+  }
+  body.v132-loading .v132-blur-right {
+    position: absolute;
+    top: calc(50% - 140px);
+    bottom: calc(50% - 140px);
+    right: 0;
+    width: calc(50% - 120px);
+    background: rgba(0, 0, 0, 0.40);
+    backdrop-filter: blur(15px) saturate(140%);
+    -webkit-backdrop-filter: blur(15px) saturate(140%);
+    pointer-events: none;
+  }
+  /* Default (when not v132-loading) — all four blur panels invisible */
+  .v132-blur { display: none; }
+  body.v132-loading .v132-blur { display: block; }
+
+  /* iOS-native circular spinner: thin ring with a brighter top arc that
+     spins. CSS-only, GPU-accelerated transform. */
+  .v132-spinner {
+    position: absolute;
+    top: calc(50% + 140px + 32px);  /* 32px below the bracket */
+    left: 50%;
+    width: 32px; height: 32px;
+    margin-left: -16px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.22);
+    border-top-color: rgba(255, 255, 255, 0.95);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+    animation: v132-spin 0.9s linear infinite;
+    pointer-events: none;
+    display: none;
+  }
+  body.v132-loading .v132-spinner { display: block; }
+  @keyframes v132-spin {
+    to { transform: rotate(360deg); }
+  }
+  /* Spinner caption — heavy weight, minimal text, centered under spinner */
+  .v132-verify-text {
+    position: absolute;
+    top: calc(50% + 140px + 32px + 48px);
+    left: 0; right: 0;
+    text-align: center;
+    font: 800 17px/1.2 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    letter-spacing: -0.01em;
+    color: #fff;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.5);
+    pointer-events: none;
+    display: none;
+  }
+  body.v132-loading .v132-verify-text { display: block; }
+  /* The legacy V.104 dim/scanline/text are no longer rendered (DOM was
+     replaced in V.132). Defensive: hide them if any cached HTML survives. */
+  body.v132-loading .v104-tension-dim,
+  body.v132-loading .v104-tension-scanline,
+  body.v132-loading .v104-tension-text { display: none !important; }
+  /* V.132 — also override the legacy .v104-tension black background so the
+     blur panels are the only opaque thing on screen. */
+  body.v132-loading .v104-tension {
     background: transparent !important;
   }
-  /* Make sure the video element inside fills the mount. */
-  #barcode-reader video {
-    width: 100% !important;
-    height: 100% !important;
-    object-fit: cover !important;
-    display: block !important;
-    background: #000 !important;
-  }
-  /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
+  /* ═════════════════════════ END V.132 APPLE-GRADE LOADING ═══════════════ */
 
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
@@ -4813,8 +4935,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v131';
-  var V126_GUARD          = 'savvey_v131_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v132';
+  var V126_GUARD          = 'savvey_v132_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4903,7 +5025,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.131 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.132 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5049,7 +5171,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v131</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v132</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5194,13 +5316,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
      scan line sweeping over it. Replaces the abrupt camera→loading swap.
      Hidden on result/disambig render. -->
 <div class="v104-tension" id="v104-tension" hidden aria-hidden="true">
-  <img class="v104-tension-frame" id="v104-tension-frame" alt="">
-  <div class="v104-tension-dim"></div>
-  <div class="v104-tension-scanline"></div>
-  <div class="v104-tension-text">
-    <div class="v104-tension-label">Savvey is verifying…</div>
-    <div class="v104-tension-sub">Working for you, not the retailer.</div>
-  </div>
+  <!-- V.132 — legacy <img> stays for back-compat but NEVER gets a src,
+       so it renders as nothing. The visible UI is now the four blur
+       panels (frame around the bracket region) + the iOS-native spinner
+       + the minimal "Verifying…" text. The live video pause keeps the
+       framed product crisp inside the bracket region. -->
+  <img class="v104-tension-frame" id="v104-tension-frame" alt="" hidden>
+  <div class="v132-blur v132-blur-top"></div>
+  <div class="v132-blur v132-blur-bottom"></div>
+  <div class="v132-blur v132-blur-left"></div>
+  <div class="v132-blur v132-blur-right"></div>
+  <div class="v132-spinner" aria-hidden="true"></div>
+  <div class="v132-verify-text">Verifying…</div>
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
@@ -6984,16 +7111,25 @@ async function captureFrame() {
 // screen change (result, confirm, error, home) automatically dismisses it.
 function showV104Tension(dataUrl) {
   try {
+    // V.132 — Panel mandate: do NOT paint the cropped frame full-bleed.
+    // Instead pause the LIVE video so the viewfinder freezes exactly
+    // where the user framed it. The V.132 frosted-blur overlay then
+    // sits ON TOP with a hole over the bracket region, so the framed
+    // product stays crisp while everything else is blurred.
+    try {
+      const vid = document.getElementById('cam-video');
+      if (vid && typeof vid.pause === 'function') vid.pause();
+    } catch (e) {}
     const el = document.getElementById('v104-tension');
+    if (!el) return;
+    // V.132 — img element stays empty (legacy V.104 path painted dataUrl
+    // here and stretched it via object-fit:cover, which made the cropped
+    // 567×662 capture fill the 390×844 viewport = "zoomed in" complaint).
     const img = document.getElementById('v104-tension-frame');
-    if (!el || !img) return;
-    if (dataUrl) img.src = dataUrl;
+    if (img) { img.removeAttribute('src'); img.hidden = true; }
     el.hidden = false;
-    // V.129 — when tension overlay is up, hide the camera-screen chrome
-    // (brackets, top bar, bottom row, zoom tiers, barcode cutout) so the
-    // capture-frame view stays clean. Without this the brackets + shutter
-    // bleed through behind the tension overlay on some iOS render paths.
     document.body.classList.add('v129-tensing');
+    document.body.classList.add('v132-loading');
   } catch (e) {}
 }
 function hideV104Tension() {
@@ -7005,6 +7141,7 @@ function hideV104Tension() {
       if (img) img.removeAttribute('src');
     }
     document.body.classList.remove('v129-tensing');
+    document.body.classList.remove('v132-loading');
   } catch (e) {}
 }
 
