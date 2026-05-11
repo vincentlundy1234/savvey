@@ -4550,6 +4550,29 @@
   }
   /* ================== END V.123 BARCODE CUTOUT ================== */
 
+  /* V.129 — chrome-hide during V.104 tension overlay. The tension overlay
+     is rendered ABOVE the camera screen, but on some iOS render paths
+     the bracket SVG / shutter button can bleed through during the
+     0–~3s capture-to-result window. Body class .v129-tensing forces
+     all camera-screen chrome to opacity 0 + pointer-events: none.
+     Removed automatically when hideV104Tension() runs. */
+  body.v129-tensing #screen-camera .v5-cam-cutout,
+  body.v129-tensing #screen-camera .v123-bc-cutout,
+  body.v129-tensing #screen-camera .v5-cam-topbar,
+  body.v129-tensing #screen-camera .v5-cam-bottom-row,
+  body.v129-tensing #screen-camera .v105-zoom-tiers,
+  body.v129-tensing #screen-camera .v5-cam-hint,
+  body.v129-tensing #screen-camera .v5-cam-mode-dots,
+  body.v129-tensing #screen-barcode .v123-bc-cutout,
+  body.v129-tensing #screen-barcode .v5-cam-hint,
+  body.v129-tensing #screen-barcode .v106-bc-scanline,
+  body.v129-tensing #screen-barcode .v5-cam-bottom-hint,
+  body.v129-tensing #screen-barcode .v5-cam-mode-dots {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity .15s ease !important;
+  }
+
   /* ═════════════════════════ V.125 BRUTE FORCE ═════════════════════════
      Panel-mandated after Founder's iPhone V.124 retest:
        The CSS variables (--sav-*) were correctly served and resolved in
@@ -4739,8 +4762,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v128';
-  var V126_GUARD          = 'savvey_v128_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v129';
+  var V126_GUARD          = 'savvey_v129_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4797,11 +4820,23 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     var dpr = window.devicePixelRatio || '?';
     var ua = (navigator.userAgent||'').slice(0,40);
     var c = window.__lastV124Crop;
-    var cropTxt = c
-      ? ('DPR=<b>' + c.dpr_applied + '</b> · backing=<b>' + (c.canvas_out && c.canvas_out.backing_store) + 'px</b> · css=<b>' + (c.canvas_out && c.canvas_out.css_size) + 'px</b><br>'
+    var cropTxt;
+    if (!c) {
+      cropTxt = '(no capture yet)';
+    } else if (c.version === 'v129') {
+      // V.129 — bracket-bounded crop diagnostic
+      cropTxt =
+          'DPR=<b>' + c.dpr_applied + '</b> · canvas CSS <b>' + (c.canvas_out && c.canvas_out.css_w) + '×' + (c.canvas_out && c.canvas_out.css_h) + '</b> · backing <b>' + (c.canvas_out && c.canvas_out.backing_w) + '×' + (c.canvas_out && c.canvas_out.backing_h) + '</b><br>'
         + 'raw video <b>' + (c.raw_video && c.raw_video.w) + '×' + (c.raw_video && c.raw_video.h) + '</b> · element <b>' + Math.round(c.element && c.element.w) + '×' + Math.round(c.element && c.element.h) + '</b> · zoom <b>' + c.zoom_factor + '</b><br>'
-        + 'bracket source: <b>' + (c.bracket_square && c.bracket_square.size) + 'px</b> @ (' + (c.bracket_square && c.bracket_square.x) + ',' + (c.bracket_square && c.bracket_square.y) + ')')
-      : '(no capture yet)';
+        + 'bracket CSS: <b>' + (c.bracket_css && c.bracket_css.w) + '×' + (c.bracket_css && c.bracket_css.h) + '</b> @ (' + (c.bracket_css && c.bracket_css.x) + ',' + (c.bracket_css && c.bracket_css.y) + ')<br>'
+        + 'capture src: <b>' + (c.capture_src && c.capture_src.w) + '×' + (c.capture_src && c.capture_src.h) + '</b> @ (' + (c.capture_src && c.capture_src.x) + ',' + (c.capture_src && c.capture_src.y) + ') · coverScale ' + c.cover_scale;
+    } else {
+      // legacy V.124/V.125 square diagnostic (fallback path)
+      cropTxt =
+          'DPR=<b>' + c.dpr_applied + '</b> · backing=<b>' + (c.canvas_out && c.canvas_out.backing_store) + 'px</b> · css=<b>' + (c.canvas_out && c.canvas_out.css_size) + 'px</b><br>'
+        + 'raw video <b>' + (c.raw_video && c.raw_video.w) + '×' + (c.raw_video && c.raw_video.h) + '</b> · element <b>' + Math.round(c.element && c.element.w) + '×' + Math.round(c.element && c.element.h) + '</b> · zoom <b>' + c.zoom_factor + '</b><br>'
+        + 'bracket source (legacy): <b>' + (c.bracket_square && c.bracket_square.size) + 'px</b> @ (' + (c.bracket_square && c.bracket_square.x) + ',' + (c.bracket_square && c.bracket_square.y) + ')';
+    }
     var pinchTxt = '(no pinch yet)';
     if (window.__v128Pinch) {
       try {
@@ -4809,7 +4844,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.128 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.129 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -4955,7 +4990,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v128</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v129</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6542,6 +6577,35 @@ function _cropCentreSquare(source, sw, sh) {
   return c;
 }
 
+// V.129 — capture-time math, RIGOROUS. Replaces the V.123/V.125 attempts
+// which assumed the brackets covered "centre 60% square of the visible
+// area" — they don't. The brackets are .v5-cam-cutout, a FIXED 240×280
+// CSS-pixel portrait rectangle anchored to the center of #screen-camera.
+//
+// Panel-mandated math:
+//   (1) Measure both the video element and the bracket element with
+//       getBoundingClientRect — gives us their actual on-screen positions
+//       in CSS pixels.
+//   (2) Bracket CSS coords RELATIVE to the video element:
+//         bx = cutout.left - video.left
+//         by = cutout.top  - video.top
+//         bw = cutout.width
+//         bh = cutout.height
+//   (3) Cover-scale ratio (object-fit: cover):
+//         coverScale = Math.max(elementW/vw, elementH/vh)
+//       The video is scaled by this factor to fill the element. Equivalent
+//       to: visible-source-rect in intrinsic px is (visX, visY, visW, visH)
+//       where vis{X,Y,W,H} are derived from the element/video aspect ratios.
+//   (4) Map bracket CSS coords → intrinsic video pixels:
+//         intX = visX + (bx / elementW) * visW
+//         intY = visY + (by / elementH) * visH
+//         intW = (bw / elementW) * visW
+//         intH = (bh / elementH) * visH
+//   (5) Apply CSS zoom: at zoom=N, the user is logically "closer" so the
+//       captured intrinsic region should shrink by 1/N (recentered).
+//   (6) Draw to canvas with DPR-scaled backing store. Preserve aspect ratio
+//       of the bracket (portrait → portrait canvas, never forced square).
+//
 // V.123 — capture-time math that matches what the user SEES in the viewfinder.
 //
 // The Bug: the viewfinder uses `object-fit: cover` on <video> and a CSS
@@ -6653,6 +6717,126 @@ async function _v123CropVisibleSquare(video) {
   } catch (e) {}
   return c;
 }
+
+// V.129 — bracket-bounded crop. Replaces _v123CropVisibleSquare as the
+// primary capture path. Uses the .v5-cam-cutout DOM element's actual
+// position to compute exactly which intrinsic video pixels the user
+// framed inside the brackets. Preserves bracket aspect ratio.
+async function _v129CropToBrackets(video) {
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return null;
+
+  let vRect = null;
+  try { vRect = video.getBoundingClientRect(); } catch (e) {}
+  const elementW = vRect ? vRect.width  : 0;
+  const elementH = vRect ? vRect.height : 0;
+  if (!elementW || !elementH) return _cropCentreSquare(video, vw, vh);
+
+  // ── Step 1: measure the brackets (real DOM, not assumed geometry) ──────
+  const cutoutEl = document.querySelector('.v5-cam-cutout');
+  let bracketCssX, bracketCssY, bracketCssW, bracketCssH;
+  if (cutoutEl) {
+    const cRect = cutoutEl.getBoundingClientRect();
+    bracketCssX = cRect.left - vRect.left;
+    bracketCssY = cRect.top  - vRect.top;
+    bracketCssW = cRect.width;
+    bracketCssH = cRect.height;
+  } else {
+    // Defensive: if cutout DOM missing, fall back to a centred 60% square
+    bracketCssW = Math.min(elementW, elementH) * 0.6;
+    bracketCssH = bracketCssW;
+    bracketCssX = (elementW - bracketCssW) / 2;
+    bracketCssY = (elementH - bracketCssH) / 2;
+  }
+  // Clamp to the video element box. Brackets can technically extend beyond
+  // (e.g. at high zoom levels the wrapper-scale makes them overflow), but
+  // we only capture intrinsic pixels that actually correspond to in-element
+  // coords, so clamping here keeps the math defined.
+  bracketCssX = Math.max(0, Math.min(elementW - 1, bracketCssX));
+  bracketCssY = Math.max(0, Math.min(elementH - 1, bracketCssY));
+  bracketCssW = Math.max(1, Math.min(elementW - bracketCssX, bracketCssW));
+  bracketCssH = Math.max(1, Math.min(elementH - bracketCssY, bracketCssH));
+
+  // ── Step 2: object-fit:cover visible source rect in intrinsic pixels ──
+  const elementRatio = elementW / elementH;
+  const videoRatio   = vw / vh;
+  let visW, visH, visX, visY;
+  if (videoRatio > elementRatio) {
+    visH = vh;
+    visW = vh * elementRatio;
+    visX = (vw - visW) / 2;
+    visY = 0;
+  } else {
+    visW = vw;
+    visH = vw / elementRatio;
+    visX = 0;
+    visY = (vh - visH) / 2;
+  }
+  // Equivalent cover-scale ratio (panel's formula) for diagnostic record
+  const coverScale = Math.max(elementW / vw, elementH / vh);
+
+  // ── Step 3: Map bracket CSS coords → intrinsic video pixels ───────────
+  let intX = visX + (bracketCssX / elementW) * visW;
+  let intY = visY + (bracketCssY / elementH) * visH;
+  let intW = (bracketCssW / elementW) * visW;
+  let intH = (bracketCssH / elementH) * visH;
+
+  // ── Step 4: Apply CSS zoom (--sav-cam-zoom). At zoom=N the user logically
+  //          frames a 1/N fraction of the un-zoomed bracket region. ────────
+  let zoom = 1;
+  try {
+    const z = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sav-cam-zoom'));
+    if (Number.isFinite(z) && z >= 0.5 && z <= 6) zoom = z;
+  } catch (e) {}
+  if (zoom !== 1) {
+    const newW = intW / zoom;
+    const newH = intH / zoom;
+    intX = intX + (intW - newW) / 2;
+    intY = intY + (intH - newH) / 2;
+    intW = newW;
+    intH = newH;
+  }
+  // Clamp to video bounds (defensive)
+  intX = Math.max(0, Math.min(vw - 1, intX));
+  intY = Math.max(0, Math.min(vh - 1, intY));
+  intW = Math.max(1, Math.min(vw - intX, intW));
+  intH = Math.max(1, Math.min(vh - intY, intH));
+
+  // ── Step 5: Draw to canvas. Preserve bracket aspect ratio (NO forced
+  //          square). DPR-scaled backing store for retina fidelity. ──────
+  const maxSide = Math.max(intW, intH);
+  const scaleFactor = maxSide > SNAP_MAX_WIDTH ? (SNAP_MAX_WIDTH / maxSide) : 1;
+  const targetW = Math.max(1, Math.floor(intW * scaleFactor));
+  const targetH = Math.max(1, Math.floor(intH * scaleFactor));
+  const dpr = Math.max(1, Math.min(4, Number(window.devicePixelRatio) || 1));
+  const c = document.createElement('canvas');
+  c.width  = Math.floor(targetW * dpr);
+  c.height = Math.floor(targetH * dpr);
+  c.style.width  = targetW + 'px';
+  c.style.height = targetH + 'px';
+  const ctx = c.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.drawImage(video, intX, intY, intW, intH, 0, 0, targetW, targetH);
+
+  // ── Diagnostic capture for the on-screen V.126 banner ─────────────────
+  try {
+    window.__lastV124Crop = {
+      ts: Date.now(),
+      raw_video:     { w: vw, h: vh, ratio: Number(videoRatio.toFixed(4)) },
+      element:       { w: elementW, h: elementH, ratio: Number(elementRatio.toFixed(4)) },
+      bracket_css:   { x: Math.round(bracketCssX), y: Math.round(bracketCssY), w: Math.round(bracketCssW), h: Math.round(bracketCssH) },
+      cover_visible: { x: Math.round(visX), y: Math.round(visY), w: Math.round(visW), h: Math.round(visH) },
+      cover_scale:   Number(coverScale.toFixed(4)),
+      zoom_factor:   zoom,
+      capture_src:   { x: Math.round(intX), y: Math.round(intY), w: Math.round(intW), h: Math.round(intH) },
+      canvas_out:    { css_w: targetW, css_h: targetH, backing_w: c.width, backing_h: c.height },
+      device_pixel_ratio: window.devicePixelRatio || 1,
+      dpr_applied:   dpr,
+      version:       'v129',
+    };
+  } catch (e) {}
+  return c;
+}
 function _frameToBase64(canvas) {
   const dataUrl = canvas.toDataURL('image/jpeg', SNAP_QUALITY);
   return dataUrl.split(',')[1];
@@ -6674,7 +6858,13 @@ async function captureFrame() {
   // RAW video frame; on iPhone full-bleed portrait viewfinder + CSS zoom
   // that produced wildly-over-zoomed captures because the raw 1920x1080
   // is much wider than the user sees inside the targeting brackets).
-  const firstCanvas = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, sw, sh);
+  // V.129 — bracket-bounded crop. If _v129 path returns null (rare: detached
+  // video element), fall back to the V.123 square-centre path, then the
+  // V.0 centre-of-raw-video path.
+  const firstCanvas =
+       (await _v129CropToBrackets(v))
+    || (await _v123CropVisibleSquare(v))
+    || _cropCentreSquare(v, sw, sh);
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
   // V.128 — kick the on-screen debug banner so `crop:` updates immediately
@@ -6686,12 +6876,16 @@ async function captureFrame() {
   showV104Tension(_lastSnapDataUrl);
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) {
-    const c2 = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
+    const c2 = (await _v129CropToBrackets(v))
+            || (await _v123CropVisibleSquare(v))
+            || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
     frames.push(_frameToBase64(c2));
   }
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) {
-    const c3 = (await _v123CropVisibleSquare(v)) || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
+    const c3 = (await _v129CropToBrackets(v))
+            || (await _v123CropVisibleSquare(v))
+            || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
     frames.push(_frameToBase64(c3));
   }
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
@@ -6709,6 +6903,11 @@ function showV104Tension(dataUrl) {
     if (!el || !img) return;
     if (dataUrl) img.src = dataUrl;
     el.hidden = false;
+    // V.129 — when tension overlay is up, hide the camera-screen chrome
+    // (brackets, top bar, bottom row, zoom tiers, barcode cutout) so the
+    // capture-frame view stays clean. Without this the brackets + shutter
+    // bleed through behind the tension overlay on some iOS render paths.
+    document.body.classList.add('v129-tensing');
   } catch (e) {}
 }
 function hideV104Tension() {
@@ -6719,6 +6918,7 @@ function hideV104Tension() {
       const img = document.getElementById('v104-tension-frame');
       if (img) img.removeAttribute('src');
     }
+    document.body.classList.remove('v129-tensing');
   } catch (e) {}
 }
 
