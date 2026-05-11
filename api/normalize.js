@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v118';
+const VERSION             = 'normalize.js v3.4.5v120a';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v78-4';
+const CACHE_PREFIX = 'sav-v120a-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -178,7 +178,9 @@ function cacheKey(inputType, payload) {
   // V.109 cache prefix bump v3_103 -> v3_109 — flushes every entry cached
   // under the V.97 7-day TTL so PS5 Pro (and others) re-fetch with fresh
   // SerpAPI verified prices instead of stale £749.99.
-  return 'savvey:normalize:v3_110:' + h.digest('hex').slice(0, 24);
+  // V.120a cache prefix bump — flushes V.118 entries so the new preservation
+  // rule (multi-pack/weight/colour/modifier) re-resolves canonical strings.
+  return 'savvey:normalize:v3_120a:' + h.digest('hex').slice(0, 24);
 }
 
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
@@ -206,6 +208,13 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 
 Field rules:
 - canonical_search_string: cleanest brand + family + model.
+  V.120a PRESERVATION RULE (CRITICAL — do not strip these): when the user's input contains any of the following signals, you MUST carry them through into canonical_search_string verbatim. Do NOT abbreviate, summarise, or drop them.
+    • Multi-pack quantity or count: "6 pack", "20 bags", "12 x", "Pack of 4", "x6", "case of 24". Keep the number AND the unit. A multipack is a different SKU at a different price.
+    • Weight, volume, dimension, page-count: "250g", "1L", "623g", "400 pages", "24cm", "1.7L", "135g". Keep the digits AND the unit symbol/word.
+    • Colourway: write the colour word in FULL ("Deep Teal", "Black Lacquer", "Sky Blue") — never truncate the final letters (NOT "Deep Tea", NOT "Sky Blu").
+    • Condition or relationship modifier: "replacement", "refill", "spare", "compatible", "used", "renewed", "official", "OEM". A "replacement TM6 mixing bowl" is NOT the same SKU as a "Thermomix TM6". Keep the modifier.
+    • Full model number including suffix: "YV9708" (not "YV97"), "9649-017" (not "9649"), "BES876" (not "BES"). Preserve every character.
+  Apply these rules to the four input doors (text, URL, photo, barcode). If the signal is implied but uncertain, lean toward preserving rather than dropping — downstream matching can re-broaden if needed, but cannot recover a stripped variant.
 - confidence: "high" if certain on brand+model+category. "medium" if model ambiguous. "low" if unclear.
 - confidence_score: V.110 — numeric 0-100 self-rating of YOUR certainty about the canonical_search_string. Calibration: 95-100 = exact MPN match (Bose QC45 -> "Bose QuietComfort 45"). 80-94 = brand+series clear, slight model ambiguity. 60-79 = brand clear, multiple plausible models. 40-59 = category clear, brand+model uncertain. 20-39 = category guess only. 0-19 = junk/blurry/unintelligible. Be honest — under-rate rather than over-rate. The frontend uses this for analytics + future routing tuning.
 - market_status: V.110 — UK market lifecycle of the canonical product. ONE of:
@@ -665,10 +674,14 @@ Verified Amazon UK price: ${price_str}` +
 //
 // Latency budget: 4000ms with abort. Falls through to V.96 lexical guard
 // on null / timeout / parse error so we never lose the safety net.
-async function callHaikuListingPicker({ canonical, candidates }) {
+async function callHaikuListingPicker({ canonical, candidates, trace = null }) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  if (!ANTHROPIC_KEY) return null;
-  if (!canonical || !Array.isArray(candidates) || candidates.length === 0) return null;
+  if (!ANTHROPIC_KEY) { if (trace) trace.push({step:'picker.skip', reason:'no_api_key'}); return null; }
+  if (!canonical || !Array.isArray(candidates) || candidates.length === 0) {
+    if (trace) trace.push({step:'picker.skip', reason:'no_candidates', candidates_in: Array.isArray(candidates) ? candidates.length : 0});
+    return null;
+  }
+  if (trace) trace.push({step:'picker.start', candidate_count: candidates.length, canonical: String(canonical).slice(0,80)});
 
   const sys = `You are a UK retail product matcher. Given a canonical product query and up to 5 Amazon UK listing candidates, pick the ONE listing that best matches the canonical product, or reject all of them.
 
@@ -713,19 +726,28 @@ Pick the index or return null. Produce the JSON.`;
     });
     if (!r.ok) {
       console.warn(`[${VERSION}] callHaikuListingPicker HTTP ${r.status}`);
+      if (trace) trace.push({step:'picker.http_error', status: r.status});
       return null;
     }
     const j = await r.json();
     const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
     const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
     let parsed;
-    try { parsed = JSON.parse(cleaned); } catch { return null; }
+    try { parsed = JSON.parse(cleaned); } catch {
+      if (trace) trace.push({step:'picker.parse_error', raw_snippet: text.slice(0,120)});
+      return null;
+    }
     const idx = parsed && (parsed.index === null ? null
       : (Number.isInteger(parsed.index) && parsed.index >= 0 && parsed.index < candidates.length ? parsed.index : null));
     const reason = (parsed && typeof parsed.reason === 'string') ? parsed.reason.slice(0, 200) : '';
+    if (trace) {
+      if (idx === null) trace.push({step:'picker.rejected_all', reason: reason});
+      else trace.push({step:'picker.picked', index: idx, reason: reason, picked_title: String(candidates[idx].title||'').slice(0,120), picked_price: candidates[idx].price});
+    }
     return { index: idx, reason };
   } catch (e) {
     console.warn(`[${VERSION}] callHaikuListingPicker error: ${e.message}`);
+    if (trace) trace.push({step:'picker.exception', message: String(e.message||e).slice(0,160)});
     return null;
   } finally { clearTimeout(timer); }
 }
@@ -782,14 +804,19 @@ function _extractAmazonReviews(item) {
 // Native Amazon search returns ASIN + price + rating directly, so we can
 // build canonical /dp/ASIN URLs with the affiliate tag baked in — no
 // redirect-chasing, no Google middleware.
-async function fetchVerifiedAmazonPrice(query) {
+async function fetchVerifiedAmazonPrice(query, trace = null) {
   _lastSerpStatus = null;
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) {
     _lastSerpStatus = 'no_key';
+    if (trace) trace.push({step:'serpapi.skip', reason:'no_api_key'});
     return null;
   }
-  if (!query || typeof query !== 'string' || query.length < 2) return null;
+  if (!query || typeof query !== 'string' || query.length < 2) {
+    if (trace) trace.push({step:'serpapi.skip', reason:'empty_query'});
+    return null;
+  }
+  if (trace) trace.push({step:'serpapi.fetch', query: query.slice(0,120)});
 
   const url = new URL('https://serpapi.com/search.json');
   url.searchParams.set('engine',         'amazon');
@@ -805,10 +832,12 @@ async function fetchVerifiedAmazonPrice(query) {
     _lastSerpStatus = r.status;
     if (!r.ok) {
       console.warn(`[${VERSION}] SerpAPI HTTP ${r.status} for "${query.slice(0, 60)}"`);
+      if (trace) trace.push({step:'serpapi.http_error', status: r.status});
       return null;
     }
     const j = await r.json();
     const results = Array.isArray(j.organic_results) ? j.organic_results : [];
+    if (trace) trace.push({step:'serpapi.results', total: results.length, sponsored_skipped: results.filter(it => it.sponsored).length});
 
     // Find first organic (non-sponsored) listing with a valid price.
     // Used / refurbished items are surfaced separately for savvey_says.
@@ -858,10 +887,12 @@ async function fetchVerifiedAmazonPrice(query) {
     let _v118Picked = null;
     let _v118Reason = '';
     if (_v118TopCandidates.length > 0) {
+      if (trace) trace.push({step:'picker.candidates_built', count: _v118TopCandidates.length, titles: _v118TopCandidates.map(c => ({t: c.title.slice(0,120), p: c.price}))});
       try {
         const picker = await callHaikuListingPicker({
           canonical: query,
           candidates: _v118TopCandidates,
+          trace,
         });
         if (picker && Number.isInteger(picker.index) && picker.index >= 0 && picker.index < _v118TopCandidates.length) {
           _v118Picked = _v118TopCandidates[picker.index]._ref;
@@ -873,7 +904,10 @@ async function fetchVerifiedAmazonPrice(query) {
         }
       } catch (e) {
         console.warn(`[${VERSION}] V.118 picker exception: ${e.message}. Falling through to V.96.`);
+        if (trace) trace.push({step:'picker.outer_exception', message: String(e.message||e).slice(0,160)});
       }
+    } else {
+      if (trace) trace.push({step:'picker.no_candidates', reason:'no priced non-sponsored non-used organic results'});
     }
 
     // If V.118 didn't pick (Haiku returned null, failed, or no candidates),
@@ -926,18 +960,23 @@ async function fetchVerifiedAmazonPrice(query) {
       console.warn(`[${VERSION}] SerpAPI lexical guard soft-fallback: query="${query.slice(0,60)}" rejected=${_skippedLexical} bestOverlap=${_bestSoftScore}/${canonicalTokens.length} tokens. Using soft match "${String(_bestSoftMatch.title||'').slice(0,80)}"`);
       primary = _bestSoftMatch;
       _lastSerpStatus = 'soft_match';
+      if (trace) trace.push({step:'lexical.soft_match', rejected: _skippedLexical, best_overlap: _bestSoftScore, tokens_required: minTokensRequired, soft_title: String(_bestSoftMatch.title||'').slice(0,120)});
     }
     if (!primary && _skippedLexical > 0) {
       console.warn(`[${VERSION}] SerpAPI lexical guard rejected ALL ${_skippedLexical} organic candidates for "${query.slice(0,60)}" (canonicalTokens=${canonicalTokens.length} required=${minTokensRequired}). No fallback — bestOverlap was 0.`);
+      if (trace) trace.push({step:'lexical.rejected_all', rejected: _skippedLexical, canonical_tokens: canonicalTokens.length, tokens_required: minTokensRequired, best_overlap: _bestSoftScore});
     }
     if (!primary && _skippedLexical === 0 && _organicChecked === 0) {
       console.warn(`[${VERSION}] SerpAPI returned 0 usable organic results for "${query.slice(0,60)}" (results.length=${results.length}). Likely sponsored-only or zero matches.`);
+      if (trace) trace.push({step:'serpapi.no_usable_results', total_results: results.length, organic_checked: 0});
     }
 
     if (!primary) {
       _lastSerpStatus = _lastSerpStatus || 'no_amazon_match';
+      if (trace) trace.push({step:'serpapi.final', outcome:'no_match', last_status: _lastSerpStatus});
       return null;
     }
+    if (trace) trace.push({step:'serpapi.final', outcome:'matched', last_status: _lastSerpStatus, source: _v118Picked ? 'v118_haiku_picker' : (_bestSoftMatch === primary ? 'v96_soft_match' : 'v96_lexical_or_first_pass'), picked_title: String(primary.title||'').slice(0,120), picked_price: Number(primary.extracted_price)});
 
     const asin = (typeof primary.asin === 'string' && /^[A-Z0-9]{8,12}$/i.test(primary.asin)) ? primary.asin : null;
 
@@ -1598,7 +1637,10 @@ export default async function handler(req, res) {
   // Wave II — canonical-keyed cache lookup. Different input phrasings that
   // resolve to the SAME canonical hit one shared cache entry, skipping
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
-  const _canonicalKey = `savvey:canonical:v6:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  // V.120a — bumped canonical cache key to v120a so V.118 cached payloads (which
+  // lack debug_trace and were keyed on the over-stripped canonical) don't shadow
+  // the new preserved-canonical lookups.
+  const _canonicalKey = `savvey:canonical:v120a:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -1623,20 +1665,27 @@ export default async function handler(req, res) {
   let verified_amazon_price = null;
   let retailer_deep_links = null;
   let alternative_amazon_price_v69 = null;
+  // V.120a — per-request debug trace. Panel-mandated to surface picker/lexical
+  // failure reasons in the JSON response, bypassing Vercel-log truncation.
+  const debugTrace = [];
+  debugTrace.push({step:'handler.parsed', canonical: String(parsed.canonical_search_string||'').slice(0,120), confidence: parsed.confidence, mpn: parsed.mpn || null});
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
     const canonicalKey = String(parsed.canonical_search_string).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
     const fetchAlt = (parsed.alternative_string && parsed.confidence === 'medium')
       ? fetchVerifiedAmazonPrice(parsed.alternative_string)
       : Promise.resolve(null);
     const [amazonRes, retailersRes, altAmazonRes] = await Promise.all([
-      fetchVerifiedAmazonPrice(parsed.canonical_search_string),
+      fetchVerifiedAmazonPrice(parsed.canonical_search_string, debugTrace),
       fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey),
       fetchAlt,
     ]);
     verified_amazon_price = amazonRes;
     retailer_deep_links = retailersRes;
     alternative_amazon_price_v69 = altAmazonRes;
+  } else {
+    debugTrace.push({step:'handler.skip_serpapi', reason: parsed.confidence === 'low' ? 'low_confidence' : 'no_canonical'});
   }
+  debugTrace.push({step:'handler.serpapi_outcome', has_price: !!verified_amazon_price, has_retailers: !!retailer_deep_links});
   // V.69 - alternative_amazon_price now resolved via the parallel batch above.
   const alternative_amazon_price = alternative_amazon_price_v69;
 
@@ -1886,6 +1935,7 @@ export default async function handler(req, res) {
     ? `https://www.amazon.co.uk/s?k=${encodeURIComponent(_amazonFallbackQ)}&tag=${encodeURIComponent(AMAZON_TAG)}`
     : null;
 
+  debugTrace.push({step:'handler.final', verdict: (parsed && parsed.savvey_says && parsed.savvey_says.verdict) || null, has_price: !!verified_amazon_price, latency_ms: Date.now() - t0});
   const responseBody = {
     ...parsed,
     specificity: _specificity,
@@ -1898,6 +1948,7 @@ export default async function handler(req, res) {
     visual_matches, // V.87 - low-conf snap visual similarity, null otherwise
     recommendations, // V.88 - budget-pattern Haiku recommendations, null otherwise
     review_synthesis, // V.89 - honest love/gripe pair, null otherwise
+    debug_trace: debugTrace, // V.120a — Panel-mandated pipeline trace
     _meta: {
       version: VERSION,
       input_type: inputType,
