@@ -4521,12 +4521,15 @@
     /* Subtle inner stroke so the user can see the edge of the cutout */
     border: 1.5px solid rgba(255, 255, 255, 0.55);
     background: transparent;
-    /* Massive outset shadow = dark surround everywhere except inside */
-    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.6);
+    /* V.133 — opacity bumped 0.60 → 0.85 per Panel mandate so the cutout
+       surround physically covers any UI html5-qrcode injects outside the
+       hole. Combined with z-index 50 below, the library's overlay (if any
+       survives the #qr-shaded-region kill) gets visually buried. */
+    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.85);
     /* CRITICAL: clip the laser line so it can never bleed outside */
     overflow: hidden;
     pointer-events: none;
-    z-index: 5;
+    z-index: 50; /* V.133 — was 5; must be above html5-qrcode's injected overlays */
     animation: v130-bc-breathe 1.4s ease-in-out infinite;
     touch-action: none !important;
   }
@@ -4725,40 +4728,36 @@
      We keep #barcode-reader and its video (needed for scanning) but
      visually nuke the library's overlay so only our V.130 .v123-bc-cutout
      shows. ═══════════════════════════════════════════════════════════════ */
-  /* V.132 — Panel-mandated BRUTE FORCE. The V.131 polite-CSS approach
-     left an orange laser line floating outside the cutout (html5-qrcode
-     injects this via inline JS). Nuke EVERY div inside the mount, then
-     explicitly unhide the video element. */
-  #barcode-reader div { display: none !important; }
+  /* V.133 — REVERTED V.132's nuclear `#barcode-reader div { display: none }`.
+     That rule killed the wrapper div that html5-qrcode puts around the
+     <video>, so the entire barcode screen went black. The Panel's
+     correct approach: target only the LIBRARY's known overlay element
+     (#qr-shaded-region) and let our V.130 cutout PHYSICALLY cover any
+     other rogue UI via a high z-index + nearly-opaque box-shadow. */
+  #qr-shaded-region {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+  /* Strip borders + backgrounds the library inline-styles on its inner
+     divs (corner brackets, scan-region indicator) WITHOUT hiding them
+     (so the video wrapper survives). They visually disappear because
+     their styling is wiped + our cutout covers them. */
+  #barcode-reader,
+  #barcode-reader > *,
+  #barcode-reader > * > * {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  /* Make sure the video element fills the mount and stays opaque-black
+     so we have a real preview. */
   #barcode-reader video {
     display: block !important;
-    position: absolute !important;
-    inset: 0 !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
     background: #000 !important;
-    border: none !important;
-    box-shadow: none !important;
-  }
-  /* Defensive ID-based kill in case html5-qrcode wraps the video element
-     and the wrapper-div display:none would otherwise hide our video too.
-     We also force any direct-child div CONTAINING a video to display:block. */
-  #barcode-reader > div:has(video) {
-    display: block !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    position: absolute !important;
-    inset: 0 !important;
-  }
-  #qr-shaded-region,
-  #barcode-reader [id^="qr-"]:not(:has(video)),
-  #barcode-reader > svg,
-  #barcode-reader canvas {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
   }
   /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
 
@@ -4870,6 +4869,29 @@
   body.v132-loading .v104-tension {
     background: transparent !important;
   }
+  /* V.133 — Panel-mandated photobomb fix. While the V.132 tension overlay
+     is up, the bracket interior is a transparent "hole" that reveals
+     whatever sits behind. The hole was showing the loading-screen
+     "Comparing UK retailers" card because callNormalize() calls
+     show('loading') which activates #screen-loading. Suppress every
+     non-camera screen + the bottom nav while v132-loading is on body. */
+  body.v132-loading #screen-loading,
+  body.v132-loading #screen-result,
+  body.v132-loading #screen-confirm,
+  body.v132-loading #screen-error,
+  body.v132-loading #screen-home,
+  body.v132-loading .bottom-nav,
+  body.v132-loading .v5-bottom-nav,
+  body.v132-loading .topbar {
+    display: none !important;
+    visibility: hidden !important;
+  }
+  /* The camera screen itself MUST stay visible (it holds the paused
+     <video> that the user sees through the bracket hole). */
+  body.v132-loading #screen-camera {
+    display: block !important;
+    visibility: visible !important;
+  }
   /* ═════════════════════════ END V.132 APPLE-GRADE LOADING ═══════════════ */
 
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
@@ -4935,8 +4957,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v132';
-  var V126_GUARD          = 'savvey_v132_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v133';
+  var V126_GUARD          = 'savvey_v133_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5025,7 +5047,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.132 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.133 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5171,7 +5193,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v132</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v133</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
