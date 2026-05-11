@@ -4711,6 +4711,45 @@
   }
   /* ═════════════════════════ END V.125 BRUTE FORCE ═════════════════════════ */
 
+  /* ═════════════════════════ V.131 SCANNER UI PURGE ═════════════════════════
+     Founder's iPhone V.130 test reported the scanner UI as "overlapping
+     white pill borders" still. Root cause was NOT a leftover SVG — it
+     was the html5-qrcode library's own injected DOM. When we call
+       new Html5Qrcode('barcode-reader').start(..., { qrbox: { width: 260,
+                                                              height: 120 }})
+     the library injects elements inside #barcode-reader:
+       #qr-shaded-region            — semi-transparent overlay around qrbox
+       <div> wrapping <video>       — the video container
+       canvas elements              — for processing frames
+       inline-styled corner borders — drawn around the qrbox region
+     We keep #barcode-reader and its video (needed for scanning) but
+     visually nuke the library's overlay so only our V.130 .v123-bc-cutout
+     shows. ═══════════════════════════════════════════════════════════════ */
+  #qr-shaded-region,
+  #barcode-reader [id^="qr-"]:not(:has(video)) {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+  }
+  /* Strip every border / shadow / background from anything html5-qrcode
+     injects, since the library inline-styles corner brackets. The video
+     and canvas children are immune (they don't have borders by default). */
+  #barcode-reader,
+  #barcode-reader > * {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+  }
+  /* Make sure the video element inside fills the mount. */
+  #barcode-reader video {
+    width: 100% !important;
+    height: 100% !important;
+    object-fit: cover !important;
+    display: block !important;
+    background: #000 !important;
+  }
+  /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
+
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
      showed radius=18px and old soft shadow). Forcing the Panel-mandated
@@ -4774,8 +4813,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v130';
-  var V126_GUARD          = 'savvey_v130_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v131';
+  var V126_GUARD          = 'savvey_v131_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4836,12 +4875,20 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     if (!c) {
       cropTxt = '(no capture yet)';
     } else if (c.version === 'v129') {
-      // V.129 — bracket-bounded crop diagnostic
+      // V.129/V.130/V.131 — bracket-bounded crop diagnostic
+      var brW = (c.bracket_css && c.bracket_css.w) || 0;
+      var brH = (c.bracket_css && c.bracket_css.h) || 0;
+      var cpW = (c.capture_src && c.capture_src.w) || 0;
+      var cpH = (c.capture_src && c.capture_src.h) || 0;
+      var brAspect = (brH > 0) ? (brW / brH).toFixed(3) : '?';
+      var cpAspect = (cpH > 0) ? (cpW / cpH).toFixed(3) : '?';
+      var aspectMatch = (brAspect === cpAspect) ? '<b style="color:#9f9">✓</b>' : '<b style="color:#fcc">≠</b> ' + brAspect + ' vs ' + cpAspect;
       cropTxt =
           'DPR=<b>' + c.dpr_applied + '</b> · canvas CSS <b>' + (c.canvas_out && c.canvas_out.css_w) + '×' + (c.canvas_out && c.canvas_out.css_h) + '</b> · backing <b>' + (c.canvas_out && c.canvas_out.backing_w) + '×' + (c.canvas_out && c.canvas_out.backing_h) + '</b><br>'
-        + 'raw video <b>' + (c.raw_video && c.raw_video.w) + '×' + (c.raw_video && c.raw_video.h) + '</b> · element <b>' + Math.round(c.element && c.element.w) + '×' + Math.round(c.element && c.element.h) + '</b> · zoom <b>' + c.zoom_factor + '</b><br>'
-        + 'bracket CSS: <b>' + (c.bracket_css && c.bracket_css.w) + '×' + (c.bracket_css && c.bracket_css.h) + '</b> @ (' + (c.bracket_css && c.bracket_css.x) + ',' + (c.bracket_css && c.bracket_css.y) + ')<br>'
-        + 'capture src: <b>' + (c.capture_src && c.capture_src.w) + '×' + (c.capture_src && c.capture_src.h) + '</b> @ (' + (c.capture_src && c.capture_src.x) + ',' + (c.capture_src && c.capture_src.y) + ') · coverScale ' + c.cover_scale;
+        + 'raw video <b>' + (c.raw_video && c.raw_video.w) + '×' + (c.raw_video && c.raw_video.h) + '</b> · element <b>' + Math.round(c.element && c.element.w) + '×' + Math.round(c.element && c.element.h) + '</b> · zoom <b>' + (c.zoom_factor && c.zoom_factor.toFixed ? c.zoom_factor.toFixed(2) : c.zoom_factor) + '</b><br>'
+        + 'bracket CSS: <b>' + brW + '×' + brH + '</b> (aspect ' + brAspect + ') @ (' + (c.bracket_css && c.bracket_css.x) + ',' + (c.bracket_css && c.bracket_css.y) + ')<br>'
+        + 'capture src: <b>' + cpW + '×' + cpH + '</b> (aspect ' + cpAspect + ') @ (' + (c.capture_src && c.capture_src.x) + ',' + (c.capture_src && c.capture_src.y) + ')<br>'
+        + 'coverScale ' + c.cover_scale + ' · aspect check ' + aspectMatch;
     } else {
       // legacy V.124/V.125 square diagnostic (fallback path)
       cropTxt =
@@ -4856,7 +4903,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.130 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.131 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5002,7 +5049,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v130</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v131</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5037,8 +5084,10 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   <div class="v123-bc-cutout" aria-hidden="true">
     <div class="v123-bc-laser" aria-hidden="true"></div>
   </div>
-  <!-- Legacy mount preserved for engine bindings -->
-  <div class="v5-cam-cutout v5-cam-cutout--barcode" hidden></div>
+  <!-- V.131 — legacy v5-cam-cutout--barcode zombie div DELETED. It was
+       already hidden but the Panel mandate was to physically purge any
+       legacy markup. The actual library overlay (html5-qrcode's
+       qr-shaded-region) is suppressed via CSS in the V.131 block below. -->
 
   <!-- Barcode reader mount (engine: barcode-reader) — invisible but live -->
   <div id="barcode-reader" class="v5-barcode-mount"></div>
@@ -6822,8 +6871,25 @@ async function _v129CropToBrackets(video) {
   intW = Math.max(1, Math.min(vw - intX, intW));
   intH = Math.max(1, Math.min(vh - intY, intH));
 
-  // ── Step 5: Draw to canvas. Preserve bracket aspect ratio (NO forced
-  //          square). DPR-scaled backing store for retina fidelity. ──────
+  // ── Step 5: Draw to canvas.
+  //
+  // V.131 DPR AUDIT (Panel-mandated): confirming the drawImage math is
+  // NOT double-scaling.
+  //   canvas.width  = targetW * dpr     ← PHYSICAL (backing-store) pixels
+  //   canvas.height = targetH * dpr     ← PHYSICAL
+  //   canvas.style.width  = targetW px  ← CSS display size (we never mount)
+  //   ctx.scale(dpr, dpr)               ← CTM scales drawing by DPR
+  //   drawImage(src, sx, sy, sW, sH,    ← source in INTRINSIC video px
+  //             0, 0, targetW, targetH) ← destination in CSS pixels
+  // After ctx.scale, the destination rect (0..targetW, 0..targetH)
+  // transforms to (0..targetW*dpr, 0..targetH*dpr) in backing-store
+  // pixels — which is EXACTLY the canvas backing size. No double-scale.
+  // The captured image is rendered at retina resolution AT the intended
+  // CSS-pixel dimensions. toDataURL exports the full backing-store
+  // image (targetW*dpr × targetH*dpr) so Haiku Vision sees retina-
+  // resolution pixels of the bracketed region. ✓
+  //
+  // Preserve bracket aspect ratio (NO forced square).
   const maxSide = Math.max(intW, intH);
   const scaleFactor = maxSide > SNAP_MAX_WIDTH ? (SNAP_MAX_WIDTH / maxSide) : 1;
   const targetW = Math.max(1, Math.floor(intW * scaleFactor));
