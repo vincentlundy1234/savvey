@@ -5366,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v141';
-  var V126_GUARD          = 'savvey_v141_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v142';
+  var V126_GUARD          = 'savvey_v142_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5456,7 +5456,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.141 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.142 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5602,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v141</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v142</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -8021,24 +8021,35 @@ async function callNormalize(body) {
     // V.140 — explicit HTTP status branch BEFORE parsing JSON. A 500/504
     // body is usually HTML (Vercel's error page), so r.json() would throw
     // and obscure the real status code. Surface a status-specific message.
-    if (!r.ok) {
+        if (!r.ok) {
       const _ms = Date.now() - t0;
-      track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms });
+      // V.142 — read the response body to surface the actual error
+      // message. Server error pages may be HTML or JSON; fall back
+      // gracefully so the user sees what really failed.
+      let _errBody = '';
+      try {
+        const _rt = await r.text();
+        try {
+          const _ej = JSON.parse(_rt);
+          _errBody = String(_ej.message || _ej.error || _rt).slice(0, 240);
+        } catch { _errBody = String(_rt || '').slice(0, 240); }
+      } catch { _errBody = ''; }
+      track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms, err: _errBody.slice(0, 100) });
       clearInterval(phaseTimer);
       if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
       let title, sub;
       if (r.status === 504 || r.status === 408) {
         title = 'The AI took too long to respond.';
-        sub   = 'Try again — usually fine on a second attempt.';
+        sub   = 'Try again \u2014 usually fine on a second attempt.';
       } else if (r.status === 429) {
         title = 'Too many checks at once.';
         sub   = 'Wait a moment and try again.';
       } else if (r.status >= 500) {
-        title = 'Savvey had a hiccup.';
-        sub   = 'The server choked. Try again in a moment.';
+        title = 'Savvey had a hiccup (HTTP ' + r.status + ').';
+        sub   = _errBody || 'The server choked. Try again in a moment.';
       } else {
-        title = 'Couldn\u2019t complete that check.';
-        sub   = `Server said ${r.status}. Try again.`;
+        title = 'Couldn\u2019t complete that check (HTTP ' + r.status + ').';
+        sub   = _errBody || ('Server said ' + r.status + '. Try again.');
       }
       showError(title, sub);
       return;
