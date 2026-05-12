@@ -4774,15 +4774,26 @@
      spinner in its place. Result: clean white card, native iOS
      spinner, no video freeze, no memory-pressure black-out.
      ═════════════════════════════════════════════════════════════════ */
-  /* Phase A polish on the loading card */
+  /* V.135 — fixed V.134 layout collapse. The original max-width:380px +
+     padding:32px 24px squeezed the V.77 4-node timeline so the labels
+     overlapped the spinner. Restructured with proper vertical rhythm
+     and wider card so the timeline breathes. */
   body .v5-loading-screen.active .v5-loading-inner {
     background: #FFFFFF !important;
     border-radius: 16px !important;
     box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10),
                 0 8px 10px -6px rgba(0, 0, 0, 0.10) !important;
     border: 1px solid rgba(20, 32, 26, 0.06) !important;
-    padding: 32px 24px !important;
-    max-width: 380px !important;
+    padding: 28px 20px 24px !important;
+    width: calc(100% - 32px) !important;
+    max-width: 440px !important;
+    /* V.135 — vertical rhythm using gap so spinner/timeline/text don't
+       collide. The V.77 layout used absolute orbit dimensions; this
+       restores predictable spacing. */
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 18px !important;
   }
   /* Dark-mode parallel */
   @media (prefers-color-scheme: dark) {
@@ -4794,18 +4805,19 @@
   /* Hide the V.77 orbit/core S-badge — replaced by the iOS spinner */
   .v5-loading-orbit { display: none !important; }
 
-  /* iOS-native circular spinner — repurposed from the (deleted) V.132
-     CSS. Rendered INSIDE the loading card now, not as a full-screen
-     overlay. Sized 36px so it reads at glance distance. */
+  /* iOS-native circular spinner. V.135 — explicit margin reset (the
+     V.134 margin:0 auto 18px got collapsed by flex gap above). */
   .v134-loading-spinner {
     width: 36px; height: 36px;
-    margin: 0 auto 18px;
+    margin: 0 !important;
+    flex: 0 0 auto;
     border-radius: 50%;
     border: 3px solid rgba(20, 32, 26, 0.12);
     border-top-color: var(--green, #2a6b22);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
     animation: v134-spin 0.9s linear infinite;
     will-change: transform;
+    display: block !important;
   }
   @media (prefers-color-scheme: dark) {
     .v134-loading-spinner {
@@ -4821,17 +4833,58 @@
       animation-duration: 2.4s;
     }
   }
-  /* Loading narration text — use V.122 system stack at 800 weight per
-     the Panel directive. */
+  /* V.135 — give the timeline a known width so its 4 phase nodes
+     space evenly without overflowing the 440px card. */
+  .v5-loading-screen.active .v5-loading-timeline {
+    width: 100% !important;
+    max-width: 360px !important;
+    margin: 0 !important;
+  }
+  /* Loading narration text — system stack, balanced weight for legibility. */
   .v5-loading-screen .v5-loading-witty,
   .v5-loading-screen #loading-text {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
     font-weight: 600 !important;
     font-size: 16px !important;
     color: var(--ink, #14201a) !important;
-    margin-top: 4px;
+    margin: 0 !important;
+    text-align: center !important;
+  }
+  .v5-loading-screen .v5-loading-footer {
+    font-size: 12px !important;
+    color: var(--ink-mute, #7a857f) !important;
+    margin: 0 !important;
+    text-align: center !important;
   }
   /* ═════════════════════════ END V.134 SAFE LOADING ROLLBACK ═════════════ */
+
+  /* ═════════════════════════ V.135 ROUTING DEFENCE ═════════════════════════
+     Founder reported V.134 broke screen-result + screen-confirm visibility
+     (verified prices not showing, disambiguation skipping). Most likely
+     causes: a v132-loading body class leftover from a stale cached PWA
+     session OR a transitive specificity override from one of the V.122-V.134
+     hide rules. This block defensively guarantees that whichever screen
+     carries `.active` becomes visible regardless of body classes.
+     ═════════════════════════════════════════════════════════════════ */
+  /* Defensively clear any V.132-era body class that might persist on a
+     cached PWA shell. The .v132-loading + .v129-tensing rules above
+     should already be dormant (showV104Tension is a no-op in V.134+),
+     but if a service-worker race kept the old shell briefly active and
+     set the class, this rule keeps screens visible regardless. */
+  body.v132-loading #screen-result.active,
+  body.v132-loading #screen-confirm.active,
+  body.v132-loading #screen-error.active,
+  body.v129-tensing #screen-result.active,
+  body.v129-tensing #screen-confirm.active,
+  body.v129-tensing #screen-error.active,
+  body #screen-result.active,
+  body #screen-confirm.active,
+  body #screen-error.active {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+  /* ═════════════════════════ END V.135 ROUTING DEFENCE ═══════════════════ */
 
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
@@ -4896,8 +4949,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v134';
-  var V126_GUARD          = 'savvey_v134_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v135';
+  var V126_GUARD          = 'savvey_v135_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -4986,7 +5039,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.134 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.135 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5132,7 +5185,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v134</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v135</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -7060,7 +7113,14 @@ async function captureFrame() {
             || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
     frames.push(_frameToBase64(c3));
   }
-  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  // V.135 — Panel-mandated teardown routing fix. Previously this stopped
+  // tracks directly, bypassing the FSM. Result: FSM stayed in CAPTURING
+  // state while the loading screen was active (red banner caught this).
+  // Now goes through stopAllScanners() which calls __camFsm._teardownInternal(),
+  // properly transitioning CAPTURING → TEARING_DOWN → RELEASED → IDLE.
+  try { stopAllScanners(); } catch (e) {
+    if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch {} camStream = null; }
+  }
   const totalBytes = frames.reduce((s, f) => s + Math.floor(f.length * 0.75), 0);
   track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });
   await callNormalize({ input_type: 'image', image_base64_frames: frames, media_type: 'image/jpeg' });

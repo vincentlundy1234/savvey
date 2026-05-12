@@ -27,7 +27,7 @@
 // v3.4.5o (6 May 2026): STATIC_VER bumped v345n -> v345o for Wave E
 // V.124 (11 May 2026): STATIC_VER bumped v345v123 -> v345v124 + new
 // activate logic above; rolling forward will be self-recovering from now on.
-const STATIC_VER    = 'savvey-static-v345v134';
+const STATIC_VER    = 'savvey-static-v345v135';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
