@@ -5320,8 +5320,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v139';
-  var V126_GUARD          = 'savvey_v139_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v140';
+  var V126_GUARD          = 'savvey_v140_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5410,7 +5410,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.139 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.140 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5556,7 +5556,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v139</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v140</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -7948,13 +7948,54 @@ async function callNormalize(body) {
   _savveyActiveAbort = _ac;
   const _mySeq = ++_savveyFetchSeq;
   const _ato = setTimeout(() => _ac.abort(), 15000);
+  // V.140 — track WHY we aborted. The 15s timeout firing must surface an
+  // explicit error to the user, not be swallowed like a user-initiated nav.
+  var _timedOut = false;
+  if (_ato) clearTimeout(_ato);
+  var _ato_v140 = setTimeout(() => { _timedOut = true; try { _ac.abort(); } catch {} }, 15000);
   try {
     const r = await fetch('/api/normalize', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       signal: _ac.signal
     });
-    clearTimeout(_ato);
-    const j = await r.json();
+    clearTimeout(_ato_v140);
+    // V.140 — explicit HTTP status branch BEFORE parsing JSON. A 500/504
+    // body is usually HTML (Vercel's error page), so r.json() would throw
+    // and obscure the real status code. Surface a status-specific message.
+    if (!r.ok) {
+      const _ms = Date.now() - t0;
+      track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms });
+      clearInterval(phaseTimer);
+      if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
+      let title, sub;
+      if (r.status === 504 || r.status === 408) {
+        title = 'The AI took too long to respond.';
+        sub   = 'Try again — usually fine on a second attempt.';
+      } else if (r.status === 429) {
+        title = 'Too many checks at once.';
+        sub   = 'Wait a moment and try again.';
+      } else if (r.status >= 500) {
+        title = 'Savvey had a hiccup.';
+        sub   = 'The server choked. Try again in a moment.';
+      } else {
+        title = 'Couldn\u2019t complete that check.';
+        sub   = `Server said ${r.status}. Try again.`;
+      }
+      showError(title, sub);
+      return;
+    }
+    // V.140 — guard JSON parse with its own try/catch so a malformed body
+    // doesn't silently bubble to the outer abort handler.
+    let j;
+    try {
+      j = await r.json();
+    } catch (parseErr) {
+      track('normalize_parse_error', { input_type: body.input_type, error: String(parseErr).slice(0,100), ms: Date.now() - t0 });
+      clearInterval(phaseTimer);
+      if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
+      showError('Couldn\u2019t read the response.', 'Try again \u2014 the server sent an unexpected reply.');
+      return;
+    }
     clearInterval(phaseTimer);
     const ms = Date.now() - t0;
     // V.75 — drop response if a newer call has started or this one was aborted.
@@ -8081,19 +8122,27 @@ async function callNormalize(body) {
     }
   } catch (err) {
     clearInterval(phaseTimer);
-    // V.75 — swallow AbortError silently; that's the user navigating away,
-    // not a real error worth surfacing. Anything else gets the normal path.
-    if (err && (err.name === 'AbortError' || String(err).indexOf('aborted') !== -1)) {
-      track('normalize_aborted', { input_type: body.input_type, ms: Date.now() - t0 });
+    const _isAbort = err && (err.name === 'AbortError' || String(err).indexOf('aborted') !== -1);
+    // V.140 — split the abort path. The V.75 silent-swallow rule was correct
+    // for "newer fetch replaced this one". The 15s _timedOut abort is a REAL
+    // failure mode and the user must see an error screen.
+    if (_isAbort && !_timedOut && _mySeq !== _savveyFetchSeq) {
+      track('normalize_aborted', { input_type: body.input_type, ms: Date.now() - t0, reason: 'superseded' });
+    } else if (_isAbort && _timedOut) {
+      track('normalize_timeout', { input_type: body.input_type, ms: Date.now() - t0 });
+      if (_mySeq === _savveyFetchSeq) {
+        showError('The AI took too long to respond.', 'Try again \u2014 usually fine on a second attempt.');
+      }
+    } else if (_isAbort) {
+      track('normalize_aborted', { input_type: body.input_type, ms: Date.now() - t0, reason: 'user_nav' });
     } else {
       track('normalize_throw', { input_type: body.input_type, error: String(err).slice(0, 100) });
-      // Only surface error if user is still on the loading screen for this call.
       if (_mySeq === _savveyFetchSeq) {
         showError('Network error.', 'Check your connection and try again.');
       }
     }
   } finally {
-    clearTimeout(_ato);  // Wave BB defensive cleanup
+    clearTimeout(_ato_v140);  // V.140 cleanup
     window._savveyFetching = false;
     // V.75 — only release the global handle if it still points at us
     // (a later call may have already replaced it).

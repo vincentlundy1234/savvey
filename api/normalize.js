@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v139';
+const VERSION             = 'normalize.js v3.4.5v140';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v139-1';
+const CACHE_PREFIX = 'sav-v140-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -840,96 +840,11 @@ CRITICAL RULES (apply to ALL modes):
   } finally { clearTimeout(timer); }
 }
 
-// V.139 — Tier-fallback Haiku call. ONLY fires on the recovery path when
-// the primary parser returned 0-1 alternatives for a generic-noun query
-// (e.g. "Teapot", "Mug", "Garden Hose"). Single focused prompt returns
-// 3 UK products spanning budget / top-rated / premium tiers. This is
-// the documented "one fallback call" exemption to the "no 5 separate
-// AI calls" mandate — fires only when the main parse missed tiers.
-async function callHaikuTierFallback({ canonical, category, trace }) {
-  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-  const EMPTY = { alternatives_array: null, alternatives_meta: null };
-  if (!ANTHROPIC_KEY || !canonical) return EMPTY;
-
-  const sys = `You are Savvey's tier generator for UK shoppers. Given a generic product noun (e.g. "Teapot", "Toaster", "Cordless Drill"), return EXACTLY 3 popular UK products spanning budget, top-rated, and premium price tiers.
-
-OUTPUT JSON ONLY, no preamble, no markdown fences:
-{
-  "alternatives_array": ["budget product full name", "top-rated product full name", "premium product full name"],
-  "alternatives_meta": [
-    { "tier": "basic",     "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" },
-    { "tier": "top_rated", "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" },
-    { "tier": "premium",   "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" }
-  ]
-}
-
-RULES:
-- Use real UK products available on Amazon UK or major UK retailers. No invented SKUs.
-- Tier 0 (basic): cheapest reliable option, plain-spoken.
-- Tier 1 (top_rated): the most-reviewed mid-priced product. MUST include rating + reviews when known.
-- Tier 2 (premium): heritage / craft / longevity angle. Higher GBP.
-- typical_price_gbp must be a sensible UK retail point — no guesses outside 10x range.
-- rationale = ONE short clause, max 10 words.
-- If you cannot honestly produce 3 tiers (e.g. canonical is too narrow), return {"alternatives_array": null, "alternatives_meta": null}.
-- Output VALID JSON only. No prose preamble. Max ~250 tokens.`;
-
-  const userMsg = `Canonical: "${String(canonical).slice(0, 100)}"\nCategory: ${category || 'unknown'}\n\nProduce the 3-tier JSON now.`;
-
-  const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 4000);
-  try {
-    if (trace) trace.push({step:'tier_fallback.start', canonical: String(canonical).slice(0,60), category: category || null});
-    const r = await fetch(ANTHROPIC_ENDPOINT, {
-      method: 'POST',
-      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-      body: JSON.stringify({
-        model: MODEL,
-        max_tokens: 350,
-        system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: userMsg }],
-      }),
-      signal: ac.signal,
-    });
-    if (!r.ok) {
-      console.warn(`[${VERSION}] callHaikuTierFallback HTTP ${r.status}`);
-      if (trace) trace.push({step:'tier_fallback.http_error', status: r.status});
-      return EMPTY;
-    }
-    const j = await r.json();
-    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
-    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
-    let parsed;
-    try { parsed = JSON.parse(cleaned); }
-    catch (e) {
-      console.warn(`[${VERSION}] callHaikuTierFallback JSON parse failed: ${e.message}`);
-      if (trace) trace.push({step:'tier_fallback.parse_error', snippet: text.slice(0,120)});
-      return EMPTY;
-    }
-    const arr = Array.isArray(parsed && parsed.alternatives_array) ? parsed.alternatives_array : null;
-    const meta = Array.isArray(parsed && parsed.alternatives_meta) ? parsed.alternatives_meta : null;
-    if (!arr || arr.length !== 3 || !meta || meta.length !== 3) {
-      if (trace) trace.push({step:'tier_fallback.shape_invalid', got_arr: arr ? arr.length : 0, got_meta: meta ? meta.length : 0});
-      return EMPTY;
-    }
-    // Sanitise meta numerics.
-    const cleanMeta = meta.map(m => ({
-      tier:              (m && typeof m.tier === 'string') ? m.tier : null,
-      typical_price_gbp: (m && Number(m.typical_price_gbp) > 0) ? Number(m.typical_price_gbp) : null,
-      rating:            (m && Number(m.rating) > 0 && Number(m.rating) <= 5) ? Number(m.rating) : null,
-      reviews:           (m && Number(m.reviews) > 0) ? Math.floor(Number(m.reviews)) : null,
-      rationale:         (m && typeof m.rationale === 'string') ? m.rationale.trim().slice(0, 120) : null,
-    }));
-    if (trace) trace.push({step:'tier_fallback.done', n: arr.length});
-    return {
-      alternatives_array: arr.map(s => String(s).slice(0, 200)),
-      alternatives_meta:  cleanMeta,
-    };
-  } catch (e) {
-    console.warn(`[${VERSION}] callHaikuTierFallback error: ${e.message}`);
-    if (trace) trace.push({step:'tier_fallback.exception', message: String(e.message || e).slice(0, 160)});
-    return EMPTY;
-  } finally { clearTimeout(timer); }
-}
+// V.140 — callHaikuTierFallback REMOVED. The V.139 sequential-LLM
+// chain caused Vercel function timeouts (504) under load. Panel
+// reverted to strict one-LLM-call policy. When the primary parse
+// returns <2 alternatives we accept defeat and route to no_match
+// (the frontend renders the Amazon-search fallback CTA).
 
 // V.118 (11 May 2026) — Haiku-validates-top-5 SerpAPI listing picker.
 // Replaces the V.96 lexical-overlap heuristic with semantic validation.
@@ -2177,7 +2092,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v139:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v140:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -2406,36 +2321,9 @@ export default async function handler(req, res) {
     }
   }
 
-  // V.139 — Tier fallback. When we have no verified price AND Haiku
-  // returned 0-1 alternatives (or none at all), make ONE focused Haiku
-  // call to produce 3 budget/top-rated/premium UK products for this
-  // generic category. The "Teapot" failure mode. Single recovery call
-  // — does NOT fire on the matched path. Panel-mandated exemption to
-  // the "no extra AI calls" rule.
-  const _altsLenPre = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
-  const _needsTierFallback = !verified_amazon_price
-                             && parsed.canonical_search_string
-                             && _altsLenPre < 2;
-  if (_needsTierFallback) {
-    debugTrace.push({step:'handler.tier_fallback.start', alts_len_pre: _altsLenPre, canonical: String(parsed.canonical_search_string).slice(0,80)});
-    try {
-      const fb = await callHaikuTierFallback({
-        canonical: parsed.canonical_search_string,
-        category:  parsed.category,
-        trace:     debugTrace,
-      });
-      if (fb && fb.alternatives_array && fb.alternatives_meta) {
-        parsed.alternatives_array = fb.alternatives_array;
-        parsed.alternatives_meta  = fb.alternatives_meta;
-        debugTrace.push({step:'handler.tier_fallback.applied', n: fb.alternatives_array.length});
-      } else {
-        debugTrace.push({step:'handler.tier_fallback.empty'});
-      }
-    } catch (e) {
-      console.warn(`[${VERSION}] V.139 tier-fallback error: ${e.message}`);
-      debugTrace.push({step:'handler.tier_fallback.exception', message: String(e.message || e).slice(0, 160)});
-    }
-  }
+  // V.140 — Tier-fallback invocation REMOVED. Strict one-LLM-call.
+  // If the primary parse returned <2 alternatives, we let the outcome
+  // gate route to no_match below — never chain a second AI call here.
 
   // V.138/V.139 — TIERS-mode mega-synthesis. Fires when we have 2-4
   // alternatives with meta. Single Haiku call (Panel mandate: NO 5
@@ -2558,7 +2446,9 @@ export default async function handler(req, res) {
   // verdict, links, tiers, disclosure } per the locked V.138 schema. Legacy
   // V.121 fields are preserved alongside for back-compat (existing analytics +
   // older frontend hashes).
-  const _megaForBuild = (Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length === 3)
+  // V.140 — accept 2-4 alternatives for the tiers-mega routing (was strict ===3).
+  const _altsLenFinal = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
+  const _megaForBuild = (_altsLenFinal >= 2 && _altsLenFinal <= 4)
     ? _megaTiers
     : _megaPillars;
   const _v138 = _v138BuildResponse({
