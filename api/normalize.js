@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v121';
+const VERSION             = 'normalize.js v3.4.5v138';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v121-1';
+const CACHE_PREFIX = 'sav-v138-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -657,6 +657,182 @@ Verified Amazon UK price: ${price_str}` +
     return { verdict, price_take: take };
   } catch (e) {
     return null;
+  } finally { clearTimeout(timer); }
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V.138 — MEGA-SYNTHESIS PROMPT (Panel-mandated, replaces N separate calls)
+// ═══════════════════════════════════════════════════════════════════════
+// One Haiku call that returns ALL AI-derived text fields needed by the
+// V.137 frontend in a single JSON object. Replaces the per-field strategy
+// (separate calls for eyebrow, sentiment, tier blurbs) that the Panel
+// hard-vetoed in V.137 review.
+//
+// Two operating modes auto-detected from the input shape:
+//   Pillars mode  — INPUT.amazon present  → returns verdict_label,
+//                   verdict_summary, category_eyebrow. tier_blurbs=null.
+//   Tiers mode    — INPUT.alternatives[3] → returns tier_blurbs[3].
+//                   All other fields=null.
+//
+// Latency budget: 4000ms with abort. Falls back to {nulls} on
+// timeout / parse error / no-key so the response shape stays stable.
+async function callHaikuMegaSynthesis({ canonical, category, market_status, amazon, retailers, alternatives, trace }) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const EMPTY = { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null };
+  if (!ANTHROPIC_KEY) return EMPTY;
+  if (!canonical) return EMPTY;
+
+  // Build the user-message payload from whatever signals are available.
+  const input = {
+    canonical: String(canonical).slice(0, 200),
+    category: category || null,
+    market_status: market_status || null,
+  };
+  if (amazon && Number(amazon.price) > 0) {
+    input.amazon = {
+      price: Number(amazon.price),
+      price_str: amazon.price_str || null,
+      rating: amazon.rating || null,
+      reviews: amazon.reviews || null,
+      title: amazon.title ? String(amazon.title).slice(0, 150) : null,
+      used_price_str: amazon.used_price_str || null,
+    };
+  }
+  if (retailers && Array.isArray(retailers) && retailers.length > 0) {
+    input.retailers = retailers.slice(0, 5).map(r => ({
+      name: String(r.name || '').slice(0, 60),
+      price: (r.price != null && Number(r.price) > 0) ? Number(r.price) : null,
+    }));
+  }
+  if (alternatives && Array.isArray(alternatives) && alternatives.length === 3) {
+    input.alternatives = alternatives.slice(0, 3).map((a, i) => ({
+      tier: ['basic', 'top_rated', 'premium'][i],
+      name: String(a.name || '').slice(0, 120),
+      typical_price_gbp: (a.typical_price_gbp != null) ? Number(a.typical_price_gbp) : null,
+      rating: a.rating || null,
+      reviews: a.reviews || null,
+      pack_size: a.pack_size || null,
+    }));
+  }
+
+  const sys = `You are Savvey's result-text synthesizer for UK shoppers. Given a verified product (Pillars mode) or a low-confidence query with 3 tier alternatives (Tiers mode), return strictly formatted JSON.
+
+OUTPUT JSON ONLY, no preamble, no markdown fences:
+{
+  "verdict_label": "good_buy" | "fair" | "wait" | "check_elsewhere" | null,
+  "verdict_summary": "1-2 sentence max 28-word review-data synthesis" | null,
+  "category_eyebrow": "Category · KeySpec · KeySpec, max 40 chars" | null,
+  "tier_blurbs": ["basic blurb", "top_rated blurb", "premium blurb"] | null
+}
+
+PILLARS MODE (INPUT.amazon present, INPUT.alternatives absent):
+  verdict_label semantics:
+    good_buy        = verified price at/below typical UK floor + decent rating
+    fair            = within typical UK retail band
+    wait            = price normal but a known UK sale event imminent
+                      (Prime Day, Black Friday, end-of-product-cycle)
+    check_elsewhere = implausibly LOW for product family (likely accessory
+                      / wrong-SKU surfaced as top organic) OR implausibly
+                      HIGH (3P markup) OR title doesn't match canonical.
+                      Bias toward check_elsewhere when in doubt.
+
+  verdict_summary: ALWAYS try when rating + reviews are present. 1-2
+    sentences, max 28 words. Cite a concrete observation reviewers
+    actually make. Honest + brutal voice. Format examples:
+      "Highly rated for cooking speed and dual-zone capacity. Most reviewers
+       mention the non-stick basket is fiddly to clean — soak after every cook."
+      "Best-in-class noise cancellation. Comfort drops past 4-hour sessions
+       per long-haul flight reviewers."
+    If no review data, return null. Never invent.
+
+  category_eyebrow: derive from canonical + obvious specs in the name.
+    e.g. "Ninja Foodi Dual Zone AF300UK" → "Air Fryer · 7.6L · 2400W"
+    Use ONLY specs visible in the canonical or amazon.title. Don't
+    invent numbers. Format: "Category · Spec1 · Spec2". Max 40 chars.
+    Return null if not derivable.
+
+  tier_blurbs: return null.
+
+TIERS MODE (INPUT.alternatives present with 3 entries):
+  verdict_label: null
+  verdict_summary: null
+  category_eyebrow: null
+  tier_blurbs: array of EXACTLY 3 blurbs (max 14 words each), in this
+    exact order: [basic, top_rated, premium].
+
+    basic[0] — "cheap + reliable + does the job" angle. Plain spoken.
+      Example: "Cheap, reliable, dishwasher-safe. Job done."
+
+    top_rated[1] — CRITICAL OBJECTIVITY RULE (Panel mandate):
+      MUST cite the exact review count and/or star rating from
+      INPUT.alternatives[1].rating / .reviews. NO editorial value
+      judgements (forbidden phrases: "buy it once", "best value",
+      "worth the money", "the smart pick").
+      Format: "<stars>★ from <count> reviews. Reviewers cite '<concrete observation>'"
+      Example: "4.6★ from 2,847 reviews. Reviewers cite 'perfect weight' and 'beautiful glaze.'"
+      If rating + reviews are missing in the input, frame as "highest-
+      rated of the three" without inventing numbers.
+
+    premium[2] — premium signals (provenance, craft, materials, longevity).
+      No price-anchor judgements. Example: "Hand-decorated in Stoke-on-Trent. Heirloom-grade."
+
+CRITICAL RULES (apply to ALL modes):
+  - Never invent specific GBP figures, retailer prices, or review counts
+    that aren't in INPUT.
+  - Never quote song lyrics, copyrighted text, or persuasive marketing copy.
+  - Output VALID JSON only. No prose preamble. No trailing text.
+  - When a field can't be filled honestly from INPUT, return null.
+  - Be concise. Total response max ~200 tokens.`;
+
+  const userMsg = `INPUT:\n${JSON.stringify(input)}\n\nProduce the JSON now.`;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000);
+  try {
+    if (trace) trace.push({step:'mega_synthesis.start', mode: input.alternatives ? 'tiers' : 'pillars', has_amazon: !!input.amazon, has_alts: !!input.alternatives});
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 280,
+        system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[${VERSION}] callHaikuMegaSynthesis HTTP ${r.status}`);
+      if (trace) trace.push({step:'mega_synthesis.http_error', status: r.status});
+      return EMPTY;
+    }
+    const j = await r.json();
+    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); }
+    catch (e) {
+      console.warn(`[${VERSION}] callHaikuMegaSynthesis JSON parse failed: ${e.message}`);
+      if (trace) trace.push({step:'mega_synthesis.parse_error', snippet: text.slice(0,120)});
+      return EMPTY;
+    }
+    const allowedVerdicts = ['good_buy', 'fair', 'wait', 'check_elsewhere'];
+    const out = {
+      verdict_label: (parsed && allowedVerdicts.includes(parsed.verdict_label)) ? parsed.verdict_label : null,
+      verdict_summary: (parsed && typeof parsed.verdict_summary === 'string' && parsed.verdict_summary.trim())
+                        ? parsed.verdict_summary.trim().slice(0, 220) : null,
+      category_eyebrow: (parsed && typeof parsed.category_eyebrow === 'string' && parsed.category_eyebrow.trim())
+                        ? parsed.category_eyebrow.trim().slice(0, 60) : null,
+      tier_blurbs: (parsed && Array.isArray(parsed.tier_blurbs) && parsed.tier_blurbs.length === 3)
+                    ? parsed.tier_blurbs.map(b => (typeof b === 'string' && b.trim()) ? b.trim().slice(0, 140) : null)
+                    : null,
+    };
+    if (trace) trace.push({step:'mega_synthesis.done', verdict: out.verdict_label, has_summary: !!out.verdict_summary, has_eyebrow: !!out.category_eyebrow, has_tiers: !!out.tier_blurbs});
+    return out;
+  } catch (e) {
+    console.warn(`[${VERSION}] callHaikuMegaSynthesis error: ${e.message}`);
+    if (trace) trace.push({step:'mega_synthesis.exception', message: String(e.message||e).slice(0,160)});
+    return EMPTY;
   } finally { clearTimeout(timer); }
 }
 
@@ -1378,6 +1554,267 @@ The user's phone classifier suggests this image is in the "${hint}" category.
 - Do NOT bias category enum solely on this hint without supporting evidence.`;
 }
 
+// ═══════════════════════════════════════════════════════════════════════
+// V.138 — JS PRICING MATH (Panel mandate: no AI math, never)
+// ═══════════════════════════════════════════════════════════════════════
+// Pure Node.js arithmetic over already-fetched SerpAPI data. Builds the
+// pricing block + the links[] array of the V.138 schema. LLMs hallucinate
+// math; this stays deterministic.
+const V138_RETAILER_NAMES = {
+  'amzn': 'Amazon UK',
+  'curr': 'Currys',
+  'argo': 'Argos',
+  'jl':   'John Lewis',
+  'tesc': 'Tesco',
+  'sain': "Sainsbury's",
+  'ebay': 'eBay',
+  'bq':   'B&Q',
+  'smyt': 'Smyths Toys',
+  'scre': 'Screwfix',
+  'asda': 'ASDA',
+  'mors': 'Morrisons',
+  'wait': 'Waitrose',
+  'boot': 'Boots',
+  'spec': 'Specsavers',
+  'next': 'Next',
+  'verylink': 'Very',
+  'verycta': 'Very',
+};
+const V138_DELIVERY_NOTES = {
+  'amzn': 'Verified live · Prime delivery',
+  'curr': 'In stock · Free delivery',
+  'argo': 'Same-day collection',
+  'jl':   '2-year guarantee included',
+  'tesc': 'Tesco Clubcard prices',
+  'sain': 'Nectar prices · same-day delivery',
+  'ebay': 'New, used, auctions',
+  'bq':   'Click & collect',
+  'smyt': 'In-store + online',
+  'scre': 'Next-day delivery',
+  'asda': 'Click & collect',
+  'mors': 'Morrisons More',
+  'wait': 'Free over £40',
+  'boot': 'Advantage Card',
+  'spec': '2-pair offers',
+  'next': 'Next-day available',
+  'verylink': 'Buy-now-pay-later',
+  'verycta': 'Buy-now-pay-later',
+};
+
+function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links }) {
+  const links = [];
+  const allPrices = [];
+
+  // (1) Amazon link (primary anchor when present)
+  if (verified_amazon_price && Number(verified_amazon_price.price) > 0) {
+    const p = Number(verified_amazon_price.price);
+    links.push({
+      retailer:      'Amazon UK',
+      retailer_key:  'amzn',
+      is_primary:    true,
+      url:           verified_amazon_price.link || null,
+      price_gbp:     p,
+      price_str:     verified_amazon_price.price_str || `£${p.toFixed(2)}`,
+      stock_state:   'in_stock',
+      delivery_note: V138_DELIVERY_NOTES.amzn,
+      affiliate:     true,
+    });
+    allPrices.push(p);
+  }
+
+  // (2) Non-Amazon retailers from google_shopping fan-out
+  if (retailer_deep_links && typeof retailer_deep_links === 'object') {
+    for (const key of Object.keys(retailer_deep_links)) {
+      const r = retailer_deep_links[key];
+      if (!r || !r.link) continue;
+      if (key === 'amzn') continue; // Don't double-count Amazon
+      const p = (r.price != null && Number(r.price) > 0) ? Number(r.price) : null;
+      links.push({
+        retailer:      V138_RETAILER_NAMES[key] || r.name || key,
+        retailer_key:  key,
+        is_primary:    false,
+        url:           r.link,
+        price_gbp:     p,
+        price_str:     (p != null) ? `£${p.toFixed(2)}` : null,
+        stock_state:   'in_stock',
+        delivery_note: V138_DELIVERY_NOTES[key] || null,
+        affiliate:     false,
+      });
+      if (p != null) allPrices.push(p);
+    }
+  }
+
+  // (3) If no Amazon, promote the cheapest known retailer to primary
+  if (!links.find(l => l.is_primary) && links.length > 0) {
+    const priced = links.filter(l => l.price_gbp != null).sort((a, b) => a.price_gbp - b.price_gbp);
+    if (priced[0]) priced[0].is_primary = true;
+  }
+
+  // (4) Best price = the primary link (already chosen above)
+  const primary = links.find(l => l.is_primary);
+  const best_price = primary ? {
+    value_gbp:     primary.price_gbp,
+    value_str:     primary.price_str,
+    retailer:      primary.retailer,
+    retailer_key:  primary.retailer_key,
+    url:           primary.url,
+    verified_at:   new Date().toISOString(),
+    stock_state:   primary.stock_state,
+    delivery_note: primary.delivery_note,
+  } : null;
+
+  // (5) Avg market = arithmetic mean of all known prices
+  let avg_market = null;
+  if (allPrices.length >= 2) {
+    const sum  = allPrices.reduce((a, b) => a + b, 0);
+    const mean = sum / allPrices.length;
+    avg_market = {
+      value_gbp:       Number(mean.toFixed(2)),
+      value_str:       `£${mean.toFixed(2)}`,
+      retailer_count:  allPrices.length,
+      sub:             `across ${allPrices.length} UK retailers`,
+      method:          'mean_of_retailer_deep_links',
+    };
+  }
+
+  // (6) Price band — min/max + spread%
+  let price_band = null;
+  if (allPrices.length >= 1) {
+    const low  = Math.min(...allPrices);
+    const high = Math.max(...allPrices);
+    const spread_pct = (low > 0 && high > low) ? Number(((high - low) / low * 100).toFixed(1)) : 0;
+    price_band = { low: Number(low.toFixed(2)), high: Number(high.toFixed(2)), spread_pct };
+  }
+
+  return { pricing: { best_price, avg_market, price_band }, links };
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// V.138 — RESPONSE WRAPPER
+// ═══════════════════════════════════════════════════════════════════════
+// Assembles the Panel-approved schema (outcome / identity / pricing /
+// verdict / links / tiers / disclosure) over the existing pipeline data
+// + the mega-synthesis text fields. Additive — sits alongside the legacy
+// V.121 fields in responseBody so cached analytics + frontend back-compat
+// continue to work during the transition.
+function _v138BuildResponse({
+  parsed,
+  verified_amazon_price,
+  retailer_deep_links,
+  alternative_amazon_price,
+  mega,
+  inputType,
+  serpapi_status,
+}) {
+  const { pricing, links } = _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links });
+
+  // ── Outcome routing ────────────────────────────────────────────────
+  let outcome = 'no_match';
+  let outcome_reason = 'no_match';
+  const hasPrice = !!(pricing && pricing.best_price && pricing.best_price.value_gbp);
+  const isLow   = parsed && parsed.confidence === 'low';
+  const hasAlts = parsed && Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length === 3;
+
+  if (isLow && hasAlts) {
+    outcome = 'disambig';
+    outcome_reason = (parsed.confidence_score < 40) ? 'brand_only' : 'low_confidence';
+  } else if (hasPrice) {
+    outcome = 'matched';
+    outcome_reason = 'high_confidence_with_price';
+  } else if (parsed && parsed.canonical_search_string) {
+    outcome = 'no_match';
+    outcome_reason = 'no_amazon_match';
+  }
+
+  // ── Identity block ────────────────────────────────────────────────
+  const identity = {
+    canonical:        (parsed && parsed.canonical_search_string) || null,
+    display_title:    (parsed && parsed.canonical_search_string) || null,
+    category_eyebrow: (mega && mega.category_eyebrow) || null,
+    mpn:              (parsed && parsed.mpn) || null,
+    market_status:    (parsed && parsed.market_status) || null,
+    image: verified_amazon_price && verified_amazon_price.thumbnail ? {
+      thumbnail_url: verified_amazon_price.thumbnail,
+      source:        'amazon',
+      alt_text:      parsed && parsed.canonical_search_string ? parsed.canonical_search_string : null,
+    } : null,
+  };
+
+  // ── Verdict block ─────────────────────────────────────────────────
+  const verdictPillMap = {
+    good_buy:        { text: 'GOOD BUY',        cls: 'v136-verdict-good' },
+    fair:            { text: 'FAIR',            cls: 'v136-verdict-fair' },
+    wait:            { text: 'WAIT',            cls: 'v136-verdict-wait' },
+    check_elsewhere: { text: 'CHECK ELSEWHERE', cls: 'v136-verdict-check' },
+  };
+  const vLabel = (mega && mega.verdict_label) || null;
+  const vPill  = vLabel ? verdictPillMap[vLabel] : null;
+  const verdict = {
+    label:             vLabel,
+    pill_text:         vPill ? vPill.text : null,
+    pill_color_class:  vPill ? vPill.cls : null,
+    summary:           (mega && mega.verdict_summary) || null,
+    summary_max_words: 28,
+    rating: (verified_amazon_price && verified_amazon_price.rating) ? {
+      stars:        verified_amazon_price.rating,
+      review_count: verified_amazon_price.reviews || null,
+      display_str:  verified_amazon_price.reviews
+                      ? `★ ${verified_amazon_price.rating} · ${
+                          verified_amazon_price.reviews >= 1000
+                            ? (verified_amazon_price.reviews / 1000).toFixed(verified_amazon_price.reviews >= 10000 ? 0 : 1) + 'k'
+                            : String(verified_amazon_price.reviews)
+                        } reviews`
+                      : `★ ${verified_amazon_price.rating}`,
+      source:       'amazon',
+    } : null,
+  };
+
+  // ── Tiers block (disambig mode only) ──────────────────────────────
+  let tiers = null;
+  if (hasAlts) {
+    const altsArr  = parsed.alternatives_array;
+    const altsMeta = Array.isArray(parsed.alternatives_meta) ? parsed.alternatives_meta : [];
+    const tierKeys = ['basic', 'top_rated', 'premium'];
+    const tierPillText = ['BUDGET', 'TOP RATED', 'PREMIUM'];
+    tiers = altsArr.slice(0, 3).map((name, i) => {
+      const meta = altsMeta[i] || {};
+      const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
+      return {
+        tier:        tierKeys[i],
+        pill_text:   tierPillText[i],
+        name:        name || '',
+        retailer:    null,
+        price_gbp:   meta.typical_price_gbp || null,
+        price_str:   (meta.typical_price_gbp != null) ? `£${Number(meta.typical_price_gbp).toFixed(2)}` : null,
+        url:         null, // backend doesn't yet resolve per-tier URLs; frontend search-amazon-fallback handles
+        blurb:       blurbFromMega || meta.rationale || null,
+        blurb_basis: i === 1 ? 'review_count' : (i === 0 ? 'price_anchor' : 'premium_signal'),
+        review_count: meta.reviews || null,
+        review_stars: meta.rating || null,
+        image:       null,
+      };
+    });
+  }
+
+  // ── Disclosure ────────────────────────────────────────────────────
+  const disclosure = {
+    affiliate_text: 'Savvey may earn a small commission via the Amazon link. It never changes the price you pay.',
+    data_freshness: 'Prices verified within the last 6 hours.',
+  };
+
+  return {
+    outcome,
+    outcome_reason,
+    identity,
+    pricing,
+    verdict,
+    links: links.length > 0 ? links : null,
+    tiers,
+    disclosure,
+    schema_version: 1,
+  };
+}
+
 export default async function handler(req, res) {
   applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -1607,7 +2044,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v121:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v138:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -1657,6 +2094,11 @@ export default async function handler(req, res) {
   const alternative_amazon_price = alternative_amazon_price_v69;
 
 
+  // V.138 — Mega-Synthesis Architecture. One Haiku call returning
+  // verdict_label + verdict_summary + category_eyebrow + tier_blurbs (the
+  // last only used in TIERS mode below). Replaces V.121 callHaikuPriceTake.
+  // Panel mandate: NO 5 separate AI calls. JS-math for pricing arithmetic.
+  let _megaPillars = { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null };
   if (verified_amazon_price && parsed.savvey_says) {
     if (Number(verified_amazon_price.price) > 0) {
       parsed.savvey_says.live_amazon_price = verified_amazon_price.price_str
@@ -1665,8 +2107,6 @@ export default async function handler(req, res) {
     if (verified_amazon_price.used_price_str) {
       parsed.savvey_says.used_amazon_price = verified_amazon_price.used_price_str;
     }
-    // v3.3.3 — surface rating + reviews so savvey_says block carries
-    // social-proof context, not just price.
     if (verified_amazon_price.rating && verified_amazon_price.reviews) {
       const reviewsFmt = verified_amazon_price.reviews >= 1000
         ? (verified_amazon_price.reviews / 1000).toFixed(verified_amazon_price.reviews >= 10000 ? 0 : 1) + 'k'
@@ -1675,10 +2115,8 @@ export default async function handler(req, res) {
     } else if (verified_amazon_price.rating) {
       parsed.savvey_says.amazon_rating = `${verified_amazon_price.rating}★`;
     }
-    // v3.4.0 / Wave II — Haiku price_take + verdict grounded by verified anchor.
-    // Wave II skip: rating >= 4.6 AND reviews >= 200 AND price > 0 -> verdict='good_buy'
-    // deterministically, skip the second Haiku call entirely. Saves ~600ms on
-    // the most common high-confidence cases (top-rated Amazon listings).
+    // V.138 slam-dunk shortcut preserved: rating >= 4.6 AND reviews >= 200 AND price > 0
+    // -> verdict='good_buy' deterministically, skip the mega Haiku call entirely.
     const _isSlamDunk =
       Number(verified_amazon_price.rating || 0) >= 4.6 &&
       Number(verified_amazon_price.reviews || 0) >= 200 &&
@@ -1686,20 +2124,33 @@ export default async function handler(req, res) {
     if (_isSlamDunk) {
       parsed.savvey_says.verdict = 'good_buy';
       parsed.savvey_says.price_take = null;
-      console.log(`[${VERSION}] slam-dunk skip Haiku price_take for "${parsed.canonical_search_string}"`);
+      _megaPillars.verdict_label = 'good_buy';
+      console.log(`[${VERSION}] slam-dunk skip mega-synthesis for "${parsed.canonical_search_string}"`);
     } else {
       try {
-        const ai = await callHaikuPriceTake({
-          canonical:      parsed.canonical_search_string,
-          price_str:      verified_amazon_price.price_str,
-          used_price_str: verified_amazon_price.used_price_str,
-          category:       parsed.category,
-          rating:         verified_amazon_price.rating,
-          reviews:        verified_amazon_price.reviews,
+        const ai = await callHaikuMegaSynthesis({
+          canonical:     parsed.canonical_search_string,
+          category:      parsed.category,
+          market_status: parsed.market_status,
+          amazon: {
+            price:          verified_amazon_price.price,
+            price_str:      verified_amazon_price.price_str,
+            used_price_str: verified_amazon_price.used_price_str,
+            rating:         verified_amazon_price.rating,
+            reviews:        verified_amazon_price.reviews,
+            title:          verified_amazon_price.title,
+          },
+          retailers: (retailer_deep_links && typeof retailer_deep_links === 'object')
+            ? Object.keys(retailer_deep_links).map(k => ({ name: k, price: (retailer_deep_links[k] && retailer_deep_links[k].price) || null }))
+            : null,
+          alternatives: null, // Pillars mode
+          trace: debugTrace,
         });
         if (ai) {
-          if (ai.price_take) parsed.savvey_says.price_take = ai.price_take;
-          if (ai.verdict)    parsed.savvey_says.verdict    = ai.verdict;
+          _megaPillars = ai;
+          // Legacy savvey_says mirror for back-compat (frontend V.121 path)
+          if (ai.verdict_label)   parsed.savvey_says.verdict    = ai.verdict_label;
+          if (ai.verdict_summary) parsed.savvey_says.price_take = ai.verdict_summary;
         }
       } catch (e) { /* non-critical */ }
     }
@@ -1822,6 +2273,39 @@ export default async function handler(req, res) {
     }
   }
 
+  // V.138 — TIERS-mode mega-synthesis. Only fires when we have 3 alternatives
+  // with meta (the V.137 three-tier UI requires basic/top_rated/premium blurbs).
+  // Single Haiku call (Panel mandate: NO 5 separate AI calls). Returns
+  // tier_blurbs[] for the disambig render.
+  let _megaTiers = { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null };
+  if (Array.isArray(parsed.alternatives_array)
+      && parsed.alternatives_array.length === 3
+      && Array.isArray(parsed.alternatives_meta)
+      && parsed.alternatives_meta.length === 3) {
+    try {
+      _megaTiers = await callHaikuMegaSynthesis({
+        canonical:     parsed.canonical_search_string,
+        category:      parsed.category,
+        market_status: parsed.market_status,
+        amazon:        null,
+        retailers:     null,
+        alternatives: parsed.alternatives_array.map((name, i) => {
+          const m = parsed.alternatives_meta[i] || {};
+          return {
+            name,
+            typical_price_gbp: m.typical_price_gbp || null,
+            rating:            m.rating || null,
+            reviews:           m.reviews || null,
+            pack_size:         m.pack_size || null,
+          };
+        }),
+        trace: debugTrace,
+      }) || _megaTiers;
+    } catch (e) {
+      console.warn(`[${VERSION}] V.138 tiers mega-synth error: ${e.message}`);
+    }
+  }
+
   // V.78 — retailer-own detection. If canonical leads with a UK retailer-own
   // brand (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range), stamp _meta
   // so the frontend can short-circuit to a "Sold direct by [Brand]" empty
@@ -1903,6 +2387,26 @@ export default async function handler(req, res) {
     : null;
 
   debugTrace.push({step:'handler.final', verdict: (parsed && parsed.savvey_says && parsed.savvey_says.verdict) || null, has_price: !!verified_amazon_price, latency_ms: Date.now() - t0});
+
+  // V.138 — Build the new schema response block. Single mega-synth result is
+  // selected based on flow: Pillars mode uses _megaPillars, Tiers mode uses
+  // _megaTiers. _v138BuildResponse produces { outcome, identity, pricing,
+  // verdict, links, tiers, disclosure } per the locked V.138 schema. Legacy
+  // V.121 fields are preserved alongside for back-compat (existing analytics +
+  // older frontend hashes).
+  const _megaForBuild = (Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length === 3)
+    ? _megaTiers
+    : _megaPillars;
+  const _v138 = _v138BuildResponse({
+    parsed,
+    verified_amazon_price,
+    retailer_deep_links,
+    alternative_amazon_price,
+    mega: _megaForBuild,
+    inputType,
+    serpapi_status: _lastSerpStatus,
+  });
+
   const responseBody = {
     ...parsed,
     specificity: _specificity,
@@ -1916,6 +2420,16 @@ export default async function handler(req, res) {
     recommendations, // V.88 - budget-pattern Haiku recommendations, null otherwise
     review_synthesis, // V.89 - honest love/gripe pair, null otherwise
     debug_trace: debugTrace, // V.120a — Panel-mandated pipeline trace
+    // V.138 schema (frontend consumes these for the V.137 four-pillar + three-tier UI)
+    outcome:         _v138.outcome,
+    outcome_reason:  _v138.outcome_reason,
+    identity:        _v138.identity,
+    pricing:         _v138.pricing,
+    verdict:         _v138.verdict,
+    links:           _v138.links,
+    tiers:           _v138.tiers,
+    disclosure:      _v138.disclosure,
+    schema_version:  _v138.schema_version,
     _meta: {
       version: VERSION,
       input_type: inputType,

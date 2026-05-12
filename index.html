@@ -5320,8 +5320,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v137';
-  var V126_GUARD          = 'savvey_v137_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v138';
+  var V126_GUARD          = 'savvey_v138_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5410,7 +5410,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.137 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.138 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5556,7 +5556,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v137</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v138</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5768,11 +5768,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </button>
 
     <div class="v136-similar-header">
-      <h1 class="v136-title">Couldn't find an exact match.</h1>
-      <p class="v136-similar-sub">Looks like an unbranded ceramic mug. Here are three popular UK alternatives, ranked by price band.</p>
+      <h1 class="v136-title" id="v138-tier-headline">Couldn't find an exact match.</h1>
+      <p class="v136-similar-sub" id="v138-tier-sub">Here are three popular UK alternatives, ranked by price band.</p>
     </div>
 
-    <a class="v136-similar-card" href="#" onclick="return false;">
+    <a class="v136-similar-card" id="v138-tier-card-0" href="#" onclick="return false;">
       <div class="v136-similar-img v136-tier-img-basic" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
           <rect width="80" height="80" rx="14" fill="#EEEEF1"/>
@@ -5781,18 +5781,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </svg>
       </div>
       <div class="v136-similar-body">
-        <span class="v136-tier-pill v136-tier-basic">BUDGET</span>
-        <div class="v136-similar-name">Argos Home Plain White Mug · Set of 4</div>
-        <div class="v136-similar-blurb">Cheap, reliable, dishwasher-safe. Job done.</div>
+        <span class="v136-tier-pill v136-tier-basic" id="v138-tier-pill-0">BUDGET</span>
+        <div class="v136-similar-name" id="v138-tier-name-0">Argos Home Plain White Mug · Set of 4</div>
+        <div class="v136-similar-blurb" id="v138-tier-blurb-0">Cheap, reliable, dishwasher-safe. Job done.</div>
         <div class="v136-similar-pricerow">
-          <span class="v136-similar-price">£4.50</span>
-          <span class="v136-similar-priceat">at Argos</span>
+          <span class="v136-similar-price" id="v138-tier-price-0">£4.50</span>
+          <span class="v136-similar-priceat" id="v138-tier-priceat-0">at Argos</span>
         </div>
       </div>
       <span class="v136-similar-arrow" aria-hidden="true">›</span>
     </a>
 
-    <a class="v136-similar-card" href="#" onclick="return false;">
+    <a class="v136-similar-card" id="v138-tier-card-1" href="#" onclick="return false;">
       <div class="v136-similar-img v136-tier-img-mid" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
           <rect width="80" height="80" rx="14" fill="#E4DED5"/>
@@ -5804,18 +5804,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </svg>
       </div>
       <div class="v136-similar-body">
-        <span class="v136-tier-pill v136-tier-mid">TOP RATED</span>
-        <div class="v136-similar-name">Denby Halo Speckle Stoneware Mug</div>
-        <div class="v136-similar-blurb">4.6★ from 2,847 reviews. Reviewers cite "perfect weight" and "beautiful glaze."</div>
+        <span class="v136-tier-pill v136-tier-mid" id="v138-tier-pill-1">TOP RATED</span>
+        <div class="v136-similar-name" id="v138-tier-name-1">Denby Halo Speckle Stoneware Mug</div>
+        <div class="v136-similar-blurb" id="v138-tier-blurb-1">4.6★ from 2,847 reviews. Reviewers cite "perfect weight" and "beautiful glaze."</div>
         <div class="v136-similar-pricerow">
-          <span class="v136-similar-price">£19.00</span>
-          <span class="v136-similar-priceat">at Denby UK</span>
+          <span class="v136-similar-price" id="v138-tier-price-1">£19.00</span>
+          <span class="v136-similar-priceat" id="v138-tier-priceat-1">at Denby UK</span>
         </div>
       </div>
       <span class="v136-similar-arrow" aria-hidden="true">›</span>
     </a>
 
-    <a class="v136-similar-card" href="#" onclick="return false;">
+    <a class="v136-similar-card" id="v138-tier-card-2" href="#" onclick="return false;">
       <div class="v136-similar-img v136-tier-img-premium" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
           <rect width="80" height="80" rx="14" fill="#FBF3E8"/>
@@ -5828,18 +5828,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </svg>
       </div>
       <div class="v136-similar-body">
-        <span class="v136-tier-pill v136-tier-premium">PREMIUM</span>
-        <div class="v136-similar-name">Emma Bridgewater Toast &amp; Marmalade Mug</div>
-        <div class="v136-similar-blurb">Hand-decorated in Stoke-on-Trent. Heirloom-grade.</div>
+        <span class="v136-tier-pill v136-tier-premium" id="v138-tier-pill-2">PREMIUM</span>
+        <div class="v136-similar-name" id="v138-tier-name-2">Emma Bridgewater Toast &amp; Marmalade Mug</div>
+        <div class="v136-similar-blurb" id="v138-tier-blurb-2">Hand-decorated in Stoke-on-Trent. Heirloom-grade.</div>
         <div class="v136-similar-pricerow">
-          <span class="v136-similar-price">£24.95</span>
-          <span class="v136-similar-priceat">at Emma Bridgewater</span>
+          <span class="v136-similar-price" id="v138-tier-price-2">£24.95</span>
+          <span class="v136-similar-priceat" id="v138-tier-priceat-2">at Emma Bridgewater</span>
         </div>
       </div>
       <span class="v136-similar-arrow" aria-hidden="true">›</span>
     </a>
 
-    <p class="v136-mockup-note">V.137 preview · dynamic binding lands in V.138+</p>
+    <p class="v136-mockup-note" id="v138-tier-note" style="display:none;">V.138 dynamic</p>
   </div>
 </div>
 <!-- end #screen-confirm -->
@@ -6131,7 +6131,7 @@ END LEGACY V.44 CONFIRM DOM (commented out) -->
     <!-- Pillar 1 + 2: Identity + Pricing -->
     <div class="v136-card v136-hero-card">
       <div class="v136-identity">
-        <div class="v136-product-img" aria-hidden="true">
+        <div class="v136-product-img" id="v138-product-img" aria-hidden="true">
           <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
             <rect width="80" height="80" rx="14" fill="#F2F2F7"/>
             <rect x="14" y="18" width="52" height="50" rx="9" fill="#1f2724"/>
@@ -6141,42 +6141,42 @@ END LEGACY V.44 CONFIRM DOM (commented out) -->
           </svg>
         </div>
         <div class="v136-identity-text">
-          <div class="v136-category">Air Fryer · 7.6L · 2400W</div>
-          <h1 class="v136-title">Ninja Foodi Dual Zone AF300UK</h1>
-          <div class="v136-market-status">
-            <span class="v136-dot v136-dot-green"></span> Current Model
+          <div class="v136-category" id="v138-category">Air Fryer · 7.6L · 2400W</div>
+          <h1 class="v136-title" id="v138-title">Ninja Foodi Dual Zone AF300UK</h1>
+          <div class="v136-market-status" id="v138-market-status">
+            <span class="v136-dot v136-dot-green" id="v138-market-dot"></span> <span id="v138-market-label">Current Model</span>
           </div>
         </div>
       </div>
 
-      <div class="v136-pricing">
+      <div class="v136-pricing" id="v138-pricing">
         <div class="v136-price-col">
           <div class="v136-price-label">BEST PRICE</div>
-          <div class="v136-price-value">£179<span class="v136-price-pence">.00</span></div>
-          <div class="v136-price-sub">at Amazon UK</div>
+          <div class="v136-price-value" id="v138-best-price">£179<span class="v136-price-pence">.00</span></div>
+          <div class="v136-price-sub" id="v138-best-price-sub">at Amazon UK</div>
         </div>
         <div class="v136-price-divider" aria-hidden="true"></div>
         <div class="v136-price-col">
           <div class="v136-price-label">AVG MARKET</div>
-          <div class="v136-price-value v136-price-mute">£199<span class="v136-price-pence">.99</span></div>
-          <div class="v136-price-sub">across 4 UK retailers</div>
+          <div class="v136-price-value v136-price-mute" id="v138-avg-market">£199<span class="v136-price-pence">.99</span></div>
+          <div class="v136-price-sub" id="v138-avg-market-sub">across 4 UK retailers</div>
         </div>
       </div>
     </div>
 
     <!-- Pillar 3: Verdict (Sentiment) -->
-    <div class="v136-card v136-verdict-card">
+    <div class="v136-card v136-verdict-card" id="v138-verdict-card">
       <div class="v136-verdict-head">
-        <span class="v136-verdict-pill v136-verdict-good">GOOD BUY</span>
-        <span class="v136-verdict-rating">★ 4.6 · 12.4k reviews</span>
+        <span class="v136-verdict-pill v136-verdict-good" id="v138-verdict-pill">GOOD BUY</span>
+        <span class="v136-verdict-rating" id="v138-verdict-rating">★ 4.6 · 12.4k reviews</span>
       </div>
-      <p class="v136-verdict-text">
+      <p class="v136-verdict-text" id="v138-verdict-text">
         Highly rated for cooking speed and the dual-zone capacity. Most reviewers say the non-stick basket is fiddly to clean — soak after every cook.
       </p>
     </div>
 
     <!-- Pillar 4: The Links -->
-    <div class="v136-cta-stack">
+    <div class="v136-cta-stack" id="v138-cta-stack">
       <a class="v136-cta v136-cta-primary" href="#" onclick="return false;">
         <span class="v136-cta-mark v136-cta-mark-amzn">a</span>
         <span class="v136-cta-body">
@@ -6211,8 +6211,8 @@ END LEGACY V.44 CONFIRM DOM (commented out) -->
       </a>
     </div>
 
-    <p class="v136-affiliate">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
-    <p class="v136-mockup-note">V.137 preview · dynamic binding lands in V.138+</p>
+    <p class="v136-affiliate" id="v138-disclosure">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
+    <p class="v136-mockup-note" id="v138-mockup-note" style="display:none;">V.138 dynamic</p>
   </div>
 </div>
 <!-- end #screen-result -->
@@ -8586,6 +8586,75 @@ function _buildDisambigDetails(label, meta) {
 }
 
 function renderConfirm(a, b, payload) {
+  // V.138 — DYNAMIC BINDING. Reads response.tiers[] (basic / top_rated /
+  // premium) into the three-tier V.136 disambig DOM. Falls back to the
+  // legacy disambig_candidates / alternatives_array shape when V.138
+  // tiers are absent.
+  try {
+    var p = payload || {};
+    var tiers = Array.isArray(p.tiers) ? p.tiers : null;
+    var headlineEl = document.getElementById('v138-tier-headline');
+    var subEl      = document.getElementById('v138-tier-sub');
+    var canon      = (p.identity && p.identity.canonical) || p.canonical_search_string || '';
+    if (headlineEl) headlineEl.textContent = canon
+      ? ('Couldn’t find an exact match for “' + canon + '”.')
+      : 'Couldn’t find an exact match.';
+    if (subEl) subEl.textContent = 'Here are three popular UK alternatives, ranked by price band.';
+
+    if (tiers && tiers.length === 3) {
+      tiers.forEach(function (t, i) {
+        if (!t) return;
+        var nameEl    = document.getElementById('v138-tier-name-'    + i);
+        var blurbEl   = document.getElementById('v138-tier-blurb-'   + i);
+        var priceEl   = document.getElementById('v138-tier-price-'   + i);
+        var priceAtEl = document.getElementById('v138-tier-priceat-' + i);
+        var pillEl    = document.getElementById('v138-tier-pill-'    + i);
+        var cardEl    = document.getElementById('v138-tier-card-'    + i);
+        if (nameEl)    nameEl.textContent    = t.name || '';
+        if (blurbEl)   blurbEl.textContent   = t.blurb || '';
+        if (priceEl)   priceEl.textContent   = t.price_str || (t.price_gbp != null ? ('£' + Number(t.price_gbp).toFixed(2)) : '—');
+        if (priceAtEl) priceAtEl.textContent = t.retailer ? ('at ' + t.retailer) : '';
+        if (pillEl && t.pill_text) pillEl.textContent = t.pill_text;
+        if (cardEl) {
+          var fbUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(t.name || canon);
+          var target = t.url || fbUrl;
+          cardEl.setAttribute('href', target);
+          cardEl.setAttribute('target', '_blank');
+          cardEl.setAttribute('rel', 'noopener nofollow');
+          cardEl.onclick = null;
+        }
+      });
+    } else if (Array.isArray(p.disambig_candidates) && p.disambig_candidates.length >= 2) {
+      // Legacy fallback — bind to the first three disambig_candidates.
+      var cand = p.disambig_candidates.slice(0, 3);
+      var meta = Array.isArray(p.disambig_candidates_meta) ? p.disambig_candidates_meta : [];
+      cand.forEach(function (name, i) {
+        var m = meta[i] || {};
+        var nameEl    = document.getElementById('v138-tier-name-'    + i);
+        var blurbEl   = document.getElementById('v138-tier-blurb-'   + i);
+        var priceEl   = document.getElementById('v138-tier-price-'   + i);
+        var priceAtEl = document.getElementById('v138-tier-priceat-' + i);
+        var cardEl    = document.getElementById('v138-tier-card-'    + i);
+        if (nameEl)    nameEl.textContent    = name || '';
+        if (blurbEl)   blurbEl.textContent   = m.rationale || '';
+        if (priceEl)   priceEl.textContent   = (m.typical_price_gbp != null) ? ('£' + Number(m.typical_price_gbp).toFixed(2)) : '—';
+        if (priceAtEl) priceAtEl.textContent = '';
+        if (cardEl) {
+          cardEl.setAttribute('href', 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(name));
+          cardEl.setAttribute('target', '_blank');
+          cardEl.setAttribute('rel', 'noopener nofollow');
+          cardEl.onclick = null;
+        }
+      });
+    }
+
+    show('confirm');
+  } catch (err) {
+    console.warn('[V.138 renderConfirm] error', err);
+    show('confirm');
+  }
+  return;
+  // Legacy body preserved below for reference (dead code — `return` above):
   // V.137 — short-circuited per Panel mandate. The #screen-confirm DOM
   // was replaced with the V.136 three-tier scaffolding (BUDGET / TOP
   // RATED / PREMIUM). Dynamic candidate population lands in V.138 once
@@ -8867,12 +8936,209 @@ async function disambigPick(idx, label, payload) {
 
 
 function renderResult(displayName, payload) {
-  // V.137 — short-circuited per Panel mandate. The #screen-result DOM
-  // was replaced with the V.136 four-pillar scaffolding (Identity /
-  // Pricing / Verdict / Links). Dynamic data binding lands in V.138
-  // once the JSON schema (deploy notes) is approved. User sees static
-  // fake-data preview until then.
-  show('result');
+  // V.138 — DYNAMIC BINDING. Reads V.138 schema fields (identity, pricing,
+  // verdict, links) off `payload` and injects them into the V.136 four-pillar
+  // DOM. Falls back to legacy fields (verified_amazon_price, savvey_says,
+  // retailer_deep_links) when V.138 fields are absent (cached V.121 entries).
+  // Handles null fields gracefully — only-Amazon links, no image, no rating.
+  try {
+    var p = payload || {};
+    var ident = p.identity || {};
+    var pric  = p.pricing  || {};
+    var verd  = p.verdict  || {};
+    var links = Array.isArray(p.links) ? p.links : [];
+    var disc  = p.disclosure || {};
+
+    // --- IDENTITY -----------------------------------------------------
+    var titleStr = ident.display_title || ident.canonical || displayName || (p.canonical_search_string) || '';
+    var titleEl = document.getElementById('v138-title');
+    if (titleEl) titleEl.textContent = titleStr;
+
+    var catEl = document.getElementById('v138-category');
+    var catStr = ident.category_eyebrow || '';
+    if (catEl) {
+      catEl.textContent = catStr;
+      catEl.style.display = catStr ? '' : 'none';
+    }
+
+    var mktStatus = ident.market_status || p.market_status || null;
+    var mktDot   = document.getElementById('v138-market-dot');
+    var mktLabel = document.getElementById('v138-market-label');
+    var mktWrap  = document.getElementById('v138-market-status');
+    if (mktLabel && mktDot && mktWrap) {
+      if (mktStatus === 'current') {
+        mktLabel.textContent = 'Current Model';
+        mktDot.className = 'v136-dot v136-dot-green';
+        mktWrap.style.display = '';
+      } else if (mktStatus === 'aging') {
+        mktLabel.textContent = 'Ageing — successor likely';
+        mktDot.className = 'v136-dot v136-dot-amber';
+        mktWrap.style.display = '';
+      } else if (mktStatus === 'discontinued') {
+        mktLabel.textContent = 'Discontinued';
+        mktDot.className = 'v136-dot v136-dot-red';
+        mktWrap.style.display = '';
+      } else {
+        mktWrap.style.display = 'none';
+      }
+    }
+
+    // Product image — swap the placeholder SVG with the real thumbnail when present.
+    var imgWrap = document.getElementById('v138-product-img');
+    if (imgWrap) {
+      var thumb = (ident.image && ident.image.thumbnail_url)
+                 || (p.verified_amazon_price && p.verified_amazon_price.thumbnail)
+                 || null;
+      if (thumb) {
+        imgWrap.innerHTML = '';
+        var im = document.createElement('img');
+        im.src = thumb;
+        im.alt = (ident.image && ident.image.alt_text) || titleStr || '';
+        im.style.width = '100%';
+        im.style.height = '100%';
+        im.style.borderRadius = '14px';
+        im.style.objectFit = 'cover';
+        im.loading = 'lazy';
+        im.decoding = 'async';
+        imgWrap.appendChild(im);
+      }
+    }
+
+    // --- PRICING ------------------------------------------------------
+    function _fmtPrice(num) {
+      if (num == null || isNaN(Number(num))) return null;
+      var n = Number(num);
+      var whole = Math.floor(n);
+      var pence = Math.round((n - whole) * 100);
+      var penceStr = pence < 10 ? ('0' + pence) : String(pence);
+      return { whole: '£' + whole, pence: '.' + penceStr };
+    }
+    var bp = (pric.best_price && pric.best_price.value_gbp != null)
+             ? _fmtPrice(pric.best_price.value_gbp)
+             : (p.verified_amazon_price && Number(p.verified_amazon_price.price) > 0
+                 ? _fmtPrice(p.verified_amazon_price.price) : null);
+    var bpEl = document.getElementById('v138-best-price');
+    var bpSubEl = document.getElementById('v138-best-price-sub');
+    if (bp && bpEl) {
+      bpEl.innerHTML = bp.whole + '<span class="v136-price-pence">' + bp.pence + '</span>';
+      if (bpSubEl) {
+        var retailerName = (pric.best_price && pric.best_price.retailer) || 'Amazon UK';
+        bpSubEl.textContent = 'at ' + retailerName;
+      }
+    } else if (bpEl) {
+      bpEl.textContent = '—';
+      if (bpSubEl) bpSubEl.textContent = 'price unverified';
+    }
+
+    var avg = (pric.avg_market && pric.avg_market.value_gbp != null)
+             ? _fmtPrice(pric.avg_market.value_gbp) : null;
+    var avgEl = document.getElementById('v138-avg-market');
+    var avgSubEl = document.getElementById('v138-avg-market-sub');
+    var pricingEl = document.getElementById('v138-pricing');
+    if (avg && avgEl) {
+      avgEl.innerHTML = avg.whole + '<span class="v136-price-pence">' + avg.pence + '</span>';
+      var n = (pric.avg_market && pric.avg_market.n) || 0;
+      if (avgSubEl) avgSubEl.textContent = 'across ' + n + ' UK retailer' + (n === 1 ? '' : 's');
+    } else if (avgEl) {
+      // No market data → collapse the column gracefully (keep best-price visible).
+      avgEl.innerHTML = '<span class="v136-price-mute">—</span>';
+      if (avgSubEl) avgSubEl.textContent = 'single source';
+    }
+
+    // --- VERDICT ------------------------------------------------------
+    var verdCard = document.getElementById('v138-verdict-card');
+    var verdPill = document.getElementById('v138-verdict-pill');
+    var verdRating = document.getElementById('v138-verdict-rating');
+    var verdText = document.getElementById('v138-verdict-text');
+    var hasVerdictText = !!(verd.summary || (p.savvey_says && p.savvey_says.price_take));
+    var hasVerdictPill = !!verd.pill_text;
+    var hasRating = !!(verd.rating && verd.rating.display_str);
+    if (verdCard) {
+      if (!hasVerdictText && !hasVerdictPill && !hasRating) {
+        verdCard.style.display = 'none';
+      } else {
+        verdCard.style.display = '';
+        if (verdPill) {
+          if (hasVerdictPill) {
+            verdPill.textContent = verd.pill_text;
+            verdPill.className = 'v136-verdict-pill ' + (verd.pill_color_class || 'v136-verdict-fair');
+            verdPill.style.display = '';
+          } else {
+            verdPill.style.display = 'none';
+          }
+        }
+        if (verdRating) {
+          if (hasRating) {
+            verdRating.textContent = verd.rating.display_str;
+            verdRating.style.display = '';
+          } else {
+            verdRating.style.display = 'none';
+          }
+        }
+        if (verdText) {
+          var summary = verd.summary || (p.savvey_says && p.savvey_says.price_take) || '';
+          verdText.textContent = summary;
+          verdText.style.display = summary ? '' : 'none';
+        }
+      }
+    }
+
+    // --- LINKS --------------------------------------------------------
+    var stackEl = document.getElementById('v138-cta-stack');
+    if (stackEl) {
+      stackEl.innerHTML = '';
+      if (links.length === 0) {
+        // Only-Amazon-fallback: use amazon_search_fallback if available.
+        var fb = p.amazon_search_fallback;
+        if (fb) {
+          var fbA = document.createElement('a');
+          fbA.className = 'v136-cta v136-cta-primary';
+          fbA.target = '_blank';
+          fbA.rel = 'noopener nofollow';
+          fbA.href = fb;
+          fbA.innerHTML = '<span class="v136-cta-mark v136-cta-mark-amzn">a</span>'
+                       + '<span class="v136-cta-body">'
+                       +   '<span class="v136-cta-name">Search Amazon UK</span>'
+                       +   '<span class="v136-cta-sub">No exact match — search results</span>'
+                       + '</span>'
+                       + '<span class="v136-cta-price">›</span>';
+          stackEl.appendChild(fbA);
+        }
+      } else {
+        links.forEach(function (lnk, i) {
+          if (!lnk || !lnk.url) return;
+          var a = document.createElement('a');
+          a.className = 'v136-cta ' + (i === 0 ? 'v136-cta-primary' : 'v136-cta-secondary');
+          a.href = lnk.url;
+          a.target = '_blank';
+          a.rel = 'noopener nofollow';
+          var markCls = 'v136-cta-mark-' + ((lnk.retailer || '').toLowerCase().replace(/[^a-z]/g,'').slice(0,4) || 'rt');
+          if (/amazon/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-amzn';
+          else if (/currys/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-curr';
+          else if (/argos/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-argo';
+          else if (/john\s*lewis/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-jl';
+          var initial = (lnk.retailer || '?').charAt(0).toLowerCase();
+          var priceStr = lnk.price_str || (lnk.price_gbp != null ? ('£' + Number(lnk.price_gbp).toFixed(2)) : '—');
+          a.innerHTML = '<span class="v136-cta-mark ' + markCls + '">' + initial + '</span>'
+                     + '<span class="v136-cta-body">'
+                     +   '<span class="v136-cta-name">' + (lnk.retailer || 'Retailer') + '</span>'
+                     +   '<span class="v136-cta-sub">' + (lnk.delivery_note || '') + '</span>'
+                     + '</span>'
+                     + '<span class="v136-cta-price">' + priceStr + '</span>';
+          stackEl.appendChild(a);
+        });
+      }
+    }
+
+    // --- DISCLOSURE ---------------------------------------------------
+    var discEl = document.getElementById('v138-disclosure');
+    if (discEl && disc.affiliate_text) discEl.textContent = disc.affiliate_text;
+
+    show('result');
+  } catch (err) {
+    console.warn('[V.138 renderResult] error', err);
+    show('result');
+  }
   return;
   // Legacy body retained behind unreachable branch for git-archaeology:
   if (false) {
