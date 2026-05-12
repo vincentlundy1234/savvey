@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v150';
+const VERSION             = 'normalize.js v3.4.5v151';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v150-1';
+const CACHE_PREFIX = 'sav-v151-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -763,14 +763,30 @@ PILLARS MODE (INPUT.amazon present, INPUT.alternatives absent):
                       HIGH (3P markup) OR title doesn't match canonical.
                       Bias toward check_elsewhere when in doubt.
 
-  verdict_summary: ALWAYS try when rating + reviews are present. 1-2
-    sentences, max 28 words. Cite a concrete observation reviewers
-    actually make. Honest + brutal voice. Format examples:
-      "Highly rated for cooking speed and dual-zone capacity. Most reviewers
-       mention the non-stick basket is fiddly to clean — soak after every cook."
-      "Best-in-class noise cancellation. Comfort drops past 4-hour sessions
-       per long-haul flight reviewers."
-    If no review data, return null. Never invent.
+  verdict_summary: ALWAYS produce non-null. 1-2 sentences, max 28 words.
+    Two modes depending on what INPUT.amazon carries:
+
+    (a) When rating + reviews present: cite a concrete observation
+        reviewers actually make. Honest + brutal voice. Examples:
+        "Highly rated for cooking speed and dual-zone capacity. Most
+         reviewers mention the non-stick basket is fiddly to clean —
+         soak after every cook."
+        "Best-in-class noise cancellation. Comfort drops past 4-hour
+         sessions per long-haul flight reviewers."
+
+    (b) When rating/reviews missing or sparse (new launches, etc.):
+        write 1 sentence of honest price-context — model lifecycle,
+        launch RRP, typical UK price band, sale-window expectation.
+        Examples:
+        "Launch RRP £699 for the flagship console. Stock fluid in the
+         first 6 months; expect occasional Currys/Game discounts by Q3."
+        "Top-end iPhone tier — Apple holds price firmly until the
+         September refresh."
+        "Mid-range air fryer pricing. Black Friday usually trims 15-20%."
+
+    NEVER invent specific reviewer quotes, rating numbers, or review
+    counts that aren't in INPUT. But ALWAYS write something honest.
+    Returning null is V.150-era behaviour, no longer permitted.
 
   category_eyebrow: derive from canonical + obvious specs in the name.
     e.g. "Ninja Foodi Dual Zone AF300UK" → "Air Fryer · 7.6L · 2400W"
@@ -1546,7 +1562,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v150:${canonicalKey}`;
+  const ck = `savvey:retailers:v151:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -2534,7 +2550,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v150:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v151:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {

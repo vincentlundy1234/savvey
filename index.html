@@ -5366,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v150';
-  var V126_GUARD          = 'savvey_v150_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v151';
+  var V126_GUARD          = 'savvey_v151_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5456,7 +5456,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.150 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.151 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5602,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v150</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v151</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -6196,6 +6196,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </div>
 
     <p class="v136-affiliate" id="v138-disclosure">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
+    <p class="v151-serp-diag" id="v151-serp-diag" style="display:none; color:#9aa3a0; font-size:11px; text-align:center; margin-top:6px;">&nbsp;</p>
     <p class="v136-mockup-note" id="v138-mockup-note" style="display:none;">V.138 dynamic</p>
   </div>
 </div>
@@ -9175,6 +9176,27 @@ function renderResult(displayName, payload) {
     var discEl = document.getElementById('v138-disclosure');
     if (discEl && disc.affiliate_text) discEl.textContent = disc.affiliate_text;
 
+    // --- V.151 SERP DIAG FOOTER --------------------------------------
+    // Tiny grey footer: "Searched N listings · M priced · K rejected".
+    // Gives on-device visibility into the SerpAPI pipeline without
+    // needing DevTools. Hidden when no serp_diag is available.
+    var diagEl = document.getElementById('v151-serp-diag');
+    if (diagEl) {
+      var _diag2 = p && p._meta && p._meta.serp_diag;
+      if (_diag2 && typeof _diag2.examined === 'number') {
+        var parts = [];
+        parts.push('Searched ' + _diag2.examined + ' listing' + (_diag2.examined === 1 ? '' : 's'));
+        if (typeof _diag2.priced === 'number') parts.push(_diag2.priced + ' priced');
+        if (pric && pric.avg_market && typeof pric.avg_market.outliers_rejected === 'number' && pric.avg_market.outliers_rejected > 0) {
+          parts.push(pric.avg_market.outliers_rejected + ' rejected');
+        }
+        diagEl.textContent = parts.join(' \u00b7 ');
+        diagEl.style.display = '';
+      } else {
+        diagEl.style.display = 'none';
+      }
+    }
+
     show('result');
   } catch (err) {
     console.warn('[V.138 renderResult] error', err);
@@ -11612,8 +11634,14 @@ async function _v140KickoffSynthesize(idPayload) {
       }
       var vtxt = document.getElementById('v138-verdict-text');
       if (vtxt) {
-        if (s.verdict_summary) {
-          vtxt.textContent = s.verdict_summary;
+        // V.151 — never leave the slot empty. Trim, null-check, fallback
+        // to soft-fail copy if absent. Removes any lingering V.140 skeleton
+        // classes so the slot is guaranteed visible.
+        vtxt.classList.remove('v140-skel', 'v140-skel-line', 'short');
+        var _summary = (s.verdict_summary && typeof s.verdict_summary === 'string')
+                       ? s.verdict_summary.trim() : '';
+        if (_summary) {
+          vtxt.textContent = _summary;
         } else {
           vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
         }
