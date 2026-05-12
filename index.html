@@ -8035,33 +8035,45 @@ async function callNormalize(body) {
       bounceToType(_seed, _bounceReason);
       return;
     }
-    // Wave GG — confidence-gated routing using the new `specificity` flag.
-    // When Vision returns `brand_only` on a Snap (e.g. generic "Krups Nespresso
-    // U" without a model number), route to disambig with the user's snap
-    // visible rather than committing to a half-baked result page. This was
-    // the Nespresso-miss-class fix (7 May 2026 beta-2 finding).
+    // V.138c — Outcome-driven routing. The backend now emits a canonical
+    // `outcome` field on the V.138 schema ('matched' | 'disambig' | 'no_match').
+    // Prefer that when present; fall back to legacy specificity/confidence
+    // checks (Wave GG / V.74) for older cached responses that don't carry
+    // outcome. Three branches:
+    //   matched  → renderResult (Four Pillars)
+    //   disambig → renderConfirm (Three Tiers)
+    //   no_match → renderResult with fallback (Search-Amazon CTA via amazon_search_fallback)
     const _isImageInput = body.input_type === 'image';
     const _brandOnly = j.specificity === 'brand_only';
-    // V.74 — also fire disambig when alternatives_array has options even if
-    // alternative_string is null. Catches "Bose"/"Logitech mouse" style brand-only
-    // text searches that previously fell through to the V.58 empty state.
     const _hasDisambigOptions = !!(j.alternative_string ||
-      (Array.isArray(j.alternatives_array) && j.alternatives_array.length >= 1));
-    const _shouldDisambig =
-      (j.confidence !== 'high' && _hasDisambigOptions) ||
-      (_isImageInput && _brandOnly && _hasDisambigOptions);
-    if (_shouldDisambig) {
-      // V.78 — Generic-noun nudge. If the user typed a single generic word
-      // ("mug", "pen", "shampoo"), Haiku's alternatives are biased to whatever
-      // is commercially popular on Amazon. Soften the disambig framing from
-      // "Which one?" (committed) to "Want to be more specific?" (suggestive).
+      (Array.isArray(j.alternatives_array) && j.alternatives_array.length >= 1) ||
+      (Array.isArray(j.disambig_candidates) && j.disambig_candidates.length >= 2));
+
+    var _route;
+    if (j.outcome === 'matched' || j.outcome === 'disambig' || j.outcome === 'no_match') {
+      // V.138 schema present — trust the backend.
+      _route = (j.outcome === 'disambig') ? 'disambig' : 'result';
+    } else {
+      // Legacy fallback (cached pre-V.138 entries or older clients).
+      var _shouldDisambig =
+        (j.confidence !== 'high' && _hasDisambigOptions) ||
+        (_isImageInput && _brandOnly && _hasDisambigOptions);
+      _route = _shouldDisambig ? 'disambig' : 'result';
+    }
+
+    if (_route === 'disambig') {
+      // Generic-noun nudge preserved from V.78.
       var _typedText = (body.input_type === 'text') ? String(body.text || '').trim() : '';
       var _typedWords = _typedText.split(/\s+/).filter(Boolean);
       if (_typedWords.length <= 1 && _brandOnly && _typedText.length > 0) {
         j._meta = j._meta || {};
         j._meta.generic_noun_input = true;
       }
-      track('disambig_routed', { reason: _brandOnly ? 'brand_only' : 'low_confidence', door: _lastDoor, generic_noun: !!(j._meta && j._meta.generic_noun_input) });
+      track('disambig_routed', {
+        reason: (j.outcome === 'disambig' ? (j.outcome_reason || 'outcome_disambig') : (_brandOnly ? 'brand_only' : 'low_confidence')),
+        door: _lastDoor,
+        generic_noun: !!(j._meta && j._meta.generic_noun_input),
+      });
       renderConfirm(j.canonical_search_string, j.alternative_string, j);
     } else {
       pushRecent(j);
@@ -11281,143 +11293,9 @@ handleInbound();
   }, { passive: true, capture: true });
 })();
 
-/* V.103 — Mock engine. URL params bypass /api/normalize and render the
-   target screen with hand-crafted payloads, so design + animation can be
-   tested without burning SerpAPI quota or relying on network state.
-
-   Triggers:
-     ?mock=ninja       → renders the result screen with Ninja Air Fryer AF100UK
-     ?mock=dishwasher  → renders the disambig screen with intent-categorized 3-option (Beko/Bosch/Miele)
-     ?mock=kettle      → same shape, kettle category (Russell Hobbs / Tefal / Smeg)
-*/
-(function v103Mock() {
-  try {
-    var url = new URL(location.href);
-    var mock = url.searchParams.get('mock');
-    if (!mock) return;
-
-    function buildNinjaPayload() {
-      // Ninja Air Fryer AF100UK final-result mock — matches /api/normalize shape.
-      return {
-        canonical_search_string: 'Ninja Air Fryer AF100UK',
-        confidence: 'high',
-        specificity: 'specific',
-        category: 'home',
-        mpn: 'AF100UK',
-        amazon_search_query: 'Ninja AF100UK',
-        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=Ninja+AF100UK&tag=savvey-21',
-        savvey_says: {
-          live_amazon_price: '£99.00',
-          used_amazon_price: null,
-          amazon_rating: '4.7 · 12,453 reviews',
-          price_take: 'Solid mid-range buy. Typical UK band: £99-£130.',
-          verdict: 'good_buy',
-          timing_advice: 'Buy now — price is stable.',
-          consensus: 'Loud but cooks chips perfectly.',
-          confidence: 'high'
-        },
-        verified_amazon_price: {
-          price: 99,
-          price_str: '£99.00',
-          currency: 'GBP',
-          source: 'amazon.co.uk',
-          source_type: 'organic',
-          asin: 'B08F5Z4H2P',
-          title: 'Ninja Air Fryer 3.8L AF100UK Single Drawer Black/Grey',
-          link: 'https://www.amazon.co.uk/dp/B08F5Z4H2P?tag=savvey-21',
-          thumbnail: null,
-          rating: 4.7,
-          reviews: 12453
-        },
-        retailer_deep_links: {},
-        disambig_candidates: null,
-        disambig_candidates_meta: null,
-        visual_matches: null,
-        recommendations: null,
-        review_synthesis: null,
-        _meta: { version: 'mock:ninja', input_type: 'text', latency_ms: 0, cache: 'mock' }
-      };
-    }
-
-    function buildDishwasherPayload() {
-      return {
-        canonical_search_string: 'Dishwasher',
-        confidence: 'low',
-        specificity: 'category_only',
-        category: 'home',
-        mpn: null,
-        amazon_search_query: 'dishwasher',
-        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=dishwasher&tag=savvey-21',
-        alternatives_array: ['Beko DVN05320W', 'Bosch Series 4 SMS4EKW09G', 'Miele G 5210 SC'],
-        alternatives_meta: [
-          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option, fast wash cycle.', typical_price_gbp: 229, est_price_range: '£200-£250', pack_size: null, tier_label: 'Budget' },
-          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet and bulletproof.', typical_price_gbp: 399, est_price_range: '£350-£450', pack_size: null, tier_label: 'Mid-tier' },
-          { intent_label: 'Premium Choice', rationale: 'Built to last 20 years. Best drying.', typical_price_gbp: 779, est_price_range: '£700-£850', pack_size: null, tier_label: 'Premium' }
-        ],
-        disambig_candidates: ['Beko DVN05320W', 'Bosch Series 4 SMS4EKW09G', 'Miele G 5210 SC'],
-        disambig_candidates_meta: [
-          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option, fast wash cycle.', typical_price_gbp: 229, est_price_range: '£200-£250', pack_size: null, tier_label: 'Budget' },
-          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet and bulletproof.', typical_price_gbp: 399, est_price_range: '£350-£450', pack_size: null, tier_label: 'Mid-tier' },
-          { intent_label: 'Premium Choice', rationale: 'Built to last 20 years. Best drying.', typical_price_gbp: 779, est_price_range: '£700-£850', pack_size: null, tier_label: 'Premium' }
-        ],
-        savvey_says: { live_amazon_price: null, used_amazon_price: null, amazon_rating: null, price_take: null, verdict: null, timing_advice: null, consensus: null, confidence: 'low' },
-        verified_amazon_price: null,
-        retailer_deep_links: null,
-        visual_matches: null,
-        recommendations: null,
-        review_synthesis: null,
-        _meta: { version: 'mock:dishwasher', input_type: 'text', latency_ms: 0, cache: 'mock' }
-      };
-    }
-
-    function buildKettlePayload() {
-      return {
-        canonical_search_string: 'Kettle',
-        confidence: 'low',
-        specificity: 'category_only',
-        category: 'home',
-        amazon_search_query: 'kettle',
-        amazon_search_fallback: 'https://www.amazon.co.uk/s?k=kettle&tag=savvey-21',
-        alternatives_array: ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
-        alternatives_meta: [
-          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option with rapid boil.', typical_price_gbp: 24.99, est_price_range: '£20-£30', pack_size: '1.7L', tier_label: 'Budget' },
-          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet, durable.', typical_price_gbp: 49.00, est_price_range: '£40-£55', pack_size: '1.7L', tier_label: 'Mid-tier' },
-          { intent_label: 'Premium Choice', rationale: 'Iconic design, lifetime build quality.', typical_price_gbp: 169.00, est_price_range: '£150-£180', pack_size: '1.5L', tier_label: 'Premium' }
-        ],
-        disambig_candidates: ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
-        disambig_candidates_meta: [
-          { intent_label: 'Best Value',     rationale: 'Cheapest reliable option with rapid boil.', typical_price_gbp: 24.99, est_price_range: '£20-£30', pack_size: '1.7L', tier_label: 'Budget' },
-          { intent_label: 'Top Reviewed',   rationale: 'UK high-street standard. Quiet, durable.', typical_price_gbp: 49.00, est_price_range: '£40-£55', pack_size: '1.7L', tier_label: 'Mid-tier' },
-          { intent_label: 'Premium Choice', rationale: 'Iconic design, lifetime build quality.', typical_price_gbp: 169.00, est_price_range: '£150-£180', pack_size: '1.5L', tier_label: 'Premium' }
-        ],
-        savvey_says: { live_amazon_price: null, verdict: null, confidence: 'low' },
-        verified_amazon_price: null, retailer_deep_links: null, visual_matches: null, recommendations: null, review_synthesis: null,
-        _meta: { version: 'mock:kettle', input_type: 'text', latency_ms: 0, cache: 'mock' }
-      };
-    }
-
-    setTimeout(function() {
-      try {
-        if (mock === 'ninja') {
-          var p = buildNinjaPayload();
-          window.lastResult = p;
-          if (typeof renderResult === 'function') renderResult(p.canonical_search_string, p);
-          if (typeof show === 'function') show('result');
-          console.log('[V.103 mock] rendered Ninja Air Fryer AF100UK result');
-        } else if (mock === 'dishwasher' || mock === 'kettle') {
-          var p2 = mock === 'dishwasher' ? buildDishwasherPayload() : buildKettlePayload();
-          window.lastResult = p2;
-          if (typeof renderConfirm === 'function') {
-            renderConfirm(p2.disambig_candidates[0], p2.disambig_candidates[1], p2);
-          }
-          console.log('[V.103 mock] rendered ' + mock + ' disambig with intent-categorized options');
-        }
-      } catch (e) {
-        console.warn('[V.103 mock] render error', e);
-      }
-    }, 500);
-  } catch (e) { /* swallow */ }
-})();
+/* V.138c — V.103 mock IIFE removed. Static fake-data injection is
+   incompatible with live dynamic binding and risked masking real backend
+   regressions. Use the actual /api/normalize endpoint for testing now. */
 </script>
 
 </body>
