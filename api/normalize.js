@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v148';
+const VERSION             = 'normalize.js v3.4.5v150';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v148-1';
+const CACHE_PREFIX = 'sav-v150-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1546,7 +1546,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v147:${canonicalKey}`;
+  const ck = `savvey:retailers:v150:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1585,7 +1585,9 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
       _examined++;
       // Pick the best URL. product_link is the merchant PDP and is preferred;
       // item.link is the Google aclk redirector which still works but is uglier.
-      const url = item.product_link || item.link;
+      // V.150 — declared with `let` so the redirector-unwrap branch can
+      // reassign to the rescued merchant URL.
+      let url = item.product_link || item.link;
       if (!url || typeof url !== 'string') {
         _droppedNoUrl++;
         continue;
@@ -1599,13 +1601,14 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
         _droppedNoUrl++;
         continue;
       }
-      // V.145 — Google is not a shop. Aggressively reject any Google-owned
-      // domain regardless of subdomain depth or TLD. Also rejects ad-tracking
-      // redirectors that occasionally surface as raw hosts.
-      if (!host
+      // V.150 — before banning a Google redirector host, attempt to unwrap
+      // it (the real merchant URL is wrapped in adurl=/url=/q=/dest=).
+      // V.145's blanket ban was dropping ~75% of sponsored cards on hot
+      // queries; unwrap rescues them with their actual merchant host.
+      const _isGoogleHost = !host
           || host === 'google.com' || host === 'google.co.uk'
           || host === 'google.de'  || host === 'google.fr'
-          || host.startsWith('google.')          // catches google.com, google.co.uk, google.anything
+          || host.startsWith('google.')
           || host.endsWith('.google.com')
           || host.endsWith('.google.co.uk')
           || host.endsWith('.googleusercontent.com')
@@ -1613,9 +1616,21 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
           || host.includes('googleshopping')
           || host.includes('aclk')
           || host.includes('doubleclick')
-          || host === 'shopping.google.com') {
-        _droppedRedirector++;
-        continue;
+          || host === 'shopping.google.com';
+      if (_isGoogleHost) {
+        // V.150 — try to unwrap the redirector. Probe both product_link
+        // and link in case one is the merchant and the other is the ad
+        // wrapper.
+        const _unwrap = _v150UnwrapGoogleRedirect(item.link)
+                     || _v150UnwrapGoogleRedirect(item.product_link)
+                     || _v150UnwrapGoogleRedirect(url);
+        if (_unwrap && _unwrap.host) {
+          host = _unwrap.host;
+          url = _unwrap.url;  // re-point to merchant
+        } else {
+          _droppedRedirector++;
+          continue;
+        }
       }
       // V.146 — deep price extraction. Probes extracted_price, price string,
       // price_range.lower, offers[].price, lowest_price, minimum_price in
@@ -1787,6 +1802,46 @@ const V138_DELIVERY_NOTES = {
   'verycta': 'Buy-now-pay-later',
 };
 
+// V.150 — UNWRAP GOOGLE REDIRECTORS. SerpAPI's `item.link` field is the
+// Google aclk / adservices redirector for sponsored carousel cards. The
+// actual merchant URL is buried in the `adurl=` / `url=` / `q=` / `dest=`
+// query parameter. V.145's host-ban dropped these as redirectors, losing
+// 30+ sponsored cards on hot-product queries (PS5 Pro, iPhone 16, etc.).
+// V.150 unwraps the redirector and returns the real merchant host + URL,
+// so the listing flows into the Retailer Stack with its actual brand.
+function _v150UnwrapGoogleRedirect(rawUrl) {
+  try {
+    if (!rawUrl || typeof rawUrl !== 'string') return null;
+    const u = new URL(rawUrl);
+    const h = u.hostname.toLowerCase();
+    // Only attempt unwrap on known Google redirector hosts.
+    if (!(h.includes('google') || h.includes('aclk') || h.includes('doubleclick'))) {
+      return null;
+    }
+    const wrapped = u.searchParams.get('adurl')
+                 || u.searchParams.get('url')
+                 || u.searchParams.get('q')
+                 || u.searchParams.get('dest')
+                 || u.searchParams.get('redirect');
+    if (!wrapped) return null;
+    let decoded = wrapped;
+    try { decoded = decodeURIComponent(wrapped); } catch (e) { /* already decoded */ }
+    const w = new URL(decoded);
+    const wh = w.hostname.replace(/^www\./, '').toLowerCase();
+    // Sanity: the unwrapped host must NOT also be a Google host
+    // (some chains nest redirects). Reject if so.
+    if (wh.startsWith('google.') || wh.endsWith('.google.com') ||
+        wh.endsWith('.google.co.uk') || wh.includes('aclk') ||
+        wh.includes('doubleclick') || wh.includes('googleadservices') ||
+        wh.endsWith('.googleusercontent.com')) {
+      return null;
+    }
+    return { host: wh, url: w.toString().slice(0, 500) };
+  } catch (e) {
+    return null;
+  }
+}
+
 // V.146 — DEEP PRICE EXTRACTION. SerpAPI google_shopping returns three
 // classes of shopping_results: (1) direct merchant offers with extracted_price
 // + price string, (2) aggregator/comparison cards with no `price` but a
@@ -1820,6 +1875,17 @@ function _v146ExtractPrice(item) {
     if (lowest != null) return { price: lowest, raw: item.lowest_price, source: 'lowest_price' };
     const minimum = _v143ParsePrice(item.minimum_price);
     if (minimum != null) return { price: minimum, raw: item.minimum_price, source: 'minimum_price' };
+    // V.150 — newer SerpAPI shapes seen on flagship-product queries.
+    if (item.serpapi_immersive_product && typeof item.serpapi_immersive_product === 'object') {
+      const imm = _v143ParsePrice(item.serpapi_immersive_product.price);
+      if (imm != null) return { price: imm, raw: item.serpapi_immersive_product.price, source: 'serpapi_immersive_product.price' };
+    }
+    if (Array.isArray(item.prices) && item.prices.length > 0) {
+      for (const pr of item.prices) {
+        const p = (typeof pr === 'number') ? pr : _v143ParsePrice(pr);
+        if (p != null && p > 0) return { price: p, raw: pr, source: 'prices[]' };
+      }
+    }
   } catch (e) {
     console.warn(`[${VERSION}] V.147 _v146ExtractPrice exception:`, e && e.message);
   }
@@ -2028,6 +2094,13 @@ function _v138BuildResponse({
   const brandOnly = parsed && parsed.specificity === 'brand_only';
   const shouldDisambig = (isLow || brandOnly || !hasPrice) && hasAlts;
 
+  // V.150 — when the Amazon picker fails but google_shopping returned 2+
+  // priced retailers, promote to 'matched' instead of falling through to
+  // no_match. The Four Pillars + Retailer Stack render fine without Amazon
+  // as long as some priced links exist. PS5 Pro / new launches no longer
+  // hit a total blackout just because Amazon picker is strict.
+  const _v150HasRetailerPrices = !!(pricing && pricing.best_price && pricing.best_price.value_gbp)
+    || (Array.isArray(links) && links.filter(l => l && l.price_gbp != null && !l.is_outlier).length >= 1);
   if (shouldDisambig) {
     outcome = 'disambig';
     outcome_reason = isLow ? 'low_confidence'
@@ -2036,6 +2109,10 @@ function _v138BuildResponse({
   } else if (hasPrice) {
     outcome = 'matched';
     outcome_reason = 'high_confidence_with_price';
+  } else if (_v150HasRetailerPrices) {
+    // V.150 — rescue path: Amazon picker missed but retailers exist.
+    outcome = 'matched';
+    outcome_reason = 'retailer_priced_no_amazon';
   } else if (parsed && parsed.canonical_search_string) {
     outcome = 'no_match';
     outcome_reason = 'no_amazon_match';
@@ -2457,7 +2534,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v148:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v150:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {

@@ -68,3 +68,65 @@ OPERATING RULES FOR COWORK
 6. globalReset() must be called first in every search path
 7. After every deploy, verify on Vercel deployments page
    that the commit appears as Current Production
+
+1. THE UNIVERSAL ROUTING MATRIX (The 4 Inputs & 3 Outcomes)
+There are exactly four ways a user inputs data: Snap (Camera), Type (Text), Scan (Barcode), or Paste (URL). All four inputs must route through the exact same backend pipeline and resolve into one of three strict outcomes.
+
+Outcome 1: Exact Match (High Confidence)
+
+Trigger: A barcode, a URL, or a highly specific text/snap (e.g., "Ninja AF300UK", "Sony PS5 Pro").
+
+Destination: Route DIRECTLY to #screen-result (The Four Pillars + Retailer Stack).
+
+Action: Do not show any disambiguation.
+
+Outcome 2: Variant Family (The Closed Loop)
+
+Trigger: Broad family name with known models (e.g., "PS5", "iPhone 16").
+
+Destination: Route to #screen-disambig (Clean UI). Hide "Budget/Premium" pills and generic icons. Show a clean list of variant names (e.g., Slim Disc, Pro).
+
+Action: Tapping a variant intercepts the click, silently enters the variant name into the search flow, and routes to Outcome 1. Do NOT link externally.
+
+Outcome 3: Generic Noun (The Open Loop)
+
+Trigger: Unbranded, generic items (e.g., "teapot", "white mug").
+
+Destination: Route to #screen-disambig (Generic Tiers).
+
+UI Required: Display the color-coded "BUDGET", "TOP RATED", and "PREMIUM" pills.
+
+Action: Tapping these acts as an external affiliate link out to Amazon.
+
+2. UI/UX SOURCE OF TRUTH (The Four Pillars & Retailer Stack)
+For Outcome 1 (Exact Match), the #screen-result UI is locked. Do not alter the CSS layout. It must contain exactly:
+
+The Four Pillars (Data Presentation):
+
+Identity: The exact Product Name and a clean cropped image.
+
+Best Price: The lowest verified price (£X.XX) with the Retailer Name underneath.
+
+Market Context: The median average price across the market and the total number of retailers checked (e.g., "Average £399 across 5 stores").
+
+The AI Verdict: A 1-2 sentence summary from Haiku and the colored "Verdict Pill" (e.g., "Great Price").
+
+The Retailer Stack (The Revenue Engine):
+Immediately below the Four Pillars, you must render the affiliate links pulled from SerpAPI.
+
+Amazon Primary: If verified, featured at the top in green with price and prime/delivery subtext.
+
+Competitors: 2 to 4 other retailers (e.g., Currys, Argos, Game) listed below with their respective logos, prices, and stock text.
+
+Routing: Every card in this stack must be a functional, external affiliate link.
+
+3. BACKEND & DATA CONSTRAINTS (Zero Timeouts, Zero Garbage)
+To prevent Vercel 504 Timeouts and garbage data, enforce the following:
+
+Split-Routing (No Monoliths): Data extraction (/api/identify) and AI text synthesis (/api/synthesize) must remain decoupled. Render the prices instantly; let the AI text shimmer/load asynchronously. Graceful degradation is mandatory—if the AI text fails, the user must still see the prices and affiliate links.
+
+Price Sanity (Outlier Rejection): Never display cheap accessories as the "Best Price" for a main console. Calculate the median price of all valid SerpAPI results and discard anything less than 50% of the median.
+
+Deep Price Extraction: When parsing SerpAPI, check all possible price fields (extracted_price, price, price_range.lower, offers[0].price, lowest_price). Do not drop aggregator results just because the primary price string is null.
+
+No Silent Failures: If 0 prices are found, or an exception is thrown, the frontend MUST display a clean message indicating exactly why (e.g., "Searched X listings, none with valid UK prices" or the specific Error string). Never dump the user to a blank screen or the Home screen without an explanation.
