@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v146';
+const VERSION             = 'normalize.js v3.4.5v147';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v146-1';
+const CACHE_PREFIX = 'sav-v147-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1231,6 +1231,47 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
   }
 }
 
+// V.146 — VARIANT-FAMILY DETECTOR (Panel-mandated safety net).
+// Deterministic backup for when Haiku ignores the prompt rule and picks
+// a single variant from a known multi-variant family. Null-safe: returns
+// null on any non-string input, never throws.
+const V146_VARIANT_FAMILIES = [
+  { rx: /^Sony PlayStation 5(?!.*(Slim|Pro)\b)/i,
+    variants: ['Sony PlayStation 5 Slim Disc Edition', 'Sony PlayStation 5 Slim Digital Edition', 'Sony PlayStation 5 Pro'] },
+  { rx: /^(?:Microsoft\s+)?Xbox Series(?!\s+(?:S|X)\b)/i,
+    variants: ['Xbox Series S 512GB', 'Xbox Series S 1TB', 'Xbox Series X 1TB'] },
+  { rx: /^Apple iPhone 16(?!.*(Plus|Pro|Pro Max)\b)/i,
+    variants: ['Apple iPhone 16 128GB', 'Apple iPhone 16 Plus 128GB', 'Apple iPhone 16 Pro 128GB'] },
+  { rx: /^Apple iPhone 15(?!.*(Plus|Pro|Pro Max)\b)/i,
+    variants: ['Apple iPhone 15 128GB', 'Apple iPhone 15 Plus 128GB', 'Apple iPhone 15 Pro 128GB'] },
+  { rx: /^Samsung Galaxy S25(?!.*(Plus|Ultra)\b)/i,
+    variants: ['Samsung Galaxy S25 128GB', 'Samsung Galaxy S25 Plus 256GB', 'Samsung Galaxy S25 Ultra 256GB'] },
+  { rx: /^Samsung Galaxy S24(?!.*(Plus|Ultra)\b)/i,
+    variants: ['Samsung Galaxy S24 128GB', 'Samsung Galaxy S24 Plus 256GB', 'Samsung Galaxy S24 Ultra 256GB'] },
+  { rx: /^Apple AirPods(?!.*(Pro|Max|4|3|2)\b)/i,
+    variants: ['Apple AirPods 4', 'Apple AirPods Pro 2', 'Apple AirPods Max'] },
+  { rx: /^(?:Nintendo\s+)?Switch(?!.*(OLED|Lite)\b)/i,
+    variants: ['Nintendo Switch OLED', 'Nintendo Switch Lite', 'Nintendo Switch (standard)'] },
+  { rx: /^Apple MacBook (?:Air|Pro)(?!.*(13|14|15|16))/i,
+    variants: ['Apple MacBook Air 13\" M3', 'Apple MacBook Pro 14\" M4', 'Apple MacBook Pro 16\" M4 Pro'] },
+  { rx: /^Google Pixel 9(?!.*(Pro|Pro XL)\b)/i,
+    variants: ['Google Pixel 9 128GB', 'Google Pixel 9 Pro 128GB', 'Google Pixel 9 Pro XL 256GB'] },
+  { rx: /^Amazon Kindle(?!.*(Paperwhite|Oasis|Scribe|Colorsoft)\b)/i,
+    variants: ['Amazon Kindle Paperwhite', 'Amazon Kindle Colorsoft', 'Amazon Kindle Scribe'] },
+];
+function _v146DetectVariantFamily(canonical) {
+  try {
+    if (!canonical || typeof canonical !== 'string') return null;
+    for (const fam of V146_VARIANT_FAMILIES) {
+      if (fam && fam.rx && fam.rx.test(canonical)) return fam.variants;
+    }
+  } catch (e) {
+    // Defensive: never let a regex panic crash the request.
+    console.warn(`[${VERSION}] V.147 _v146DetectVariantFamily exception:`, e && e.message);
+  }
+  return null;
+}
+
 function parseAndDefault(rawText) {
   if (!rawText) return null;
   const cleaned = rawText.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
@@ -1505,7 +1546,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v146:${canonicalKey}`;
+  const ck = `savvey:retailers:v147:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1753,27 +1794,35 @@ const V138_DELIVERY_NOTES = {
 // V.143's _v143ParsePrice handled (1) only — V.146 probes (2) so aggregator
 // cards no longer count as unpriced and silently inflate dropped_no_price.
 function _v146ExtractPrice(item) {
-  if (!item || typeof item !== 'object') return null;
-  if (typeof item.extracted_price === 'number' && item.extracted_price > 0) {
-    return { price: item.extracted_price, raw: item.price || String(item.extracted_price), source: 'extracted_price' };
-  }
-  const fromStr = _v143ParsePrice(item.price);
-  if (fromStr != null) return { price: fromStr, raw: item.price, source: 'price' };
-  if (item.price_range && typeof item.price_range === 'object') {
-    const loRaw = item.price_range.lower;
-    const lo = (typeof loRaw === 'number') ? loRaw : _v143ParsePrice(loRaw);
-    if (lo != null && lo > 0) return { price: lo, raw: 'range_lower:' + lo, source: 'price_range.lower' };
-  }
-  if (Array.isArray(item.offers) && item.offers.length > 0) {
-    for (const offer of item.offers) {
-      const p = _v143ParsePrice(offer && offer.price);
-      if (p != null) return { price: p, raw: offer.price, source: 'offers[].price' };
+  // V.147 — full body wrapped in try/catch so any unexpected SerpAPI
+  // payload shape (e.g. a non-object in offers[], a nested null) can
+  // never crash the handler.
+  try {
+    if (!item || typeof item !== 'object') return null;
+    if (typeof item.extracted_price === 'number' && item.extracted_price > 0) {
+      return { price: item.extracted_price, raw: item.price || String(item.extracted_price), source: 'extracted_price' };
     }
+    const fromStr = _v143ParsePrice(item.price);
+    if (fromStr != null) return { price: fromStr, raw: item.price, source: 'price' };
+    if (item.price_range && typeof item.price_range === 'object') {
+      const loRaw = item.price_range.lower;
+      const lo = (typeof loRaw === 'number') ? loRaw : _v143ParsePrice(loRaw);
+      if (lo != null && lo > 0) return { price: lo, raw: 'range_lower:' + lo, source: 'price_range.lower' };
+    }
+    if (Array.isArray(item.offers) && item.offers.length > 0) {
+      for (const offer of item.offers) {
+        if (!offer) continue;
+        const p = _v143ParsePrice(offer.price);
+        if (p != null) return { price: p, raw: offer.price, source: 'offers[].price' };
+      }
+    }
+    const lowest = _v143ParsePrice(item.lowest_price);
+    if (lowest != null) return { price: lowest, raw: item.lowest_price, source: 'lowest_price' };
+    const minimum = _v143ParsePrice(item.minimum_price);
+    if (minimum != null) return { price: minimum, raw: item.minimum_price, source: 'minimum_price' };
+  } catch (e) {
+    console.warn(`[${VERSION}] V.147 _v146ExtractPrice exception:`, e && e.message);
   }
-  const lowest = _v143ParsePrice(item.lowest_price);
-  if (lowest != null) return { price: lowest, raw: item.lowest_price, source: 'lowest_price' };
-  const minimum = _v143ParsePrice(item.minimum_price);
-  if (minimum != null) return { price: minimum, raw: item.minimum_price, source: 'minimum_price' };
   return null;
 }
 
@@ -2395,7 +2444,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v146:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v147:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
