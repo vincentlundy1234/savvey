@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v145';
+const VERSION             = 'normalize.js v3.4.5v146';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v145-1';
+const CACHE_PREFIX = 'sav-v146-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1359,18 +1359,37 @@ function parseAndDefault(rawText) {
     confidence:          ['high','medium','low'].includes(ss.confidence) ? ss.confidence : 'low',
   };
 
+  // V.146 — variant-family backstop. If Haiku ignored the prompt rule
+  // and gave us a single-variant canonical for a known family with empty
+  // alternatives_array, synthesise the variant list and downgrade confidence
+  // to 'medium' so the V.139 disambig gate fires and the user gets to choose.
+  let _v146FamilyApplied = false;
+  if (alternatives_array.length < 2) {
+    const _famVariants = _v146DetectVariantFamily(canonical);
+    if (_famVariants && _famVariants.length >= 2) {
+      alternatives_array = _famVariants.slice(0, 3);
+      alternatives_meta = []; // mega-synth will populate blurbs from these
+      _v146FamilyApplied = true;
+      console.log(`[${VERSION}] V.146 family backstop applied: "${canonical}" -> ${alternatives_array.join(' | ')}`);
+    }
+  }
+  // V.146 — when family backstop fires AND Haiku said 'high', downgrade
+  // to 'medium' so the V.139 disambig gate doesn't short-circuit.
+  const _finalConfidence = (_v146FamilyApplied && confidence === 'high') ? 'medium' : confidence;
+
   return {
     canonical_search_string: canonical,
-    confidence,
+    confidence: _finalConfidence,
     confidence_score, // V.110 — numeric 0-100, defensively derived from enum if Haiku omitted it
     market_status,    // V.110 — Current Model | Replaced | Discontinued | Pre-release | null
     alternative_string: alternative,
-    alternatives_array, // Wave HH
+    alternatives_array, // Wave HH (+ V.146 family backstop)
     alternatives_meta, // Wave KK — typical_price_gbp + pack_size + tier_label per candidate
     category,
     mpn,
     amazon_search_query: amazonQ,
     savvey_says,
+    _v146_family_applied: _v146FamilyApplied, // diagnostic
   };
 }
 
@@ -1486,7 +1505,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v145:${canonicalKey}`;
+  const ck = `savvey:retailers:v146:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1557,18 +1576,19 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
         _droppedRedirector++;
         continue;
       }
-      // Parse price up-front. _v143ParsePrice handles '£499.99', '$599',
-      // 'EUR 549,99', '499.99 + £5 delivery', etc.
-      const rawPrice = (typeof item.price === 'string') ? item.price
-                     : (typeof item.extracted_price === 'number') ? item.extracted_price
-                     : null;
-      const parsedPrice = _v143ParsePrice(rawPrice);
+      // V.146 — deep price extraction. Probes extracted_price, price string,
+      // price_range.lower, offers[].price, lowest_price, minimum_price in
+      // priority order. Aggregator cards now produce prices via the
+      // price_range.lower branch instead of being silently dropped.
+      const _v146Extract = _v146ExtractPrice(item);
+      const parsedPrice = _v146Extract ? _v146Extract.price : null;
+      const rawPrice = _v146Extract ? _v146Extract.raw
+                     : (typeof item.price === 'string' ? item.price
+                        : (typeof item.extracted_price === 'number' ? item.extracted_price : null));
+      const priceSource = _v146Extract ? _v146Extract.source : 'none';
       if (parsedPrice == null) {
         _droppedNoPrice++;
         if (_droppedSamples.length < 5) _droppedSamples.push(host + ':' + String(rawPrice).slice(0, 20));
-        // V.144 — still keep the link as a fallback navigation target even
-        // without a price. Stored with price=null; the Pillars assembler will
-        // only include it in links[] if no priced retailer is available.
       }
       // Deduplicate by host (cheapest wins).
       if (deepLinks[host]) {
@@ -1585,11 +1605,12 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
       const displayName = _mappedName
         || (_hostKey.charAt(0).toUpperCase() + _hostKey.slice(1));
       deepLinks[host] = {
-        url:       url.slice(0, 500),
-        title:     typeof item.title === 'string' ? item.title.slice(0, 200) : null,
-        price:     rawPrice,        // keep original string for display fallback
-        price_gbp: parsedPrice,     // V.144 — parsed once, cached on the way IN
-        name:      displayName,
+        url:          url.slice(0, 500),
+        title:        typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+        price:        (typeof rawPrice === 'string' || typeof rawPrice === 'number') ? rawPrice : null,
+        price_gbp:    parsedPrice,
+        price_source: priceSource,
+        name:         displayName,
       };
     }
     const _kept = Object.keys(deepLinks).length;
@@ -1597,13 +1618,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
     console.log(`[${VERSION}] google_shopping for "${query.slice(0,60)}": examined=${_examined} kept=${_kept} priced=${_withPrice} dropped_no_url=${_droppedNoUrl} no_price=${_droppedNoPrice} redirector=${_droppedRedirector} samples=${_droppedSamples.slice(0,3).join('|')}`);
     // V.144 — stash diagnostic counts on the function so the handler can
     // bubble them to the frontend (_meta.serp_diag) for on-screen transparency.
+    // V.146 — richer diagnostic samples. Each surviving deepLink contributes
+    // a sample object so the Panel can audit data shape from the response JSON
+    // (DevTools Network tab) without needing the Vercel runtime log.
+    const _v146Samples = [];
+    for (const [host, rec] of Object.entries(deepLinks)) {
+      if (_v146Samples.length >= 8) break;
+      _v146Samples.push({
+        host,
+        raw_price: (typeof rec.price === 'string' || typeof rec.price === 'number') ? rec.price : null,
+        parsed:    rec.price_gbp,
+        source:    rec.price_source || null,
+      });
+    }
     _lastGoogleShoppingDiag = {
-      examined: _examined,
-      kept: _kept,
-      priced: _withPrice,
-      dropped_no_url: _droppedNoUrl,
-      dropped_no_price: _droppedNoPrice,
+      examined:           _examined,
+      kept:               _kept,
+      priced:             _withPrice,
+      dropped_no_url:     _droppedNoUrl,
+      dropped_no_price:   _droppedNoPrice,
       dropped_redirector: _droppedRedirector,
+      samples:            _v146Samples,
+      dropped_samples:    _droppedSamples.slice(0, 5),
     };
     if (Object.keys(deepLinks).length === 0) return null;
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
@@ -1709,6 +1745,37 @@ const V138_DELIVERY_NOTES = {
   'verylink': 'Buy-now-pay-later',
   'verycta': 'Buy-now-pay-later',
 };
+
+// V.146 — DEEP PRICE EXTRACTION. SerpAPI google_shopping returns three
+// classes of shopping_results: (1) direct merchant offers with extracted_price
+// + price string, (2) aggregator/comparison cards with no `price` but a
+// `price_range.lower` or `lowest_price` field, (3) sponsored carousel cards.
+// V.143's _v143ParsePrice handled (1) only — V.146 probes (2) so aggregator
+// cards no longer count as unpriced and silently inflate dropped_no_price.
+function _v146ExtractPrice(item) {
+  if (!item || typeof item !== 'object') return null;
+  if (typeof item.extracted_price === 'number' && item.extracted_price > 0) {
+    return { price: item.extracted_price, raw: item.price || String(item.extracted_price), source: 'extracted_price' };
+  }
+  const fromStr = _v143ParsePrice(item.price);
+  if (fromStr != null) return { price: fromStr, raw: item.price, source: 'price' };
+  if (item.price_range && typeof item.price_range === 'object') {
+    const loRaw = item.price_range.lower;
+    const lo = (typeof loRaw === 'number') ? loRaw : _v143ParsePrice(loRaw);
+    if (lo != null && lo > 0) return { price: lo, raw: 'range_lower:' + lo, source: 'price_range.lower' };
+  }
+  if (Array.isArray(item.offers) && item.offers.length > 0) {
+    for (const offer of item.offers) {
+      const p = _v143ParsePrice(offer && offer.price);
+      if (p != null) return { price: p, raw: offer.price, source: 'offers[].price' };
+    }
+  }
+  const lowest = _v143ParsePrice(item.lowest_price);
+  if (lowest != null) return { price: lowest, raw: item.lowest_price, source: 'lowest_price' };
+  const minimum = _v143ParsePrice(item.minimum_price);
+  if (minimum != null) return { price: minimum, raw: item.minimum_price, source: 'minimum_price' };
+  return null;
+}
 
 // V.143 — robust price-string parser. SerpAPI google_shopping returns
 // `price` as a display-formatted string ('£499.99', '$599', 'EUR 549,99').
@@ -2328,7 +2395,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v145:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v146:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
