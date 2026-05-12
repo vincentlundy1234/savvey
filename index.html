@@ -4886,6 +4886,377 @@
   }
   /* ═════════════════════════ END V.135 ROUTING DEFENCE ═══════════════════ */
 
+  /* ═════════════════════════ V.136 STATIC UI MOCKUPS ═════════════════════
+     Two prototype screens for design review only. No backend coupling,
+     no API calls — fake data hardcoded. Triggered via hash router
+     (#mockup-result / #mockup-similar) or window.__savveyShowMockup().
+     Adheres to the iOS HIG mathematical design from Phase A:
+       16px card radius · diffused 10/25/-5 + 8/10/-6 shadow pair ·
+       system-ui font stack · 800/600 weights · #FFFFFF cards on
+       #F2F2F7 body bg · dark-mode parallel · pill-shape primary CTAs.
+     ═════════════════════════════════════════════════════════════════ */
+
+  .v136-mockup-screen { display: none; }
+  .v136-mockup-screen.active {
+    display: block;
+    min-height: 100dvh;
+    background: #F2F2F7;
+    padding: 16px 16px 80px;
+    -webkit-overflow-scrolling: touch;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-mockup-screen.active { background: #000000; }
+  }
+  .v136-wrap {
+    width: 100%;
+    max-width: 440px;
+    margin: 0 auto;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #14201a;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-wrap { color: #FFFFFF; }
+  }
+
+  /* Back link — small text + icon, top-left */
+  .v136-back {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: none; border: none;
+    font: 600 14px/1 system-ui, -apple-system, sans-serif;
+    color: #4a5550;
+    padding: 12px 4px;
+    margin-bottom: 8px;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  @media (prefers-color-scheme: dark) { .v136-back { color: #b0b8b3; } }
+
+  /* Card base — 16px radius + Phase A diffused shadow */
+  .v136-card {
+    background: #FFFFFF;
+    border-radius: 16px;
+    border: 1px solid rgba(20, 32, 26, 0.06);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10),
+                0 8px 10px -6px rgba(0, 0, 0, 0.10);
+    padding: 18px;
+    margin-bottom: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-card {
+      background: #1C1C1E;
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+  }
+
+  /* ── Identity row (image + title) ─────────────────────────────────── */
+  .v136-identity {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+  .v136-product-img {
+    width: 72px; height: 72px;
+    flex: 0 0 72px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #F2F2F7;
+  }
+  .v136-product-img svg { width: 100%; height: 100%; display: block; }
+  .v136-identity-text { flex: 1 1 auto; min-width: 0; }
+  .v136-category {
+    font: 600 11px/1.2 system-ui, sans-serif;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+    color: #7a857f;
+    margin-bottom: 4px;
+  }
+  .v136-title {
+    font: 800 19px/1.25 system-ui, sans-serif;
+    letter-spacing: -0.02em;
+    margin: 0 0 6px;
+    color: inherit;
+  }
+  .v136-market-status {
+    display: inline-flex; align-items: center; gap: 6px;
+    font: 600 12px/1 system-ui, sans-serif;
+    color: #4a5550;
+  }
+  @media (prefers-color-scheme: dark) { .v136-market-status { color: #b0b8b3; } }
+  .v136-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #999;
+  }
+  .v136-dot-green { background: #2a6b22; box-shadow: 0 0 0 3px rgba(42,107,34,0.18); }
+
+  /* ── Pricing row (best price + avg market) ─────────────────────────── */
+  .v136-pricing {
+    display: flex;
+    align-items: stretch;
+    gap: 16px;
+    padding-top: 16px;
+    border-top: 1px solid rgba(20, 32, 26, 0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-pricing { border-top-color: rgba(255, 255, 255, 0.08); }
+  }
+  .v136-price-col { flex: 1 1 0; }
+  .v136-price-divider {
+    width: 1px;
+    background: rgba(20, 32, 26, 0.08);
+    margin: 4px 0;
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-price-divider { background: rgba(255, 255, 255, 0.10); }
+  }
+  .v136-price-label {
+    font: 700 10.5px/1.2 system-ui, sans-serif;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    color: #7a857f;
+    margin-bottom: 6px;
+  }
+  .v136-price-value {
+    font: 800 28px/1 system-ui, sans-serif;
+    letter-spacing: -0.025em;
+    color: #14201a;
+  }
+  @media (prefers-color-scheme: dark) { .v136-price-value { color: #FFFFFF; } }
+  .v136-price-mute { color: #7a857f !important; font-weight: 700; }
+  @media (prefers-color-scheme: dark) { .v136-price-mute { color: #9a9690 !important; } }
+  .v136-price-pence { font-size: 18px; font-weight: 700; }
+  .v136-price-sub {
+    font: 500 11.5px/1.2 system-ui, sans-serif;
+    color: #7a857f;
+    margin-top: 4px;
+  }
+
+  /* ── Verdict card (sentiment) ──────────────────────────────────────── */
+  .v136-verdict-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+  .v136-verdict-pill {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font: 800 12px/1 system-ui, sans-serif;
+    letter-spacing: 0.4px;
+  }
+  .v136-verdict-good {
+    background: rgba(42, 107, 34, 0.12);
+    color: #1f5a18;
+    box-shadow: inset 0 0 0 1px rgba(42, 107, 34, 0.25);
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-verdict-good {
+      background: rgba(95, 180, 85, 0.18);
+      color: #b7e3b1;
+    }
+  }
+  .v136-verdict-rating {
+    font: 600 12.5px/1 system-ui, sans-serif;
+    color: #4a5550;
+  }
+  @media (prefers-color-scheme: dark) { .v136-verdict-rating { color: #b0b8b3; } }
+  .v136-verdict-text {
+    font: 500 15px/1.45 system-ui, sans-serif;
+    color: #14201a;
+    margin: 0;
+  }
+  @media (prefers-color-scheme: dark) { .v136-verdict-text { color: #FFFFFF; } }
+
+  /* ── CTA stack (the Links) ─────────────────────────────────────────── */
+  .v136-cta-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 14px;
+  }
+  .v136-cta {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 16px;
+    border-radius: 24px;
+    text-decoration: none;
+    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1),
+                box-shadow .15s ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v136-cta:active { transform: scale(0.97); }
+  .v136-cta-primary {
+    background: linear-gradient(180deg, #3d8a33 0%, #1d4a18 100%);
+    color: #FFFFFF;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.18) inset,
+                0 10px 25px -5px rgba(42, 107, 34, 0.30),
+                0 8px 10px -6px rgba(42, 107, 34, 0.20);
+  }
+  .v136-cta-secondary {
+    background: #FFFFFF;
+    color: #14201a;
+    border: 1px solid rgba(20, 32, 26, 0.08);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08),
+                0 8px 10px -6px rgba(0, 0, 0, 0.08);
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-cta-secondary {
+      background: #1C1C1E;
+      color: #FFFFFF;
+      border-color: rgba(255, 255, 255, 0.10);
+    }
+  }
+  .v136-cta-mark {
+    width: 40px; height: 40px;
+    flex: 0 0 40px;
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font: 800 13px/1 system-ui, sans-serif;
+    background: #FFFFFF;
+    color: #14201a;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset,
+                0 1px 2px rgba(0, 0, 0, 0.08);
+  }
+  .v136-cta-mark-amzn { color: #ff9900; }
+  .v136-cta-mark-curr { background: #4c1c91; color: #FFFFFF; }
+  .v136-cta-mark-argo { background: #ed1c24; color: #FFFFFF; }
+  .v136-cta-mark-jl   { background: #000000; color: #FFFFFF; }
+  .v136-cta-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .v136-cta-name {
+    font: 700 16px/1.2 system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .v136-cta-primary .v136-cta-name { font-weight: 800; }
+  .v136-cta-sub {
+    font: 500 12px/1.3 system-ui, sans-serif;
+    opacity: 0.78;
+  }
+  .v136-cta-price {
+    font: 800 17px/1 system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    flex: 0 0 auto;
+  }
+
+  /* ── Affiliate + mockup note ───────────────────────────────────────── */
+  .v136-affiliate {
+    font: 500 11px/1.4 system-ui, sans-serif;
+    color: #7a857f;
+    margin: 0 4px 16px;
+    text-align: left;
+  }
+  .v136-mockup-note {
+    font: 600 10.5px/1 system-ui, sans-serif;
+    color: #7a857f;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin: 24px 0 0;
+    opacity: 0.72;
+  }
+
+  /* ── Similar Items mockup ──────────────────────────────────────────── */
+  .v136-similar-header { padding: 4px 4px 14px; }
+  .v136-similar-sub {
+    font: 500 14px/1.45 system-ui, sans-serif;
+    color: #4a5550;
+    margin: 6px 0 0;
+  }
+  @media (prefers-color-scheme: dark) { .v136-similar-sub { color: #b0b8b3; } }
+  .v136-similar-card {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+    background: #FFFFFF;
+    border-radius: 16px;
+    border: 1px solid rgba(20, 32, 26, 0.06);
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.10),
+                0 8px 10px -6px rgba(0, 0, 0, 0.10);
+    padding: 14px;
+    margin-bottom: 12px;
+    text-decoration: none;
+    color: inherit;
+    transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .v136-similar-card:active { transform: scale(0.98); }
+  @media (prefers-color-scheme: dark) {
+    .v136-similar-card {
+      background: #1C1C1E;
+      border-color: rgba(255, 255, 255, 0.08);
+    }
+  }
+  .v136-similar-img {
+    width: 80px; height: 80px;
+    flex: 0 0 80px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .v136-similar-img svg { width: 100%; height: 100%; display: block; }
+  .v136-similar-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+  .v136-tier-pill {
+    display: inline-block;
+    align-self: flex-start;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font: 800 10px/1 system-ui, sans-serif;
+    letter-spacing: 0.6px;
+    margin-bottom: 4px;
+  }
+  .v136-tier-basic {
+    background: rgba(122, 133, 127, 0.14);
+    color: #4a5550;
+    box-shadow: inset 0 0 0 1px rgba(122, 133, 127, 0.22);
+  }
+  .v136-tier-mid {
+    background: rgba(42, 107, 34, 0.14);
+    color: #1f5a18;
+    box-shadow: inset 0 0 0 1px rgba(42, 107, 34, 0.22);
+  }
+  .v136-tier-premium {
+    background: rgba(195, 109, 49, 0.14);
+    color: #8a4a1f;
+    box-shadow: inset 0 0 0 1px rgba(195, 109, 49, 0.22);
+  }
+  @media (prefers-color-scheme: dark) {
+    .v136-tier-basic   { color: #c8cdc9; background: rgba(255,255,255,0.08); }
+    .v136-tier-mid     { color: #b7e3b1; background: rgba(95,180,85,0.16); }
+    .v136-tier-premium { color: #e8b18a; background: rgba(232,177,138,0.16); }
+  }
+  .v136-similar-name {
+    font: 700 15px/1.3 system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
+  .v136-similar-blurb {
+    font: 500 13px/1.4 system-ui, sans-serif;
+    color: #4a5550;
+  }
+  @media (prefers-color-scheme: dark) { .v136-similar-blurb { color: #9a9690; } }
+  .v136-similar-pricerow {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-top: 4px;
+  }
+  .v136-similar-price {
+    font: 800 17px/1 system-ui, sans-serif;
+    letter-spacing: -0.01em;
+    color: #14201a;
+  }
+  @media (prefers-color-scheme: dark) { .v136-similar-price { color: #FFFFFF; } }
+  .v136-similar-priceat {
+    font: 500 12px/1 system-ui, sans-serif;
+    color: #7a857f;
+  }
+  .v136-similar-arrow {
+    flex: 0 0 auto;
+    align-self: center;
+    font: 700 22px/1 system-ui;
+    color: #c0c5c1;
+  }
+  @media (prefers-color-scheme: dark) { .v136-similar-arrow { color: #5a615b; } }
+  /* ═════════════════════════ END V.136 STATIC UI MOCKUPS ═════════════════ */
+
   /* V.122 — explicit Intel Box override. The .v5-door !important shadow
      rule at line ~1013 was shadowing the .v5-savvey-says edit (live probe
      showed radius=18px and old soft shadow). Forcing the Panel-mandated
@@ -4949,8 +5320,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v135';
-  var V126_GUARD          = 'savvey_v135_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v136';
+  var V126_GUARD          = 'savvey_v136_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5039,7 +5410,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.135 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.136 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5185,7 +5556,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v135</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v136</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5447,6 +5818,203 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 </div>
 <div class="savvey-sheet-scrim" id="savvey-sheet-scrim" hidden></div>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     V.136 STATIC UI PROTOTYPES — Panel-mandated design preview.
+     Two hidden screens that DO NOT touch any backend or callNormalize path.
+     Visit via:
+       https://savvey.vercel.app/#mockup-result   (Four Pillars known product)
+       https://savvey.vercel.app/#mockup-similar  (Disambiguation for unknown)
+     Or from desktop console:
+       window.__savveyShowMockup('result')
+       window.__savveyShowMockup('similar')
+     ════════════════════════════════════════════════════════════════════ -->
+
+<!-- ═══════ MOCKUP A: FOUR PILLARS RESULT (Known Product) ════════════════ -->
+<div class="screen v136-mockup-screen" id="screen-mockup-result">
+  <div class="v136-wrap">
+    <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Home
+    </button>
+
+    <!-- Pillar 1 + 2: Identity + Pricing in one elevated card -->
+    <div class="v136-card v136-hero-card">
+      <div class="v136-identity">
+        <div class="v136-product-img" aria-hidden="true">
+          <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="80" height="80" rx="14" fill="#F2F2F7"/>
+            <rect x="14" y="18" width="52" height="50" rx="9" fill="#1f2724"/>
+            <rect x="22" y="46" width="36" height="16" rx="3" fill="#2a6b22"/>
+            <circle cx="40" cy="30" r="6" fill="#fff" opacity="0.85"/>
+            <rect x="34" y="14" width="12" height="4" rx="1.5" fill="#7a857f"/>
+          </svg>
+        </div>
+        <div class="v136-identity-text">
+          <div class="v136-category">Air Fryer · 7.6L · 2400W</div>
+          <h1 class="v136-title">Ninja Foodi Dual Zone AF300UK</h1>
+          <div class="v136-market-status">
+            <span class="v136-dot v136-dot-green"></span> Current Model
+          </div>
+        </div>
+      </div>
+
+      <div class="v136-pricing">
+        <div class="v136-price-col">
+          <div class="v136-price-label">BEST PRICE</div>
+          <div class="v136-price-value">£179<span class="v136-price-pence">.00</span></div>
+          <div class="v136-price-sub">at Amazon UK</div>
+        </div>
+        <div class="v136-price-divider" aria-hidden="true"></div>
+        <div class="v136-price-col">
+          <div class="v136-price-label">AVG MARKET</div>
+          <div class="v136-price-value v136-price-mute">£199<span class="v136-price-pence">.99</span></div>
+          <div class="v136-price-sub">across 4 UK retailers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pillar 3: Verdict (Sentiment) -->
+    <div class="v136-card v136-verdict-card">
+      <div class="v136-verdict-head">
+        <span class="v136-verdict-pill v136-verdict-good">GOOD BUY</span>
+        <span class="v136-verdict-rating" aria-label="4.6 out of 5 stars from 12.4k reviews">
+          ★ 4.6 · 12.4k reviews
+        </span>
+      </div>
+      <p class="v136-verdict-text">
+        Highly rated for cooking speed and the dual-zone capacity. Most reviewers say the non-stick basket is fiddly to clean — soak after every cook.
+      </p>
+    </div>
+
+    <!-- Pillar 4: The Links -->
+    <div class="v136-cta-stack">
+      <a class="v136-cta v136-cta-primary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-amzn">a</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Amazon UK</span>
+          <span class="v136-cta-sub">Verified live · Prime delivery</span>
+        </span>
+        <span class="v136-cta-price">£179.00</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-curr">c</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Currys</span>
+          <span class="v136-cta-sub">In stock · Free delivery</span>
+        </span>
+        <span class="v136-cta-price">£189.00</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-argo">a</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Argos</span>
+          <span class="v136-cta-sub">Same-day collection</span>
+        </span>
+        <span class="v136-cta-price">£199.99</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-jl">jl</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">John Lewis</span>
+          <span class="v136-cta-sub">2-year guarantee included</span>
+        </span>
+        <span class="v136-cta-price">£219.00</span>
+      </a>
+    </div>
+
+    <p class="v136-affiliate">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
+    <p class="v136-mockup-note">V.136 mockup · static fake data · design preview only</p>
+  </div>
+</div>
+
+<!-- ═══════ MOCKUP B: SIMILAR ITEMS (Unknown / Generic Product) ══════════ -->
+<div class="screen v136-mockup-screen" id="screen-mockup-similar">
+  <div class="v136-wrap">
+    <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Home
+    </button>
+
+    <div class="v136-similar-header">
+      <h1 class="v136-title">Couldn't find an exact match.</h1>
+      <p class="v136-similar-sub">Looks like an unbranded ceramic mug. Here are three popular UK alternatives, ranked by price band.</p>
+    </div>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-basic" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#EEEEF1"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FAFAFC" stroke="#C7CAD0" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#C7CAD0" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-basic">BUDGET</span>
+        <div class="v136-similar-name">Argos Home Plain White Mug · Set of 4</div>
+        <div class="v136-similar-blurb">Cheap, reliable, dishwasher-safe. Job done.</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£4.50</span>
+          <span class="v136-similar-priceat">at Argos</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-mid" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#E4DED5"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#5C5048" stroke="#3A332D" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#3A332D" stroke-width="2"/>
+          <circle cx="32" cy="44" r="1.2" fill="#A89A8A"/>
+          <circle cx="44" cy="50" r="1" fill="#A89A8A"/>
+          <circle cx="38" cy="56" r="1.4" fill="#A89A8A"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-mid">BEST VALUE</span>
+        <div class="v136-similar-name">Denby Halo Speckle Stoneware Mug</div>
+        <div class="v136-similar-blurb">UK-made stoneware. The "buy it once" pick.</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£19.00</span>
+          <span class="v136-similar-priceat">at Denby UK</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-premium" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#FBF3E8"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FFFFFF" stroke="#D4A672" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#D4A672" stroke-width="2"/>
+          <circle cx="32" cy="40" r="2" fill="#E89B5C" opacity="0.7"/>
+          <circle cx="42" cy="46" r="1.5" fill="#C26A3A" opacity="0.7"/>
+          <circle cx="36" cy="52" r="1.8" fill="#E89B5C" opacity="0.7"/>
+          <circle cx="46" cy="38" r="1.2" fill="#C26A3A" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-premium">PREMIUM</span>
+        <div class="v136-similar-name">Emma Bridgewater Toast &amp; Marmalade Mug</div>
+        <div class="v136-similar-blurb">Hand-decorated in Stoke-on-Trent. Heirloom-grade.</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£24.95</span>
+          <span class="v136-similar-priceat">at Emma Bridgewater</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <p class="v136-mockup-note">V.136 mockup · static fake data · design preview only</p>
+  </div>
+</div>
 
 <div class="screen" id="screen-result" style="position:relative;">
   <!-- v5 RESULT REBUILD (V.41) — DOM rewrite matching Claude Design v5 ResultScreen -->
@@ -7128,6 +7696,34 @@ async function captureFrame() {
 
 // V.104 — Tension overlay show/hide. Hide is wired into show() so any
 // screen change (result, confirm, error, home) automatically dismisses it.
+// ═══════════════════════════ V.136 MOCKUP ACCESS ═══════════════════════
+// Hash router + console function for the two static UI prototypes. They
+// don't touch any backend path — purely a design-review surface. Vincent
+// can hit either screen from his iPhone by typing the URL hash directly
+// in Safari, or from Mac console via window.__savveyShowMockup('result').
+window.__savveyShowMockup = function(which){
+  if (which === 'result' || which === 'similar') {
+    try { show('mockup-' + which); } catch (e) {}
+  } else {
+    try { console.log('V.136 mockups: pass "result" or "similar"'); } catch {}
+  }
+};
+(function v136HashRouter(){
+  function check(){
+    var h = (location.hash || '').replace(/^#/, '');
+    if (h === 'mockup-result' || h === 'mockup-similar') {
+      try { show(h); } catch (e) {}
+    }
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', check);
+  } else {
+    check();
+  }
+  window.addEventListener('hashchange', check);
+})();
+// ═══════════════════════════ END V.136 MOCKUP ACCESS ═══════════════════
+
 // V.134 — Panel-mandated rollback. The V.132 frosted-glass overlay +
 // video.pause() approach triggered iOS Safari's memory-pressure path
 // (it drops paused-video frames to black), making the loading state
