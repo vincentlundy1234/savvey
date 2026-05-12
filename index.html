@@ -5366,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v151';
-  var V126_GUARD          = 'savvey_v151_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v152';
+  var V126_GUARD          = 'savvey_v152_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5456,7 +5456,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.151 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.152 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5602,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v151</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v152</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -11591,6 +11591,15 @@ async function _v140KickoffSynthesize(idPayload) {
   var sp = idPayload.synthesis_payload;
   var mySeq = ++window._v140SynSeq;
   _v140ApplySkeletons(idPayload);
+  // V.152 — hard timeout: if synth doesn't paint within 5s, force soft-fail
+  // so the user never sees an indefinite shimmer.
+  var _v152SkelTimeout = setTimeout(function () {
+    if (mySeq === window._v140SynSeq) {
+      try { track && track('synthesize_skeleton_timeout', { mode: sp.mode }); } catch (e) {}
+      _v140SoftFail(sp.mode);
+    }
+  }, 5000);
+  var _v152ClearTimeout = function () { try { clearTimeout(_v152SkelTimeout); } catch (e) {} };
   try {
     var sAc = new AbortController();
     var sTimer = setTimeout(function () { try { sAc.abort(); } catch (e) {} }, 12000);
@@ -11603,11 +11612,13 @@ async function _v140KickoffSynthesize(idPayload) {
     clearTimeout(sTimer);
     if (mySeq !== window._v140SynSeq) return;
     if (!resp.ok) {
+      _v152ClearTimeout();
       try { track && track('synthesize_http_error', { status: resp.status, mode: sp.mode }); } catch (e) {}
       _v140SoftFail(sp.mode);
       return;
     }
     var s = await resp.json();
+    _v152ClearTimeout();
     try { track && track('synthesize_ok', { mode: s.mode || sp.mode, ms: (s._meta && s._meta.latency_ms) || null }); } catch (e) {}
     var effectiveMode = s.mode || sp.mode;
     if (effectiveMode === 'pillars') {
@@ -11659,6 +11670,7 @@ async function _v140KickoffSynthesize(idPayload) {
       }
     }
   } catch (err) {
+    _v152ClearTimeout();
     try { track && track('synthesize_throw', { error: String(err).slice(0, 100), mode: sp.mode }); } catch (e) {}
     if (mySeq === window._v140SynSeq) _v140SoftFail(sp.mode);
   }

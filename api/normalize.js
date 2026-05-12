@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v151';
+const VERSION             = 'normalize.js v3.4.5v152';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v151-1';
+const CACHE_PREFIX = 'sav-v152-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1252,27 +1252,31 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
 // a single variant from a known multi-variant family. Null-safe: returns
 // null on any non-string input, never throws.
 const V146_VARIANT_FAMILIES = [
-  { rx: /^Sony PlayStation 5(?!.*(Slim|Pro)\b)/i,
+  // V.152 — regex broadened to catch typed variations Haiku canonicalises
+  // differently (e.g. "playstation 5" → "PlayStation 5 Console", missing the
+  // strict "Sony" prefix). All families now accept optional brand prefix +
+  // permissive whitespace + common abbreviations + dot/space-insensitive.
+  { rx: /^(?:Sony\s+)?(?:Play[\s-]?Station|PS)\s*5(?!\s*(?:Slim|Pro|Digital|Disc)\b)/i,
     variants: ['Sony PlayStation 5 Slim Disc Edition', 'Sony PlayStation 5 Slim Digital Edition', 'Sony PlayStation 5 Pro'] },
-  { rx: /^(?:Microsoft\s+)?Xbox Series(?!\s+(?:S|X)\b)/i,
+  { rx: /^(?:Microsoft\s+)?Xbox\s*Series(?!\s*(?:S|X)\b)/i,
     variants: ['Xbox Series S 512GB', 'Xbox Series S 1TB', 'Xbox Series X 1TB'] },
-  { rx: /^Apple iPhone 16(?!.*(Plus|Pro|Pro Max)\b)/i,
+  { rx: /^(?:Apple\s+)?(?:iPhone)\s*16(?!\s*(?:Plus|Pro|Pro\s*Max|Mini)\b)/i,
     variants: ['Apple iPhone 16 128GB', 'Apple iPhone 16 Plus 128GB', 'Apple iPhone 16 Pro 128GB'] },
-  { rx: /^Apple iPhone 15(?!.*(Plus|Pro|Pro Max)\b)/i,
+  { rx: /^(?:Apple\s+)?(?:iPhone)\s*15(?!\s*(?:Plus|Pro|Pro\s*Max|Mini)\b)/i,
     variants: ['Apple iPhone 15 128GB', 'Apple iPhone 15 Plus 128GB', 'Apple iPhone 15 Pro 128GB'] },
-  { rx: /^Samsung Galaxy S25(?!.*(Plus|Ultra)\b)/i,
+  { rx: /^(?:Samsung\s+)?Galaxy\s*S25(?!\s*(?:Plus|Ultra|FE)\b)/i,
     variants: ['Samsung Galaxy S25 128GB', 'Samsung Galaxy S25 Plus 256GB', 'Samsung Galaxy S25 Ultra 256GB'] },
-  { rx: /^Samsung Galaxy S24(?!.*(Plus|Ultra)\b)/i,
+  { rx: /^(?:Samsung\s+)?Galaxy\s*S24(?!\s*(?:Plus|Ultra|FE)\b)/i,
     variants: ['Samsung Galaxy S24 128GB', 'Samsung Galaxy S24 Plus 256GB', 'Samsung Galaxy S24 Ultra 256GB'] },
-  { rx: /^Apple AirPods(?!.*(Pro|Max|4|3|2)\b)/i,
+  { rx: /^(?:Apple\s+)?AirPods(?!\s*(?:Pro|Max|4|3|2)\b)/i,
     variants: ['Apple AirPods 4', 'Apple AirPods Pro 2', 'Apple AirPods Max'] },
-  { rx: /^(?:Nintendo\s+)?Switch(?!.*(OLED|Lite)\b)/i,
+  { rx: /^(?:Nintendo\s+)?Switch(?!\s*(?:OLED|Lite|2)\b)/i,
     variants: ['Nintendo Switch OLED', 'Nintendo Switch Lite', 'Nintendo Switch (standard)'] },
-  { rx: /^Apple MacBook (?:Air|Pro)(?!.*(13|14|15|16))/i,
+  { rx: /^(?:Apple\s+)?MacBook\s*(?:Air|Pro)?(?!.*(?:13|14|15|16))/i,
     variants: ['Apple MacBook Air 13\" M3', 'Apple MacBook Pro 14\" M4', 'Apple MacBook Pro 16\" M4 Pro'] },
-  { rx: /^Google Pixel 9(?!.*(Pro|Pro XL)\b)/i,
+  { rx: /^(?:Google\s+)?Pixel\s*9(?!\s*(?:Pro|Pro\s*XL|XL|a)\b)/i,
     variants: ['Google Pixel 9 128GB', 'Google Pixel 9 Pro 128GB', 'Google Pixel 9 Pro XL 256GB'] },
-  { rx: /^Amazon Kindle(?!.*(Paperwhite|Oasis|Scribe|Colorsoft)\b)/i,
+  { rx: /^(?:Amazon\s+)?Kindle(?!\s*(?:Paperwhite|Oasis|Scribe|Colorsoft|Kids)\b)/i,
     variants: ['Amazon Kindle Paperwhite', 'Amazon Kindle Colorsoft', 'Amazon Kindle Scribe'] },
 ];
 function _v146DetectVariantFamily(canonical) {
@@ -1562,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v151:${canonicalKey}`;
+  const ck = `savvey:retailers:v152:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1703,6 +1707,32 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
         source:    rec.price_source || null,
       });
     }
+    // V.152 — capture first 3 RAW SerpAPI items (truncated) so the
+    // parser can be debugged from the response JSON without log access.
+    const _rawSamples = results.slice(0, 3).map(it => {
+      if (!it || typeof it !== 'object') return null;
+      const trunc = (v, n) => (typeof v === 'string' && v.length > n) ? v.slice(0, n) + '…' : v;
+      return {
+        title:                 trunc(it.title, 100),
+        source:                it.source || null,
+        seller_name:           it.seller_name || null,
+        merchant_name:         (it.merchant && it.merchant.name) || null,
+        link:                  trunc(it.link, 200),
+        product_link:          trunc(it.product_link, 200),
+        price:                 it.price || null,
+        extracted_price:       it.extracted_price || null,
+        price_range:           it.price_range || null,
+        offers_first:          (Array.isArray(it.offers) && it.offers[0]) || null,
+        lowest_price:          it.lowest_price || null,
+        minimum_price:         it.minimum_price || null,
+        prices:                Array.isArray(it.prices) ? it.prices.slice(0, 3) : null,
+        immersive_price:       (it.serpapi_immersive_product && it.serpapi_immersive_product.price) || null,
+        sponsored:             it.sponsored || false,
+        position:              it.position || null,
+        product_id:            it.product_id || null,
+        all_fields_present:    Object.keys(it).slice(0, 25),
+      };
+    }).filter(Boolean);
     _lastGoogleShoppingDiag = {
       examined:           _examined,
       kept:               _kept,
@@ -1712,6 +1742,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
       dropped_redirector: _droppedRedirector,
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 5),
+      raw_samples:        _rawSamples,
     };
     if (Object.keys(deepLinks).length === 0) return null;
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
@@ -2550,7 +2581,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v151:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v152:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
