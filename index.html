@@ -5285,6 +5285,52 @@
   }
   #cam-zoom-layer > * { pointer-events: auto; }
 
+
+/* ─── V.140 Option B — Skeleton states (no layout shift) ─────────────── */
+@keyframes v140-shimmer {
+  0%   { background-position: -240px 0; }
+  100% { background-position: calc(240px + 100%) 0; }
+}
+.v140-skel {
+  display: inline-block;
+  vertical-align: middle;
+  background: linear-gradient(90deg, #e8e8ee 0%, #f4f4f8 50%, #e8e8ee 100%);
+  background-size: 240px 100%;
+  background-repeat: no-repeat;
+  animation: v140-shimmer 1.5s infinite linear;
+  border-radius: 6px;
+  color: transparent !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.v140-skel-pill    { width: 90px; height: 22px; border-radius: 12px; }
+.v140-skel-eyebrow { width: 150px; height: 13px; border-radius: 4px; }
+.v140-skel-line {
+  display: block;
+  width: 100%;
+  height: 14px;
+  margin: 5px 0;
+  border-radius: 4px;
+}
+.v140-skel-line.short { width: 75%; }
+.v140-skel-blurb {
+  display: block;
+  width: 92%;
+  height: 12px;
+  margin: 3px 0;
+  border-radius: 4px;
+}
+.v140-skel-blurb.short { width: 60%; }
+#v138-category       { min-height: 13px; display: block; }
+#v138-verdict-text   { min-height: 32px; }
+#v138-verdict-pill   { min-height: 22px; }
+.v136-similar-blurb  { min-height: 24px; }
+.v140-softfail {
+  color: var(--ink-mute, #6b7068);
+  font-style: italic;
+  font-size: 14px;
+}
+/* End V.140 skeleton block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -5320,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v140';
-  var V126_GUARD          = 'savvey_v140_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v140b';
+  var V126_GUARD          = 'savvey_v140b_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5556,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v140</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v140b</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -7954,7 +8000,7 @@ async function callNormalize(body) {
   if (_ato) clearTimeout(_ato);
   var _ato_v140 = setTimeout(() => { _timedOut = true; try { _ac.abort(); } catch {} }, 15000);
   try {
-    const r = await fetch('/api/normalize', {
+    const r = await fetch('/api/identify', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       signal: _ac.signal
     });
@@ -8119,6 +8165,13 @@ async function callNormalize(body) {
     } else {
       pushRecent(j);
       renderResult(j.canonical_search_string, j);
+    }
+    // V.140 OPTION B — kick off /api/synthesize asynchronously after
+    // the identify-leg render. Synthesis only fires when the backend
+    // gave us a synthesis_payload AND the user landed on a screen
+    // with text slots to fill (matched or disambig). Soft-fail safe.
+    if (j.synthesis_payload && (j.outcome === 'matched' || j.outcome === 'disambig')) {
+      try { _v140KickoffSynthesize(j); } catch (e) { /* soft-fail handles it */ }
     }
   } catch (err) {
     clearInterval(phaseTimer);
@@ -11350,6 +11403,135 @@ handleInbound();
 /* V.138c — V.103 mock IIFE removed. Static fake-data injection is
    incompatible with live dynamic binding and risked masking real backend
    regressions. Use the actual /api/normalize endpoint for testing now. */
+</script>
+
+
+<script>
+/* ─── V.140 OPTION B — Synthesize orchestrator ──────────────────────── */
+window._v140SynSeq = 0;
+function _v140ApplySkeletons(payload) {
+  try {
+    if (!payload || !payload.outcome) return;
+    if (payload.outcome === 'matched') {
+      var cat = document.getElementById('v138-category');
+      if (cat && !cat.textContent.trim()) cat.innerHTML = '<span class="v140-skel v140-skel-eyebrow">&nbsp;</span>';
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill) {
+        vpill.className = 'v136-verdict-pill v140-skel v140-skel-pill';
+        vpill.textContent = '';
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        vtxt.innerHTML = '<span class="v140-skel v140-skel-line"></span>' +
+                         '<span class="v140-skel v140-skel-line short"></span>';
+      }
+    } else if (payload.outcome === 'disambig') {
+      for (var i = 0; i < 3; i++) {
+        var b = document.getElementById('v138-tier-blurb-' + i);
+        if (b) b.innerHTML = '<span class="v140-skel v140-skel-blurb"></span><span class="v140-skel v140-skel-blurb short"></span>';
+      }
+    }
+  } catch (e) { /* skeletons are cosmetic */ }
+}
+function _v140SoftFail(mode) {
+  try {
+    if (mode !== 'tiers') {
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill && vpill.classList.contains('v140-skel')) {
+        vpill.className = 'v136-verdict-pill';
+        vpill.style.display = 'none';
+        vpill.textContent = '';
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
+      }
+      var cat = document.getElementById('v138-category');
+      if (cat && cat.querySelector && cat.querySelector('.v140-skel')) {
+        cat.style.display = 'none';
+        cat.textContent = '';
+      }
+    }
+    for (var i = 0; i < 3; i++) {
+      var b = document.getElementById('v138-tier-blurb-' + i);
+      if (b && b.querySelector && b.querySelector('.v140-skel')) {
+        b.textContent = '';
+      }
+    }
+  } catch (e) {}
+}
+async function _v140KickoffSynthesize(idPayload) {
+  if (!idPayload || !idPayload.synthesis_payload) return;
+  var sp = idPayload.synthesis_payload;
+  var mySeq = ++window._v140SynSeq;
+  _v140ApplySkeletons(idPayload);
+  try {
+    var sAc = new AbortController();
+    var sTimer = setTimeout(function () { try { sAc.abort(); } catch (e) {} }, 12000);
+    var resp = await fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ synthesis_payload: sp }),
+      signal: sAc.signal,
+    });
+    clearTimeout(sTimer);
+    if (mySeq !== window._v140SynSeq) return;
+    if (!resp.ok) {
+      try { track && track('synthesize_http_error', { status: resp.status, mode: sp.mode }); } catch (e) {}
+      _v140SoftFail(sp.mode);
+      return;
+    }
+    var s = await resp.json();
+    try { track && track('synthesize_ok', { mode: s.mode || sp.mode, ms: (s._meta && s._meta.latency_ms) || null }); } catch (e) {}
+    var effectiveMode = s.mode || sp.mode;
+    if (effectiveMode === 'pillars') {
+      var cat = document.getElementById('v138-category');
+      if (cat) {
+        if (s.category_eyebrow) {
+          cat.textContent = s.category_eyebrow;
+          cat.style.display = '';
+        } else {
+          cat.textContent = '';
+          cat.style.display = 'none';
+        }
+      }
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill) {
+        vpill.classList.remove('v140-skel', 'v140-skel-pill');
+        if (s.verdict_pill_text) {
+          vpill.textContent = s.verdict_pill_text;
+          vpill.className = 'v136-verdict-pill ' + (s.verdict_pill_color_class || 'v136-verdict-fair');
+          vpill.style.display = '';
+        } else {
+          vpill.style.display = 'none';
+        }
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        if (s.verdict_summary) {
+          vtxt.textContent = s.verdict_summary;
+        } else {
+          vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
+        }
+      }
+    } else if (effectiveMode === 'tiers') {
+      var blurbs = Array.isArray(s.tier_blurbs) ? s.tier_blurbs : [];
+      for (var i = 0; i < 3; i++) {
+        var b = document.getElementById('v138-tier-blurb-' + i);
+        if (!b) continue;
+        if (blurbs[i]) {
+          b.textContent = blurbs[i];
+        } else {
+          b.textContent = '';
+        }
+      }
+    }
+  } catch (err) {
+    try { track && track('synthesize_throw', { error: String(err).slice(0, 100), mode: sp.mode }); } catch (e) {}
+    if (mySeq === window._v140SynSeq) _v140SoftFail(sp.mode);
+  }
+}
+/* End V.140 synthesize orchestrator */
 </script>
 
 </body>

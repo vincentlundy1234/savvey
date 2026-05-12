@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v140';
+const VERSION             = 'normalize.js v3.4.5v140b';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v140-1';
+const CACHE_PREFIX = 'sav-v140b-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1872,6 +1872,63 @@ export default async function handler(req, res) {
 
   const t0 = Date.now();
   const body = req.body || {};
+
+  // ─── V.140 OPTION B: SYNTH-ONLY BRANCH (/api/synthesize) ───────
+  // Skip identify entirely; run ONLY the Haiku mega-synth on the
+  // synthesis_payload the client gathered from a prior /api/identify.
+  // Cached separately on canonical+mode for 7 days.
+  if (body.synth_only === true) {
+    try {
+      const sp = body.synthesis_payload || {};
+      const canon = sp.canonical && String(sp.canonical).slice(0, 200);
+      if (!canon) {
+        return res.status(400).json({ error: 'synthesis_payload.canonical required' });
+      }
+      const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
+      const synthKeyRaw = `sav-v140-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
+      const cached = await kvGet(synthKey);
+      if (cached && typeof cached === 'object') {
+        return res.status(200).json({
+          ...cached,
+          _meta: { ...(cached._meta || {}), cache: 'hit', latency_ms: Date.now() - t0, version: VERSION, leg: 'synthesize' }
+        });
+      }
+      const mega = await callHaikuMegaSynthesis({
+        canonical:     canon,
+        category:      sp.category || null,
+        market_status: sp.market_status || null,
+        amazon:        (mode === 'pillars') ? (sp.amazon || null) : null,
+        retailers:     (mode === 'pillars') ? (sp.retailers || null) : null,
+        alternatives:  (mode === 'tiers')   ? (sp.alternatives || null) : null,
+        trace:         [],
+      });
+      const pillMap = {
+        good_buy:        { text: 'GOOD BUY',        cls: 'v136-verdict-good' },
+        fair:            { text: 'FAIR',            cls: 'v136-verdict-fair' },
+        wait:            { text: 'WAIT',            cls: 'v136-verdict-wait' },
+        check_elsewhere: { text: 'CHECK ELSEWHERE', cls: 'v136-verdict-check' },
+      };
+      const pill = mega.verdict_label ? pillMap[mega.verdict_label] : null;
+      const result = {
+        mode,
+        category_eyebrow:        mega.category_eyebrow || null,
+        verdict_label:           mega.verdict_label || null,
+        verdict_summary:         mega.verdict_summary || null,
+        verdict_pill_text:       pill ? pill.text : null,
+        verdict_pill_color_class: pill ? pill.cls : null,
+        tier_blurbs:             mega.tier_blurbs || null,
+        _meta: { version: VERSION, latency_ms: Date.now() - t0, cache: 'miss', leg: 'synthesize' }
+      };
+      // 7-day cache.
+      kvSet(synthKey, result, 7 * 24 * 60 * 60).catch(() => {});
+      return res.status(200).json(result);
+    } catch (e) {
+      console.warn(`[${VERSION}] synth_only error: ${e && e.message}`);
+      return res.status(500).json({ error: 'synth_failed', message: String(e && e.message || e).slice(0, 200) });
+    }
+  }
+
   const inputType = body.input_type;
 
   if (!['image','url','text','barcode'].includes(inputType)) {
@@ -2092,7 +2149,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v140:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v140b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -2141,6 +2198,90 @@ export default async function handler(req, res) {
   // V.69 - alternative_amazon_price now resolved via the parallel batch above.
   const alternative_amazon_price = alternative_amazon_price_v69;
 
+
+  // ─── V.140 OPTION B: SKIP-SYNTH EARLY EXIT (/api/identify) ───────
+  // Identify-only leg. Pricing + links + tiers (names/prices/ratings
+  // only) are built via _v138BuildResponse(mega=null) and returned
+  // immediately. Frontend renders pricing instantly, then kicks off
+  // /api/synthesize for the AI-generated verdict + tier blurbs.
+  if (body.skip_synth === true) {
+    const _altsLenSkip = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
+    const _synthMode = (_altsLenSkip >= 2 && _altsLenSkip <= 4) ? 'tiers' : 'pillars';
+    const synthesis_payload = {
+      mode:          _synthMode,
+      canonical:     parsed.canonical_search_string || null,
+      category:      parsed.category || null,
+      market_status: parsed.market_status || null,
+      amazon: verified_amazon_price ? {
+        price:          verified_amazon_price.price,
+        price_str:      verified_amazon_price.price_str,
+        rating:         verified_amazon_price.rating,
+        reviews:        verified_amazon_price.reviews,
+        title:          verified_amazon_price.title,
+        used_price_str: verified_amazon_price.used_price_str,
+      } : null,
+      retailers: (retailer_deep_links && typeof retailer_deep_links === 'object')
+        ? Object.keys(retailer_deep_links).map(k => ({
+            name:  k,
+            price: (retailer_deep_links[k] && retailer_deep_links[k].price) || null,
+          }))
+        : null,
+      alternatives: (_synthMode === 'tiers' && Array.isArray(parsed.alternatives_meta))
+        ? parsed.alternatives_array.slice(0, 4).map((name, i) => {
+            const m = parsed.alternatives_meta[i] || {};
+            return {
+              name,
+              typical_price_gbp: m.typical_price_gbp || null,
+              rating:            m.rating || null,
+              reviews:           m.reviews || null,
+              pack_size:         m.pack_size || null,
+            };
+          })
+        : null,
+    };
+    const _v138_id = _v138BuildResponse({
+      parsed,
+      verified_amazon_price,
+      retailer_deep_links,
+      alternative_amazon_price,
+      mega: { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null },
+      inputType,
+      serpapi_status: _lastSerpStatus,
+    });
+    const idResponse = {
+      ...parsed,
+      specificity: _specificity,
+      verified_amazon_price,
+      alternative_amazon_price,
+      retailer_deep_links,
+      disambig_candidates,
+      disambig_candidates_meta,
+      amazon_search_fallback,
+      outcome:        _v138_id.outcome,
+      outcome_reason: _v138_id.outcome_reason,
+      identity:       _v138_id.identity,
+      pricing:        _v138_id.pricing,
+      verdict:        _v138_id.verdict,
+      links:          _v138_id.links,
+      tiers:          _v138_id.tiers,
+      disclosure:     _v138_id.disclosure,
+      schema_version: _v138_id.schema_version,
+      synthesis_payload,
+      debug_trace: debugTrace,
+      _meta: {
+        version: VERSION,
+        input_type: inputType,
+        latency_ms: Date.now() - t0,
+        cache: 'miss',
+        retailer_own: _retailerOwn,
+        serpapi_status: _lastSerpStatus,
+        leg: 'identify',
+      }
+    };
+    // 6h cache for identify (pricing freshness window).
+    kvSet(cKey, idResponse, 6 * 60 * 60).catch(() => {});
+    return res.status(200).json(idResponse);
+  }
 
   // V.138 — Mega-Synthesis Architecture. One Haiku call returning
   // verdict_label + verdict_summary + category_eyebrow + tier_blurbs (the
