@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v140b';
+const VERSION             = 'normalize.js v3.4.5v141';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v140b-1';
+const CACHE_PREFIX = 'sav-v141-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -314,7 +314,23 @@ CATEGORY examples (these are STRICT — match the right enum):
 - Photo of Bose / Sony / Logitech / iPhone / laptop -> category="tech"
 - Photo of Ninja air fryer / kettle / appliance -> category="home"
 - Photo of LEGO / board game / kids toy -> category="toys"
-- Photo of Bosch tools / Black+Decker / DIY item -> category="diy"`;
+- Photo of Bosch tools / Black+Decker / DIY item -> category="diy"
+
+V.141 LAZY-NOUN BAN (Panel-mandated, hard rule):
+NEVER output generic fallback canonical_search_string values like "Product",
+"Item", "Object", "Thing", "Appliance", "Device", "Gadget", "Container",
+"Bottle", or single-word category placeholders. If the photographed item is
+unbranded or you cannot read a brand, you MUST return a descriptive multi-word
+noun phrase derived from visible physical properties — material, colour, shape,
+category. Examples:
+- unbranded white ceramic mug -> "White Ceramic Coffee Mug"
+- unbranded stainless steel kettle with curved spout -> "Stainless Steel Gooseneck Kettle"
+- plain glass tumbler -> "Clear Glass Tumbler 350ml" (approximate if needed)
+- unbranded cotton tote -> "Plain Cotton Tote Bag"
+When you do this, set confidence="low" and populate alternatives_array with 3
+popular UK products matching the descriptive phrase. NEVER set the canonical
+to just the category noun ("Mug", "Kettle", "Bag"); always add at least
+TWO descriptive words (material + form, or colour + form).`;
 
 const URL_SYSTEM_PROMPT = `You are a UK retail URL parser. Extract product identity from the URL string ALONE — do NOT fetch the page. UK e-commerce URLs typically include the product name in the slug.
 
@@ -329,7 +345,13 @@ Examples:
 - "kettle" → canonical="Kettle", confidence="low", category="home", savvey_says all null
 - "Listerine" → canonical="Listerine Mouthwash", category="health" (mouthwash is oral-care/health, NOT generic)
 - "L'Oreal shampoo" → canonical="L'Oreal Elvive Shampoo", category="beauty"
-- "Heinz beans" → canonical="Heinz Baked Beans 415g", category="grocery" `;
+- "Heinz beans" → canonical="Heinz Baked Beans 415g", category="grocery"
+
+V.141 LAZY-NOUN BAN: NEVER output a single-word generic canonical like
+"Product", "Item", "Object", "Thing", "Appliance", or "Device". If the
+user typed a bare category noun, return that category noun ONCE as canonical
+BUT also populate alternatives_array with 3 specific UK products. The lazy
+stop-words above are banned regardless of input.`;
 
 const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier.
 
@@ -2149,7 +2171,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v140b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v141:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {

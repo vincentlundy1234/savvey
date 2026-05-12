@@ -5366,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v140b';
-  var V126_GUARD          = 'savvey_v140b_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v141';
+  var V126_GUARD          = 'savvey_v141_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5456,7 +5456,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.140 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.141 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5602,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v140b</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v141</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -7708,10 +7708,23 @@ async function captureFrame() {
   // V.129 — bracket-bounded crop. If _v129 path returns null (rare: detached
   // video element), fall back to the V.123 square-centre path, then the
   // V.0 centre-of-raw-video path.
-  const firstCanvas =
-       (await _v129CropToBrackets(v))
-    || (await _v123CropVisibleSquare(v))
-    || _cropCentreSquare(v, sw, sh);
+  // V.141 — capture tolerance. If the first crop returns a tiny canvas
+  // (<100px, the V.130 1x1 collapse symptom), wait a frame and retry
+  // the fallback chain. Up to 3 attempts total. The user shaking the
+  // phone slightly no longer instantly fails the capture.
+  async function _v141ResilientCrop() {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      var c = (await _v129CropToBrackets(v))
+           || (await _v123CropVisibleSquare(v))
+           || _cropCentreSquare(v, v.videoWidth || sw, v.videoHeight || sh);
+      if (c && c.width >= 100 && c.height >= 100) return c;
+      // tiny canvas — wait one repaint tick and try again
+      await new Promise(function (r) { return setTimeout(r, 80); });
+    }
+    // Final fallback: return the centre-of-raw crop without size guard
+    return _cropCentreSquare(v, v.videoWidth || sw, v.videoHeight || sh);
+  }
+  const firstCanvas = await _v141ResilientCrop();
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
   // V.128 — kick the on-screen debug banner so `crop:` updates immediately
@@ -8415,18 +8428,25 @@ function bounceToType(seed, reason) {
   track('door1_to_door2_fallback', { reason: String(reason || '').slice(0, 40), seed_len: (seed || '').length, from_door: _lastDoor || 'unknown' });
 }
 function shouldBounceToType(j, doorIn) {
-  // v3.4.5dd: extend bounce-to-Type to barcode too. Beta finding 7 May 2026 -
-  // an unknown EAN (Open Food Facts miss + Haiku doesn't recognise digits) used
-  // to land on a result screen with 'Unknown product' verdict, looking broken.
-  // Now bounces to Type with the EAN pre-filled so user can edit to a name.
+  // V.141 — bounce relaxed. The V.140b split-routing + V.139 broadened
+  // disambig gate means generic snaps now produce alternatives_array
+  // and route to the three-tier UI. Bouncing them to Type was a V.138-era
+  // dead-end. Only bounce when there's NOTHING the disambig flow can render.
   if (doorIn !== 'image' && doorIn !== 'barcode') return false;
   const canonical = String(j && j.canonical_search_string || '').trim();
   if (!canonical) return true;
   if (/^unknown\b/i.test(canonical)) return true;
-  if (j.confidence === 'low') return true;
-  // Edge case: medium confidence but canonical is suspiciously generic (single word + nothing else)
-  // Only bounce if there's also no alternative_string to fall back on via disambig
-  if (j.confidence === 'medium' && !j.alternative_string && canonical.split(/\s+/).length < 2) return true;
+  // V.141 — if backend produced 2+ alternatives, let the disambig flow run.
+  const hasAlts = !!(j && Array.isArray(j.alternatives_array) && j.alternatives_array.length >= 2)
+               || !!(j && Array.isArray(j.disambig_candidates) && j.disambig_candidates.length >= 2);
+  // V.141 — block lazy fallback nouns (Vision prompt ALSO bans them, this is
+  // belt-and-braces in case a cached or older-deploy response slips through).
+  if (/^(?:product|item|object|thing|appliance|device|gadget)$/i.test(canonical)) {
+    return !hasAlts; // only bounce if there's no fallback content either
+  }
+  if (j.confidence === 'low' && !hasAlts) return true;
+  // V.141 — medium-confidence single-word bounce ONLY when no alternatives.
+  if (j.confidence === 'medium' && !j.alternative_string && canonical.split(/\s+/).length < 2 && !hasAlts) return true;
   return false;
 }
 
