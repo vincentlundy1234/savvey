@@ -5320,8 +5320,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v136';
-  var V126_GUARD          = 'savvey_v136_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v137';
+  var V126_GUARD          = 'savvey_v137_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5410,7 +5410,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.136 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.137 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5556,7 +5556,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v136</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v137</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5753,8 +5753,100 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 </div>
 
-<div class="screen v5-confirm-screen" id="screen-confirm">
-  <!-- v5 CONFIRM REBUILD (V.44) — display headline + best-value-on-top candidates -->
+<!-- V.137 — #screen-confirm content REPLACED with the V.136 "Similar Items"
+     three-tier scaffolding. Per Panel mandate: legacy V.44 v5-ConfirmScreen
+     DOM removed. renderConfirm() short-circuited to a safe no-op. Tier
+     pill taxonomy: BUDGET / TOP RATED / PREMIUM (V.137 swap from BEST
+     VALUE — review counts are objective, value is editorial). -->
+<div class="screen v136-mockup-screen" id="screen-confirm">
+  <div class="v136-wrap">
+    <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Home
+    </button>
+
+    <div class="v136-similar-header">
+      <h1 class="v136-title">Couldn't find an exact match.</h1>
+      <p class="v136-similar-sub">Looks like an unbranded ceramic mug. Here are three popular UK alternatives, ranked by price band.</p>
+    </div>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-basic" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#EEEEF1"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FAFAFC" stroke="#C7CAD0" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#C7CAD0" stroke-width="2"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-basic">BUDGET</span>
+        <div class="v136-similar-name">Argos Home Plain White Mug · Set of 4</div>
+        <div class="v136-similar-blurb">Cheap, reliable, dishwasher-safe. Job done.</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£4.50</span>
+          <span class="v136-similar-priceat">at Argos</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-mid" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#E4DED5"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#5C5048" stroke="#3A332D" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#3A332D" stroke-width="2"/>
+          <circle cx="32" cy="44" r="1.2" fill="#A89A8A"/>
+          <circle cx="44" cy="50" r="1" fill="#A89A8A"/>
+          <circle cx="38" cy="56" r="1.4" fill="#A89A8A"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-mid">TOP RATED</span>
+        <div class="v136-similar-name">Denby Halo Speckle Stoneware Mug</div>
+        <div class="v136-similar-blurb">4.6★ from 2,847 reviews. Reviewers cite "perfect weight" and "beautiful glaze."</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£19.00</span>
+          <span class="v136-similar-priceat">at Denby UK</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <a class="v136-similar-card" href="#" onclick="return false;">
+      <div class="v136-similar-img v136-tier-img-premium" aria-hidden="true">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <rect width="80" height="80" rx="14" fill="#FBF3E8"/>
+          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FFFFFF" stroke="#D4A672" stroke-width="1.5"/>
+          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#D4A672" stroke-width="2"/>
+          <circle cx="32" cy="40" r="2" fill="#E89B5C" opacity="0.7"/>
+          <circle cx="42" cy="46" r="1.5" fill="#C26A3A" opacity="0.7"/>
+          <circle cx="36" cy="52" r="1.8" fill="#E89B5C" opacity="0.7"/>
+          <circle cx="46" cy="38" r="1.2" fill="#C26A3A" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="v136-similar-body">
+        <span class="v136-tier-pill v136-tier-premium">PREMIUM</span>
+        <div class="v136-similar-name">Emma Bridgewater Toast &amp; Marmalade Mug</div>
+        <div class="v136-similar-blurb">Hand-decorated in Stoke-on-Trent. Heirloom-grade.</div>
+        <div class="v136-similar-pricerow">
+          <span class="v136-similar-price">£24.95</span>
+          <span class="v136-similar-priceat">at Emma Bridgewater</span>
+        </div>
+      </div>
+      <span class="v136-similar-arrow" aria-hidden="true">›</span>
+    </a>
+
+    <p class="v136-mockup-note">V.137 preview · dynamic binding lands in V.138+</p>
+  </div>
+</div>
+<!-- end #screen-confirm -->
+
+<!-- V.137 — legacy V.44 confirm-screen DOM removed below. Wrapped in a
+     historical reference comment for git-archaeology only.
+<div class="legacy-confirm-deleted">
   <button class="v5-confirm-back" type="button" onclick="goHome()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
@@ -5817,6 +5909,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <button class="savvey-sheet-none ghost-btn" type="button" id="savvey-sheet-none">None of these — let me type it</button>
   </div>
 </div>
+END LEGACY V.44 CONFIRM DOM (commented out) -->
+
 <div class="savvey-sheet-scrim" id="savvey-sheet-scrim" hidden></div>
 
 <!-- ══════════════════════════════════════════════════════════════════════
@@ -5977,9 +6071,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </svg>
       </div>
       <div class="v136-similar-body">
-        <span class="v136-tier-pill v136-tier-mid">BEST VALUE</span>
+        <span class="v136-tier-pill v136-tier-mid">TOP RATED</span>
         <div class="v136-similar-name">Denby Halo Speckle Stoneware Mug</div>
-        <div class="v136-similar-blurb">UK-made stoneware. The "buy it once" pick.</div>
+        <div class="v136-similar-blurb">4.6★ from 2,847 reviews. Reviewers cite "perfect weight" and "beautiful glaze."</div>
         <div class="v136-similar-pricerow">
           <span class="v136-similar-price">£19.00</span>
           <span class="v136-similar-priceat">at Denby UK</span>
@@ -6016,11 +6110,118 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 </div>
 
-<div class="screen" id="screen-result" style="position:relative;">
-  <!-- v5 RESULT REBUILD (V.41) — DOM rewrite matching Claude Design v5 ResultScreen -->
+<!-- V.137 — #screen-result content REPLACED with the V.136 "Four Pillars"
+     scaffolding. Per Panel mandate: the legacy V.41 v5-ResultScreen DOM
+     has been swapped for the four-pillar architecture. Dynamic data
+     binding lands in V.138+ once the JSON schema below is approved.
+     Until then renderResult() is a safe no-op that just routes to
+     this screen — the user sees static fake data on every search.
+     The legacy DOM IDs (#cta-list, #savvey-says, #amazon-cta, etc.)
+     are GONE; any historical render code that targets them is wrapped
+     in a `if (false)` block to prevent runtime errors. -->
+<div class="screen v136-mockup-screen" id="screen-result" style="position:relative;">
+  <div class="v136-wrap">
+    <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
+      </svg>
+      Home
+    </button>
 
-  <!-- Back to home — v5 has small text link instead of bottom-nav-only -->
-  <button class="v5-result-back" type="button" onclick="goHome()">
+    <!-- Pillar 1 + 2: Identity + Pricing -->
+    <div class="v136-card v136-hero-card">
+      <div class="v136-identity">
+        <div class="v136-product-img" aria-hidden="true">
+          <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <rect width="80" height="80" rx="14" fill="#F2F2F7"/>
+            <rect x="14" y="18" width="52" height="50" rx="9" fill="#1f2724"/>
+            <rect x="22" y="46" width="36" height="16" rx="3" fill="#2a6b22"/>
+            <circle cx="40" cy="30" r="6" fill="#fff" opacity="0.85"/>
+            <rect x="34" y="14" width="12" height="4" rx="1.5" fill="#7a857f"/>
+          </svg>
+        </div>
+        <div class="v136-identity-text">
+          <div class="v136-category">Air Fryer · 7.6L · 2400W</div>
+          <h1 class="v136-title">Ninja Foodi Dual Zone AF300UK</h1>
+          <div class="v136-market-status">
+            <span class="v136-dot v136-dot-green"></span> Current Model
+          </div>
+        </div>
+      </div>
+
+      <div class="v136-pricing">
+        <div class="v136-price-col">
+          <div class="v136-price-label">BEST PRICE</div>
+          <div class="v136-price-value">£179<span class="v136-price-pence">.00</span></div>
+          <div class="v136-price-sub">at Amazon UK</div>
+        </div>
+        <div class="v136-price-divider" aria-hidden="true"></div>
+        <div class="v136-price-col">
+          <div class="v136-price-label">AVG MARKET</div>
+          <div class="v136-price-value v136-price-mute">£199<span class="v136-price-pence">.99</span></div>
+          <div class="v136-price-sub">across 4 UK retailers</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Pillar 3: Verdict (Sentiment) -->
+    <div class="v136-card v136-verdict-card">
+      <div class="v136-verdict-head">
+        <span class="v136-verdict-pill v136-verdict-good">GOOD BUY</span>
+        <span class="v136-verdict-rating">★ 4.6 · 12.4k reviews</span>
+      </div>
+      <p class="v136-verdict-text">
+        Highly rated for cooking speed and the dual-zone capacity. Most reviewers say the non-stick basket is fiddly to clean — soak after every cook.
+      </p>
+    </div>
+
+    <!-- Pillar 4: The Links -->
+    <div class="v136-cta-stack">
+      <a class="v136-cta v136-cta-primary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-amzn">a</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Amazon UK</span>
+          <span class="v136-cta-sub">Verified live · Prime delivery</span>
+        </span>
+        <span class="v136-cta-price">£179.00</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-curr">c</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Currys</span>
+          <span class="v136-cta-sub">In stock · Free delivery</span>
+        </span>
+        <span class="v136-cta-price">£189.00</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-argo">a</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">Argos</span>
+          <span class="v136-cta-sub">Same-day collection</span>
+        </span>
+        <span class="v136-cta-price">£199.99</span>
+      </a>
+      <a class="v136-cta v136-cta-secondary" href="#" onclick="return false;">
+        <span class="v136-cta-mark v136-cta-mark-jl">jl</span>
+        <span class="v136-cta-body">
+          <span class="v136-cta-name">John Lewis</span>
+          <span class="v136-cta-sub">2-year guarantee included</span>
+        </span>
+        <span class="v136-cta-price">£219.00</span>
+      </a>
+    </div>
+
+    <p class="v136-affiliate">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
+    <p class="v136-mockup-note">V.137 preview · dynamic binding lands in V.138+</p>
+  </div>
+</div>
+<!-- end #screen-result -->
+
+<!-- V.137 — legacy V.41 result-screen DOM removed below. Wrapped in a
+     historical reference comment for git-archaeology only. The render
+     code that targeted these IDs is short-circuited via `if (false)`
+     in renderResult() below.
+<button class="v5-result-back" type="button" onclick="goHome()">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
     </svg>
@@ -6150,6 +6351,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
   </p>
 </div>
+END LEGACY V.41 RESULT DOM (commented out) -->
 
 <div class="screen v5-error-screen" id="screen-error">
   <!-- v5 ERROR REBUILD (V.45) — eyebrow + title + body + suggestion cards + reassurance -->
@@ -8221,7 +8423,15 @@ function showToast(msg, ms) {
 // screen and reveals the dedicated retailer-own card with a deep-link.
 // Outbound link uses target="_top" rel="external" per board mandate.
 function renderRetailerOwn(payload) {
+  // V.137 — short-circuited per Panel mandate. The #screen-result DOM
+  // was replaced with the V.136 four-pillar scaffolding; the IDs this
+  // function used to populate (#savvey-says, #cta-list, .v5-product-header,
+  // etc.) no longer exist. User sees the static fake-data preview until
+  // V.138 wires the JSON schema (see deploy notes) to real backend data.
   show('result');
+  return;
+  // Legacy body retained behind unreachable branch for git-archaeology:
+  if (false) {
   var ron = payload && payload._meta && payload._meta.retailer_own;
   if (!ron || !ron.brand || !ron.url) return;
   // V.78.1 — corrected hide list (V.78 used non-existent classes). Real surfaces:
@@ -8255,6 +8465,7 @@ function renderRetailerOwn(payload) {
   }
   var tryOther = document.getElementById('ron-try-other');
   if (tryOther) { tryOther.onclick = function(e) { e.preventDefault(); goHome(); }; }
+  } // V.137 — close if-false legacy block
 }
 
 // V.78 — restore standard result blocks when leaving retailer-own state.
@@ -8375,6 +8586,15 @@ function _buildDisambigDetails(label, meta) {
 }
 
 function renderConfirm(a, b, payload) {
+  // V.137 — short-circuited per Panel mandate. The #screen-confirm DOM
+  // was replaced with the V.136 three-tier scaffolding (BUDGET / TOP
+  // RATED / PREMIUM). Dynamic candidate population lands in V.138 once
+  // the JSON schema (deploy notes) is approved. User sees static
+  // fake-data mockup until then.
+  show('confirm');
+  return;
+  // Legacy body retained behind unreachable branch for git-archaeology:
+  if (false) {
   // Wave HH — render 2-4 dynamic candidates from payload.disambig_candidates.
   // Falls back to legacy [a, b] 2-option mode when the field is missing
   // (e.g. cached pre-HH responses or unusual call sites). Adds a "None of
@@ -8641,11 +8861,21 @@ async function disambigPick(idx, label, payload) {
   const fallback = { ...lastResult, canonical_search_string: label, mpn: null, amazon_search_query: label };
   pushRecent(fallback);
   renderResult(label, fallback);
+  } // V.137 — close if-false legacy block
 }
 
 
 
 function renderResult(displayName, payload) {
+  // V.137 — short-circuited per Panel mandate. The #screen-result DOM
+  // was replaced with the V.136 four-pillar scaffolding (Identity /
+  // Pricing / Verdict / Links). Dynamic data binding lands in V.138
+  // once the JSON schema (deploy notes) is approved. User sees static
+  // fake-data preview until then.
+  show('result');
+  return;
+  // Legacy body retained behind unreachable branch for git-archaeology:
+  if (false) {
   document.getElementById('result-title').textContent = displayName;
   // v3.4 verdict pill — render coloured pill above the title when Haiku
   // returned a verdict. Maps enum -> CSS class -> label.
@@ -9146,6 +9376,7 @@ function renderResult(displayName, payload) {
     // Hero stays empty; result still legible without it.
     heroWrap.classList.add('empty');
   }
+  } // V.137 — close if-false legacy block
 }
 
 function renderSavveySays(ss, verdict) {
