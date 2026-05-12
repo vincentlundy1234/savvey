@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v152';
+const VERSION             = 'normalize.js v3.4.5v152b';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v152-1';
+const CACHE_PREFIX = 'sav-v152b-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1566,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v152:${canonicalKey}`;
+  const ck = `savvey:retailers:v152b:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1638,18 +1638,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
           || host.includes('doubleclick')
           || host === 'shopping.google.com';
       if (_isGoogleHost) {
-        // V.150 — try to unwrap the redirector. Probe both product_link
-        // and link in case one is the merchant and the other is the ad
-        // wrapper.
+        // V.150 — try to unwrap the redirector first.
         const _unwrap = _v150UnwrapGoogleRedirect(item.link)
                      || _v150UnwrapGoogleRedirect(item.product_link)
                      || _v150UnwrapGoogleRedirect(url);
         if (_unwrap && _unwrap.host) {
           host = _unwrap.host;
-          url = _unwrap.url;  // re-point to merchant
+          url = _unwrap.url;
         } else {
-          _droppedRedirector++;
-          continue;
+          // V.152b — when the URL is a Google aggregator page with no
+          // unwrappable merchant URL, resolve the merchant from item.source
+          // and build a search URL on that merchant. SerpAPI uses this
+          // shape extensively for hot consumer-electronics queries.
+          const _resolved = _v152ResolveFromSource(item.source, query)
+                         || _v152ResolveFromSource(item.seller_name, query)
+                         || _v152ResolveFromSource(item.merchant && item.merchant.name, query);
+          if (_resolved && _resolved.host) {
+            host = _resolved.host;
+            url = _resolved.url;
+          } else {
+            _droppedRedirector++;
+            continue;
+          }
         }
       }
       // V.146 — deep price extraction. Probes extracted_price, price string,
@@ -1848,6 +1858,62 @@ const V138_DELIVERY_NOTES = {
   'verylink': 'Buy-now-pay-later',
   'verycta': 'Buy-now-pay-later',
 };
+
+// V.152b — RESCUE UK RETAILERS FROM item.source.
+// Empirically (test_suite case B/C/D), SerpAPI's google_shopping returns
+// Google-aggregator product_link URLs (www.google.com/search?ibp=...) with
+// the actual merchant identity in `item.source` as a free-form string like
+// "Amazon.co.uk - Amazon.co.uk-Seller", "Asda George", "eBay - ninja-kitchen".
+// V.150 unwrap returned null on these because Google's aggregator URLs don't
+// carry the merchant in adurl=/url= params. V.152b resolves the merchant
+// from the source string against a known-UK-retailer table and builds a
+// search URL on that merchant's domain (PDP isn't recoverable but search
+// lands the user on the right merchant for affiliate routing).
+const V152_SOURCE_RESOLVERS = [
+  { rx: /^amazon/i,              host: 'amazon.co.uk',        name: 'Amazon UK',     pathT: q => '/s?k=' + encodeURIComponent(q) + '&tag=' + encodeURIComponent(AMAZON_TAG), origin: 'https://www.amazon.co.uk' },
+  { rx: /currys/i,                host: 'currys.co.uk',        name: 'Currys',        pathT: q => '/search?q=' + encodeURIComponent(q), origin: 'https://www.currys.co.uk' },
+  { rx: /argos/i,                 host: 'argos.co.uk',         name: 'Argos',         pathT: q => '/search/' + encodeURIComponent(q) + '/', origin: 'https://www.argos.co.uk' },
+  { rx: /asda\s*george|\basda/i,host: 'asda.com',            name: 'ASDA',          pathT: q => '/search/' + encodeURIComponent(q), origin: 'https://direct.asda.com/george' },
+  { rx: /\bebay/i,               host: 'ebay.co.uk',          name: 'eBay UK',       pathT: q => '/sch/i.html?_nkw=' + encodeURIComponent(q), origin: 'https://www.ebay.co.uk' },
+  { rx: /smyth/i,                 host: 'smythstoys.com',      name: 'Smyths Toys',   pathT: q => '/uk/en-gb/search?text=' + encodeURIComponent(q), origin: 'https://www.smythstoys.com' },
+  { rx: /\bgame\b/i,            host: 'game.co.uk',          name: 'Game',          pathT: q => '/en/search?searchTerm=' + encodeURIComponent(q), origin: 'https://www.game.co.uk' },
+  { rx: /john\s*lewis/i,         host: 'johnlewis.com',       name: 'John Lewis',    pathT: q => '/search?search-term=' + encodeURIComponent(q), origin: 'https://www.johnlewis.com' },
+  { rx: /\bvery\b/i,            host: 'very.co.uk',          name: 'Very',          pathT: q => '/e/q/' + encodeURIComponent(q) + '.end', origin: 'https://www.very.co.uk' },
+  { rx: /\bao\b/i,              host: 'ao.com',              name: 'AO',            pathT: q => '/search/?searchTerm=' + encodeURIComponent(q), origin: 'https://ao.com' },
+  { rx: /box\.co\.uk|^box(?:\s|$)/i, host: 'box.co.uk',     name: 'Box.co.uk',     pathT: q => '/Shop/SearchResults.aspx?Search=' + encodeURIComponent(q), origin: 'https://www.box.co.uk' },
+  { rx: /\btesco/i,              host: 'tesco.com',           name: 'Tesco',         pathT: q => '/groceries/en-GB/search?query=' + encodeURIComponent(q), origin: 'https://www.tesco.com' },
+  { rx: /sainsbury/i,             host: 'sainsburys.co.uk',    name: "Sainsbury's",   pathT: q => '/gol-ui/SearchResults/' + encodeURIComponent(q), origin: 'https://www.sainsburys.co.uk' },
+  { rx: /screwfix/i,              host: 'screwfix.com',        name: 'Screwfix',      pathT: q => '/search?search=' + encodeURIComponent(q), origin: 'https://www.screwfix.com' },
+  { rx: /b\s*&\s*q|^bq\b|diy\.com/i, host: 'diy.com',      name: 'B&Q',           pathT: q => '/search?term=' + encodeURIComponent(q), origin: 'https://www.diy.com' },
+  { rx: /halfords/i,              host: 'halfords.com',        name: 'Halfords',      pathT: q => '/search?q=' + encodeURIComponent(q), origin: 'https://www.halfords.com' },
+  { rx: /boots/i,                 host: 'boots.com',           name: 'Boots',         pathT: q => '/search?text=' + encodeURIComponent(q), origin: 'https://www.boots.com' },
+  { rx: /superdrug/i,             host: 'superdrug.com',       name: 'Superdrug',     pathT: q => '/search?text=' + encodeURIComponent(q), origin: 'https://www.superdrug.com' },
+  { rx: /\bnext\b/i,            host: 'next.co.uk',          name: 'Next',          pathT: q => '/search?w=' + encodeURIComponent(q), origin: 'https://www.next.co.uk' },
+  { rx: /m\s*&\s*s|marks/i,     host: 'marksandspencer.com', name: 'M&S',           pathT: q => '/l/search?searchTerm=' + encodeURIComponent(q), origin: 'https://www.marksandspencer.com' },
+  { rx: /apple\b/i,              host: 'apple.com',           name: 'Apple',         pathT: q => '/uk/search/' + encodeURIComponent(q), origin: 'https://www.apple.com' },
+  { rx: /samsung/i,               host: 'samsung.com',         name: 'Samsung',       pathT: q => '/uk/search/searchMain?searchTerm=' + encodeURIComponent(q), origin: 'https://www.samsung.com' },
+  { rx: /dyson/i,                 host: 'dyson.co.uk',         name: 'Dyson',         pathT: q => '/search?text=' + encodeURIComponent(q), origin: 'https://www.dyson.co.uk' },
+  { rx: /\bao\.com|\bao\.co\.uk/i, host: 'ao.com',        name: 'AO',            pathT: q => '/search/?searchTerm=' + encodeURIComponent(q), origin: 'https://ao.com' },
+  { rx: /pcworld/i,               host: 'currys.co.uk',        name: 'Currys',        pathT: q => '/search?q=' + encodeURIComponent(q), origin: 'https://www.currys.co.uk' },
+  { rx: /littlewoods/i,           host: 'littlewoods.com',     name: 'Littlewoods',   pathT: q => '/web/search.html?Ntt=' + encodeURIComponent(q), origin: 'https://www.littlewoods.com' },
+  { rx: /365\s*games/i,          host: '365games.co.uk',      name: '365 Games',     pathT: q => '/search?q=' + encodeURIComponent(q), origin: 'https://www.365games.co.uk' },
+  { rx: /shopto/i,                host: 'shopto.net',          name: 'ShopTo',        pathT: q => '/search/?q=' + encodeURIComponent(q), origin: 'https://www.shopto.net' },
+  { rx: /sevenoaks/i,             host: 'ssav.com',            name: 'Sevenoaks',     pathT: q => '/search?keyword=' + encodeURIComponent(q), origin: 'https://www.ssav.com' },
+  { rx: /littlewoods/i,           host: 'littlewoods.com',     name: 'Littlewoods',   pathT: q => '/web/search.html?Ntt=' + encodeURIComponent(q), origin: 'https://www.littlewoods.com' },
+  { rx: /pro\s*direct/i,         host: 'prodirectsport.com',  name: 'Pro:Direct',    pathT: q => '/search?w=' + encodeURIComponent(q), origin: 'https://www.prodirectsport.com' },
+];
+function _v152ResolveFromSource(source, canonical) {
+  if (!source || typeof source !== 'string' || !canonical) return null;
+  for (const r of V152_SOURCE_RESOLVERS) {
+    if (r.rx.test(source)) {
+      try {
+        const url = r.origin + r.pathT(String(canonical).slice(0, 100));
+        return { host: r.host, url: url.slice(0, 500), name: r.name };
+      } catch (e) { return null; }
+    }
+  }
+  return null;
+}
 
 // V.150 — UNWRAP GOOGLE REDIRECTORS. SerpAPI's `item.link` field is the
 // Google aclk / adservices redirector for sponsored carousel cards. The
@@ -2581,7 +2647,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v152:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v152b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
