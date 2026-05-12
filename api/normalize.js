@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v152b';
+const VERSION             = 'normalize.js v3.4.5v152c';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v152b-1';
+const CACHE_PREFIX = 'sav-v152c-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1566,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v152b:${canonicalKey}`;
+  const ck = `savvey:retailers:v152c:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -2205,7 +2205,13 @@ function _v138BuildResponse({
   const hasAlts  = altsLen >= 2 && altsLen <= 4;
   const isLow    = parsed && parsed.confidence === 'low';
   const brandOnly = parsed && parsed.specificity === 'brand_only';
-  const shouldDisambig = (isLow || brandOnly || !hasPrice) && hasAlts;
+  // V.152c — when V.146 family backstop fired (e.g. "playstation 5" →
+  // 3 variant tiers), ALWAYS route to disambig regardless of whether
+  // SerpAPI returned a verified Amazon price for the broad canonical.
+  // Without this, V.152b's retailer-rescue makes hasPrice=true for hot
+  // family queries and the matched-branch wins, hiding the variant UI.
+  const familyApplied = !!(parsed && parsed._v146_family_applied);
+  const shouldDisambig = (familyApplied || isLow || brandOnly || !hasPrice) && hasAlts;
 
   // V.150 — when the Amazon picker fails but google_shopping returned 2+
   // priced retailers, promote to 'matched' instead of falling through to
@@ -2647,7 +2653,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v152b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v152c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
