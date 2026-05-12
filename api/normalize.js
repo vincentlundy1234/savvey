@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v143';
+const VERSION             = 'normalize.js v3.4.5v144';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v143-1';
+const CACHE_PREFIX = 'sav-v144-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -597,6 +597,8 @@ Be specific. "Comfortable, great battery" is bad. "All-day wear, 30hr battery in
 const SERPAPI_TIMEOUT_MS = 4000; // V.121 - reverted 2000→4000. Panel mandate after V.120a observed Pukka + Tefal queries fetch_error on the 2000ms cap.
 const AMAZON_TAG = process.env.AMAZON_TAG || 'savvey-21';
 let _lastSerpStatus = null;
+// V.144 — last google_shopping diagnostic, exposed on _meta.serp_diag.
+let _lastGoogleShoppingDiag = null;
 
 // v3.4.0 — Haiku price_take + structured verdict. ONE Haiku call after SerpAPI
 // returns. Inputs: canonical + verified price + used price + category + rating
@@ -1484,7 +1486,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v143:${canonicalKey}`;
+  const ck = `savvey:retailers:v144:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1508,49 +1510,90 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
     const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
     const deepLinks = {};
     let _examined = 0;
-    let _matchedSeller = 0;
-    const _droppedSellers = [];
+    let _droppedNoUrl = 0;
+    let _droppedNoPrice = 0;
+    let _droppedRedirector = 0;
+    const _droppedSamples = [];
+    // V.144 — FILTER NUKE. Panel mandate: any SerpAPI shopping result with a
+    // valid GBP price and a URL is accepted. NO retailer-name map check,
+    // NO TLD whitelist (we just reject Google's own redirector hosts), NO
+    // strict-seller skip. Host is derived directly from product_link / link;
+    // price is parsed via _v143ParsePrice so '£499.99' becomes 499.99 here
+    // rather than NaN'ing two functions down the chain. Pretty display name
+    // derived from host (game.co.uk → 'Game').
     for (const item of results) {
       _examined++;
-      // V.143 — seller resolution loosened. First try the hardcoded name
-      // map (existing behaviour). If that misses, derive host from the
-      // outbound URL. This catches mid-tier UK retailers (Game, 365 Games,
-      // Sevenoaks, Box.co.uk, ProDirect, etc.) that aren't in the map.
-      let host = _resolveSeller(item);
-      if (!host) {
-        // Try product_link first (merchant PDP); fall back to item.link
-        // (Google aclk redirect — last resort, URL contains merchant host
-        // in a query param sometimes).
-        const probeUrl = item.product_link || item.link || '';
-        try {
-          const u = new URL(String(probeUrl));
-          const h = u.hostname.replace(/^www\./, '').toLowerCase();
-          // Only accept .co.uk / .com / .uk / .net to filter out aclk
-          // redirect domains and obvious junk.
-          if (/\.(co\.uk|com|uk|net)$/.test(h) && !h.includes('googleadservices') && !h.includes('aclk') && !h.includes('doubleclick')) {
-            host = h;
-          }
-        } catch (e) { /* unparseable URL */ }
-      }
-      if (!host) {
-        _droppedSellers.push(String((item && item.source) || (item && item.seller_name) || '?').slice(0, 24));
+      // Pick the best URL. product_link is the merchant PDP and is preferred;
+      // item.link is the Google aclk redirector which still works but is uglier.
+      const url = item.product_link || item.link;
+      if (!url || typeof url !== 'string') {
+        _droppedNoUrl++;
         continue;
       }
-      _matchedSeller++;
-      // V.143 — Amazon listings via google_shopping ARE useful (third-party
-      // sellers, FBA listings, sometimes different price than engine=amazon).
-      // Keep them; the Pillars assembler dedups against verified_amazon_price.
-      if (deepLinks[host]) continue;
-      const url = item.link || item.product_link;
-      if (!url || typeof url !== 'string') continue;
+      // Derive host from URL. We do NOT care about TLD — any merchant is fine.
+      let host = null;
+      try {
+        const u = new URL(String(url));
+        host = u.hostname.replace(/^www\./, '').toLowerCase();
+      } catch (e) {
+        _droppedNoUrl++;
+        continue;
+      }
+      // Only reject Google's own redirector / ad-tracking hostnames.
+      if (!host || host.includes('googleadservices') || host.includes('aclk')
+          || host.includes('doubleclick') || host === 'shopping.google.com'
+          || host.endsWith('.google.com') || host.endsWith('.googleusercontent.com')) {
+        _droppedRedirector++;
+        continue;
+      }
+      // Parse price up-front. _v143ParsePrice handles '£499.99', '$599',
+      // 'EUR 549,99', '499.99 + £5 delivery', etc.
+      const rawPrice = (typeof item.price === 'string') ? item.price
+                     : (typeof item.extracted_price === 'number') ? item.extracted_price
+                     : null;
+      const parsedPrice = _v143ParsePrice(rawPrice);
+      if (parsedPrice == null) {
+        _droppedNoPrice++;
+        if (_droppedSamples.length < 5) _droppedSamples.push(host + ':' + String(rawPrice).slice(0, 20));
+        // V.144 — still keep the link as a fallback navigation target even
+        // without a price. Stored with price=null; the Pillars assembler will
+        // only include it in links[] if no priced retailer is available.
+      }
+      // Deduplicate by host (cheapest wins).
+      if (deepLinks[host]) {
+        const existing = deepLinks[host].price_gbp;
+        if (parsedPrice != null && (existing == null || parsedPrice < existing)) {
+          // overwrite with cheaper
+        } else {
+          continue;
+        }
+      }
+      // Display name: from V138_RETAILER_NAMES if mapped, else derive from host.
+      const _hostKey = host.split('.')[0]; // 'game.co.uk' → 'game'
+      const _mappedName = V138_RETAILER_NAMES[host] || V138_RETAILER_NAMES[_hostKey];
+      const displayName = _mappedName
+        || (_hostKey.charAt(0).toUpperCase() + _hostKey.slice(1));
       deepLinks[host] = {
-        url:   url.slice(0, 500),
-        title: typeof item.title === 'string' ? item.title.slice(0, 200) : null,
-        price: typeof item.price === 'string' ? item.price.slice(0, 30)
-             : (typeof item.extracted_price === 'number' ? item.extracted_price : null),
+        url:       url.slice(0, 500),
+        title:     typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+        price:     rawPrice,        // keep original string for display fallback
+        price_gbp: parsedPrice,     // V.144 — parsed once, cached on the way IN
+        name:      displayName,
       };
     }
-    console.log(`[${VERSION}] google_shopping for "${query.slice(0,60)}": examined=${_examined} matched=${_matchedSeller} kept=${Object.keys(deepLinks).length} dropped_sellers=${_droppedSellers.slice(0,5).join('|')}`);
+    const _kept = Object.keys(deepLinks).length;
+    const _withPrice = Object.values(deepLinks).filter(r => r.price_gbp != null).length;
+    console.log(`[${VERSION}] google_shopping for "${query.slice(0,60)}": examined=${_examined} kept=${_kept} priced=${_withPrice} dropped_no_url=${_droppedNoUrl} no_price=${_droppedNoPrice} redirector=${_droppedRedirector} samples=${_droppedSamples.slice(0,3).join('|')}`);
+    // V.144 — stash diagnostic counts on the function so the handler can
+    // bubble them to the frontend (_meta.serp_diag) for on-screen transparency.
+    _lastGoogleShoppingDiag = {
+      examined: _examined,
+      kept: _kept,
+      priced: _withPrice,
+      dropped_no_url: _droppedNoUrl,
+      dropped_no_price: _droppedNoPrice,
+      dropped_redirector: _droppedRedirector,
+    };
     if (Object.keys(deepLinks).length === 0) return null;
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
     return deepLinks;
@@ -1707,16 +1750,8 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
   }
 
   // (2) Non-Amazon retailers from google_shopping fan-out
-  // V.143 — CRITICAL FILTER FIXES:
-  //   a) Was checking `r.link` but fetchGoogleShoppingDeepLinks stores the
-  //      URL under `r.url`. Every google_shopping result was being silently
-  //      dropped. (Bug since V.138.)
-  //   b) Was checking `key === 'amzn'` but the key is the HOST (e.g.
-  //      'currys.co.uk'). Amazon dedup never fired. Replaced with proper
-  //      `key.includes('amazon')` host-based dedup.
-  //   c) r.price is a SerpAPI string like '£499.99'. Number('£499.99') ===
-  //      NaN, so price_gbp was always null. New _v143ParsePrice() strips
-  //      £/GBP/$/€/EUR/USD prefixes and thousands separators before parse.
+  // V.144 — assembler trusts pre-parsed price_gbp from fetchGoogleShoppingDeepLinks.
+  // Falls back to _v143ParsePrice on r.price for older cached payloads.
   if (retailer_deep_links && typeof retailer_deep_links === 'object') {
     for (const key of Object.keys(retailer_deep_links)) {
       const r = retailer_deep_links[key];
@@ -1724,11 +1759,17 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       const _url = r.url || r.link || null;
       if (!_url) continue;
       if (typeof key === 'string' && key.toLowerCase().includes('amazon')) continue;
-      const p = _v143ParsePrice(r.price);
+      // V.144 — prefer pre-parsed price_gbp (set by fetchGoogleShoppingDeepLinks
+      // on the way in). Fall back to parsing the raw r.price string for any
+      // pre-V.144 cached entries that still have the old shape.
+      const p = (r.price_gbp != null && Number(r.price_gbp) > 0)
+        ? Number(r.price_gbp)
+        : _v143ParsePrice(r.price);
+      const _hostKey = (typeof key === 'string') ? key.split('.')[0] : key;
       const retailerName = V138_RETAILER_NAMES[key]
-        || (typeof key === 'string' ? key.replace(/\.(co\.uk|com|net)$/i, '').replace(/^./, c => c.toUpperCase()) : key)
+        || V138_RETAILER_NAMES[_hostKey]
         || r.name
-        || key;
+        || (typeof _hostKey === 'string' ? (_hostKey.charAt(0).toUpperCase() + _hostKey.slice(1)) : String(key));
       links.push({
         retailer:      retailerName,
         retailer_key:  key,
@@ -1737,7 +1778,7 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
         price_gbp:     p,
         price_str:     (p != null) ? `£${p.toFixed(2)}` : (typeof r.price === 'string' ? r.price.slice(0, 24) : null),
         stock_state:   'in_stock',
-        delivery_note: V138_DELIVERY_NOTES[key] || null,
+        delivery_note: V138_DELIVERY_NOTES[key] || V138_DELIVERY_NOTES[_hostKey] || null,
         affiliate:     false,
       });
       if (p != null) allPrices.push(p);
@@ -2239,7 +2280,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v143:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v144:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -2677,6 +2718,7 @@ export default async function handler(req, res) {
       cache: 'miss',
       retailer_own: _retailerOwn, // V.78 — null or { brand, url }
       serpapi_status: _lastSerpStatus, // V.96.1 - bubble for diagnosis
+      serp_diag: _lastGoogleShoppingDiag, // V.144 — examined/kept/priced counts for on-screen transparency
     }
   };
   // V.97 — Don't cache failure responses when SerpAPI returned 429 (quota).
