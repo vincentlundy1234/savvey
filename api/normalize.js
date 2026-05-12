@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v138';
+const VERSION             = 'normalize.js v3.4.5v139';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v138-1';
+const CACHE_PREFIX = 'sav-v139-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -704,7 +704,10 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
       price: (r.price != null && Number(r.price) > 0) ? Number(r.price) : null,
     }));
   }
-  if (alternatives && Array.isArray(alternatives) && alternatives.length === 3) {
+  if (alternatives && Array.isArray(alternatives) && alternatives.length >= 2 && alternatives.length <= 4) {
+    // V.139 — accept 2-4 alternatives. The frontend tier render either
+    // pads with a placeholder (when 2) or truncates (when 4). Haiku only
+    // generates blurbs for the real alts; placeholder gets its own copy.
     input.alternatives = alternatives.slice(0, 3).map((a, i) => ({
       tier: ['basic', 'top_rated', 'premium'][i],
       name: String(a.name || '').slice(0, 120),
@@ -753,12 +756,13 @@ PILLARS MODE (INPUT.amazon present, INPUT.alternatives absent):
 
   tier_blurbs: return null.
 
-TIERS MODE (INPUT.alternatives present with 3 entries):
+TIERS MODE (INPUT.alternatives present with 2-3 entries):
   verdict_label: null
   verdict_summary: null
   category_eyebrow: null
-  tier_blurbs: array of EXACTLY 3 blurbs (max 14 words each), in this
-    exact order: [basic, top_rated, premium].
+  tier_blurbs: array of N blurbs matching the input alternatives count
+    (max 14 words each), in this exact order: [basic, top_rated, premium].
+    If only 2 alternatives were provided, return ONLY 2 blurbs (no padding).
 
     basic[0] — "cheap + reliable + does the job" angle. Plain spoken.
       Example: "Cheap, reliable, dishwasher-safe. Job done."
@@ -823,7 +827,7 @@ CRITICAL RULES (apply to ALL modes):
                         ? parsed.verdict_summary.trim().slice(0, 220) : null,
       category_eyebrow: (parsed && typeof parsed.category_eyebrow === 'string' && parsed.category_eyebrow.trim())
                         ? parsed.category_eyebrow.trim().slice(0, 60) : null,
-      tier_blurbs: (parsed && Array.isArray(parsed.tier_blurbs) && parsed.tier_blurbs.length === 3)
+      tier_blurbs: (parsed && Array.isArray(parsed.tier_blurbs) && parsed.tier_blurbs.length >= 2 && parsed.tier_blurbs.length <= 3)
                     ? parsed.tier_blurbs.map(b => (typeof b === 'string' && b.trim()) ? b.trim().slice(0, 140) : null)
                     : null,
     };
@@ -832,6 +836,97 @@ CRITICAL RULES (apply to ALL modes):
   } catch (e) {
     console.warn(`[${VERSION}] callHaikuMegaSynthesis error: ${e.message}`);
     if (trace) trace.push({step:'mega_synthesis.exception', message: String(e.message||e).slice(0,160)});
+    return EMPTY;
+  } finally { clearTimeout(timer); }
+}
+
+// V.139 — Tier-fallback Haiku call. ONLY fires on the recovery path when
+// the primary parser returned 0-1 alternatives for a generic-noun query
+// (e.g. "Teapot", "Mug", "Garden Hose"). Single focused prompt returns
+// 3 UK products spanning budget / top-rated / premium tiers. This is
+// the documented "one fallback call" exemption to the "no 5 separate
+// AI calls" mandate — fires only when the main parse missed tiers.
+async function callHaikuTierFallback({ canonical, category, trace }) {
+  const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
+  const EMPTY = { alternatives_array: null, alternatives_meta: null };
+  if (!ANTHROPIC_KEY || !canonical) return EMPTY;
+
+  const sys = `You are Savvey's tier generator for UK shoppers. Given a generic product noun (e.g. "Teapot", "Toaster", "Cordless Drill"), return EXACTLY 3 popular UK products spanning budget, top-rated, and premium price tiers.
+
+OUTPUT JSON ONLY, no preamble, no markdown fences:
+{
+  "alternatives_array": ["budget product full name", "top-rated product full name", "premium product full name"],
+  "alternatives_meta": [
+    { "tier": "basic",     "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" },
+    { "tier": "top_rated", "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" },
+    { "tier": "premium",   "typical_price_gbp": <number>, "rating": <number|null>, "reviews": <int|null>, "rationale": "1 short clause" }
+  ]
+}
+
+RULES:
+- Use real UK products available on Amazon UK or major UK retailers. No invented SKUs.
+- Tier 0 (basic): cheapest reliable option, plain-spoken.
+- Tier 1 (top_rated): the most-reviewed mid-priced product. MUST include rating + reviews when known.
+- Tier 2 (premium): heritage / craft / longevity angle. Higher GBP.
+- typical_price_gbp must be a sensible UK retail point — no guesses outside 10x range.
+- rationale = ONE short clause, max 10 words.
+- If you cannot honestly produce 3 tiers (e.g. canonical is too narrow), return {"alternatives_array": null, "alternatives_meta": null}.
+- Output VALID JSON only. No prose preamble. Max ~250 tokens.`;
+
+  const userMsg = `Canonical: "${String(canonical).slice(0, 100)}"\nCategory: ${category || 'unknown'}\n\nProduce the 3-tier JSON now.`;
+
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 4000);
+  try {
+    if (trace) trace.push({step:'tier_fallback.start', canonical: String(canonical).slice(0,60), category: category || null});
+    const r = await fetch(ANTHROPIC_ENDPOINT, {
+      method: 'POST',
+      headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 350,
+        system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: userMsg }],
+      }),
+      signal: ac.signal,
+    });
+    if (!r.ok) {
+      console.warn(`[${VERSION}] callHaikuTierFallback HTTP ${r.status}`);
+      if (trace) trace.push({step:'tier_fallback.http_error', status: r.status});
+      return EMPTY;
+    }
+    const j = await r.json();
+    const text = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const cleaned = text.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+    let parsed;
+    try { parsed = JSON.parse(cleaned); }
+    catch (e) {
+      console.warn(`[${VERSION}] callHaikuTierFallback JSON parse failed: ${e.message}`);
+      if (trace) trace.push({step:'tier_fallback.parse_error', snippet: text.slice(0,120)});
+      return EMPTY;
+    }
+    const arr = Array.isArray(parsed && parsed.alternatives_array) ? parsed.alternatives_array : null;
+    const meta = Array.isArray(parsed && parsed.alternatives_meta) ? parsed.alternatives_meta : null;
+    if (!arr || arr.length !== 3 || !meta || meta.length !== 3) {
+      if (trace) trace.push({step:'tier_fallback.shape_invalid', got_arr: arr ? arr.length : 0, got_meta: meta ? meta.length : 0});
+      return EMPTY;
+    }
+    // Sanitise meta numerics.
+    const cleanMeta = meta.map(m => ({
+      tier:              (m && typeof m.tier === 'string') ? m.tier : null,
+      typical_price_gbp: (m && Number(m.typical_price_gbp) > 0) ? Number(m.typical_price_gbp) : null,
+      rating:            (m && Number(m.rating) > 0 && Number(m.rating) <= 5) ? Number(m.rating) : null,
+      reviews:           (m && Number(m.reviews) > 0) ? Math.floor(Number(m.reviews)) : null,
+      rationale:         (m && typeof m.rationale === 'string') ? m.rationale.trim().slice(0, 120) : null,
+    }));
+    if (trace) trace.push({step:'tier_fallback.done', n: arr.length});
+    return {
+      alternatives_array: arr.map(s => String(s).slice(0, 200)),
+      alternatives_meta:  cleanMeta,
+    };
+  } catch (e) {
+    console.warn(`[${VERSION}] callHaikuTierFallback error: ${e.message}`);
+    if (trace) trace.push({step:'tier_fallback.exception', message: String(e.message || e).slice(0, 160)});
     return EMPTY;
   } finally { clearTimeout(timer); }
 }
@@ -1708,16 +1803,26 @@ function _v138BuildResponse({
 }) {
   const { pricing, links } = _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links });
 
-  // ── Outcome routing ────────────────────────────────────────────────
+  // ── Outcome routing (V.139: Generic Item Pivot) ───────────────────
+  // Panel-mandated broadening: if we can't verify a price, route to
+  // disambig regardless of Haiku's stated confidence. The Teapot bug
+  // had Haiku returning confidence='medium' for a generic noun, then
+  // the prior gate (isLow && length===3) fell straight through to
+  // no_match. New rule: !hasPrice + any 2-4 alternatives → disambig.
   let outcome = 'no_match';
   let outcome_reason = 'no_match';
   const hasPrice = !!(pricing && pricing.best_price && pricing.best_price.value_gbp);
-  const isLow   = parsed && parsed.confidence === 'low';
-  const hasAlts = parsed && Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length === 3;
+  const altsLen  = (parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array.length : 0;
+  const hasAlts  = altsLen >= 2 && altsLen <= 4;
+  const isLow    = parsed && parsed.confidence === 'low';
+  const brandOnly = parsed && parsed.specificity === 'brand_only';
+  const shouldDisambig = (isLow || brandOnly || !hasPrice) && hasAlts;
 
-  if (isLow && hasAlts) {
+  if (shouldDisambig) {
     outcome = 'disambig';
-    outcome_reason = (parsed.confidence_score < 40) ? 'brand_only' : 'low_confidence';
+    outcome_reason = isLow ? 'low_confidence'
+                   : brandOnly ? 'brand_only'
+                   : 'no_price_with_alternatives';
   } else if (hasPrice) {
     outcome = 'matched';
     outcome_reason = 'high_confidence_with_price';
@@ -1769,14 +1874,18 @@ function _v138BuildResponse({
     } : null,
   };
 
-  // ── Tiers block (disambig mode only) ──────────────────────────────
+  // ── Tiers block (V.139: 2–4 alternatives accepted) ────────────────
+  // When Haiku returns 2 alternatives we pad to 3 with a synthetic
+  // PREMIUM placeholder pointing at an Amazon search for the canonical.
+  // When 4 are returned we truncate to 3. Never invent prices/reviews.
   let tiers = null;
   if (hasAlts) {
-    const altsArr  = parsed.alternatives_array;
-    const altsMeta = Array.isArray(parsed.alternatives_meta) ? parsed.alternatives_meta : [];
+    const altsArr  = parsed.alternatives_array.slice(0, 4);
+    const altsMeta = Array.isArray(parsed.alternatives_meta) ? parsed.alternatives_meta.slice(0, 4) : [];
     const tierKeys = ['basic', 'top_rated', 'premium'];
     const tierPillText = ['BUDGET', 'TOP RATED', 'PREMIUM'];
-    tiers = altsArr.slice(0, 3).map((name, i) => {
+
+    const built = altsArr.slice(0, 3).map((name, i) => {
       const meta = altsMeta[i] || {};
       const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
       return {
@@ -1786,14 +1895,38 @@ function _v138BuildResponse({
         retailer:    null,
         price_gbp:   meta.typical_price_gbp || null,
         price_str:   (meta.typical_price_gbp != null) ? `£${Number(meta.typical_price_gbp).toFixed(2)}` : null,
-        url:         null, // backend doesn't yet resolve per-tier URLs; frontend search-amazon-fallback handles
+        url:         null,
         blurb:       blurbFromMega || meta.rationale || null,
         blurb_basis: i === 1 ? 'review_count' : (i === 0 ? 'price_anchor' : 'premium_signal'),
         review_count: meta.reviews || null,
         review_stars: meta.rating || null,
         image:       null,
+        is_placeholder: false,
       };
     });
+
+    // Pad to 3 with a non-inventive placeholder pointing at Amazon search.
+    if (built.length === 2) {
+      const canonForSearch = (parsed && parsed.canonical_search_string) || '';
+      built.push({
+        tier:        'premium',
+        pill_text:   'PREMIUM',
+        name:        canonForSearch ? `Premium ${canonForSearch} on Amazon UK` : 'Search Amazon UK for premium options',
+        retailer:    'Amazon UK',
+        price_gbp:   null,
+        price_str:   null,
+        url:         canonForSearch
+                       ? `https://www.amazon.co.uk/s?k=${encodeURIComponent('premium ' + canonForSearch)}&tag=${encodeURIComponent(AMAZON_TAG)}`
+                       : null,
+        blurb:       'Couldn’t verify a premium pick — browse the highest-priced UK listings.',
+        blurb_basis: 'placeholder_search',
+        review_count: null,
+        review_stars: null,
+        image:       null,
+        is_placeholder: true,
+      });
+    }
+    tiers = built;
   }
 
   // ── Disclosure ────────────────────────────────────────────────────
@@ -2044,7 +2177,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v138:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v139:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -2273,15 +2406,46 @@ export default async function handler(req, res) {
     }
   }
 
-  // V.138 — TIERS-mode mega-synthesis. Only fires when we have 3 alternatives
-  // with meta (the V.137 three-tier UI requires basic/top_rated/premium blurbs).
-  // Single Haiku call (Panel mandate: NO 5 separate AI calls). Returns
-  // tier_blurbs[] for the disambig render.
+  // V.139 — Tier fallback. When we have no verified price AND Haiku
+  // returned 0-1 alternatives (or none at all), make ONE focused Haiku
+  // call to produce 3 budget/top-rated/premium UK products for this
+  // generic category. The "Teapot" failure mode. Single recovery call
+  // — does NOT fire on the matched path. Panel-mandated exemption to
+  // the "no extra AI calls" rule.
+  const _altsLenPre = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
+  const _needsTierFallback = !verified_amazon_price
+                             && parsed.canonical_search_string
+                             && _altsLenPre < 2;
+  if (_needsTierFallback) {
+    debugTrace.push({step:'handler.tier_fallback.start', alts_len_pre: _altsLenPre, canonical: String(parsed.canonical_search_string).slice(0,80)});
+    try {
+      const fb = await callHaikuTierFallback({
+        canonical: parsed.canonical_search_string,
+        category:  parsed.category,
+        trace:     debugTrace,
+      });
+      if (fb && fb.alternatives_array && fb.alternatives_meta) {
+        parsed.alternatives_array = fb.alternatives_array;
+        parsed.alternatives_meta  = fb.alternatives_meta;
+        debugTrace.push({step:'handler.tier_fallback.applied', n: fb.alternatives_array.length});
+      } else {
+        debugTrace.push({step:'handler.tier_fallback.empty'});
+      }
+    } catch (e) {
+      console.warn(`[${VERSION}] V.139 tier-fallback error: ${e.message}`);
+      debugTrace.push({step:'handler.tier_fallback.exception', message: String(e.message || e).slice(0, 160)});
+    }
+  }
+
+  // V.138/V.139 — TIERS-mode mega-synthesis. Fires when we have 2-4
+  // alternatives with meta. Single Haiku call (Panel mandate: NO 5
+  // separate AI calls; tier-fallback above is the documented exception).
+  // Returns tier_blurbs[] for the disambig render.
   let _megaTiers = { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null };
-  if (Array.isArray(parsed.alternatives_array)
-      && parsed.alternatives_array.length === 3
+  const _altsLenPost = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
+  if (_altsLenPost >= 2 && _altsLenPost <= 4
       && Array.isArray(parsed.alternatives_meta)
-      && parsed.alternatives_meta.length === 3) {
+      && parsed.alternatives_meta.length === _altsLenPost) {
     try {
       _megaTiers = await callHaikuMegaSynthesis({
         canonical:     parsed.canonical_search_string,
