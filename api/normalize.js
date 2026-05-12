@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v147';
+const VERSION             = 'normalize.js v3.4.5v148';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v147-1';
+const CACHE_PREFIX = 'sav-v148-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -2095,12 +2095,17 @@ function _v138BuildResponse({
     const tierKeys = ['basic', 'top_rated', 'premium'];
     const tierPillText = ['BUDGET', 'TOP RATED', 'PREMIUM'];
 
+    // V.148 — disambig_kind: variant families (PS5 Slim/Pro/Disc) vs generic
+    // tiers (cheap/top-rated/premium teapots). Variant families get a clean
+    // render (no pills, no placeholder SVGs) and tap-to-re-search; generic
+    // tiers keep the BUDGET / TOP RATED / PREMIUM mockup.
+    const _isFamilyVariant = !!(parsed && parsed._v146_family_applied);
     const built = altsArr.slice(0, 3).map((name, i) => {
       const meta = altsMeta[i] || {};
       const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
       return {
         tier:        tierKeys[i],
-        pill_text:   tierPillText[i],
+        pill_text:   _isFamilyVariant ? null : tierPillText[i],
         name:        name || '',
         retailer:    null,
         price_gbp:   meta.typical_price_gbp || null,
@@ -2112,6 +2117,7 @@ function _v138BuildResponse({
         review_stars: meta.rating || null,
         image:       null,
         is_placeholder: false,
+        is_family_variant: _isFamilyVariant, // V.148
       };
     });
 
@@ -2145,9 +2151,16 @@ function _v138BuildResponse({
     data_freshness: 'Prices verified within the last 6 hours.',
   };
 
+  // V.148 — top-level disambig_kind tag for the frontend's renderConfirm
+  // branching. 'family' = variant disambig (PS5 Slim/Pro/Disc, iPhone 16 base/
+  // Plus/Pro), 'generic' = BUDGET/TOP RATED/PREMIUM tiers, null = not disambig.
+  const _disambigKind = (outcome === 'disambig')
+    ? ((parsed && parsed._v146_family_applied) ? 'family' : 'generic')
+    : null;
   return {
     outcome,
     outcome_reason,
+    disambig_kind: _disambigKind,
     identity,
     pricing,
     verdict,
@@ -2444,7 +2457,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v147:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v148:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
