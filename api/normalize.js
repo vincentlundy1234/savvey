@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v152c';
+const VERSION             = 'normalize.js v3.4.5v153';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v152c-1';
+const CACHE_PREFIX = 'sav-v153-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1562,14 +1562,40 @@ function _resolveSeller(item) {
   }
   return null;
 }
-async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
+async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v152c:${canonicalKey}`;
-  const cached = await kvGet(ck);
-  if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
-    return cached;
+  const ck = `savvey:retailers:v153:${canonicalKey}`;
+  if (!_forceFresh) {
+    const cached = await kvGet(ck);
+    if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
+      const _cachedCount = Object.keys(cached).length;
+      // V.153 — populate diag for the cache_hit path so we never leak
+      // stale module-level state across requests.
+      if (_diagOut) Object.assign(_diagOut, {
+        examined: _cachedCount,
+        kept: _cachedCount,
+        priced: Object.values(cached).filter(r => r && r.price_gbp != null).length,
+        dropped_no_url: 0,
+        dropped_no_price: 0,
+        dropped_redirector: 0,
+        samples: [],
+        dropped_samples: [],
+        raw_samples: [],
+        cache_hit: true,
+      });
+      // V.153 SMART CACHE BUSTING — if the cached entry is "poor" (0 or 1
+      // competitor that survived), it likely predates a parser improvement.
+      // Force a fresh SerpAPI fetch and overwrite the cache.
+      const _pricedSurvivors = Object.values(cached).filter(r => r && r.price_gbp != null && Number(r.price_gbp) > 0).length;
+      if (_pricedSurvivors < 2) {
+        console.log(`[${VERSION}] V.153 poor-cache bust: only ${_pricedSurvivors} priced competitors in cache, forcing fresh fetch for "${query.slice(0,60)}"`);
+        // Fall through to the fresh-fetch path below.
+      } else {
+        return cached;
+      }
+    }
   }
   const url = new URL('https://serpapi.com/search.json');
   url.searchParams.set('engine', 'google_shopping');
@@ -1743,7 +1769,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
         all_fields_present:    Object.keys(it).slice(0, 25),
       };
     }).filter(Boolean);
-    _lastGoogleShoppingDiag = {
+    const _v153Diag = {
       examined:           _examined,
       kept:               _kept,
       priced:             _withPrice,
@@ -1753,7 +1779,11 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 5),
       raw_samples:        _rawSamples,
+      cache_hit:          false,
     };
+    if (_diagOut) Object.assign(_diagOut, _v153Diag);
+    // Module-level kept for back-compat callers that haven't migrated yet.
+    _lastGoogleShoppingDiag = _v153Diag;
     if (Object.keys(deepLinks).length === 0) return null;
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
     return deepLinks;
@@ -2064,7 +2094,17 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       if (!r) continue;
       const _url = r.url || r.link || null;
       if (!_url) continue;
-      if (typeof key === 'string' && key.toLowerCase().includes('amazon')) continue;
+      // V.153 — relaxed Amazon dedup. When the retailer stack is sparse
+      // (< 2 non-Amazon competitors after this loop), allow 3rd-party
+      // Amazon sellers from google_shopping to populate the stack as
+      // separate cards. Implemented via a deferred pass after the loop —
+      // here we just count them and tag.
+      if (typeof key === 'string' && key.toLowerCase().includes('amazon')) {
+        // Stash for potential second pass.
+        if (!retailer_deep_links.__v153_amazon_extras) retailer_deep_links.__v153_amazon_extras = [];
+        retailer_deep_links.__v153_amazon_extras.push({ key, record: r });
+        continue;
+      }
       // V.144 — prefer pre-parsed price_gbp (set by fetchGoogleShoppingDeepLinks
       // on the way in). Fall back to parsing the raw r.price string for any
       // pre-V.144 cached entries that still have the old shape.
@@ -2089,6 +2129,47 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       });
       if (p != null) allPrices.push(p);
     }
+  }
+
+  // V.153 — RELAXED AMAZON DEDUP. When the non-Amazon retailer stack is
+  // sparse (< 2 cards), promote any stashed 3rd-party Amazon listings to
+  // separate cards so the user has comparison context. Label distinctly
+  // as "Amazon UK (3rd-party)" so they're not confused for the verified
+  // primary listing.
+  const _v153NonAmazonLinks = links.filter(l => !l.is_primary).length;
+  if (_v153NonAmazonLinks < 2 && retailer_deep_links && retailer_deep_links.__v153_amazon_extras) {
+    const extras = retailer_deep_links.__v153_amazon_extras;
+    let _addedAmz = 0;
+    for (const e of extras) {
+      if (_addedAmz >= 3) break;
+      const r = e.record;
+      const _url = r.url || r.link;
+      if (!_url) continue;
+      // Skip if this exact URL is already in links (don't double the primary).
+      if (links.some(l => l.url === _url)) continue;
+      const p = (r.price_gbp != null && Number(r.price_gbp) > 0)
+        ? Number(r.price_gbp)
+        : _v143ParsePrice(r.price);
+      if (p == null) continue;
+      links.push({
+        retailer:      'Amazon UK (3rd-party)',
+        retailer_key:  e.key,
+        is_primary:    false,
+        url:           _url,
+        price_gbp:     p,
+        price_str:     `£${p.toFixed(2)}`,
+        stock_state:   'in_stock',
+        delivery_note: 'Marketplace seller',
+        affiliate:     false,
+      });
+      allPrices.push(p);
+      _addedAmz++;
+    }
+    if (_addedAmz > 0) console.log(`[${VERSION}] V.153 relaxed-dedup: promoted ${_addedAmz} 3rd-party Amazon listings to retailer stack`);
+  }
+  // Clean up the stash so it doesn't leak into the response.
+  if (retailer_deep_links && retailer_deep_links.__v153_amazon_extras) {
+    delete retailer_deep_links.__v153_amazon_extras;
   }
 
   // V.145 — MEDIAN SANITY FLOOR. Panel-mandated outlier rejection.
@@ -2653,7 +2734,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v152c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v153:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -2681,6 +2762,11 @@ export default async function handler(req, res) {
   // V.120a — per-request debug trace. Panel-mandated to surface picker/lexical
   // failure reasons in the JSON response, bypassing Vercel-log truncation.
   const debugTrace = [];
+  // V.153 — per-REQUEST diag object. Replaces module-level
+  // _lastGoogleShoppingDiag to prevent cross-request state bleed in the
+  // Vercel serverless environment where instances handle multiple
+  // requests sequentially.
+  const _v153LocalDiag = {};
   debugTrace.push({step:'handler.parsed', canonical: String(parsed.canonical_search_string||'').slice(0,120), confidence: parsed.confidence, mpn: parsed.mpn || null});
   if (parsed.canonical_search_string && parsed.confidence !== 'low') {
     const canonicalKey = String(parsed.canonical_search_string).toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 60);
@@ -2689,7 +2775,7 @@ export default async function handler(req, res) {
       : Promise.resolve(null);
     const [amazonRes, retailersRes, altAmazonRes] = await Promise.all([
       fetchVerifiedAmazonPrice(parsed.canonical_search_string, debugTrace),
-      fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey),
+      fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey, _v153LocalDiag),
       fetchAlt,
     ]);
     verified_amazon_price = amazonRes;
@@ -3091,7 +3177,7 @@ export default async function handler(req, res) {
       cache: 'miss',
       retailer_own: _retailerOwn, // V.78 — null or { brand, url }
       serpapi_status: _lastSerpStatus, // V.96.1 - bubble for diagnosis
-      serp_diag: _lastGoogleShoppingDiag, // V.144 — examined/kept/priced counts for on-screen transparency
+      serp_diag: _v153LocalDiag, // V.153 — per-request diag, no module-level leak
     }
   };
   // V.97 — Don't cache failure responses when SerpAPI returned 429 (quota).
