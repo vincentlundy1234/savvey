@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v144';
+const VERSION             = 'normalize.js v3.4.5v145';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v144-1';
+const CACHE_PREFIX = 'sav-v145-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1486,7 +1486,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v144:${canonicalKey}`;
+  const ck = `savvey:retailers:v145:${canonicalKey}`;
   const cached = await kvGet(ck);
   if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
     return cached;
@@ -1539,10 +1539,21 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey) {
         _droppedNoUrl++;
         continue;
       }
-      // Only reject Google's own redirector / ad-tracking hostnames.
-      if (!host || host.includes('googleadservices') || host.includes('aclk')
-          || host.includes('doubleclick') || host === 'shopping.google.com'
-          || host.endsWith('.google.com') || host.endsWith('.googleusercontent.com')) {
+      // V.145 — Google is not a shop. Aggressively reject any Google-owned
+      // domain regardless of subdomain depth or TLD. Also rejects ad-tracking
+      // redirectors that occasionally surface as raw hosts.
+      if (!host
+          || host === 'google.com' || host === 'google.co.uk'
+          || host === 'google.de'  || host === 'google.fr'
+          || host.startsWith('google.')          // catches google.com, google.co.uk, google.anything
+          || host.endsWith('.google.com')
+          || host.endsWith('.google.co.uk')
+          || host.endsWith('.googleusercontent.com')
+          || host.includes('googleadservices')
+          || host.includes('googleshopping')
+          || host.includes('aclk')
+          || host.includes('doubleclick')
+          || host === 'shopping.google.com') {
         _droppedRedirector++;
         continue;
       }
@@ -1785,9 +1796,43 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     }
   }
 
-  // (3) If no Amazon, promote the cheapest known retailer to primary
+  // V.145 — MEDIAN SANITY FLOOR. Panel-mandated outlier rejection.
+  // The V.144 "force the absolute cheapest" rule paired with the filter-nuke
+  // surfaced a £15.99 PS5 accessory (skin / HDMI cable) as the best_price.
+  // Fix: compute the median of all priced listings (Amazon + retailers).
+  // Discard any listing where price < 0.5 * median. Then re-pick best_price
+  // and recompute avg_market from the surviving cluster. Only applies when
+  // we have 3+ priced listings (median is unstable for n<3).
+  let _v145Floor = null;
+  let _v145Median = null;
+  let _v145Outliers = 0;
+  if (allPrices.length >= 3) {
+    const sorted = allPrices.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    _v145Median = (sorted.length % 2 === 0)
+      ? (sorted[mid - 1] + sorted[mid]) / 2
+      : sorted[mid];
+    _v145Floor = _v145Median * 0.5;
+    // Mark outlier links; filter allPrices in-place.
+    for (const l of links) {
+      if (l.price_gbp != null && l.price_gbp < _v145Floor) {
+        l.is_outlier = true;
+        _v145Outliers++;
+      }
+    }
+    // Rebuild allPrices excluding outliers.
+    allPrices.length = 0;
+    for (const l of links) {
+      if (l.price_gbp != null && !l.is_outlier) allPrices.push(l.price_gbp);
+    }
+  }
+
+  // (3) If no Amazon, promote the cheapest NON-OUTLIER retailer to primary.
+  // V.145 — only consider links that survived the median floor.
   if (!links.find(l => l.is_primary) && links.length > 0) {
-    const priced = links.filter(l => l.price_gbp != null).sort((a, b) => a.price_gbp - b.price_gbp);
+    const priced = links
+      .filter(l => l.price_gbp != null && !l.is_outlier)
+      .sort((a, b) => a.price_gbp - b.price_gbp);
     if (priced[0]) priced[0].is_primary = true;
   }
 
@@ -1804,7 +1849,8 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     delivery_note: primary.delivery_note,
   } : null;
 
-  // (5) Avg market = arithmetic mean of all known prices
+  // (5) V.145 — avg_market computed over the FILTERED (post-median) cluster.
+  // Outliers excluded. The retailer_count reflects only surviving listings.
   let avg_market = null;
   if (allPrices.length >= 2) {
     const sum  = allPrices.reduce((a, b) => a + b, 0);
@@ -1814,7 +1860,9 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       value_str:       `£${mean.toFixed(2)}`,
       retailer_count:  allPrices.length,
       sub:             `across ${allPrices.length} UK retailers`,
-      method:          'mean_of_retailer_deep_links',
+      method:          'mean_post_median_floor',
+      median_gbp:      _v145Median != null ? Number(_v145Median.toFixed(2)) : null,
+      outliers_rejected: _v145Outliers,
     };
   }
 
@@ -2280,7 +2328,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v144:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v145:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
