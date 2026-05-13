@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v162';
+const VERSION             = 'normalize.js v3.4.5v163';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v162-1'; // V.162 — bumped to invalidate V.161 responses that still anchored Amazon to is_primary even when cheaper retailers existed (the Canon R6 £1,699-over-Jessops-£779 trust failure).
+const CACHE_PREFIX = 'sav-v163-1'; // V.163 — bumped so V.162 responses (carrying RP/R5 false-positive listings inside the Retailer Stack) get re-evaluated through the strict identity filter.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1651,6 +1651,87 @@ function _resolveSeller(item) {
   }
   return null;
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// V.163 — STRICT IDENTITY ENFORCEMENT
+// ═══════════════════════════════════════════════════════════════════════
+// Panel mandate: Google Shopping's fuzzy search surfaces near-misses for
+// keyword-stuffed merchant titles. "Canon EOS R6 Mark II" was matching
+// listings for the cheaper "Canon EOS RP" and "Canon EOS R5". Their prices
+// then corrupted the median and the wrong product won the Best Price Crown.
+//
+// Algorithm — extract canonical "must-match" tokens (model numbers,
+// generations, distinctive suffixes), then require ALL of them to be
+// present (word-bound, case-insensitive) in item.title before the item
+// can enter the pricing pipeline.
+//
+// Token classes that qualify as "must-match":
+//   - Any token containing a digit  (R6, AF180UK, V15, 4K, GR3X)
+//   - Roman numerals                 (II, III, IV, V, VI…)
+//   - Distinctive product markers    (Pro, Max, Plus, Mini, Lite, Ultra)
+// Plain English nouns ("Canon", "Camera", "Body") are NOT required to
+// match — those are common to every result and would over-prune.
+//
+// Roman-numeral matching is generation-aware: "II" matches "II", "Mark II",
+// "Mk II", "Mark 2", "Mk 2", and bare "2" when it's a word on its own.
+// "Mark II" alone matches "II", "Mark II", "Mk II", "Mark 2", "Mk 2".
+// ─────────────────────────────────────────────────────────────────────
+const _V163_ROMAN_TO_ARABIC = { II:2, III:3, IV:4, V:5, VI:6, VII:7, VIII:8, IX:9, X:10 };
+const _V163_NOISE_WORDS = new Set([
+  'mark','mk','ed','edition','version','model','series','gen','generation',
+  'and','the','with','for','of','in','on','at','by','to','from',
+]);
+
+function _v163ExtractCanonicalTokens(canonical) {
+  if (!canonical || typeof canonical !== 'string') return [];
+  const tokens = [];
+  const seen = new Set();
+  // Split on any non-alphanumeric (so "EOS R6 Mark II" → ['EOS','R6','Mark','II']).
+  const words = canonical.split(/[^A-Za-z0-9]+/).filter(Boolean);
+  for (const w of words) {
+    const wU = w.toUpperCase();
+    if (seen.has(wU)) continue;
+    if (_V163_NOISE_WORDS.has(w.toLowerCase())) continue;
+    const isRoman = /^(II|III|IV|V|VI|VII|VIII|IX|X)$/.test(wU);
+    const hasDigit = /\d/.test(w);
+    const isMarker = /^(Pro|Max|Plus|Mini|Lite|Ultra|Sport|Premium|Air|Slim|Light|Pure|Black|White|Silver)$/i.test(w);
+    if (hasDigit || isRoman || isMarker) {
+      seen.add(wU);
+      tokens.push({ raw: w, isRoman, hasDigit, isMarker });
+    }
+  }
+  return tokens;
+}
+
+function _v163ItemMatchesIdentity(title, requiredTokens) {
+  if (!requiredTokens || requiredTokens.length === 0) return { pass: true, missing: [] };
+  if (!title || typeof title !== 'string') return { pass: false, missing: ['(no_title)'] };
+  const T = title;
+  const missing = [];
+  for (const tok of requiredTokens) {
+    let matched = false;
+    if (tok.isRoman) {
+      const romanU = tok.raw.toUpperCase();
+      const arab = _V163_ROMAN_TO_ARABIC[romanU];
+      // Plain roman/arabic standalone word
+      const romanRx = new RegExp('\\b' + romanU + '\\b', 'i');
+      const arabRx  = arab ? new RegExp('\\b' + arab + '\\b') : null;
+      // Mark / Mk + roman / arabic
+      const markRx = new RegExp(
+        '(?:Mark|Mk)\\s*0*(?:' + romanU + (arab ? ('|' + arab) : '') + ')\\b',
+        'i'
+      );
+      matched = romanRx.test(T) || (arabRx && arabRx.test(T)) || markRx.test(T);
+    } else {
+      // Alphanumeric model token — word-bound, case-insensitive
+      const esc = tok.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const rx  = new RegExp('\\b' + esc + '\\b', 'i');
+      matched = rx.test(T);
+    }
+    if (!matched) missing.push(tok.raw);
+  }
+  return { pass: missing.length === 0, missing };
+}
 async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false) {
   // V.156 — diag-write on every bail path. Ensures _v153LocalDiag is
   // ALWAYS populated so the response carries telemetry even when SerpAPI
@@ -1670,7 +1751,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v162:${canonicalKey}`;
+  const ck = `savvey:retailers:v163:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1725,7 +1806,15 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     let _droppedRedirector = 0;
     let _droppedUsed = 0;       // V.161 — condition !== new
     let _squashedEbay = 0;      // V.161 — eBay dedup count
+    let _droppedIdentity = 0;   // V.163 — strict identity filter
     const _droppedSamples = [];
+    // V.163 — extract required identity tokens from the canonical ONCE.
+    // Every SerpAPI item must contain ALL of these in item.title or it
+    // gets dropped as a false positive (cheaper-cousin SKU leakage).
+    const _v163Required = _v163ExtractCanonicalTokens(query);
+    if (_v163Required.length > 0) {
+      try { console.log(`[${VERSION}] V.163 identity tokens for "${query.slice(0,60)}": ${_v163Required.map(t => t.raw).join(', ')}`); } catch (e) {}
+    }
     // V.161 — match strings used in SerpAPI's condition field. Real-world
     // sample: "Used", "Refurbished", "Pre-owned", "Open Box", "Renewed",
     // "Second hand". Match case-insensitively, allow whitespace variants.
@@ -1757,6 +1846,26 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           _droppedSamples.push('used:' + (_condField || _condStock || _condTitle).slice(0, 24));
         }
         continue;
+      }
+      // V.163 — STRICT IDENTITY ENFORCEMENT. Drop any SerpAPI item whose
+      // title doesn't contain EVERY canonical must-match token. This is
+      // the false-positive shield: "Canon EOS R6 Mark II" required tokens
+      // ["R6","II"] reject any title that's missing either — so "Canon
+      // EOS RP" (no R6, no II) and "Canon EOS R5" (no R6, no II) drop
+      // outright. Empty titles also drop — we can't verify identity
+      // without a title and false-positive risk is unacceptable.
+      if (_v163Required.length > 0) {
+        const _match = _v163ItemMatchesIdentity(item.title, _v163Required);
+        if (!_match.pass) {
+          _droppedIdentity++;
+          if (_droppedSamples.length < 8) {
+            _droppedSamples.push(
+              'identity:' + (item.title || '(no_title)').slice(0, 38) +
+              ' [missing: ' + _match.missing.join(',') + ']'
+            );
+          }
+          continue;
+        }
       }
       // Pick the best URL. product_link is the merchant PDP and is preferred;
       // item.link is the Google aclk redirector which still works but is uglier.
@@ -1959,8 +2068,10 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       dropped_redirector: _droppedRedirector,
       dropped_used:       _droppedUsed,     // V.161 — used/refurb filter
       squashed_ebay:      _squashedEbay,    // V.161 — eBay squasher dedup count
+      dropped_identity:   _droppedIdentity, // V.163 — strict identity filter
+      identity_tokens:    _v163Required.map(t => t.raw),  // V.163 — what we required
       samples:            _v146Samples,
-      dropped_samples:    _droppedSamples.slice(0, 5),
+      dropped_samples:    _droppedSamples.slice(0, 8),   // V.163 — wider window for identity drops
       raw_samples:        _rawSamples,
       cache_hit:          false,
     };
@@ -3101,7 +3212,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v162:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v163:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
