@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v160';
+const VERSION             = 'normalize.js v3.4.5v160a';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -767,6 +767,15 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
 
   const sys = `You are Savvey's result-text synthesizer for UK shoppers. Given a verified product (Pillars mode) or a low-confidence query with 3 tier alternatives (Tiers mode), return strictly formatted JSON.
 
+V.160 HARD RULE — PILLARS MODE (INPUT.alternatives absent):
+  - verdict_label MUST be one of: "good_buy" | "fair" | "wait" | "check_elsewhere".
+    null is FORBIDDEN here. If unsure, default to "fair".
+  - verdict_summary MUST be a non-empty string ≤28 words.
+    null is FORBIDDEN here. If amazon is absent, you MUST cite
+    INPUT.market_context numbers (retailer_count, low_gbp, median_gbp,
+    high_gbp, spread_pct) instead. Those numbers are GROUND TRUTH —
+    cite them, don't invent others.
+
 OUTPUT JSON ONLY, no preamble, no markdown fences:
 {
   "verdict_label": "good_buy" | "fair" | "wait" | "check_elsewhere" | null,
@@ -883,7 +892,7 @@ CRITICAL RULES (apply to ALL modes):
       headers: { 'x-api-key': ANTHROPIC_KEY, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 280,
+        max_tokens: 420,
         system: [{ type: 'text', text: sys, cache_control: { type: 'ephemeral' } }],
         messages: [{ role: 'user', content: userMsg }],
       }),
@@ -916,6 +925,13 @@ CRITICAL RULES (apply to ALL modes):
                     : null,
     };
     if (trace) trace.push({step:'mega_synthesis.done', verdict: out.verdict_label, has_summary: !!out.verdict_summary, has_eyebrow: !!out.category_eyebrow, has_tiers: !!out.tier_blurbs});
+    // V.160a — when the parsed output is structurally empty (Haiku gave
+    // null on both verdict_label and verdict_summary), surface the raw
+    // text snippet on the trace so the Panel can see exactly what Haiku
+    // produced. Truncated to 400 chars to keep response size sane.
+    if (trace && !out.verdict_label && !out.verdict_summary) {
+      trace.push({step:'mega_synthesis.empty_output_audit', raw_text_snippet: (text || '').slice(0, 400)});
+    }
     return out;
   } catch (e) {
     console.warn(`[${VERSION}] callHaikuMegaSynthesis error: ${e.message}`);
@@ -2727,7 +2743,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v160-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v160a-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -2736,6 +2752,7 @@ export default async function handler(req, res) {
           _meta: { ...(cached._meta || {}), cache: 'hit', latency_ms: Date.now() - t0, version: VERSION, leg: 'synthesize' }
         });
       }
+      const _v160Trace = [];
       const mega = await callHaikuMegaSynthesis({
         canonical:     canon,
         category:      sp.category || null,
@@ -2743,7 +2760,7 @@ export default async function handler(req, res) {
         amazon:        (mode === 'pillars') ? (sp.amazon || null) : null,
         retailers:     (mode === 'pillars') ? (sp.retailers || null) : null,
         alternatives:  (mode === 'tiers')   ? (sp.alternatives || null) : null,
-        trace:         [],
+        trace:         _v160Trace,
       });
       const pillMap = {
         good_buy:        { text: 'GOOD BUY',        cls: 'v136-verdict-good' },
@@ -2760,10 +2777,18 @@ export default async function handler(req, res) {
         verdict_pill_text:       pill ? pill.text : null,
         verdict_pill_color_class: pill ? pill.cls : null,
         tier_blurbs:             mega.tier_blurbs || null,
-        _meta: { version: VERSION, latency_ms: Date.now() - t0, cache: 'miss', leg: 'synthesize' }
+        _meta: { version: VERSION, latency_ms: Date.now() - t0, cache: 'miss', leg: 'synthesize',
+                 trace: _v160Trace }
       };
-      // 7-day cache.
-      kvSet(synthKey, result, 7 * 24 * 60 * 60).catch(() => {});
+      // V.160a — 7-day cache, BUT skip cache write when verdict is empty
+      // (don't poison the cache with a null result on a transient Haiku
+      // hiccup). The next call retries fresh.
+      const _v160Empty = !mega.verdict_label && !mega.verdict_summary;
+      if (!_v160Empty) {
+        kvSet(synthKey, result, 7 * 24 * 60 * 60).catch(() => {});
+      } else {
+        try { console.log(`[${VERSION}] synth empty for "${canon}" — skipping cache write (trace: ${JSON.stringify(_v160Trace).slice(0, 240)})`); } catch (e) {}
+      }
       return res.status(200).json(result);
     } catch (e) {
       console.warn(`[${VERSION}] synth_only error: ${e && e.message}`);
