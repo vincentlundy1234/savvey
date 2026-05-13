@@ -6496,6 +6496,91 @@ body.v177 .v177-ghost {
 body.v177 .v177-ghost.v177-ghost-fading { opacity: 0; }
 body.v177 .v177-ghost.v177-ghost-hidden  { opacity: 0; transition: opacity .15s ease-out; }
 /* End V.177 Living Invite block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.179 — ZERO DEFECT LOCKDOWN
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (Lock 2) Link integrity — retailer-stack anchors override every other
+   pointer rule. z-index 9999 lifts them above the V.172 swipe listener,
+   pointer-events: auto !important guarantees taps land. position:
+   relative makes z-index actually do something on flex children. */
+body.v179 .v136-cta-secondary,
+body.v179 .v136-cta-primary,
+body.v179 .v136-cta,
+body.v179 .v138-retailer-row,
+body.v179 a.v136-cta,
+body.v179 a.v136-cta-secondary,
+body.v179 a.v136-cta-primary,
+body.v179 a[href*="://"][class*="cta"],
+body.v179 a[href*="://"][class*="retailer"] {
+  position: relative !important;
+  z-index: 9999 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+}
+body.v179 #screen-result a[href],
+body.v179 #screen-confirm a[href] {
+  position: relative;
+  z-index: 9999;
+  pointer-events: auto !important;
+}
+
+/* (Lock 4) Layout integrity — strict 320px floor. The price column may
+   NEVER shrink; the name column may NEVER push it off. */
+body.v179 .v136-cta-secondary,
+body.v179 .v136-cta-primary,
+body.v179 .v136-cta {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  min-width: 0;
+  overflow: hidden;
+}
+body.v179 .v136-cta-body {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding-right: 10px !important;
+}
+body.v179 .v136-cta-name,
+body.v179 .v136-cta-sub {
+  display: block !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  word-break: keep-all;
+}
+body.v179 .v136-cta-price {
+  flex: 0 0 auto !important;
+  flex-shrink: 0 !important;          /* MUST not shrink — Founder mandate */
+  min-width: 70px !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  margin-left: 12px !important;
+  overflow: visible !important;
+}
+@media (max-width: 360px) {
+  body.v179 .v136-cta-price { min-width: 64px !important; }
+  body.v179 .v136-cta-mark   { width: 36px !important; height: 36px !important; flex: 0 0 36px !important; }
+  body.v179 .v136-cta-secondary,
+  body.v179 .v136-cta-primary { padding: 12px 14px !important; gap: 10px !important; }
+}
+
+/* No horizontal overflow at any width — the page is the page, no scroll
+   right. */
+body.v179 #screen-result,
+body.v179 #screen-confirm,
+body.v179 #screen-home,
+body.v179 #screen-loading {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* End V.179 Zero Defect Lockdown block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -13801,6 +13886,87 @@ async function _v140KickoffSynthesize(idPayload) {
 
   window._v177 = { start: start, stop: stop, resume: resume };
   try { console.log('[V.177] Living Invite ghost cycler initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.179 — ZERO DEFECT LOCKDOWN · JS
+   Lock 2: capture-phase stopPropagation on retailer-row clicks so the
+           V.172 swipe-gesture listener cannot swallow them.
+   Lock 3: hard reload on SW version skew (iOS PWA cache nuke).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v179Init() {
+  try { document.body.classList.add('v179'); } catch (e) {}
+
+  // ── Lock 2 · Retailer-link click hardener ─────────────────────────────
+  // Capture-phase listener at document level — runs BEFORE any swipe
+  // listener attached to #screen-camera or any per-row haptic handler.
+  // For taps on retailer anchors, it calls stopPropagation() so the
+  // browser's default navigation runs unimpeded.
+  document.addEventListener('click', function (e) {
+    try {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var anchor = t.closest('a[href]');
+      if (!anchor) return;
+      var inStack = anchor.closest('.v136-cta, .v136-cta-secondary, .v136-cta-primary, .v138-retailer-row, #screen-result, #screen-confirm');
+      if (!inStack) return;
+      // Stop swipe listeners from swallowing it. Do NOT preventDefault —
+      // we WANT the navigation to happen.
+      e.stopPropagation();
+    } catch (err) {}
+  }, true /* capture */);
+  // Same trick for the touchend event — some iOS Safari builds route
+  // anchor activation through synthetic touchend BEFORE click fires.
+  document.addEventListener('touchend', function (e) {
+    try {
+      var t = e.target;
+      if (!t || !t.closest) return;
+      var anchor = t.closest('a[href]');
+      if (!anchor) return;
+      var inStack = anchor.closest('.v136-cta, .v136-cta-secondary, .v136-cta-primary, .v138-retailer-row, #screen-result, #screen-confirm');
+      if (!inStack) return;
+      e.stopPropagation();
+    } catch (err) {}
+  }, true);
+
+  // ── Lock 3 · iOS PWA cache nuke ───────────────────────────────────────
+  // The SW.js install + activate paths already call skipWaiting()
+  // + clients.claim() (V.124). What's missing is the CLIENT-side
+  // version-skew check that hard-reloads the page when an updated SW
+  // takes control mid-session. The SW posts SW_UPDATED with the new
+  // STATIC_VER on activate (V.124). Listen for it and force-reload.
+  (function v179WireUpdatedToast() {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.addEventListener('message', function (e) {
+      if (e.data && e.data.type === 'SW_UPDATED') {
+        var newVer = String(e.data.version || '');
+        var seenKey = 'savvey_v179_sw_seen';
+        var last = null;
+        try { last = sessionStorage.getItem(seenKey); } catch (err) {}
+        // First SW_UPDATED in this session — show a soft toast if a
+        // toast helper exists, then hard-reload after a brief delay.
+        if (last !== newVer) {
+          try { sessionStorage.setItem(seenKey, newVer); } catch (err) {}
+          try { console.log('[V.179] SW updated to', newVer, '— hard reload scheduled.'); } catch (err) {}
+          setTimeout(function () {
+            try { window.location.reload(true); } catch (err) { window.location.reload(); }
+          }, 600);
+        }
+      }
+    });
+    // Also: a brand-new controller means a new SW took over — reload.
+    var hadController = !!navigator.serviceWorker.controller;
+    navigator.serviceWorker.addEventListener('controllerchange', function () {
+      if (hadController) {
+        try { console.log('[V.179] SW controller changed — hard reload.'); } catch (err) {}
+        setTimeout(function () {
+          try { window.location.reload(true); } catch (err) { window.location.reload(); }
+        }, 400);
+      }
+    });
+  })();
+
+  try { console.log('[V.179] Zero Defect Lockdown initialised.'); } catch (e) {}
 })();
 </script>
 </body>

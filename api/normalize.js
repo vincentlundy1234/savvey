@@ -866,6 +866,29 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
 
   const sys = `You are Savvey's result-text synthesizer for UK shoppers. Given a verified product (Pillars mode) or a low-confidence query with 3 tier alternatives (Tiers mode), return strictly formatted JSON.
 
+V.179 CRITICAL — STRICT DATA BINDING (overrides every other rule):
+
+CRITICAL: You are provided a list of exact prices and retailers. You MUST
+NOT invent, guess, or mention any price, retailer, or saving amount that
+cannot be mathematically derived from the provided list. If a retailer is
+not in the list, do not mention them.
+
+Concretely this means:
+  - Every £ figure you write must equal a price from INPUT.amazon.price,
+    INPUT.retailers[*].price, or INPUT.market_context.low_gbp / median_gbp
+    / high_gbp. No other £ figures allowed.
+  - Every retailer name you mention must equal INPUT.amazon (call it
+    "Amazon") or appear in INPUT.retailers[*].name. No other retailer
+    names allowed.
+  - Saving amounts must be the literal arithmetic difference between
+    two prices both present in INPUT. "Saving £30" requires you to be
+    able to point at the two prices (£X and £X+30) that produced it.
+  - If you can't anchor a sentence in INPUT, REWRITE THE SENTENCE.
+
+This rule overrides the V.173 "name 1-2 retailers" guidance — if the
+list of retailers you were given is empty or sparse, name fewer, not
+more. The verdict_summary may be short. It may not lie.
+
 V.173 CONSUMER VOICE — non-negotiable, applies to every verdict_summary
 and tier_blurb you write:
 
@@ -3864,6 +3887,20 @@ export default async function handler(req, res) {
       console.log(`[${VERSION}] slam-dunk skip mega-synthesis for "${parsed.canonical_search_string}"`);
     } else {
       try {
+        // V.179 — STRICT DATA BINDING. The Haiku synth must receive ONLY
+        // the retailers and prices that survive the full filter cascade
+        // (V.145 median floor → V.159 outlier delete → V.169 reality anchor).
+        // Building from raw retailer_deep_links was leaking pre-filter
+        // prices into the prompt, which is how the AI hallucinated "EE
+        // Store £349" when the UI showed no such row. Source the AI's
+        // retailers list from _v138.links — that IS the final UI state.
+        const _v179FinalLinks = (_v138 && Array.isArray(_v138.links)) ? _v138.links : [];
+        const _v179RetailersForAI = _v179FinalLinks
+          .filter(l => l && l.price_gbp != null && !l.is_outlier)
+          .map(l => ({
+            name:  l.retailer || l.retailer_key || 'Retailer',
+            price: l.price_gbp,
+          }));
         const ai = await callHaikuMegaSynthesis({
           canonical:     parsed.canonical_search_string,
           category:      parsed.category,
@@ -3876,9 +3913,7 @@ export default async function handler(req, res) {
             reviews:        verified_amazon_price.reviews,
             title:          verified_amazon_price.title,
           },
-          retailers: (retailer_deep_links && typeof retailer_deep_links === 'object')
-            ? Object.keys(retailer_deep_links).map(k => ({ name: k, price: (retailer_deep_links[k] && retailer_deep_links[k].price) || null }))
-            : null,
+          retailers: _v179RetailersForAI.length > 0 ? _v179RetailersForAI : null,
           alternatives: null, // Pillars mode
           trace: debugTrace,
         });
@@ -4204,11 +4239,24 @@ export default async function handler(req, res) {
         title:          verified_amazon_price.title,
         used_price_str: verified_amazon_price.used_price_str,
       } : null,
-      retailers: (retailer_deep_links && typeof retailer_deep_links === 'object')
-        ? Object.keys(retailer_deep_links).map(k => ({
-            name:  k,
-            price: (retailer_deep_links[k] && retailer_deep_links[k].price) || null,
-          })) : null,
+      // V.179 — STRICT DATA BINDING (split-routing path). The
+      // synthesis_payload that /api/synthesize replays MUST contain
+      // only the retailers + prices that survived V.145/V.159/V.169.
+      // Source from _v138.links (the final UI list), not from the raw
+      // retailer_deep_links bucket. This is the load-bearing fix for
+      // the "AI mentions £349 EE Store but no such row in UI" defect.
+      retailers: (function () {
+        var finalLinks = (_v138 && Array.isArray(_v138.links)) ? _v138.links : [];
+        var arr = finalLinks
+          .filter(function (l) { return l && l.price_gbp != null && !l.is_outlier; })
+          .map(function (l) {
+            return {
+              name:  l.retailer || l.retailer_key || 'Retailer',
+              price: l.price_gbp,
+            };
+          });
+        return arr.length > 0 ? arr : null;
+      })(),
       alternatives: (Array.isArray(parsed.alternatives_array) && Array.isArray(parsed.alternatives_meta))
         ? parsed.alternatives_array.slice(0, 4).map((name, i) => {
             const m = parsed.alternatives_meta[i] || {};
