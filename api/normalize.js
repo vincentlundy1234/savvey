@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v160b';
+const VERSION             = 'normalize.js v3.4.5v160c';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -723,31 +723,39 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
     };
   }
   if (retailers && Array.isArray(retailers) && retailers.length > 0) {
-    // V.160b — sanitize retailer names before Haiku sees them. The V.159c
-    // host-rederivation appends '.via-google' / '.redirect' to internal
-    // host keys so frontend dedup works; those suffixes are meaningless
-    // to the LLM and earlier caused Haiku to hallucinate broken records.
-    // Also stitch on a friendlier merchant label by stripping the suffix
-    // and capitalising the first letter.
+    // V.160b — sanitize retailer names before Haiku sees them.
     const _v160NormalizeName = (raw) => {
       if (!raw) return '';
       let n = String(raw).slice(0, 60);
       n = n.replace(/\.(?:via-google|redirect)$/i, '');
-      // Strip pseudo-hostname trailing tokens like 'couk' / 'com' that
-      // bled in from the host-keying step (e.g. 'alpinetrekcouk').
       n = n.replace(/(couk|com|net|org)$/i, '').trim();
       return n.charAt(0).toUpperCase() + n.slice(1);
     };
+    // V.160c — robust price coercion. synthesis_payload.retailers carries
+    // `price` as a £-prefixed string ("£13.46") because that's what the
+    // /api/identify response wrapper formats for display. Number() on
+    // those returns NaN, which was nulling every retailer price the LLM
+    // saw and breaking the market_context computation. Now parse £/$/€
+    // prefixes and comma thousands separators.
+    const _v160ParsePrice = (raw) => {
+      if (raw == null) return null;
+      if (typeof raw === 'number' && raw > 0 && isFinite(raw)) return raw;
+      if (typeof raw !== 'string') return null;
+      const cleaned = raw.replace(/[£$€,\s]/g, '').match(/[0-9]+(?:\.[0-9]+)?/);
+      if (!cleaned) return null;
+      const v = parseFloat(cleaned[0]);
+      return (isFinite(v) && v > 0) ? v : null;
+    };
     input.retailers = retailers.slice(0, 8).map(r => ({
       name:  _v160NormalizeName(r.name),
-      price: (r.price != null && Number(r.price) > 0) ? Number(r.price) : null,
+      price: _v160ParsePrice(r.price),
     }));
     // V.160 — compute market-context stats from the FULL retailers array
     // (NOT the .slice(0,8) view). Haiku quotes `retailer_count` in
     // verdict_summary, and we need that to match the count the frontend
     // shows in Pillar 3 (avg_market.retailer_count).
     const _v160Prices = retailers
-      .map(r => (r && r.price != null && Number(r.price) > 0) ? Number(r.price) : null)
+      .map(r => _v160ParsePrice(r && r.price))
       .filter(p => p != null)
       .sort((a, b) => a - b);
     if (_v160Prices.length >= 2) {
@@ -2764,7 +2772,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v160b-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v160c-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
