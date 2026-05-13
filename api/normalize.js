@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v154b';
+const VERSION             = 'normalize.js v3.4.5v155';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v154b-1';
+const CACHE_PREFIX = 'sav-v155-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1566,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v154b:${canonicalKey}`;
+  const ck = `savvey:retailers:v155:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2226,7 +2226,9 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
   } : null;
 
   // (5) V.145 — avg_market computed over the FILTERED (post-median) cluster.
-  // Outliers excluded. The retailer_count reflects only surviving listings.
+  // V.155 — also expose `.n` alias so the frontend's existing read of
+  // `pric.avg_market.n` works (was always returning 0 because backend
+  // only emitted .retailer_count). Both fields point to the same count.
   let avg_market = null;
   if (allPrices.length >= 2) {
     const sum  = allPrices.reduce((a, b) => a + b, 0);
@@ -2235,6 +2237,7 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       value_gbp:       Number(mean.toFixed(2)),
       value_str:       `£${mean.toFixed(2)}`,
       retailer_count:  allPrices.length,
+      n:               allPrices.length, // V.155 — alias for frontend back-compat
       sub:             `across ${allPrices.length} UK retailers`,
       method:          'mean_post_median_floor',
       median_gbp:      _v145Median != null ? Number(_v145Median.toFixed(2)) : null,
@@ -2250,6 +2253,28 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     const spread_pct = (low > 0 && high > low) ? Number(((high - low) / low * 100).toFixed(1)) : 0;
     price_band = { low: Number(low.toFixed(2)), high: Number(high.toFixed(2)), spread_pct };
   }
+
+  // V.155 — sort the links array so the frontend's index-0 (.v136-cta-primary
+  // green button) always matches the BEST PRICE pillar:
+  //   1. The is_primary entry first (verified Amazon OR promoted-cheapest)
+  //   2. Non-outlier links by price ascending
+  //   3. Outlier links last (still in array for transparency)
+  // This guarantees links[0].url === best_price.url. Previous behaviour was
+  // insertion-order: Amazon first if verified, then google_shopping order.
+  // For products without verified Amazon (e.g. Nest Cam), the cheapest
+  // surviving retailer is promoted to is_primary, but the array stayed in
+  // insertion order — so the green button rendered the wrong retailer.
+  links.sort((a, b) => {
+    const aPrim = a && a.is_primary ? 0 : 1;
+    const bPrim = b && b.is_primary ? 0 : 1;
+    if (aPrim !== bPrim) return aPrim - bPrim;
+    const aOut = a && a.is_outlier ? 1 : 0;
+    const bOut = b && b.is_outlier ? 1 : 0;
+    if (aOut !== bOut) return aOut - bOut;
+    const aP = (a && a.price_gbp != null) ? Number(a.price_gbp) : Number.POSITIVE_INFINITY;
+    const bP = (b && b.price_gbp != null) ? Number(b.price_gbp) : Number.POSITIVE_INFINITY;
+    return aP - bP;
+  });
 
   return { pricing: { best_price, avg_market, price_band }, links };
 }
@@ -2771,7 +2796,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v154b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v155:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
