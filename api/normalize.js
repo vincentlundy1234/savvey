@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v173';
+const VERSION             = 'normalize.js v3.4.5v175';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v173-1'; // V.173 — bumped: consumer-voice prompt rewrite + bare-brand disambig routing change.
+const CACHE_PREFIX = 'sav-v175-1'; // V.175 — bumped: raw-input bare-brand check + medium-confidence disambig gate.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1945,7 +1945,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v173:${canonicalKey}`;
+  const ck = `savvey:retailers:v175:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -3105,6 +3105,8 @@ function _v138BuildResponse({
   mega,
   inputType,
   serpapi_status,
+  rawInputText, // V.175 — raw user text so the bare-brand gate inspects
+                //         the ORIGINAL query, not Haiku's resolved canonical
 }) {
   const { pricing, links } = _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links });
 
@@ -3135,7 +3137,10 @@ function _v138BuildResponse({
   // alternatives_array has ≥2 entries, ALWAYS route to disambig — even
   // if Haiku's confidence came back high.
   function _v173IsBareBrandOrFamily(rawText, canonical) {
-    var probe = String(rawText || canonical || '').trim().toLowerCase();
+    // V.175 — when both passed, prefer rawText (it's the user's actual
+    // typed query, untouched by Haiku's canonical resolution). When only
+    // canonical is passed, fall back to it.
+    var probe = String((rawText && rawText.trim()) || canonical || '').trim().toLowerCase();
     if (!probe) return false;
     // Single token (no spaces) of ≤ 8 chars almost always means brand/family.
     if (!/\s/.test(probe) && probe.length <= 8) return true;
@@ -3147,9 +3152,18 @@ function _v138BuildResponse({
     }
     return false;
   }
-  // We don't have rawText in scope here; the canonical is the cleanest proxy.
-  var _v173BareBrand = _v173IsBareBrandOrFamily(null, parsed && parsed.canonical_search_string);
-  var shouldDisambig = (familyApplied || isLow || brandOnly || !hasPrice || _v173BareBrand) && hasAlts;
+  // V.175 — check BOTH the raw user input AND the resolved canonical.
+  // If the user typed "PS5", Haiku resolves to "Sony PlayStation 5 Slim
+  // Disc" with high confidence — the canonical no longer matches the
+  // bare-brand regex, but the raw input does. Checking both closes the
+  // gap.
+  var _v173BareBrand = _v173IsBareBrandOrFamily(rawInputText, parsed && parsed.canonical_search_string)
+                    || _v173IsBareBrandOrFamily(rawInputText, null);
+  // V.175 — when alternatives_array has ≥2 entries AND confidence is
+  // 'medium' (not just 'low'), the AI is uncertain enough that the user
+  // should see the choice screen. Was previously only firing on 'low'.
+  var isMedium = parsed && parsed.confidence === 'medium';
+  var shouldDisambig = (familyApplied || isLow || isMedium || brandOnly || !hasPrice || _v173BareBrand) && hasAlts;
 
   // V.150 — when the Amazon picker fails but google_shopping returned 2+
   // priced retailers, promote to 'matched' instead of falling through to
@@ -3754,7 +3768,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v173:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v175:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -4133,6 +4147,12 @@ export default async function handler(req, res) {
     mega: _megaForBuild,
     inputType,
     serpapi_status: _lastSerpStatus,
+    // V.175 — pass the raw user input so the bare-brand disambig gate
+    // can inspect the ORIGINAL query ("PS5") rather than Haiku's resolved
+    // canonical ("Sony PlayStation 5 Slim Disc").
+    rawInputText: (typeof body.text === 'string') ? body.text
+                : (typeof body.url === 'string') ? body.url
+                : null,
   });
 
   const responseBody = {

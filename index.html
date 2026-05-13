@@ -6242,6 +6242,228 @@ body.v174 .v136-cta-secondary.v174-revealed {
 }
 
 /* End V.174 Spatial Polish block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.176 — OBSESSIVE SPATIAL DESIGN
+   Bottom-weight rule. Bezier physics. Frosted-glass material.
+   Tight typography. Silent UI (borders removed, soft shadows).
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --ease-spatial: cubic-bezier(0.4, 0, 0.2, 1);
+  --shadow-silent: 0 10px 40px rgba(0, 0, 0, 0.04);
+  --shadow-silent-lift: 0 14px 50px rgba(0, 0, 0, 0.06);
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  --glass-blur: blur(28px) saturate(180%);
+  --glass-dark-bg: rgba(20, 22, 24, 0.55);
+  --glass-dark-blur: blur(20px) saturate(180%);
+}
+
+/* (1) BOTTOM-WEIGHT — anchor primary touch targets to bottom 25% on Home */
+body.v176 #screen-home {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  min-height: 100vh; /* fallback */
+}
+body.v176 .v172-home-header {
+  padding-top: calc(env(safe-area-inset-top, 0px) + 22px);
+  padding-bottom: 8px;
+  flex: 0 0 auto;
+}
+body.v176 .v171-home {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end; /* push tagline + heroes to the bottom */
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+}
+body.v176 .v171-tagline {
+  padding: 0 22px 8px;
+  font-size: 30px;
+  letter-spacing: -0.025em; /* tightened tracking per V.176 typo rule */
+  line-height: 1.05;
+}
+body.v176 .v171-subtagline {
+  padding: 0 22px 18px;
+  font-size: 15px;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+}
+body.v176 .v171-twin-heroes {
+  padding: 6px 18px 8px;
+}
+
+/* (2) CONTINUITY — replace every transition timing with the spatial ease */
+body.v176 .v171-hero,
+body.v176 .v171-cam-close,
+body.v176 .v172-type-go,
+body.v176 .v172-type-sheet,
+body.v176 #v171-show-more-prices,
+body.v176 #v154-escape-btn,
+body.v176 #v166-disambig-scan-btn,
+body.v176 .v136-cta,
+body.v176 .v136-cta-primary,
+body.v176 .v136-cta-secondary,
+body.v176 .v138-retailer-row,
+body.v176 .v5-err-suggestion,
+body.v176 .v174-recent-chip,
+body.v176 .v174-best-match,
+body.v176 #screen-camera,
+body.v176 #v138-verdict-pill,
+body.v176 #v171-savveys-verdict {
+  transition: transform .28s var(--ease-spatial),
+              opacity .22s var(--ease-spatial),
+              box-shadow .28s var(--ease-spatial),
+              background-color .22s var(--ease-spatial),
+              max-height .32s var(--ease-spatial),
+              padding .32s var(--ease-spatial) !important;
+}
+body.v176 #screen-camera.active,
+body.v176 #screen-camera:not(.active) {
+  transition: transform .38s var(--ease-spatial), opacity .25s var(--ease-spatial) !important;
+}
+body.v176 .v174-progress-fill {
+  transition: width 5s cubic-bezier(0.2, 0.6, 0.2, 1) !important;
+}
+body.v176 .v174-progress-fill.v174-progress-done {
+  transition: width .30s var(--ease-spatial), opacity .25s var(--ease-spatial) .15s !important;
+}
+
+/* (3) MATERIAL — Frosted glass on Savvey Verdict card + camera controls */
+body.v176 #v171-savveys-verdict {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 0;
+  box-shadow: var(--shadow-silent-lift);
+}
+body.v176 .v171-cam-close {
+  background: var(--glass-dark-bg) !important;
+  backdrop-filter: var(--glass-dark-blur) !important;
+  -webkit-backdrop-filter: var(--glass-dark-blur) !important;
+  border: 0 !important;
+}
+body.v176 .v174-drag-pill {
+  backdrop-filter: blur(8px) saturate(160%);
+  -webkit-backdrop-filter: blur(8px) saturate(160%);
+}
+
+/* (4) TYPOGRAPHY — system-ui only, tighter titles, generous line-height */
+body.v176,
+body.v176 *:not(input):not(textarea) {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "SF Pro Display", system-ui, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif !important;
+}
+body.v176 h1,
+body.v176 h2,
+body.v176 h3,
+body.v176 .v171-tagline,
+body.v176 .v171-hero-title,
+body.v176 .v138-title,
+body.v176 #v138-title,
+body.v176 .v136-title {
+  letter-spacing: -0.025em !important;
+}
+body.v176 #v171-savveys-verdict .v171-vh-summary {
+  font-size: 16px !important;
+  line-height: 1.6 !important;            /* generous AI-summary line-height */
+  letter-spacing: -0.005em !important;
+  color: var(--ink, #14201a);
+  font-weight: 500;
+}
+body.v176 #v171-savveys-verdict .v171-vh-title {
+  letter-spacing: 0.06em !important;
+  font-weight: 700;
+}
+body.v176 .v136-cta-name {
+  letter-spacing: -0.015em !important;
+}
+body.v176 .v136-cta-price {
+  letter-spacing: -0.02em !important;
+  font-weight: 800 !important;
+}
+
+/* (5) SILENT UI — kill 1px borders, soft shadows define boundaries */
+body.v176 .v136-cta-secondary,
+body.v176 .v136-cta-primary,
+body.v176 .v136-cta,
+body.v176 .v174-recent-chip,
+body.v176 .v172-type-bar,
+body.v176 .v171-hero,
+body.v176 .v136-similar-card,
+body.v176 .v136-tier-card,
+body.v176 .home-card,
+body.v176 .door-tile {
+  border: 0 !important;
+}
+body.v176 .v136-cta-secondary,
+body.v176 .v136-cta,
+body.v176 .v174-recent-chip {
+  box-shadow: var(--shadow-silent) !important;
+}
+body.v176 .v172-type-bar {
+  box-shadow: var(--shadow-silent-lift) !important;
+}
+body.v176 .v171-hero,
+body.v176 .v136-similar-card,
+body.v176 .v136-tier-card {
+  box-shadow: 0 12px 50px rgba(0, 0, 0, 0.06),
+              0 4px 12px rgba(0, 0, 0, 0.03) !important;
+}
+body.v176 .v171-hero.v171-hero-snap {
+  box-shadow: 0 14px 44px -8px rgba(42, 107, 34, 0.32),
+              0 8px 16px -4px rgba(42, 107, 34, 0.22) !important;
+}
+
+/* V.176 :active feedback — same physics, slightly tighter */
+body.v176 .v171-hero:active,
+body.v176 .v172-type-go:active,
+body.v176 .v171-cam-close:active,
+body.v176 #v171-show-more-prices:active,
+body.v176 #v154-escape-btn:active,
+body.v176 #v166-disambig-scan-btn:active,
+body.v176 .v136-cta:active,
+body.v176 .v136-cta-primary:active,
+body.v176 .v136-cta-secondary:active,
+body.v176 .v138-retailer-row:active,
+body.v176 .v5-err-suggestion:active,
+body.v176 .v174-recent-chip:active {
+  transform: scale(0.965);
+  opacity: 0.92;
+}
+
+/* V.175 / V.176 — Retailer row hardening: price never shrinks, name truncates
+   gracefully on iPhone SE / Mini width (375px). Belt-and-braces on V.173. */
+body.v176 .v136-cta-secondary,
+body.v176 .v136-cta-primary,
+body.v176 .v136-cta {
+  flex-wrap: nowrap !important;
+}
+body.v176 .v136-cta-body {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  padding-right: 10px !important;
+}
+body.v176 .v136-cta-name,
+body.v176 .v136-cta-sub {
+  display: block !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+body.v176 .v136-cta-price {
+  flex: 0 0 auto !important;
+  min-width: 68px !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  margin-left: 12px !important;
+}
+
+/* End V.176 Obsessive Spatial Design block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -13424,6 +13646,15 @@ async function _v140KickoffSynthesize(idPayload) {
     wireExpander: v174WireExpander,
   };
   try { console.log('[V.174] 2026 Spatial Polish initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.176 — Obsessive Spatial Design · body marker only
+   All visual logic is pure CSS scoped under body.v176. JS toggle here.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v176Init() {
+  try { document.body.classList.add('v176'); } catch (e) {}
+  try { console.log('[V.176] Obsessive Spatial Design initialised.'); } catch (e) {}
 })();
 </script>
 </body>
