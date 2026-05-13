@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v159c';
+const VERSION             = 'normalize.js v3.4.5v160';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v159c-1'; // V.159c — bumped to invalidate the V.159b cache (the /search ban was over-broad; Google Shopping product URLs use the /search path with ibp+prds query params and are legitimate product listings)
+const CACHE_PREFIX = 'sav-v160-1'; // V.160 — bumped so identify-side cache cuts over alongside the synth cache (sav-v140-syn-1 → sav-v160-syn-1). Without bumping this, V.159c full responses (carrying their own null verdict block) keep getting served from the response cache and Pillar 4 stays empty even though Haiku is now happy.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -723,10 +723,33 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
     };
   }
   if (retailers && Array.isArray(retailers) && retailers.length > 0) {
-    input.retailers = retailers.slice(0, 5).map(r => ({
+    input.retailers = retailers.slice(0, 8).map(r => ({
       name: String(r.name || '').slice(0, 60),
       price: (r.price != null && Number(r.price) > 0) ? Number(r.price) : null,
     }));
+    // V.160 — compute market-context stats from the retailers array so the
+    // prompt has a deterministic anchor for the amazon-null long-tail path.
+    // Haiku is told to LEAN on these numbers (not invent prices), which lets
+    // verdict_summary stay honest without any Amazon rating/reviews signal.
+    const _v160Prices = retailers
+      .map(r => (r && r.price != null && Number(r.price) > 0) ? Number(r.price) : null)
+      .filter(p => p != null)
+      .sort((a, b) => a - b);
+    if (_v160Prices.length >= 2) {
+      const lo = _v160Prices[0];
+      const hi = _v160Prices[_v160Prices.length - 1];
+      const mid = Math.floor(_v160Prices.length / 2);
+      const median = (_v160Prices.length % 2 === 0)
+        ? (_v160Prices[mid - 1] + _v160Prices[mid]) / 2
+        : _v160Prices[mid];
+      input.market_context = {
+        retailer_count: _v160Prices.length,
+        low_gbp:        Number(lo.toFixed(2)),
+        median_gbp:     Number(median.toFixed(2)),
+        high_gbp:       Number(hi.toFixed(2)),
+        spread_pct:     (lo > 0) ? Number((((hi - lo) / lo) * 100).toFixed(0)) : 0,
+      };
+    }
   }
   if (alternatives && Array.isArray(alternatives) && alternatives.length >= 2 && alternatives.length <= 4) {
     // V.139 — accept 2-4 alternatives. The frontend tier render either
@@ -752,41 +775,62 @@ OUTPUT JSON ONLY, no preamble, no markdown fences:
   "tier_blurbs": ["basic blurb", "top_rated blurb", "premium blurb"] | null
 }
 
-PILLARS MODE (INPUT.amazon present, INPUT.alternatives absent):
+PILLARS MODE (INPUT.alternatives ABSENT — fires when amazon OR retailers present):
   verdict_label semantics:
-    good_buy        = verified price at/below typical UK floor + decent rating
-    fair            = within typical UK retail band
+    good_buy        = verified price at/below typical UK floor + decent rating,
+                      OR retailer-only path where spread_pct is wide (>40%) AND
+                      the user has a clear "best price" choice well below median.
+    fair            = within typical UK retail band, OR retailer-only path with
+                      tight spread (<25%) — competitive market, no obvious win.
     wait            = price normal but a known UK sale event imminent
-                      (Prime Day, Black Friday, end-of-product-cycle)
+                      (Prime Day, Black Friday, end-of-product-cycle).
     check_elsewhere = implausibly LOW for product family (likely accessory
                       / wrong-SKU surfaced as top organic) OR implausibly
                       HIGH (3P markup) OR title doesn't match canonical.
                       Bias toward check_elsewhere when in doubt.
 
   verdict_summary: ALWAYS produce non-null. 1-2 sentences, max 28 words.
-    Two modes depending on what INPUT.amazon carries:
+    Three modes depending on what INPUT carries:
 
-    (a) When rating + reviews present: cite a concrete observation
-        reviewers actually make. Honest + brutal voice. Examples:
+    (a) When INPUT.amazon.rating + reviews present: cite a concrete
+        observation reviewers actually make. Honest + brutal voice. Examples:
         "Highly rated for cooking speed and dual-zone capacity. Most
          reviewers mention the non-stick basket is fiddly to clean —
          soak after every cook."
         "Best-in-class noise cancellation. Comfort drops past 4-hour
          sessions per long-haul flight reviewers."
 
-    (b) When rating/reviews missing or sparse (new launches, etc.):
-        write 1 sentence of honest price-context — model lifecycle,
-        launch RRP, typical UK price band, sale-window expectation.
-        Examples:
+    (b) When INPUT.amazon present but rating/reviews missing or sparse
+        (new launches, etc.): write 1 sentence of honest price-context —
+        model lifecycle, launch RRP, typical UK price band, sale-window
+        expectation. Examples:
         "Launch RRP £699 for the flagship console. Stock fluid in the
          first 6 months; expect occasional Currys/Game discounts by Q3."
         "Top-end iPhone tier — Apple holds price firmly until the
          September refresh."
-        "Mid-range air fryer pricing. Black Friday usually trims 15-20%."
+
+    (c) V.160 — When INPUT.amazon is ABSENT and INPUT.retailers is present
+        (long-tail / specialist gear / niche imports — climbing hardware,
+        artisan ceramics, professional tools), anchor the summary on the
+        MARKET CONTEXT signals already computed in INPUT.market_context.
+        Cite the retailer count + price band; describe whether the market
+        is competitive (tight spread) or fragmented (wide spread); finish
+        with a one-clause shopping note for the category. NEVER fabricate
+        review counts or stars on this path — none exist in INPUT.
+        Use ONLY the numbers in INPUT.market_context.
+        Examples:
+        "Found at 17 UK retailers between £36 and £142, a 295% spread —
+         specialist climbing gear pricing is fragmented, the £36 floor
+         looks unusually strong."
+        "Stocked across 22 outdoor retailers; £10–£40 spread is typical
+         for locking carabiner range. Confirm gate type before checkout."
+        "Eight UK stockists, prices clustered £18–£22 — competitive
+         market, marginal savings beyond the cheapest listing."
 
     NEVER invent specific reviewer quotes, rating numbers, or review
-    counts that aren't in INPUT. But ALWAYS write something honest.
-    Returning null is V.150-era behaviour, no longer permitted.
+    counts that aren't in INPUT. But ALWAYS write something honest based
+    on what IS in INPUT. Returning null is V.150-era behaviour, no longer
+    permitted on any path.
 
   category_eyebrow: derive from canonical + obvious specs in the name.
     e.g. "Ninja Foodi Dual Zone AF300UK" → "Air Fryer · 7.6L · 2400W"
@@ -1581,7 +1625,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v159c:${canonicalKey}`;
+  const ck = `savvey:retailers:v160:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2683,7 +2727,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v140-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v160-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -2947,7 +2991,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v159c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v160:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
