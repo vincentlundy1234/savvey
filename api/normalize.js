@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v161';
+const VERSION             = 'normalize.js v3.4.5v162';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v161-1'; // V.161 — bumped to invalidate V.160 responses that still carried 4× eBay clones and used Nespresso listings in the Retailer Stack.
+const CACHE_PREFIX = 'sav-v162-1'; // V.162 — bumped to invalidate V.161 responses that still anchored Amazon to is_primary even when cheaper retailers existed (the Canon R6 £1,699-over-Jessops-£779 trust failure).
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1670,7 +1670,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v161:${canonicalKey}`;
+  const ck = `savvey:retailers:v162:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2301,19 +2301,28 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
   const links = [];
   const allPrices = [];
 
-  // (1) Amazon link (primary anchor when present)
+  // (1) Amazon link. V.162 — Panel mandate: Amazon NO LONGER gets an
+  // automatic is_primary just for being verified. The Canon R6 Mark II
+  // case (Amazon £1,699, Jessops £779 sitting silent below) made the app
+  // look like a scam. Math wins. is_primary is now stamped on the cheapest
+  // non-outlier survivor AFTER the median sanity floor — see step (3).
   if (verified_amazon_price && Number(verified_amazon_price.price) > 0) {
     const p = Number(verified_amazon_price.price);
     links.push({
       retailer:      'Amazon UK',
       retailer_key:  'amzn',
-      is_primary:    true,
+      is_primary:    false,                  // V.162 — was true
       url:           verified_amazon_price.link || null,
       price_gbp:     p,
       price_str:     verified_amazon_price.price_str || `£${p.toFixed(2)}`,
       stock_state:   'in_stock',
       delivery_note: V138_DELIVERY_NOTES.amzn,
       affiliate:     true,
+      amazon_verified: true,                 // retained as a meta flag so the
+                                             // UI can still render the "Verified
+                                             // live · Prime delivery" subtitle
+                                             // on the Amazon card wherever it
+                                             // lands in the stack
     });
     allPrices.push(p);
   }
@@ -2436,13 +2445,21 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     }
   }
 
-  // (3) If no Amazon, promote the cheapest NON-OUTLIER retailer to primary.
-  // V.145 — only consider links that survived the median floor.
-  if (!links.find(l => l.is_primary) && links.length > 0) {
-    const priced = links
-      .filter(l => l.price_gbp != null && !l.is_outlier)
-      .sort((a, b) => a.price_gbp - b.price_gbp);
-    if (priced[0]) priced[0].is_primary = true;
+  // (3) V.162 — STRICT BEST PRICE CROWN. The cheapest non-outlier retailer
+  // in the post-median-floor cluster wins is_primary, regardless of whether
+  // it's Amazon or any other UK merchant. Replaces the V.144→V.155 "Amazon
+  // wins by default, retailer rescue only on Amazon-miss" rule.
+  //
+  // Clear any stale is_primary flags first so re-runs (cached payloads
+  // re-entering this function) re-pick cleanly. Then sort all priced
+  // non-outlier links by price ascending and crown links[0].
+  for (const l of links) { l.is_primary = false; }
+  const _v162PricedSurvivors = links
+    .filter(l => l.price_gbp != null && Number(l.price_gbp) > 0 && !l.is_outlier)
+    .sort((a, b) => a.price_gbp - b.price_gbp);
+  if (_v162PricedSurvivors[0]) {
+    _v162PricedSurvivors[0].is_primary = true;
+    try { console.log(`[${VERSION}] V.162 best-price crown → ${_v162PricedSurvivors[0].retailer} £${_v162PricedSurvivors[0].price_gbp} (over ${_v162PricedSurvivors.length} priced survivors)`); } catch (e) {}
   }
 
   // (4) Best price = the primary link (already chosen above)
@@ -2487,20 +2504,16 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     price_band = { low: Number(low.toFixed(2)), high: Number(high.toFixed(2)), spread_pct };
   }
 
-  // V.155 — sort the links array so the frontend's index-0 (.v136-cta-primary
-  // green button) always matches the BEST PRICE pillar:
-  //   1. The is_primary entry first (verified Amazon OR promoted-cheapest)
-  //   2. Non-outlier links by price ascending
-  //   3. Outlier links last (still in array for transparency)
-  // This guarantees links[0].url === best_price.url. Previous behaviour was
-  // insertion-order: Amazon first if verified, then google_shopping order.
-  // For products without verified Amazon (e.g. Nest Cam), the cheapest
-  // surviving retailer is promoted to is_primary, but the array stayed in
-  // insertion order — so the green button rendered the wrong retailer.
+  // V.162 — STRICT PRICE-ASCENDING SORT (Panel mandate "Math Wins").
+  //   Primary order key:  price_gbp ascending (null prices last)
+  //   Secondary key:      outliers always after non-outliers (will be
+  //                       filtered out shortly anyway, but keeps the
+  //                       transient order stable for any code that reads
+  //                       `links` before V.159 outlier deletion)
+  // Removed: the V.155 "is_primary first" rule. Now is_primary === the
+  // entry that already sits at links[0] by price. The Canon R6 case
+  // (Amazon £1,699 above Jessops £779) is mathematically impossible.
   links.sort((a, b) => {
-    const aPrim = a && a.is_primary ? 0 : 1;
-    const bPrim = b && b.is_primary ? 0 : 1;
-    if (aPrim !== bPrim) return aPrim - bPrim;
     const aOut = a && a.is_outlier ? 1 : 0;
     const bOut = b && b.is_outlier ? 1 : 0;
     if (aOut !== bOut) return aOut - bOut;
@@ -3088,7 +3101,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v161:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v162:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
