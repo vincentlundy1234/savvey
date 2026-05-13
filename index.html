@@ -6581,6 +6581,78 @@ body.v179 #screen-loading {
 }
 
 /* End V.179 Zero Defect Lockdown block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.181 — KINETIC MERGE
+   Aurora canvas mounted behind every screen, glass material on Twin
+   Heroes / Savvey's Verdict / camera close, spring physics replacing
+   CSS :active scale on Twin Heroes / retailer cards / show-more pill.
+   V.179 link integrity preserved (canvas pointer-events: none).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) The aurora canvas itself — fixed inset, z-index pushed BELOW the
+       screen stack but visible because we make the screens transparent. */
+body.v181 #v180-aurora {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none !important;       /* never intercepts taps */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Make the foundational screen layers TRANSPARENT under body.v181 so the
+   aurora can bleed through. Cards / pillars retain their own backgrounds. */
+body.v181 .screen,
+body.v181 #screen-home,
+body.v181 #screen-result,
+body.v181 #screen-confirm,
+body.v181 #screen-loading {
+  background: transparent !important;
+}
+body.v181 {
+  background: #faf7f0;   /* soft cream underlay; aurora paints on top */
+}
+
+/* (2) Glass utility — applied via JS to the V.181 target elements.
+       Light-theme palette: soft white surface, generous blur, faint
+       rim light to lift it off the moving aurora. */
+body.v181 .v181-glass {
+  background: rgba(255, 255, 255, 0.62) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  box-shadow:
+    0 20px 60px rgba(20, 32, 26, 0.08),
+    0 2px 10px rgba(20, 32, 26, 0.04),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;  /* rim highlight */
+}
+/* Dark glass variant for the camera close X (dark surface on dark feed). */
+body.v181 .v181-glass-dark {
+  background: rgba(20, 22, 24, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.22) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+/* (3) When the spring solver owns transform, suppress the CSS :active
+       scale on these elements (otherwise CSS and JS race for the
+       transform write — guaranteed visual jitter). */
+body.v181 .v181-spring,
+body.v181 .v181-spring:active {
+  transform: scale(1);
+  transition: none !important;
+  will-change: transform;
+}
+
+/* End V.181 Kinetic Merge block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -13967,6 +14039,288 @@ async function _v140KickoffSynthesize(idPayload) {
   })();
 
   try { console.log('[V.179] Zero Defect Lockdown initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.181 — KINETIC MERGE · JS
+   Three subsystems, all gated behind body.v181.
+
+   A) Aurora canvas engine (lifted from V.180 boilerplate, light-theme palette)
+   B) Glass-class injector for Twin Heroes / Verdict / Cam-Close
+   C) Spring-physics binder (event-delegated, no per-element listeners)
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v181Init() {
+  try { document.body.classList.add('v181'); } catch (e) {}
+
+  // ── A · AURORA CANVAS ─────────────────────────────────────────────────
+  (function v181Aurora() {
+    // Don't double-mount if the boilerplate or earlier wave already created it.
+    let canvas = document.getElementById('v180-aurora');
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.id = 'v180-aurora';
+      canvas.setAttribute('aria-hidden', 'true');
+      // Insert as first child of body so it sits behind everything else.
+      document.body.insertBefore(canvas, document.body.firstChild);
+    }
+    const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+    if (!ctx) return;
+
+    const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    let W = 0, H = 0;
+    function resize() {
+      W = window.innerWidth;
+      H = window.innerHeight;
+      canvas.width  = Math.round(W * DPR);
+      canvas.height = Math.round(H * DPR);
+      canvas.style.width  = W + 'px';
+      canvas.style.height = H + 'px';
+      ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Light-theme palette — softer, warmer pastels at ~half the boilerplate
+    // saturation so a cream underlay and dark card text both stay legible.
+    const PALETTE = [
+      { r: 255, g: 215, b: 180 },   // peach
+      { r: 210, g: 230, b: 255 },   // sky
+      { r: 220, g: 255, b: 225 },   // mint
+      { r: 255, g: 215, b: 235 },   // rose
+      { r: 220, g: 215, b: 255 },   // lavender
+      { r: 235, g: 245, b: 215 },   // pale lime
+    ];
+
+    const BLOB_COUNT = 7;
+    const blobs = [];
+    for (let i = 0; i < BLOB_COUNT; i++) {
+      const c = PALETTE[i % PALETTE.length];
+      blobs.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 24,
+        vy: (Math.random() - 0.5) * 24,
+        r: 240 + Math.random() * 220,
+        color: c,
+        phase: Math.random() * Math.PI * 2,
+      });
+    }
+
+    let lastPointer = { x: -1, y: -1, t: 0 };
+    function applyImpulse(x, y, vx, vy) {
+      for (let i = 0; i < blobs.length; i++) {
+        const b = blobs[i];
+        const dx = b.x - x, dy = b.y - y;
+        const d2 = dx * dx + dy * dy;
+        const radius = 320;
+        if (d2 < radius * radius) {
+          const fall = 1 - Math.sqrt(d2) / radius;
+          b.vx += Math.max(-160, Math.min(160, vx * fall * 0.5));
+          b.vy += Math.max(-160, Math.min(160, vy * fall * 0.5));
+        }
+      }
+    }
+    function onPointer(e) {
+      const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+      const x = t.clientX, y = t.clientY;
+      const now = performance.now();
+      if (lastPointer.t > 0) {
+        const dt = (now - lastPointer.t) / 1000;
+        if (dt > 0) {
+          const vx = (x - lastPointer.x) / dt;
+          const vy = (y - lastPointer.y) / dt;
+          applyImpulse(x, y, vx, vy);
+        }
+      }
+      lastPointer = { x, y, t: now };
+    }
+    function onPointerEnd() { lastPointer = { x: -1, y: -1, t: 0 }; }
+    // Passive listeners so V.179 link integrity is not affected. Capture
+    // phase off (default bubble) so any retailer-link stopPropagation
+    // from V.179 fires FIRST and we never see those events.
+    document.addEventListener('pointermove', onPointer, { passive: true });
+    document.addEventListener('pointerdown', onPointer, { passive: true });
+    document.addEventListener('pointerup',   onPointerEnd, { passive: true });
+    document.addEventListener('touchmove',   onPointer, { passive: true });
+    document.addEventListener('touchstart',  onPointer, { passive: true });
+    document.addEventListener('touchend',    onPointerEnd, { passive: true });
+
+    let lastFrame = performance.now();
+    let running = true;
+    let rafId = 0;
+
+    function step(now) {
+      if (!running) return;
+      rafId = requestAnimationFrame(step);
+      const dt = Math.min(1 / 30, (now - lastFrame) / 1000);
+      lastFrame = now;
+
+      for (let i = 0; i < blobs.length; i++) {
+        const b = blobs[i];
+        b.x += b.vx * dt;
+        b.y += b.vy * dt;
+        const k = Math.pow(0.82, dt * 60);
+        b.vx *= k; b.vy *= k;
+        if (b.x < -b.r * 0.7)        b.vx += 35 * dt;
+        if (b.x > W + b.r * 0.7)     b.vx -= 35 * dt;
+        if (b.y < -b.r * 0.7)        b.vy += 35 * dt;
+        if (b.y > H + b.r * 0.7)     b.vy -= 35 * dt;
+        b.vx += (Math.random() - 0.5) * 3 * dt;
+        b.vy += (Math.random() - 0.5) * 3 * dt;
+        b.phase += dt * 0.5;
+      }
+
+      // Cream wipe instead of dark — matches the V.181 body background.
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = 'rgba(250, 247, 240, 1)';
+      ctx.fillRect(0, 0, W, H);
+
+      // Multiply blend so pastels darken into the cream rather than
+      // brightening past it (which would wash out the foreground text).
+      ctx.globalCompositeOperation = 'multiply';
+      for (let i = 0; i < blobs.length; i++) {
+        const b = blobs[i];
+        const radius = b.r * (1 + 0.06 * Math.sin(b.phase));
+        const c = b.color;
+        const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius);
+        g.addColorStop(0,   'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.55)');
+        g.addColorStop(0.5, 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.30)');
+        g.addColorStop(1,   'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(b.x - radius, b.y - radius, radius * 2, radius * 2);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function start() {
+      if (running) return;
+      running = true;
+      lastFrame = performance.now();
+      rafId = requestAnimationFrame(step);
+    }
+    function pause() {
+      running = false;
+      if (rafId) cancelAnimationFrame(rafId);
+    }
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) pause(); else start();
+    });
+
+    running = true;
+    rafId = requestAnimationFrame(step);
+    window._v181Aurora = { start, pause, blobs };
+  })();
+
+  // ── B · GLASS CLASS INJECTOR ──────────────────────────────────────────
+  // Apply .v181-glass to the four mandated targets. MutationObserver so
+  // re-renders of #screen-result keep getting the glass class.
+  function v181ApplyGlass() {
+    // Twin Heroes
+    document.querySelectorAll('.v171-hero').forEach(function (el) {
+      el.classList.add('v181-glass', 'v181-spring');
+    });
+    // Savvey's Verdict
+    const verdict = document.getElementById('v171-savveys-verdict');
+    if (verdict) verdict.classList.add('v181-glass');
+    // Camera close X (dark variant)
+    const camClose = document.getElementById('v171-cam-close-btn');
+    if (camClose) camClose.classList.add('v181-glass-dark');
+    // Drag pill (dark variant, lighter weight)
+    document.querySelectorAll('.v174-drag-pill').forEach(function (el) {
+      el.classList.add('v181-glass-dark');
+    });
+  }
+  v181ApplyGlass();
+  // Re-run when the result screen mutates (Savvey's Verdict is JS-injected
+  // by V.171 on every render).
+  ['screen-result', 'screen-home'].forEach(function (id) {
+    const el = document.getElementById(id);
+    if (!el || typeof MutationObserver === 'undefined') return;
+    let debounce = null;
+    new MutationObserver(function () {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(v181ApplyGlass, 120);
+    }).observe(el, { childList: true, subtree: true });
+  });
+
+  // ── C · SPRING-PHYSICS BINDER (event-delegated) ────────────────────────
+  // Single solver instance per element, lazily created on first interaction.
+  // State stored in a WeakMap keyed by the element so it GCs cleanly when
+  // a retailer row is removed from the DOM.
+  const SPRING = { TENSION: 340, FRICTION: 18, MASS: 1, EPS: 0.0005 };
+  const springStates = new WeakMap();
+
+  function springTick(el) {
+    const s = springStates.get(el);
+    if (!s) return;
+    s.raf = 0;
+    const dt = 1 / 60;
+    const force = -SPRING.TENSION * (s.scale - s.target);
+    const damp  = -SPRING.FRICTION * s.velocity;
+    const accel = (force + damp) / SPRING.MASS;
+    s.velocity += accel * dt;
+    s.scale    += s.velocity * dt;
+    el.style.transform = 'scale(' + s.scale.toFixed(5) + ')';
+    if (Math.abs(s.velocity) > SPRING.EPS || Math.abs(s.scale - s.target) > SPRING.EPS) {
+      s.raf = requestAnimationFrame(function () { springTick(el); });
+    } else {
+      s.scale = s.target;
+      el.style.transform = 'scale(' + s.target + ')';
+    }
+  }
+  function springTarget(el, target) {
+    let s = springStates.get(el);
+    if (!s) {
+      s = { scale: 1, velocity: 0, target: 1, raf: 0 };
+      springStates.set(el, s);
+      el.classList.add('v181-spring');
+    }
+    s.target = target;
+    if (!s.raf) s.raf = requestAnimationFrame(function () { springTick(el); });
+  }
+
+  // Selectors of elements that earn the spring on tap.
+  const SPRING_TARGETS = '.v171-hero, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row, #v171-show-more-prices, .v174-recent-chip, .v172-type-go';
+
+  // Delegated pointer handlers — capture-phase so they run BEFORE the V.172
+  // haptic listener but AFTER the V.179 anchor stopPropagation (which only
+  // fires for retailer-stack anchors, the same elements that earn springs).
+  // V.179's stopPropagation actually HELPS here because once it fires, the
+  // pointerdown event is consumed and the spring never sees it on the
+  // *child* anchor — but the spring's target is the ROW container, which
+  // catches the event on the way up. Both systems play nice.
+  document.addEventListener('pointerdown', function (e) {
+    try {
+      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      if (!el) return;
+      springTarget(el, 0.94);
+    } catch (err) {}
+  }, true);
+  document.addEventListener('pointerup', function (e) {
+    try {
+      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      if (!el) return;
+      springTarget(el, 1.0);
+    } catch (err) {}
+  }, true);
+  document.addEventListener('pointercancel', function (e) {
+    try {
+      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      if (!el) return;
+      springTarget(el, 1.0);
+    } catch (err) {}
+  }, true);
+  document.addEventListener('pointerleave', function (e) {
+    try {
+      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      if (!el) return;
+      const s = springStates.get(el);
+      if (s && s.target !== 1.0) springTarget(el, 1.0);
+    } catch (err) {}
+  }, true);
+
+  window._v181 = { applyGlass: v181ApplyGlass, springTarget };
+  try { console.log('[V.181] Kinetic Merge initialised — aurora + glass + springs.'); } catch (e) {}
 })();
 </script>
 </body>
