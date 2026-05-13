@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d12">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>V.180 · Kinetic UI Boilerplate</title>
+<style>
+/* ═══════════════════════════════════════════════════════════════════════
+   V.180 · KINETIC UI PROTOCOL · ISOLATED BOILERPLATE
+   Architecture demo, not yet integrated into live index.html.
+
+   Layer cake:
+     z-index -1   Living aurora canvas (interactive, touch-reactive)
+     z-index  1   Glassmorphic foreground card
+     z-index  2   Spring-physics button + microcopy
+   ═══════════════════════════════════════════════════════════════════════ */
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+               "SF Pro Display", system-ui, "Segoe UI", Roboto, sans-serif;
+  background: #0a0d12;     /* dark canvas underlay so the aurora pops */
+  color: #ffffff;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ── (1) Canvas Architecture ────────────────────────────────────────── */
+#v180-aurora {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  /* Promote to its own compositor layer — never causes parent reflow. */
+  transform: translateZ(0);
+  will-change: transform;
+  pointer-events: none;     /* canvas doesn't intercept body touches */
+  background: radial-gradient(ellipse at 30% 20%, #1a2237 0%, #05080d 70%);
+}
+/* When the document is hidden, dim the canvas to confirm pause visually. */
+body.v180-paused #v180-aurora { opacity: 0.85; transition: opacity .2s ease; }
+
+/* ── (3) Glassmorphic Card ──────────────────────────────────────────── */
+.v180-stage {
+  position: relative;
+  z-index: 1;
+  min-height: 100dvh;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 24px;
+  /* Receive pointer events for the aurora interaction (canvas is
+     pointer-events:none; the body bubbles to us). */
+  touch-action: none;
+}
+.v180-card {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 100%);
+  padding: 28px 24px 24px;
+  border-radius: 24px;
+
+  /* The glass surface. Light tint so dark aurora bleeds beautifully. */
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.35),
+    0 2px 8px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);   /* top inner highlight */
+
+  /* The Glassmorphic blur. Webkit prefix required for older iOS. */
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+}
+.v180-eyebrow {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  margin-bottom: 8px;
+}
+.v180-title {
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin: 0 0 12px;
+}
+.v180-body {
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0 0 22px;
+}
+
+/* ── (4) Spring-Physics Button ──────────────────────────────────────── */
+.v180-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 14px 22px;
+  border-radius: 9999px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  /* No CSS transition on transform — JS spring owns it. */
+  transition: background-color .15s ease, border-color .15s ease;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  /* Initial transform; the spring writes inline transform on top. */
+  transform: scale(1);
+  transform-origin: center center;
+  will-change: transform;
+}
+.v180-btn:hover { background: rgba(255, 255, 255, 0.20); }
+.v180-btn:active { background: rgba(255, 255, 255, 0.25); }
+
+.v180-microcopy {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.v180-fps {
+  position: fixed;
+  top: max(env(safe-area-inset-top), 12px);
+  right: 14px;
+  font: 600 11px/1 -apple-system, system-ui;
+  color: rgba(255, 255, 255, 0.55);
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 10;
+  pointer-events: none;
+}
+</style>
+</head>
+<body>
+
+<!-- (1) The kinetic background canvas. z-index:-1, fixed inset:0. -->
+<canvas id="v180-aurora" aria-hidden="true"></canvas>
+
+<!-- (3) Glassmorphic foreground stage. -->
+<main class="v180-stage" id="v180-stage">
+  <article class="v180-card">
+    <div class="v180-eyebrow">V.180 · Kinetic UI</div>
+    <h1 class="v180-title">Living surface.<br>Hands-on physics.</h1>
+    <p class="v180-body">
+      Drag anywhere on the screen — the aurora reacts to your touch with
+      velocity-coupled ripples. Tap the button to feel the spring overshoot.
+      Everything you see runs at 60fps on a single GPU layer.
+    </p>
+    <button class="v180-btn" id="v180-btn" type="button">Tap to feel the spring</button>
+    <div class="v180-microcopy">Boilerplate · isolated · not yet wired into Savvey</div>
+  </article>
+</main>
+
+<!-- Lightweight fps readout to prove the loop is hardware-accelerated. -->
+<div class="v180-fps" id="v180-fps">— fps</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   V.180 · KINETIC ENGINE
+   - Aurora canvas: 6-8 soft radial-gradient "blobs" drifting via a simple
+     velocity model. Touch impulses inject velocity, decayed by friction.
+   - Render loop: requestAnimationFrame with delta-time integration.
+     Hardware-accelerated via translateZ(0) on the canvas element.
+     Composite mode 'screen' so overlapping colors add toward white.
+   - Battery: pauses on document.hidden and on IntersectionObserver
+     leaving the viewport. Resumes cleanly on visible.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v180Aurora() {
+  const canvas = document.getElementById('v180-aurora');
+  const ctx = canvas.getContext('2d', { alpha: true, desynchronized: true });
+  if (!ctx) return;
+
+  // Cap DPR at 1.5 for perf on retina phones — diminishing visual return
+  // past 1.5× for a soft-blob aurora and a major battery hit at 3×.
+  const DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+  let W = 0, H = 0;
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width  = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    canvas.style.width  = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Aurora palette — Apple-style cool teals + magenta accent.
+  const PALETTE = [
+    { r: 79,  g: 195, b: 247 },  // sky cyan
+    { r: 142, g: 95,  b: 255 },  // electric violet
+    { r: 64,  g: 235, b: 175 },  // mint
+    { r: 255, g: 92,  b: 168 },  // hot pink
+    { r: 90,  g: 215, b: 255 },  // pale aqua
+    { r: 130, g: 90,  b: 255 },  // royal
+  ];
+
+  // Eight blobs. Each: position, velocity, base radius, color.
+  const BLOB_COUNT = 8;
+  const blobs = [];
+  for (let i = 0; i < BLOB_COUNT; i++) {
+    const c = PALETTE[i % PALETTE.length];
+    blobs.push({
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: (Math.random() - 0.5) * 30,    // px / sec
+      vy: (Math.random() - 0.5) * 30,
+      r: 200 + Math.random() * 180,       // radius in px
+      color: c,
+      phase: Math.random() * Math.PI * 2, // for subtle pulsing
+    });
+  }
+
+  // Touch / pointer impulse — applies velocity to nearby blobs.
+  let lastPointer = { x: -1, y: -1, t: 0 };
+  function applyImpulse(x, y, vx, vy) {
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      const dx = b.x - x;
+      const dy = b.y - y;
+      const d2 = dx * dx + dy * dy;
+      const radius = 300;
+      if (d2 < radius * radius) {
+        const fall = 1 - Math.sqrt(d2) / radius;
+        // Push the blob in the same direction as the swipe, scaled by
+        // distance falloff. Cap impulse so a fast flick doesn't yeet
+        // blobs across the screen.
+        b.vx += Math.max(-180, Math.min(180, vx * fall * 0.6));
+        b.vy += Math.max(-180, Math.min(180, vy * fall * 0.6));
+      }
+    }
+  }
+  function onPointer(e) {
+    const t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+    const x = t.clientX, y = t.clientY;
+    const now = performance.now();
+    if (lastPointer.t > 0) {
+      const dt = (now - lastPointer.t) / 1000;
+      if (dt > 0) {
+        const vx = (x - lastPointer.x) / dt;
+        const vy = (y - lastPointer.y) / dt;
+        applyImpulse(x, y, vx, vy);
+      }
+    }
+    lastPointer = { x, y, t: now };
+  }
+  function onPointerEnd() {
+    lastPointer = { x: -1, y: -1, t: 0 };
+  }
+  // The CANVAS is pointer-events:none. Listen on the body so the card
+  // doesn't have to forward touches. Body always exists at this point.
+  document.addEventListener('pointermove', onPointer, { passive: true });
+  document.addEventListener('pointerdown', onPointer, { passive: true });
+  document.addEventListener('pointerup',   onPointerEnd, { passive: true });
+  document.addEventListener('touchmove',   onPointer, { passive: true });
+  document.addEventListener('touchstart',  onPointer, { passive: true });
+  document.addEventListener('touchend',    onPointerEnd, { passive: true });
+
+  // ── Render loop ──────────────────────────────────────────────────────
+  let lastFrame = performance.now();
+  let running = true;
+  let rafId = 0;
+  let frameCount = 0;
+  let fpsAccum = 0;
+  const fpsEl = document.getElementById('v180-fps');
+
+  function step(now) {
+    if (!running) return;
+    rafId = requestAnimationFrame(step);
+
+    const dt = Math.min(1 / 30, (now - lastFrame) / 1000);  // clamp big tab-switch gaps
+    lastFrame = now;
+
+    // Physics — drift, friction, soft wall reflection, gentle pulse.
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      b.x += b.vx * dt;
+      b.y += b.vy * dt;
+      // Friction — exponential decay, frame-rate independent.
+      const k = Math.pow(0.78, dt * 60);
+      b.vx *= k;
+      b.vy *= k;
+      // Soft wall — once a blob drifts past the edge, push it back gently.
+      if (b.x < -b.r * 0.7)        b.vx += 40 * dt;
+      if (b.x > W + b.r * 0.7)     b.vx -= 40 * dt;
+      if (b.y < -b.r * 0.7)        b.vy += 40 * dt;
+      if (b.y > H + b.r * 0.7)     b.vy -= 40 * dt;
+      // Add a tiny continual drift so blobs never freeze.
+      b.vx += (Math.random() - 0.5) * 4 * dt;
+      b.vy += (Math.random() - 0.5) * 4 * dt;
+      b.phase += dt * 0.6;
+    }
+
+    // Clear (composite 'source-over' for the wipe, then switch to 'screen'
+    // so overlapping blobs brighten rather than darken).
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(5, 8, 13, 1)';   // dark backdrop wipe
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.globalCompositeOperation = 'screen';
+    for (let i = 0; i < blobs.length; i++) {
+      const b = blobs[i];
+      const radius = b.r * (1 + 0.08 * Math.sin(b.phase));
+      const c = b.color;
+      const g = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, radius);
+      g.addColorStop(0, 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.55)');
+      g.addColorStop(0.5, 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0.18)');
+      g.addColorStop(1, 'rgba(' + c.r + ',' + c.g + ',' + c.b + ',0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(b.x - radius, b.y - radius, radius * 2, radius * 2);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+
+    // FPS readout — averaged over half a second so it doesn't jitter.
+    frameCount++;
+    fpsAccum += dt;
+    if (fpsAccum >= 0.5) {
+      if (fpsEl) fpsEl.textContent = Math.round(frameCount / fpsAccum) + ' fps';
+      frameCount = 0;
+      fpsAccum = 0;
+    }
+  }
+
+  function start() {
+    if (running) return;
+    running = true;
+    lastFrame = performance.now();
+    rafId = requestAnimationFrame(step);
+    document.body.classList.remove('v180-paused');
+  }
+  function pause() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    document.body.classList.add('v180-paused');
+  }
+
+  // Battery — pause on tab hidden, resume on visible.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) pause();
+    else start();
+  });
+
+  // Battery — pause when the canvas is fully scrolled out of view.
+  // (Always fixed inset:0 in this boilerplate; included as a pattern
+  // for when the canvas is embedded in a scroll context.)
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver(function (entries) {
+      for (const e of entries) {
+        if (e.isIntersecting) start();
+        else pause();
+      }
+    }, { threshold: 0.01 });
+    io.observe(canvas);
+  }
+
+  // Kick off.
+  running = true;
+  rafId = requestAnimationFrame(step);
+  window._v180Aurora = { start, pause, blobs };
+})();
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.180 · SPRING PHYSICS
+   Critically-damped underdamped spring with mass / tension / friction.
+   On press → target scale 0.94, instant.
+   On release → target scale 1.00 with spring overshoot.
+   Per-frame rAF integration, ends when |velocity| < epsilon AND
+   |delta| < epsilon (so we don't burn CPU after settle).
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v180Spring() {
+  const btn = document.getElementById('v180-btn');
+  if (!btn) return;
+
+  // Spring parameters — tuned for "iOS-feel".
+  // Higher tension = snappier; higher friction = less overshoot.
+  const TENSION = 340;
+  const FRICTION = 18;
+  const MASS = 1;
+  const EPS = 0.0005;
+
+  let scale = 1, velocity = 0, target = 1;
+  let raf = 0;
+
+  function tick(now) {
+    raf = 0;
+    const dt = 1 / 60;
+    // F = -k*(x - target) - c*v
+    const force = -TENSION * (scale - target);
+    const damp = -FRICTION * velocity;
+    const accel = (force + damp) / MASS;
+    velocity += accel * dt;
+    scale += velocity * dt;
+    btn.style.transform = 'scale(' + scale.toFixed(5) + ')';
+    if (Math.abs(velocity) > EPS || Math.abs(scale - target) > EPS) {
+      raf = requestAnimationFrame(tick);
+    } else {
+      scale = target;
+      btn.style.transform = 'scale(' + target + ')';
+    }
+  }
+  function arm() {
+    if (!raf) raf = requestAnimationFrame(tick);
+  }
+
+  function setTarget(t) {
+    target = t;
+    arm();
+  }
+
+  // Press path — pull down to 0.94 with a fast spring (no overshoot
+  // visible since target is below resting).
+  // Release path — set target back to 1.0; the spring naturally overshoots
+  // slightly given the velocity it accumulated during the press hold.
+  btn.addEventListener('pointerdown', function () { setTarget(0.94); });
+  btn.addEventListener('pointerup',   function () { setTarget(1.0); });
+  btn.addEventListener('pointercancel', function () { setTarget(1.0); });
+  btn.addEventListener('pointerleave', function () {
+    if (target !== 1.0) setTarget(1.0);
+  });
+  // Haptic where available — adds physical realism.
+  btn.addEventListener('pointerdown', function () {
+    try { if (navigator.vibrate) navigator.vibrate(12); } catch (e) {}
+  });
+  btn.addEventListener('pointerup', function () {
+    try { if (navigator.vibrate) navigator.vibrate(35); } catch (e) {}
+  });
+})();
+</script>
+</body>
+</html>
