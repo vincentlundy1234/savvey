@@ -7349,11 +7349,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <!-- V.177 — Ghost text layer. Sits behind the native placeholder
              (which is rendered transparent under body.v177) and cycles
              through invitations every 3s. Pure CSS opacity cross-fade. -->
-        <span class="v177-ghost" id="v177-ghost" aria-hidden="true">Type "AirPods Pro"…</span>
+        <span class="v177-ghost" id="v177-ghost" aria-hidden="true">Simply search, we find the price</span>
         <input id="v172-type-input" class="v172-type-input"
                type="text" inputmode="search" enterkeyhint="search"
                autocomplete="off" autocorrect="off" spellcheck="false"
-               placeholder='Type a product — "Bose QC45", "iPhone 15"…'>
+               placeholder="Simply search, we find the price">
         <button class="v172-type-go" type="button" onclick="v172SubmitType()" aria-label="Search">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
@@ -14311,12 +14311,9 @@ async function _v140KickoffSynthesize(idPayload) {
 (function v177Init() {
   try { document.body.classList.add('v177'); } catch (e) {}
 
+  // V.189 — Founder copy mandate. Single static line, no rotation noise.
   var PHRASES = [
-    'Type "AirPods Pro"…',
-    'Type "Dyson Airwrap"…',
-    'Type "LEGO Star Wars"…',
-    'Type "Bose Headphones"…',
-    'Type "Ninja Creami"…',
+    'Simply search, we find the price',
   ];
   var TICK_MS  = 3000;
   var FADE_MS  = 450;
@@ -14787,6 +14784,10 @@ async function _v140KickoffSynthesize(idPayload) {
 
   // V.182 — pointerup: release the spring AND defensively force the click
   // if (a) the user didn't drag and (b) no native click fires within 80 ms.
+  // V.189 hardening: business-logic failsafes for the search submit button
+  // and the Type hero card — if the click rescue is itself swallowed (rare
+  // iOS PWA edge case), we explicitly call the routing function so the
+  // user always lands on screen-result.
   document.addEventListener('pointerup', function (e) {
     try {
       var el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
@@ -14808,7 +14809,22 @@ async function _v140KickoffSynthesize(idPayload) {
               if (typeof el.click === 'function') el.click();
               _v182LastDown.fired = true;
             } catch (err) {}
-          }, 80);
+            // V.189 — Business-logic failsafe. If after el.click() the
+            // app STILL hasn't routed (because some upstream handler
+            // swallowed the synthetic event), we manually fire the
+            // correct routing call based on which element was tapped.
+            // Idempotent — v172SubmitType / goSnap each guard against
+            // double-fire internally.
+            try {
+              if (el.classList && el.classList.contains('v172-type-go')) {
+                if (typeof window.v172SubmitType === 'function') window.v172SubmitType();
+              } else if (el.classList && el.classList.contains('v171-hero-type')) {
+                if (typeof window.v172OpenTypeSheet === 'function') window.v172OpenTypeSheet();
+              } else if (el.classList && el.classList.contains('v171-hero-snap')) {
+                if (typeof window.goSnap === 'function') window.goSnap();
+              }
+            } catch (err2) {}
+          }, 90);
         }
       }
     } catch (err) {}
