@@ -5480,6 +5480,32 @@ button:active, .btn:active, a[role="button"]:active,
   * { transition-duration: .01ms !important; }
 }
 /* End V.158 design-system enforcement block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.166 — UI PRUNE (Snap-First). Two-tab nav rail balancing rules.
+   ─────────────────────────────────────────────────────────────────────
+   The legacy 3-tab rail (Home | Snap | Scan) is now 2-tab (Home | Snap).
+   The .v166-snap-first marker class on .v5-bottom-nav scopes the override
+   so we don't disturb any 3-tab call sites elsewhere in the codebase.
+   ═══════════════════════════════════════════════════════════════════════ */
+.v5-bottom-nav.v166-snap-first {
+  /* Justify-between so Home anchors left, Snap anchors right; the visual
+     space between them is naturally proportional and the Snap hero stays
+     prominent on the right side of the rail. */
+  justify-content: space-around;
+}
+.v5-bottom-nav.v166-snap-first .nav-tab {
+  flex: 1 1 50%;
+  max-width: 50%;
+}
+.v5-bottom-nav.v166-snap-first #nav-snap {
+  /* Snap stays the visual hero — bigger tap target, slight emphasis. */
+  font-weight: 700;
+}
+/* Legacy .v5-secondary-doors / .v102-secondary-row / #paste-door / #url-input
+   are now permanently removed from the DOM. Their CSS rules elsewhere in
+   the cascade still exist but match nothing, so they're inert. No-op. */
+/* End V.166 UI Prune block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -5691,41 +5717,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <input id="photo-upload" type="file" accept="image/*" hidden onchange="handlePhotoUpload(event)">
     <input id="photo-fallback" type="file" accept="image/*" capture="environment" hidden onchange="handlePhotoUpload(event)">
 
-    <!-- V.102 home rebalance — Snap=king (above), then small Scan+Paste pair
-         (secondary tools), then a large Type search bar at the bottom (the
-         primary input role for users who already know what they want). -->
-    <div class="v5-secondary-doors v102-secondary-row">
-      <button class="v5-door v102-door-mini" onclick="goBarcode()" type="button" aria-label="Scan a barcode">
-        <div class="v5-door-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-            <rect x="2" y="6" width="2" height="12"/><rect x="6" y="6" width="1" height="12"/><rect x="9" y="6" width="3" height="12"/><rect x="14" y="6" width="1" height="12"/><rect x="17" y="6" width="2" height="12"/><rect x="21" y="6" width="1" height="12"/>
-          </svg>
-        </div>
-        <div class="v5-door-text v102-door-mini-text">
-          <div class="v5-door-title">Scan</div>
-          <div class="v5-door-sub">Barcode</div>
-        </div>
-      </button>
-
-      <div class="v5-door v102-door-mini" id="paste-door">
-        <button class="v102-door-mini-btn" type="button" onclick="(function(){var el=document.getElementById('url-input'); if(el){el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'});}})()" aria-label="Paste a link">
-          <div class="v5-door-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/>
-              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>
-            </svg>
-          </div>
-          <div class="v5-door-text v102-door-mini-text">
-            <div class="v5-door-title">Paste</div>
-            <div class="v5-door-sub">A link</div>
-          </div>
-        </button>
-        <div class="v5-door-input-row v102-paste-input">
-          <input id="url-input" type="url" inputmode="url" placeholder="https://www.argos.co.uk/...">
-          <button onclick="goUrl()" type="button">Go</button>
-        </div>
-      </div>
-    </div>
+    <!-- V.166 — UI PRUNE. Snap-First strategy: the Snap door above is the
+         hero, the Type bar below is the only secondary action. The legacy
+         V.102 "Scan + Paste" two-up row has been deleted. Barcode scanning
+         is now ONLY accessible via the post-failure escape-hatch screen
+         (#screen-error) and the V.154 disambig escape button. URL paste
+         is removed entirely — it was dead weight and confused users. -->
+    <!-- (V.166 DELETION SITE — previously held: .v5-secondary-doors with
+          Scan door + Paste door + #url-input. All removed.) -->
 
     <!-- V.102 — Type a name. Promoted to primary search role at the bottom.
          Real input width, larger height, prominent placeholder. -->
@@ -6045,6 +6044,15 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
             type="button"
             style="display:block; margin:18px auto 8px; padding:14px 22px; background:transparent; border:1px solid rgba(0,0,0,0.12); border-radius:24px; color:#2a6b22; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:14px; font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent;">
       Not what you scanned? Type the name instead
+    </button>
+    <!-- V.166 — barcode entry-point relocated. The Scan tab was removed
+         from the bottom nav rail; barcode scanning is now ONLY accessible
+         via this escape hatch and the post-failure #screen-error suggestions. -->
+    <button class="v154-not-what-i-scanned" id="v166-disambig-scan-btn"
+            type="button"
+            onclick="navScan()"
+            style="display:block; margin:0 auto 16px; padding:14px 22px; background:transparent; border:1px solid rgba(0,0,0,0.12); border-radius:24px; color:#2a6b22; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:14px; font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent;">
+      Or scan the barcode instead
     </button>
   </div>
 </div>
@@ -6923,10 +6931,20 @@ function stopAllScanners() {
   }
   if (_barcodeDetectorEvt) { try { _barcodeDetectorEvt.stop(); } catch {} _barcodeDetectorEvt = null; }
 }
+// V.166 — url-input was deleted from the home screen ("UI Prune" mandate).
+// _v166ClearInput is a defensive helper that no-ops on missing elements so
+// the legacy goHome / navSnap / navType / navScan handlers don't throw
+// when the URL input is no longer in the DOM.
+function _v166ClearInput(id) {
+  try {
+    const el = document.getElementById(id);
+    if (el && typeof el.value !== 'undefined') el.value = '';
+  } catch (e) {}
+}
 function goHome(opts) {
   stopAllScanners();
-  document.getElementById('url-input').value = '';
-  document.getElementById('text-input').value = '';
+  _v166ClearInput('url-input');
+  _v166ClearInput('text-input');
   setActiveNav('home');
   show('home', opts);
 }
@@ -6936,8 +6954,8 @@ function goHome(opts) {
 // canonical_search_string state').
 function navSnap() {
   stopAllScanners();
-  document.getElementById('text-input').value = '';
-  document.getElementById('url-input').value = '';
+  _v166ClearInput('text-input');
+  _v166ClearInput('url-input');
   lastResult = null;
   setActiveNav('snap');
   goSnap();
@@ -6945,7 +6963,7 @@ function navSnap() {
 }
 function navType() {
   stopAllScanners();
-  document.getElementById('url-input').value = '';
+  _v166ClearInput('url-input');
   lastResult = null;
   setActiveNav('type');
   show('home');
@@ -6964,8 +6982,8 @@ function navType() {
 // extends to 4 doors. State-reset matches Wave C panel mandate.
 function navScan() {
   stopAllScanners();
-  document.getElementById('text-input').value = '';
-  document.getElementById('url-input').value = '';
+  _v166ClearInput('text-input');
+  _v166ClearInput('url-input');
   lastResult = null;
   setActiveNav('scan');
   goBarcode();
@@ -8011,8 +8029,13 @@ async function handlePhotoUpload(event) {
 }
 
 async function goUrl() {
-  const url = document.getElementById('url-input').value.trim();
-  if (!url) { document.getElementById('url-input').focus(); return; }
+  // V.166 — url-input was deleted from the home screen. The function body is
+  // preserved as a no-op (with the URL backend pipeline still intact) so
+  // any stale references / cached HTML / console invocations don't throw.
+  const _v166UrlEl = document.getElementById('url-input');
+  if (!_v166UrlEl) { return; } // V.166 — input is gone, nothing to do
+  const url = _v166UrlEl.value.trim();
+  if (!url) { _v166UrlEl.focus(); return; }
   if (!/^https?:\/\//i.test(url)) { alert('Please paste a full URL starting with http(s)://'); return; }
   track('url_pasted', { host: tryHost(url) });
   await callNormalize({ input_type: 'url', url });
@@ -8026,14 +8049,27 @@ async function goText() {
   await callNormalize({ input_type: 'text', text });
 }
 document.getElementById('text-input').addEventListener('keydown', e => { if (e.key === 'Enter') goText(); });
-document.getElementById('url-input').addEventListener('keydown', e => { if (e.key === 'Enter') goUrl(); });
+// V.166 — url-input deleted; attach defensively so missing element doesn't throw.
+{
+  const _v166UrlKd = document.getElementById('url-input');
+  if (_v166UrlKd) _v166UrlKd.addEventListener('keydown', e => { if (e.key === 'Enter') goUrl(); });
+}
 document.getElementById('text-input').addEventListener('input', (e) => {
   const v = e.target.value.trim();
   if (/^https?:\/\/\S+$/i.test(v)) {
     track('smart_paste', { from: 'text', to: 'url' });
-    document.getElementById('url-input').value = v;
+    // V.166 — url-input deleted. Smart-paste detection still works but now
+    // hands the URL directly to the backend without round-tripping through
+    // the (non-existent) URL input field. Stale text is cleared either way.
+    const _v166UrlSmart = document.getElementById('url-input');
+    if (_v166UrlSmart) _v166UrlSmart.value = v;
     e.target.value = '';
-    goUrl();
+    if (_v166UrlSmart) {
+      goUrl();
+    } else {
+      // V.166 — direct path: call the URL pipeline without the DOM hop.
+      callNormalize({ input_type: 'url', url: v });
+    }
   }
 });
 
@@ -10086,8 +10122,16 @@ function handleInbound() {
     track('inbound_query', { len: q.length, looks_like_url: /^https?:\/\//i.test(q) });
     history.replaceState({}, '', window.location.pathname);
     if (/^https?:\/\//i.test(q)) {
-      document.getElementById('url-input').value = q;
-      setTimeout(() => goUrl(), 150);
+      // V.166 — url-input element removed from home. Call the URL pipeline
+      // directly with the inbound query string instead of round-tripping
+      // through a non-existent input.
+      const _v166UrlIn = document.getElementById('url-input');
+      if (_v166UrlIn) {
+        _v166UrlIn.value = q;
+        setTimeout(() => goUrl(), 150);
+      } else {
+        setTimeout(() => callNormalize({ input_type: 'url', url: q }), 150);
+      }
     } else {
       document.getElementById('text-input').value = q;
       setTimeout(() => goText(), 150);
@@ -10262,8 +10306,12 @@ handleInbound();
   </div>
 </div>
 <div class="savvey-toast" id="savvey-toast" role="status" aria-live="polite"></div>
-<nav class="bottom-nav v5-bottom-nav" id="bottom-nav" aria-label="Primary navigation">
-  <!-- v5 BOTTOM NAV REBUILD (V.83) — Home | Snap (centred hero) | Scan. Type stays accessible via Home search bar. -->
+<nav class="bottom-nav v5-bottom-nav v166-snap-first" id="bottom-nav" aria-label="Primary navigation">
+  <!-- V.166 — SNAP-FIRST NAV. Two tabs only: Home + Snap (hero).
+       The legacy "Scan" tab has been removed from the primary nav rail.
+       Barcode scanning is now ONLY accessible via the post-failure
+       escape-hatch screen (#screen-error) and the V.154 disambig escape
+       button. Type stays inline on the Home search bar (V.102 type bar). -->
   <button class="nav-tab v5-nav-item" id="nav-home" onclick="navHome()" aria-label="Home">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
     <span>Home</span>
@@ -10271,10 +10319,6 @@ handleInbound();
   <button class="nav-tab v5-nav-hero" id="nav-snap" onclick="navSnap()" aria-label="Snap a product">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
     <span>Snap<span class="v5-nav-hero-dot">.</span></span>
-  </button>
-  <button class="nav-tab v5-nav-item" id="nav-scan" onclick="navScan()" aria-label="Scan a barcode">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="2" height="12"></rect><rect x="6" y="6" width="1" height="12"></rect><rect x="9" y="6" width="3" height="12"></rect><rect x="14" y="6" width="1" height="12"></rect><rect x="17" y="6" width="2" height="12"></rect><rect x="21" y="6" width="1" height="12"></rect></svg>
-    <span>Scan</span>
   </button>
 </nav>
 
