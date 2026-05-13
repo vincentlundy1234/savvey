@@ -5331,6 +5331,132 @@
   font-size: 14px;
 }
 /* End V.140 skeleton block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.158 — APPLE-GRADE DESIGN SYSTEM ENFORCEMENT (Panel mandate, 13 May 2026)
+   Authoritative override layer. Lives last in the cascade so every legacy
+   card / button / pill inherits the native-iOS standard with zero DOM churn.
+   ─── Spec ─────────────────────────────────────────────────────────────
+     Typography:  system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+                  Roboto.  Title  weight 800.  Subtitle weight 600.
+     Elevation :  box-shadow: 0 10px 25px -5px rgba(0,0,0,.10),
+                              0 8px 10px  -6px rgba(0,0,0,.10);
+     Radii     :  16px containers · 24px pills · 999px circular.
+     Tap state :  active { transform: scale(.95) }; transition .15s.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --font-app: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --shadow-v158: 0 10px 25px -5px rgba(0,0,0,.10), 0 8px 10px -6px rgba(0,0,0,.10);
+  --r-card-v158: 16px;
+  --r-pill-v158: 24px;
+  --ease-tap-v158: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* ── Global typography reset to native sans stack ───────────────────── */
+html, body,
+button, input, textarea, select,
+h1, h2, h3, h4, h5, h6,
+p, span, div, a, li {
+  font-family: var(--font-app);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* Titles → 800. Subtitles / labels → 600. */
+h1, h2, h3,
+.v138-title, #v138-title,
+.v136-title, .v5-result-title,
+.savvey-says-prefix, .v5-savvey-says-prefix,
+.screen-title, .door-title {
+  font-weight: 800 !important;
+  letter-spacing: -0.015em;
+}
+
+h4, h5, h6,
+.v138-subtitle, .v138-eyebrow,
+.v136-subtitle, .v136-eyebrow,
+#v138-category, #v138-best-price-sub, #v138-avg-market-sub,
+.v138-verdict-text, #v138-verdict-text,
+.v136-cta, .v136-cta-primary, .v136-cta-secondary,
+.nav-tab-label, .door-subtitle,
+button, .btn, label, .label, .pill, .v138-verdict-pill {
+  font-weight: 600;
+}
+
+/* ── Universal radii — kill all sharp corners on tappable surfaces ──── */
+.v136-card, .v136-similar-card, .v136-tier-card,
+.savvey-says-wrap, #savvey-says, #savvey-says-rows,
+.v5-card, .v5-result-card, .v5-retailer-row,
+#screen-result > *, #screen-confirm > *,
+.intel-box, .v138-pillar, .v138-retailer-row,
+.door-tile, .v136-door, .home-card {
+  border-radius: var(--r-card-v158) !important;
+}
+
+button, .btn, .v136-cta, .v136-cta-primary, .v136-cta-secondary,
+.v138-verdict-pill, .pill, .nav-tab,
+.v154-not-what-i-scanned, #v154-escape-btn,
+.v105-zoom-tier, #zoom-indicator {
+  border-radius: var(--r-pill-v158) !important;
+}
+
+/* Camera shutter + any explicitly circular control stays circular */
+#cam-shutter, .v5-cam-shutter, .shutter-btn, .circle-btn {
+  border-radius: 9999px !important;
+}
+
+/* ── Diffused iOS elevation on primary cards ────────────────────────── */
+.savvey-says-wrap, #savvey-says,
+.v136-card, .v136-similar-card, .v136-tier-card,
+.intel-box, .v5-card, .v5-result-card,
+.v138-pillar, .home-card, .door-tile {
+  box-shadow: var(--shadow-v158) !important;
+}
+
+/* ── Micro-interactions — every tap target presses in 95% over 150ms ── */
+button, .btn, a[role="button"],
+.v136-cta, .v136-cta-primary, .v136-cta-secondary,
+.v136-similar-card, .v136-tier-card,
+.v138-retailer-row, .v5-retailer-row,
+.nav-tab, .door-tile, .v136-door,
+#cam-shutter, .v5-cam-shutter, .shutter-btn,
+.v154-not-what-i-scanned, #v154-escape-btn,
+.v105-zoom-tier, #zoom-indicator {
+  transition: transform .15s var(--ease-tap-v158),
+              box-shadow .15s var(--ease-tap-v158),
+              background-color .15s ease-out !important;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+button:active, .btn:active, a[role="button"]:active,
+.v136-cta:active, .v136-cta-primary:active, .v136-cta-secondary:active,
+.v136-similar-card:active, .v136-tier-card:active,
+.v138-retailer-row:active, .v5-retailer-row:active,
+.nav-tab:active, .door-tile:active, .v136-door:active,
+#cam-shutter:active, .v5-cam-shutter:active, .shutter-btn:active,
+.v154-not-what-i-scanned:active, #v154-escape-btn:active,
+.v105-zoom-tier:active {
+  transform: scale(0.95) !important;
+}
+
+/* Tap target minimum 44pt (iOS HIG) — defends Retailer Stack rows + nav */
+.v138-retailer-row, .v5-retailer-row,
+.v136-cta, .v136-cta-primary, .v136-cta-secondary,
+.nav-tab, button, .btn {
+  min-height: 44px;
+}
+
+/* ── Reduced-motion accessibility ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  button:active, .btn:active, .v136-cta:active,
+  .v136-similar-card:active, .nav-tab:active,
+  #cam-shutter:active, .v138-retailer-row:active {
+    transform: none !important;
+  }
+  * { transition-duration: .01ms !important; }
+}
+/* End V.158 design-system enforcement block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -11580,142 +11706,4 @@ function _v140ApplySkeletons(payload) {
     if (payload.outcome === 'matched') {
       var cat = document.getElementById('v138-category');
       if (cat && !cat.textContent.trim()) cat.innerHTML = '<span class="v140-skel v140-skel-eyebrow">&nbsp;</span>';
-      var vpill = document.getElementById('v138-verdict-pill');
-      if (vpill) {
-        vpill.className = 'v136-verdict-pill v140-skel v140-skel-pill';
-        vpill.textContent = '';
-      }
-      var vtxt = document.getElementById('v138-verdict-text');
-      if (vtxt) {
-        vtxt.innerHTML = '<span class="v140-skel v140-skel-line"></span>' +
-                         '<span class="v140-skel v140-skel-line short"></span>';
-      }
-    } else if (payload.outcome === 'disambig') {
-      for (var i = 0; i < 3; i++) {
-        var b = document.getElementById('v138-tier-blurb-' + i);
-        if (b) b.innerHTML = '<span class="v140-skel v140-skel-blurb"></span><span class="v140-skel v140-skel-blurb short"></span>';
-      }
-    }
-  } catch (e) { /* skeletons are cosmetic */ }
-}
-function _v140SoftFail(mode) {
-  try {
-    if (mode !== 'tiers') {
-      var vpill = document.getElementById('v138-verdict-pill');
-      if (vpill && vpill.classList.contains('v140-skel')) {
-        vpill.className = 'v136-verdict-pill';
-        vpill.style.display = 'none';
-        vpill.textContent = '';
-      }
-      var vtxt = document.getElementById('v138-verdict-text');
-      if (vtxt) {
-        vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
-      }
-      var cat = document.getElementById('v138-category');
-      if (cat && cat.querySelector && cat.querySelector('.v140-skel')) {
-        cat.style.display = 'none';
-        cat.textContent = '';
-      }
-    }
-    for (var i = 0; i < 3; i++) {
-      var b = document.getElementById('v138-tier-blurb-' + i);
-      if (b && b.querySelector && b.querySelector('.v140-skel')) {
-        b.textContent = '';
-      }
-    }
-  } catch (e) {}
-}
-async function _v140KickoffSynthesize(idPayload) {
-  if (!idPayload || !idPayload.synthesis_payload) return;
-  var sp = idPayload.synthesis_payload;
-  var mySeq = ++window._v140SynSeq;
-  _v140ApplySkeletons(idPayload);
-  // V.152 — hard timeout: if synth doesn't paint within 5s, force soft-fail
-  // so the user never sees an indefinite shimmer.
-  var _v152SkelTimeout = setTimeout(function () {
-    if (mySeq === window._v140SynSeq) {
-      try { track && track('synthesize_skeleton_timeout', { mode: sp.mode }); } catch (e) {}
-      _v140SoftFail(sp.mode);
-    }
-  }, 5000);
-  var _v152ClearTimeout = function () { try { clearTimeout(_v152SkelTimeout); } catch (e) {} };
-  try {
-    var sAc = new AbortController();
-    var sTimer = setTimeout(function () { try { sAc.abort(); } catch (e) {} }, 12000);
-    var resp = await fetch('/api/synthesize', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ synthesis_payload: sp }),
-      signal: sAc.signal,
-    });
-    clearTimeout(sTimer);
-    if (mySeq !== window._v140SynSeq) return;
-    if (!resp.ok) {
-      _v152ClearTimeout();
-      try { track && track('synthesize_http_error', { status: resp.status, mode: sp.mode }); } catch (e) {}
-      _v140SoftFail(sp.mode);
-      return;
-    }
-    var s = await resp.json();
-    _v152ClearTimeout();
-    try { track && track('synthesize_ok', { mode: s.mode || sp.mode, ms: (s._meta && s._meta.latency_ms) || null }); } catch (e) {}
-    var effectiveMode = s.mode || sp.mode;
-    if (effectiveMode === 'pillars') {
-      var cat = document.getElementById('v138-category');
-      if (cat) {
-        if (s.category_eyebrow) {
-          cat.textContent = s.category_eyebrow;
-          cat.style.display = '';
-        } else {
-          cat.textContent = '';
-          cat.style.display = 'none';
-        }
-      }
-      var vpill = document.getElementById('v138-verdict-pill');
-      if (vpill) {
-        vpill.classList.remove('v140-skel', 'v140-skel-pill');
-        if (s.verdict_pill_text) {
-          vpill.textContent = s.verdict_pill_text;
-          vpill.className = 'v136-verdict-pill ' + (s.verdict_pill_color_class || 'v136-verdict-fair');
-          vpill.style.display = '';
-        } else {
-          vpill.style.display = 'none';
-        }
-      }
-      var vtxt = document.getElementById('v138-verdict-text');
-      if (vtxt) {
-        // V.151 — never leave the slot empty. Trim, null-check, fallback
-        // to soft-fail copy if absent. Removes any lingering V.140 skeleton
-        // classes so the slot is guaranteed visible.
-        vtxt.classList.remove('v140-skel', 'v140-skel-line', 'short');
-        var _summary = (s.verdict_summary && typeof s.verdict_summary === 'string')
-                       ? s.verdict_summary.trim() : '';
-        if (_summary) {
-          vtxt.textContent = _summary;
-        } else {
-          vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
-        }
-      }
-    } else if (effectiveMode === 'tiers') {
-      var blurbs = Array.isArray(s.tier_blurbs) ? s.tier_blurbs : [];
-      for (var i = 0; i < 3; i++) {
-        var b = document.getElementById('v138-tier-blurb-' + i);
-        if (!b) continue;
-        if (blurbs[i]) {
-          b.textContent = blurbs[i];
-        } else {
-          b.textContent = '';
-        }
-      }
-    }
-  } catch (err) {
-    _v152ClearTimeout();
-    try { track && track('synthesize_throw', { error: String(err).slice(0, 100), mode: sp.mode }); } catch (e) {}
-    if (mySeq === window._v140SynSeq) _v140SoftFail(sp.mode);
-  }
-}
-/* End V.140 synthesize orchestrator */
-</script>
-
-</body>
-</html>
+      var vpill =
