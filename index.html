@@ -6743,6 +6743,112 @@ body.v181 .v182-type-close svg {
 body.v181 .v172-type-sheet { position: relative; }
 
 /* End V.182 Fit & Finish block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.183 — THE GLOBAL ANCHOR (Bottom Tab Bar)
+   Frosted-glass nav strip pinned to the bottom of the viewport with iOS
+   safe-area padding. Hidden during the full-screen camera modal and the
+   welcome flow so it never fights the camera UI.
+   ═══════════════════════════════════════════════════════════════════════ */
+#v183-tab-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 80;             /* above bottom-nav (50) and scroll content */
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 0;
+  padding: 8px 12px calc(env(safe-area-inset-bottom, 0px) + 8px);
+  background: rgba(255, 255, 255, 0.45);
+  backdrop-filter: blur(25px) saturate(200%);
+  -webkit-backdrop-filter: blur(25px) saturate(200%);
+  border-top: 1px solid rgba(255, 255, 255, 0.4);
+  box-shadow:
+    0 -8px 24px rgba(20, 32, 26, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+.v183-tab {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  min-height: 52px;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  color: rgba(20, 32, 26, 0.62);
+  -webkit-tap-highlight-color: transparent;
+  transition: color .18s cubic-bezier(0.4, 0, 0.2, 1);
+  font-family: inherit;
+}
+.v183-tab-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+.v183-tab-icon svg { width: 100%; height: 100%; }
+.v183-tab-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+}
+.v183-tab.is-active { color: var(--green-deep, #143d10); }
+.v183-tab.is-active .v183-tab-icon svg { stroke-width: 2.4; }
+
+/* Primary action: Snap. Slightly larger icon + brand-green accent dot
+   under the label so it reads as the hero action. */
+.v183-tab-primary .v183-tab-icon {
+  width: 30px;
+  height: 30px;
+  color: var(--green-deep, #143d10);
+}
+.v183-tab-primary .v183-tab-label {
+  color: var(--green-deep, #143d10);
+  font-weight: 700;
+}
+.v183-tab-primary.is-active .v183-tab-icon { color: var(--green-deep, #143d10); }
+
+/* Hide the global anchor when the camera modal owns the screen, and on
+   the welcome flow so users can't escape onboarding via the nav. */
+body:has(#screen-camera.active) #v183-tab-bar,
+body:has(#screen-welcome.active) #v183-tab-bar {
+  display: none !important;
+}
+
+/* Push the camera Close X up so the tab bar (when visible) never collides
+   with it — also covers the case where the nav peeks during transitions. */
+body.v181 .v171-cam-close {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 32px) !important;
+}
+
+/* Lift Home content above the tab bar so trailing CTAs aren't covered. */
+body.v181 .v5-home-wrap,
+body.v181 #screen-home,
+body.v181 #screen-result,
+body.v181 #screen-confirm {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 76px);
+}
+
+/* V.184 — Escape Hatch Correction. The V.182 .v182-type-close button is
+   no longer rendered. We zero its CSS footprint just in case any cached
+   client still has it in the DOM during a transition window. */
+body.v181 .v182-type-close,
+.v182-type-close {
+  display: none !important;
+}
+
+/* End V.183/V.184 block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -14376,7 +14482,7 @@ async function _v140KickoffSynthesize(idPayload) {
   }
 
   // Selectors of elements that earn the spring on tap.
-  const SPRING_TARGETS = '.v171-hero, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row, #v171-show-more-prices, .v174-recent-chip, .v172-type-go';
+  const SPRING_TARGETS = '.v171-hero, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row, #v171-show-more-prices, .v174-recent-chip, .v172-type-go, .v183-tab';
 
   // V.182 — Pre-mount the spring class on init so we never mutate classes
   // during pointer events (which iOS treats as element movement and uses
@@ -14464,30 +14570,108 @@ async function _v140KickoffSynthesize(idPayload) {
     } catch (err) {}
   }, true);
 
-  // V.182 — Inject the floating Close X into the Type sheet so the user
-  // always has an Apple-grade escape hatch (mirrors the Camera close X).
-  // The button is positioned via body.v181 .v182-type-close CSS already in
-  // the stylesheet — we just need it in the DOM, once, idempotently.
-  (function v182InjectTypeClose() {
+  // V.184 — Escape Hatch Correction: the V.182 Type-sheet X injection has
+  // been REMOVED. The Founder confirmed the X belongs strictly on the
+  // Camera screen (already wired via #v171-cam-close-btn). Users dismiss
+  // the Type sheet via the V.183 tab bar / system back. Belt-and-braces:
+  // if any earlier wave snuck a .v182-type-close into the DOM, kill it.
+  (function v184ScrubLegacyTypeClose() {
     try {
-      var sheet = document.getElementById('v172-type-sheet');
-      if (!sheet) return;
-      if (sheet.querySelector('.v182-type-close')) return; // idempotent
-      var btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'v182-type-close';
-      btn.setAttribute('aria-label', 'Close');
-      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
-      btn.addEventListener('click', function (e) {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof window.v172CloseTypeSheet === 'function') {
-          window.v172CloseTypeSheet();
-        } else {
-          sheet.hidden = true;
+      var stale = document.querySelectorAll('.v182-type-close');
+      for (var i = 0; i < stale.length; i++) stale[i].remove();
+    } catch (e) {}
+  })();
+
+  // V.183 — Global Anchor (bottom tab bar). Injected on init so it lives
+  // outside any per-screen DOM and survives screen swaps. Frosted-glass,
+  // safe-area-aware, hidden during full-screen camera modal.
+  (function v183MountTabBar() {
+    try {
+      if (document.getElementById('v183-tab-bar')) return;
+      var nav = document.createElement('nav');
+      nav.id = 'v183-tab-bar';
+      nav.setAttribute('aria-label', 'Primary navigation');
+      nav.innerHTML = ''
+        + '<button class="v183-tab v181-spring" data-tab="home" type="button" aria-label="Home">'
+        +   '<span class="v183-tab-icon" aria-hidden="true">'
+        +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        +       '<path d="M3 11.5 L12 4 L21 11.5 V20 a1 1 0 0 1 -1 1 H15 V14 H9 V21 H4 a1 1 0 0 1 -1 -1 Z"/>'
+        +     '</svg>'
+        +   '</span>'
+        +   '<span class="v183-tab-label">Home</span>'
+        + '</button>'
+        + '<button class="v183-tab v183-tab-primary v181-spring" data-tab="snap" type="button" aria-label="Snap a product">'
+        +   '<span class="v183-tab-icon" aria-hidden="true">'
+        +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        +       '<path d="M4 8 h3 l1.5 -2 h7 L17 8 h3 a1 1 0 0 1 1 1 v9 a1 1 0 0 1 -1 1 H4 a1 1 0 0 1 -1 -1 V9 a1 1 0 0 1 1 -1 Z"/>'
+        +       '<circle cx="12" cy="13.5" r="3.6"/>'
+        +     '</svg>'
+        +   '</span>'
+        +   '<span class="v183-tab-label">Snap</span>'
+        + '</button>'
+        + '<button class="v183-tab v181-spring" data-tab="type" type="button" aria-label="Type a product name">'
+        +   '<span class="v183-tab-icon" aria-hidden="true">'
+        +     '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
+        +       '<circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>'
+        +     '</svg>'
+        +   '</span>'
+        +   '<span class="v183-tab-label">Type</span>'
+        + '</button>';
+      document.body.appendChild(nav);
+
+      // Active-tab tracking. We infer the active tab from which screen is
+      // currently active rather than from the last button tapped — this
+      // keeps the bar in sync when goHome() / goSnap() fire from other
+      // code paths (e.g. tension overlay, native back-swipe).
+      function v183SyncActive() {
+        try {
+          var camActive = document.getElementById('screen-camera');
+          camActive = camActive && camActive.classList.contains('active');
+          var sheet = document.getElementById('v172-type-sheet');
+          var typeOpen = sheet && !sheet.hidden;
+          var btns = nav.querySelectorAll('.v183-tab');
+          for (var i = 0; i < btns.length; i++) {
+            var t = btns[i].getAttribute('data-tab');
+            var on = (t === 'snap' && camActive) ||
+                     (t === 'type' && typeOpen && !camActive) ||
+                     (t === 'home' && !camActive && !typeOpen);
+            btns[i].classList.toggle('is-active', on);
+          }
+        } catch (e) {}
+      }
+      window._v183SyncActive = v183SyncActive;
+      v183SyncActive();
+      // Cheap polling — every 400 ms covers screen transitions without a
+      // brittle MutationObserver on every screen. Idle overhead is ~0.
+      setInterval(v183SyncActive, 400);
+
+      // Wire taps. Single capture-phase listener on the bar; the V.181
+      // pointerdown/pointerup spring physics still squish each .v181-spring
+      // tab on touch.
+      nav.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('.v183-tab');
+        if (!btn) return;
+        var tab = btn.getAttribute('data-tab');
+        try { if (window.v172Haptic) window.v172Haptic(20); } catch (err) {}
+        if (tab === 'home') {
+          // Reset any in-flight state and route to home.
+          try { if (typeof window.v172CloseTypeSheet === 'function') window.v172CloseTypeSheet(); } catch (err) {}
+          if (typeof window.goHome === 'function') window.goHome();
+        } else if (tab === 'snap') {
+          if (typeof window.goSnap === 'function') window.goSnap();
+        } else if (tab === 'type') {
+          if (typeof window.v172OpenTypeSheet === 'function') window.v172OpenTypeSheet();
         }
-      });
-      sheet.insertBefore(btn, sheet.firstChild);
+        setTimeout(v183SyncActive, 60);
+      }, true);
+
+      // Spring re-mount sweep so the tabs always have the spring class
+      // (the SPRING_TARGETS selector below also picks them up natively).
+      try {
+        nav.querySelectorAll('.v183-tab').forEach(function (el) {
+          el.classList.add('v181-spring');
+        });
+      } catch (e) {}
     } catch (e) {}
   })();
 
