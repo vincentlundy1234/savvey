@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#2a6b22" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#0f1410" media="(prefers-color-scheme: dark)">
 <meta name="description" content="Snap, scan, paste or type any product — Savvey identifies it instantly and shows the verified Amazon UK price plus alternative retailers.">
@@ -5784,6 +5784,179 @@ body.v171 #v171-show-more-prices:active { transform: scale(0.97); }
 /* Hide the legacy V.77 / V.134 loading inner when V.171 stage is mounted. */
 body.v171 #screen-loading .v5-loading-inner { display: none !important; }
 /* End V.171 Glass Polish block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.172 — NATIVE APP OVERHAUL
+   Strips web-quirks, layers iOS safe areas, punchier active states,
+   wordmark restored to top, working Type sheet, swipe-to-dismiss camera.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Web-quirk eradication (global) ──────────────────────────────────── */
+html, body {
+  overscroll-behavior-y: none;  /* kill the pull-to-refresh bounce */
+  overscroll-behavior-x: none;
+  -webkit-overflow-scrolling: touch;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+/* Block accidental selection on every tap-target. Inputs / contenteditable
+   keep their natural text-selection so paste & autofill still work. */
+body.v172 * {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+body.v172 input,
+body.v172 textarea,
+body.v172 [contenteditable="true"],
+body.v172 .v138-verdict-text,
+body.v172 #v138-verdict-text,
+body.v172 #v171-savveys-verdict .v171-vh-summary,
+body.v172 .v172-type-input {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/* ── Safe-area padding for main containers ───────────────────────────── */
+body.v172 #screen-home,
+body.v172 #screen-result,
+body.v172 #screen-confirm,
+body.v172 #screen-error {
+  padding-top:    max(env(safe-area-inset-top), 0px);
+  padding-bottom: max(env(safe-area-inset-bottom), 0px);
+  padding-left:   max(env(safe-area-inset-left), 0px);
+  padding-right:  max(env(safe-area-inset-right), 0px);
+}
+/* Camera + loading get safe-area awareness too but without paddinging the
+   full-bleed background — the close X + chrome do it instead via their
+   own anchored offsets. */
+
+/* ── V.172 Home Header (SAVVEY wordmark restored to absolute top) ────── */
+body.v172 .v172-home-header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 20px 6px;
+  padding-top: calc(env(safe-area-inset-top, 0px) + 18px);
+}
+body.v172 .v172-wordmark {
+  font-family: var(--font-app, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-weight: 800;
+  font-size: 22px;
+  letter-spacing: -0.01em;
+  color: var(--green, #2a6b22);
+}
+body.v172 .v172-wordmark .y { color: var(--amber, #d68910); }
+body.v172 .v172-wordmark .dot { color: var(--green-dark, #1d4a18); }
+
+/* ── V.172 Type Sheet (resurrects the dead "Type a Name" route) ──────── */
+body.v172 .v172-type-sheet[hidden] { display: none !important; }
+body.v172 .v172-type-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 16px 18px 24px;
+  animation: v172-type-in .22s cubic-bezier(0.32, 0.72, 0, 1);
+}
+@keyframes v172-type-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+body.v172 .v172-type-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.10),
+              0 8px 10px -6px rgba(0,0,0,0.10);
+  border: 1px solid rgba(20,32,26,0.06);
+}
+body.v172 .v172-type-icon { width: 22px; height: 22px; flex: 0 0 22px; color: var(--ink-mute, #7a857f); }
+body.v172 .v172-type-input {
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ink, #14201a);
+  min-width: 0;
+}
+body.v172 .v172-type-go {
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  border: 0;
+  background: linear-gradient(180deg, #2a6b22 0%, #1d4a18 100%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+body.v172 .v172-type-cancel {
+  align-self: center;
+  background: transparent;
+  border: 0;
+  padding: 8px 14px;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink-mute, #7a857f);
+  cursor: pointer;
+}
+
+/* ── V.172 Punchier active states (Panel-mandated 0.96 / 0.1s ease-out) ─ */
+body.v172 .v171-hero,
+body.v172 .v172-type-go,
+body.v172 .v171-cam-close,
+body.v172 #v171-show-more-prices,
+body.v172 #v154-escape-btn,
+body.v172 #v166-disambig-scan-btn,
+body.v172 .v136-cta,
+body.v172 .v136-cta-primary,
+body.v172 .v136-cta-secondary,
+body.v172 .v138-retailer-row,
+body.v172 .v5-err-suggestion {
+  transition: transform .1s ease-out, opacity .1s ease-out, box-shadow .15s ease;
+}
+body.v172 .v171-hero:active,
+body.v172 .v172-type-go:active,
+body.v172 .v171-cam-close:active,
+body.v172 #v171-show-more-prices:active,
+body.v172 #v154-escape-btn:active,
+body.v172 #v166-disambig-scan-btn:active,
+body.v172 .v136-cta:active,
+body.v172 .v136-cta-primary:active,
+body.v172 .v136-cta-secondary:active,
+body.v172 .v138-retailer-row:active,
+body.v172 .v5-err-suggestion:active {
+  transform: scale(0.96);
+  opacity: 0.90;
+}
+
+/* ── V.172 Camera swipe-dismiss visual ───────────────────────────────── */
+body.v172 #screen-camera { will-change: transform, opacity; }
+body.v172 #screen-camera.v172-swiping { transition: none !important; }
+
+/* ── V.172 Legacy element nuke (any stragglers below the heroes) ─────── */
+body.v172 #screen-home .v5-home-wrap > *:not(.v172-keep) { display: none !important; }
+body.v172 #screen-home .v76-savings,
+body.v172 #screen-home .v71-recent-strip,
+body.v172 #screen-home .v5-doors,
+body.v172 #screen-home .v102-secondary-row,
+body.v172 #screen-home .v102-type-bar,
+body.v172 #screen-home #type-door,
+body.v172 #screen-home #paste-door { display: none !important; }
+
+/* End V.172 Native App Overhaul block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -5809,9 +5982,13 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
      If the values shown here disagree with what Claude thinks landed,
      the disconnect is finally visible. Tap to dismiss.
      ════════════════════════════════════════════════════════════════════ -->
-<div id="v126-debug" style="position:fixed;top:0;left:0;right:0;z-index:99999;background:#d00000;color:#fff;font:600 11px/1.4 -apple-system,BlinkMacSystemFont,system-ui,monospace;padding:8px 12px 8px 12px;text-align:left;-webkit-user-select:text;user-select:text;box-shadow:0 2px 8px rgba(0,0,0,.3);">
-  <button id="v126-debug-close" type="button" style="position:absolute;top:4px;right:6px;background:#fff;color:#d00000;border:none;border-radius:50%;width:22px;height:22px;font:bold 14px/22px system-ui;padding:0;cursor:pointer;">×</button>
-  <div id="v126-debug-body">V.126 DEBUG · booting…</div>
+<!-- V.172 — V.126 debug overlay PURGED for production. The element is left
+     in the DOM as `display:none` so any legacy code that reads it doesn't
+     throw, but it never renders. The V.126 cache-buster + SW hook below
+     are preserved; only the visible red banner is gone. -->
+<div id="v126-debug" style="display:none !important;" aria-hidden="true">
+  <button id="v126-debug-close" type="button" style="display:none !important;">×</button>
+  <div id="v126-debug-body" style="display:none !important;"></div>
 </div>
 <script>
 (function(){
@@ -5974,6 +6151,13 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen active" id="screen-home">
+  <!-- V.172 — SAVVEY wordmark, restored to the absolute top of the home
+       screen. Sits above the V.171 Twin Heroes. Native iOS PWA pattern:
+       brand always at the top, content below. Safe-area-inset aware so
+       it doesn't collide with the notch / Dynamic Island. -->
+  <header class="v172-home-header" aria-label="Savvey">
+    <div class="v172-wordmark">SAVVE<span class="y">Y</span><span class="dot">.</span></div>
+  </header>
   <!-- V.171 — Glass Polish home overlay. Twin Heroes layout. The legacy V.40
        door layout below is preserved in the DOM but CSS-hidden when
        <body class="v171"> is active. JS at end of file toggles the class. -->
@@ -5991,7 +6175,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <div class="v171-hero-title">Snap a Product</div>
         <div class="v171-hero-sub">Point your camera, we'll find it.</div>
       </button>
-      <button class="v171-hero v171-hero-type" type="button" onclick="(function(){var el=document.getElementById('text-input'); if(el){el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'});}})()" aria-label="Type a product name">
+      <button class="v171-hero v171-hero-type" type="button" onclick="v172OpenTypeSheet()" aria-label="Type a product name">
         <div class="v171-hero-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7"/>
@@ -6001,6 +6185,26 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <div class="v171-hero-title">Type a Name</div>
         <div class="v171-hero-sub">"Bose QC45", "AF400UK", etc.</div>
       </button>
+    </div>
+    <!-- V.172 — Inline Type sheet. Hidden by default; revealed when the
+         user taps "Type a Name". Holds a visible #v172-type-input that
+         goText() will use via the legacy #text-input shadow-binding. -->
+    <div class="v172-type-sheet" id="v172-type-sheet" hidden>
+      <div class="v172-type-bar">
+        <svg class="v172-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        </svg>
+        <input id="v172-type-input" class="v172-type-input"
+               type="text" inputmode="search" enterkeyhint="search"
+               autocomplete="off" autocorrect="off" spellcheck="false"
+               placeholder='Type a product — "Bose QC45", "iPhone 15"…'>
+        <button class="v172-type-go" type="button" onclick="v172SubmitType()" aria-label="Search">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
+          </svg>
+        </button>
+      </div>
+      <button class="v172-type-cancel" type="button" onclick="v172CloseTypeSheet()">Cancel</button>
     </div>
   </div>
   <!-- v5 REBUILD (V.40): rebuilt to match Claude Design v5 spec -->
@@ -12390,6 +12594,182 @@ async function _v140KickoffSynthesize(idPayload) {
   window._v171 = { mountVerdict: v171MountVerdict, truncateStack: v171TruncateStack,
                    startLoading: v171StartLoadingCycle, stopLoading: v171StopLoadingCycle };
   try { console.log('[V.171] Glass Polish initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.172 — NATIVE APP OVERHAUL · JS
+   - Type sheet open/close/submit (resurrects "Type a Name")
+   - Camera swipe-down dismiss
+   - Haptic vibrate on primary taps
+   - body.v172 marker so the V.172 CSS rules apply
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v172Init() {
+  try { document.body.classList.add('v172'); } catch (e) {}
+
+  // ── Haptics helper ──────────────────────────────────────────────────
+  function v172Haptic(ms) {
+    try {
+      if (window.savveyHaptics && typeof window.savveyHaptics.light === 'function') {
+        window.savveyHaptics.light();
+        return;
+      }
+      if (navigator.vibrate) navigator.vibrate(ms || 50);
+    } catch (e) {}
+  }
+  window.v172Haptic = v172Haptic;
+
+  // ── Type Sheet (resurrects the dead "Type a Name" route) ────────────
+  window.v172OpenTypeSheet = function () {
+    v172Haptic(20);
+    var sheet = document.getElementById('v172-type-sheet');
+    var input = document.getElementById('v172-type-input');
+    if (!sheet || !input) return;
+    sheet.hidden = false;
+    // Defer focus to next frame so the slide-in animation has begun and
+    // iOS Safari raises the keyboard from a stable layout.
+    setTimeout(function () {
+      try { input.focus({ preventScroll: false }); } catch (e) { input.focus(); }
+      try { input.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
+    }, 60);
+  };
+  window.v172CloseTypeSheet = function () {
+    var sheet = document.getElementById('v172-type-sheet');
+    var input = document.getElementById('v172-type-input');
+    if (input) input.value = '';
+    if (sheet) sheet.hidden = true;
+  };
+  window.v172SubmitType = function () {
+    var input = document.getElementById('v172-type-input');
+    if (!input) return;
+    var text = (input.value || '').trim();
+    if (!text) { input.focus(); return; }
+    v172Haptic(50);
+    // Bridge to the existing goText() path — write through the legacy
+    // #text-input so the established pipeline doesn't need to change.
+    var legacy = document.getElementById('text-input');
+    if (legacy) legacy.value = text;
+    if (typeof window.goText === 'function') {
+      window.goText();
+    } else if (typeof window.callNormalize === 'function') {
+      window.callNormalize({ input_type: 'text', text: text });
+    }
+    // Reset + close the sheet so the next visit is clean.
+    setTimeout(function () { window.v172CloseTypeSheet(); }, 180);
+  };
+  // Submit on Enter inside the V.172 type input.
+  (function v172WireTypeEnter() {
+    var input = document.getElementById('v172-type-input');
+    if (!input) return;
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') { e.preventDefault(); window.v172SubmitType(); }
+    });
+  })();
+
+  // ── Haptic feedback on primary tap targets ──────────────────────────
+  (function v172WireHaptics() {
+    var selectors = [
+      '.v171-hero',
+      '.v171-cam-close', '#v171-cam-close-btn',
+      '.v172-type-go',
+      '.v136-cta-primary',
+      '#cam-shutter', '.v5-cam-shutter', '.shutter-btn'
+    ];
+    document.addEventListener('click', function (e) {
+      try {
+        for (var i = 0; i < selectors.length; i++) {
+          if (e.target.closest && e.target.closest(selectors[i])) {
+            v172Haptic(40);
+            return;
+          }
+        }
+      } catch (err) {}
+    }, true);
+  })();
+
+  // ── Camera swipe-down dismiss (iOS modal feel) ──────────────────────
+  (function v172WireCameraSwipe() {
+    var cam = document.getElementById('screen-camera');
+    if (!cam) return;
+    var startY = 0, startX = 0, lastY = 0, dragging = false, t0 = 0;
+    var THRESHOLD_PX = 90;
+    var VELOCITY_PX_PER_MS = 0.35;
+    cam.addEventListener('touchstart', function (e) {
+      // Only single-finger drags; pinch zoom owns multi-touch (V.128).
+      if (!e.touches || e.touches.length !== 1) return;
+      // Don't intercept if the touch started on the close button, the
+      // shutter, or any interactive control — the user wants to tap them.
+      var t = e.target;
+      if (t && t.closest && t.closest('.v171-cam-close, #cam-shutter, .v5-cam-shutter, .shutter-btn, .v105-zoom-tier, #zoom-indicator, button')) return;
+      startY = e.touches[0].clientY;
+      startX = e.touches[0].clientX;
+      lastY  = startY;
+      t0 = Date.now();
+      dragging = true;
+      cam.classList.add('v172-swiping');
+    }, { passive: true });
+    cam.addEventListener('touchmove', function (e) {
+      if (!dragging || !e.touches || e.touches.length !== 1) return;
+      var dx = e.touches[0].clientX - startX;
+      var dy = e.touches[0].clientY - startY;
+      // Cancel swipe if the user drifted horizontally (probably trying
+      // to interact with something, not dismiss the camera).
+      if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+        dragging = false;
+        cam.style.transform = '';
+        cam.style.opacity = '';
+        cam.classList.remove('v172-swiping');
+        return;
+      }
+      if (dy > 0) {
+        // Resistance curve: linear up to 200px, then dampen.
+        var t = dy < 200 ? dy : 200 + (dy - 200) * 0.45;
+        cam.style.transform = 'translateY(' + t + 'px)';
+        cam.style.opacity = String(Math.max(0.55, 1 - dy / 600));
+        lastY = e.touches[0].clientY;
+      }
+    }, { passive: true });
+    cam.addEventListener('touchend', function (e) {
+      if (!dragging) return;
+      dragging = false;
+      var dy = lastY - startY;
+      var dt = Math.max(1, Date.now() - t0);
+      var velocity = dy / dt;
+      cam.classList.remove('v172-swiping');
+      // Dismiss if user swiped far enough OR fast enough downward.
+      if (dy > THRESHOLD_PX || velocity > VELOCITY_PX_PER_MS) {
+        v172Haptic(35);
+        // Inline animate the remaining distance then trigger teardown.
+        cam.style.transition = 'transform .22s cubic-bezier(0.32, 0.72, 0, 1), opacity .2s ease-out';
+        cam.style.transform = 'translateY(110%)';
+        cam.style.opacity = '0';
+        setTimeout(function () {
+          cam.style.transform = '';
+          cam.style.opacity = '';
+          cam.style.transition = '';
+          try { if (typeof window.goHome === 'function') window.goHome(); } catch (e) {}
+        }, 230);
+        return;
+      }
+      // Snap back.
+      cam.style.transition = 'transform .2s cubic-bezier(0.32, 0.72, 0, 1), opacity .15s ease-out';
+      cam.style.transform = 'translateY(0)';
+      cam.style.opacity = '1';
+      setTimeout(function () {
+        cam.style.transform = '';
+        cam.style.opacity = '';
+        cam.style.transition = '';
+      }, 230);
+    }, { passive: true });
+    cam.addEventListener('touchcancel', function () {
+      dragging = false;
+      cam.classList.remove('v172-swiping');
+      cam.style.transform = '';
+      cam.style.opacity = '';
+      cam.style.transition = '';
+    }, { passive: true });
+  })();
+
+  try { console.log('[V.172] Native App Overhaul initialised.'); } catch (e) {}
 })();
 </script>
 </body>
