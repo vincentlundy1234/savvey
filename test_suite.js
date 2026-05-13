@@ -8,7 +8,15 @@
 
 const BASE = process.env.SAVVEY_BASE || 'https://savvey.vercel.app';
 
-const CASES = [
+// V.159 — single-product image-extraction audit per Panel mandate.
+// Tests the long-tail path (Petzl carabiner — Amazon picker almost never
+// verifies these, so identity.image must come from the google_shopping
+// fallback added in V.159). Set SAVVEY_SINGLE=1 to force one-case mode.
+const CASES = (process.env.SAVVEY_SINGLE === '1') ? [
+  { name: 'IMG: text "Petzl Sm\'D Twist-Lock Carabiner"',
+    body: { input_type: 'text', text: "Petzl Sm'D Twist-Lock Carabiner" },
+    expect: { image_present: true, links_min: 1 } },
+] : [
   { name: 'A: text "playstation 5"',
     body: { input_type: 'text', text: 'playstation 5' },
     expect: { outcome: 'disambig' } },
@@ -38,12 +46,15 @@ async function postJSON(path, body) {
 function summarise(j) {
   const links = Array.isArray(j.links) ? j.links : [];
   const sd = (j._meta && j._meta.serp_diag) || {};
+  const img = j.identity && j.identity.image;
   return {
     version: j._meta && j._meta.version,
     outcome: j.outcome,
     outcome_reason: j.outcome_reason,
     disambig_kind: j.disambig_kind,
     canonical: (j.identity && j.identity.canonical) || j.canonical_search_string,
+    image_url:    img ? img.thumbnail_url : null,
+    image_source: img ? img.source : null,
     confidence: j.confidence,
     family_applied: j._v146_family_applied,
     best_price: j.pricing && j.pricing.best_price && {
@@ -88,6 +99,16 @@ function check(name, expect, j) {
       label: `links.length >= ${expect.links_min}`,
       pass: links >= expect.links_min,
       got: links,
+    });
+  }
+  // V.159 — assert identity.image.thumbnail_url is a valid http(s) URL.
+  if (expect.image_present !== undefined) {
+    const img = j.identity && j.identity.image;
+    const ok = !!(img && typeof img.thumbnail_url === 'string' && /^https?:\/\//.test(img.thumbnail_url));
+    results.push({
+      label: `identity.image.thumbnail_url is http(s)`,
+      pass: ok === !!expect.image_present,
+      got: img ? (img.thumbnail_url + ' (source=' + img.source + ')') : 'null',
     });
   }
   const allPass = results.every(r => r.pass);

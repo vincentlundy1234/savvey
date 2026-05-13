@@ -11706,4 +11706,142 @@ function _v140ApplySkeletons(payload) {
     if (payload.outcome === 'matched') {
       var cat = document.getElementById('v138-category');
       if (cat && !cat.textContent.trim()) cat.innerHTML = '<span class="v140-skel v140-skel-eyebrow">&nbsp;</span>';
-      var vpill =
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill) {
+        vpill.className = 'v136-verdict-pill v140-skel v140-skel-pill';
+        vpill.textContent = '';
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        vtxt.innerHTML = '<span class="v140-skel v140-skel-line"></span>' +
+                         '<span class="v140-skel v140-skel-line short"></span>';
+      }
+    } else if (payload.outcome === 'disambig') {
+      for (var i = 0; i < 3; i++) {
+        var b = document.getElementById('v138-tier-blurb-' + i);
+        if (b) b.innerHTML = '<span class="v140-skel v140-skel-blurb"></span><span class="v140-skel v140-skel-blurb short"></span>';
+      }
+    }
+  } catch (e) { /* skeletons are cosmetic */ }
+}
+function _v140SoftFail(mode) {
+  try {
+    if (mode !== 'tiers') {
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill && vpill.classList.contains('v140-skel')) {
+        vpill.className = 'v136-verdict-pill';
+        vpill.style.display = 'none';
+        vpill.textContent = '';
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
+      }
+      var cat = document.getElementById('v138-category');
+      if (cat && cat.querySelector && cat.querySelector('.v140-skel')) {
+        cat.style.display = 'none';
+        cat.textContent = '';
+      }
+    }
+    for (var i = 0; i < 3; i++) {
+      var b = document.getElementById('v138-tier-blurb-' + i);
+      if (b && b.querySelector && b.querySelector('.v140-skel')) {
+        b.textContent = '';
+      }
+    }
+  } catch (e) {}
+}
+async function _v140KickoffSynthesize(idPayload) {
+  if (!idPayload || !idPayload.synthesis_payload) return;
+  var sp = idPayload.synthesis_payload;
+  var mySeq = ++window._v140SynSeq;
+  _v140ApplySkeletons(idPayload);
+  // V.152 — hard timeout: if synth doesn't paint within 5s, force soft-fail
+  // so the user never sees an indefinite shimmer.
+  var _v152SkelTimeout = setTimeout(function () {
+    if (mySeq === window._v140SynSeq) {
+      try { track && track('synthesize_skeleton_timeout', { mode: sp.mode }); } catch (e) {}
+      _v140SoftFail(sp.mode);
+    }
+  }, 5000);
+  var _v152ClearTimeout = function () { try { clearTimeout(_v152SkelTimeout); } catch (e) {} };
+  try {
+    var sAc = new AbortController();
+    var sTimer = setTimeout(function () { try { sAc.abort(); } catch (e) {} }, 12000);
+    var resp = await fetch('/api/synthesize', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ synthesis_payload: sp }),
+      signal: sAc.signal,
+    });
+    clearTimeout(sTimer);
+    if (mySeq !== window._v140SynSeq) return;
+    if (!resp.ok) {
+      _v152ClearTimeout();
+      try { track && track('synthesize_http_error', { status: resp.status, mode: sp.mode }); } catch (e) {}
+      _v140SoftFail(sp.mode);
+      return;
+    }
+    var s = await resp.json();
+    _v152ClearTimeout();
+    try { track && track('synthesize_ok', { mode: s.mode || sp.mode, ms: (s._meta && s._meta.latency_ms) || null }); } catch (e) {}
+    var effectiveMode = s.mode || sp.mode;
+    if (effectiveMode === 'pillars') {
+      var cat = document.getElementById('v138-category');
+      if (cat) {
+        if (s.category_eyebrow) {
+          cat.textContent = s.category_eyebrow;
+          cat.style.display = '';
+        } else {
+          cat.textContent = '';
+          cat.style.display = 'none';
+        }
+      }
+      var vpill = document.getElementById('v138-verdict-pill');
+      if (vpill) {
+        vpill.classList.remove('v140-skel', 'v140-skel-pill');
+        if (s.verdict_pill_text) {
+          vpill.textContent = s.verdict_pill_text;
+          vpill.className = 'v136-verdict-pill ' + (s.verdict_pill_color_class || 'v136-verdict-fair');
+          vpill.style.display = '';
+        } else {
+          vpill.style.display = 'none';
+        }
+      }
+      var vtxt = document.getElementById('v138-verdict-text');
+      if (vtxt) {
+        // V.151 — never leave the slot empty. Trim, null-check, fallback
+        // to soft-fail copy if absent. Removes any lingering V.140 skeleton
+        // classes so the slot is guaranteed visible.
+        vtxt.classList.remove('v140-skel', 'v140-skel-line', 'short');
+        var _summary = (s.verdict_summary && typeof s.verdict_summary === 'string')
+                       ? s.verdict_summary.trim() : '';
+        if (_summary) {
+          vtxt.textContent = _summary;
+        } else {
+          vtxt.innerHTML = '<span class="v140-softfail">Couldn\u2019t generate a verdict \u2014 check the price and reviews yourself.</span>';
+        }
+      }
+    } else if (effectiveMode === 'tiers') {
+      var blurbs = Array.isArray(s.tier_blurbs) ? s.tier_blurbs : [];
+      for (var i = 0; i < 3; i++) {
+        var b = document.getElementById('v138-tier-blurb-' + i);
+        if (!b) continue;
+        if (blurbs[i]) {
+          b.textContent = blurbs[i];
+        } else {
+          b.textContent = '';
+        }
+      }
+    }
+  } catch (err) {
+    _v152ClearTimeout();
+    try { track && track('synthesize_throw', { error: String(err).slice(0, 100), mode: sp.mode }); } catch (e) {}
+    if (mySeq === window._v140SynSeq) _v140SoftFail(sp.mode);
+  }
+}
+/* End V.140 synthesize orchestrator */
+</script>
+
+</body>
+</html>

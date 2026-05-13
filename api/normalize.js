@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v157';
+const VERSION             = 'normalize.js v3.4.5v159';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -1679,34 +1679,42 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           || host.includes('doubleclick')
           || host === 'shopping.google.com';
       if (_isGoogleHost) {
-        // V.150 — try to unwrap the redirector first.
+        // V.150 — try to unwrap the redirector first. _v150UnwrapGoogleRedirect
+        // extracts the real merchant target from adurl=/url=/q=/dest= params.
         const _unwrap = _v150UnwrapGoogleRedirect(item.link)
                      || _v150UnwrapGoogleRedirect(item.product_link)
                      || _v150UnwrapGoogleRedirect(url);
         if (_unwrap && _unwrap.host) {
           host = _unwrap.host;
           url = _unwrap.url;
+        } else if (item.link && typeof item.link === 'string'
+                   && /[?&](?:adurl|url|q|dest|redirect)=/.test(item.link)) {
+          // V.159 — Panel mandate: if unwrap couldn't extract a clean
+          // target but item.link IS a Google redirect with a target query
+          // param, keep the raw redirect URL as-is. Google itself resolves
+          // the click to the real merchant product page. Host stays as the
+          // Google redirector for dedup; that's fine — one entry per source.
+          url = item.link;
+          // Re-derive host from the cleaned source string so dedup/display
+          // doesn't collapse every redirect under 'google.com'.
+          const _srcKey = (typeof item.source === 'string' && item.source)
+                       || (typeof item.seller_name === 'string' && item.seller_name)
+                       || (item.merchant && typeof item.merchant.name === 'string' && item.merchant.name)
+                       || null;
+          if (_srcKey) {
+            const _slug = _srcKey.toLowerCase()
+              .replace(/&/g, 'and')
+              .replace(/[^a-z0-9]+/g, '')
+              .slice(0, 30);
+            if (_slug && _slug.length >= 2) host = _slug + '.redirect';
+          }
         } else {
-          // V.152b — try the hardcoded UK retailer regex table first.
-          let _resolved = _v152ResolveFromSource(item.source, query)
-                       || _v152ResolveFromSource(item.seller_name, query)
-                       || _v152ResolveFromSource(item.merchant && item.merchant.name, query);
-          // V.156 — UNIVERSAL FALLBACK. If V.152b missed (niche merchant
-          // like Lamp24, ShopTo, MOHD, Crema Coffee, etc.), derive a
-          // synthetic display host from the source string and build a
-          // Google Shopping search URL. No retailer left behind.
-          if (!_resolved || !_resolved.host) {
-            _resolved = _v156UniversalSourceFallback(item.source, query)
-                     || _v156UniversalSourceFallback(item.seller_name, query)
-                     || _v156UniversalSourceFallback(item.merchant && item.merchant.name, query);
-          }
-          if (_resolved && _resolved.host) {
-            host = _resolved.host;
-            url = _resolved.url;
-          } else {
-            _droppedRedirector++;
-            continue;
-          }
+          // V.159 — Panel mandate: NEVER generate a synthetic Google search
+          // URL. V.152b merchant-search-page synthesis and V.156 google.co.uk
+          // /search?q= synthesis are both BANNED. If we cannot resolve to a
+          // real product-listing URL, the item is dropped. Quality > Quantity.
+          _droppedRedirector++;
+          continue;
         }
       }
       // V.146 — deep price extraction. Probes extracted_price, price string,
@@ -1737,6 +1745,17 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       const _mappedName = V138_RETAILER_NAMES[host] || V138_RETAILER_NAMES[_hostKey];
       const displayName = _mappedName
         || (_hostKey.charAt(0).toUpperCase() + _hostKey.slice(1));
+      // V.159 — IMAGE EXTRACTION AUDIT. Capture the product thumbnail from
+      // every google_shopping item so the long-tail / non-Amazon path has
+      // a real image to show in Pillar 1 of the result UI. Previously this
+      // field was silently dropped, so anything Amazon didn't verify
+      // (Petzl carabiners, Yuzu Kosho paste, niche imports) rendered with
+      // a blank placeholder. Defensive — only accept http(s) URLs.
+      const _v159Thumb = (typeof item.thumbnail === 'string' && /^https?:\/\//i.test(item.thumbnail))
+        ? item.thumbnail.slice(0, 500)
+        : (typeof item.serpapi_thumbnail === 'string' && /^https?:\/\//i.test(item.serpapi_thumbnail))
+          ? item.serpapi_thumbnail.slice(0, 500)
+          : null;
       deepLinks[host] = {
         url:          url.slice(0, 500),
         title:        typeof item.title === 'string' ? item.title.slice(0, 200) : null,
@@ -1744,6 +1763,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         price_gbp:    parsedPrice,
         price_source: priceSource,
         name:         displayName,
+        thumbnail:    _v159Thumb,
       };
     }
     const _kept = Object.keys(deepLinks).length;
@@ -2344,7 +2364,28 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     return aP - bP;
   });
 
-  return { pricing: { best_price, avg_market, price_band }, links };
+  // V.159 — Panel mandate: outliers must be DELETED, not pushed to the
+  // bottom of the list. The V.155 sort kept is_outlier=true entries in
+  // the array so the frontend rendered £6.95 / £9.74 / £21.88 accessories
+  // alongside the real £74 Bose Sport Earbuds Retailer Stack. Filter them
+  // out here AFTER avg_market/median have been computed (so the diagnostic
+  // counters in _meta.serp_diag are unaffected) but BEFORE the response is
+  // returned. Also drop any link that somehow lacks a valid url (defence
+  // in depth against partial-record bugs).
+  const _v159BeforeCount = links.length;
+  const _v159LinksFiltered = links.filter(l => {
+    if (!l || typeof l !== 'object') return false;
+    if (l.is_outlier === true) return false;
+    if (!l.url || typeof l.url !== 'string') return false;
+    if (l.price_gbp == null) return false;
+    return true;
+  });
+  const _v159DroppedOutliers = _v159BeforeCount - _v159LinksFiltered.length;
+  if (_v159DroppedOutliers > 0) {
+    try { console.log('[V.159] filtered ' + _v159DroppedOutliers + ' outlier/empty links from response (median £' + (_v145Median != null ? _v145Median.toFixed(2) : '?') + ', floor £' + (_v145Floor != null ? _v145Floor.toFixed(2) : '?') + ')'); } catch (e) {}
+  }
+
+  return { pricing: { best_price, avg_market, price_band }, links: _v159LinksFiltered };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -2412,17 +2453,46 @@ function _v138BuildResponse({
   }
 
   // ── Identity block ────────────────────────────────────────────────
+  // V.159 — IMAGE EXTRACTION AUDIT. Pillar 1 of the result UI requires a
+  // product image. Previously identity.image was only populated when
+  // Amazon returned a verified match with a thumbnail. For long-tail
+  // items (Petzl Sm'D Twist-Lock, Yuzu Kosho paste, Aesop Marrakech)
+  // Amazon verification typically fails — the response then carried
+  // identity.image=null and the UI rendered a blank placeholder. Fix:
+  // fall back to the first non-Amazon retailer thumbnail from the
+  // google_shopping pass (already captured per-link by V.159).
+  let _v159ImageBlock = null;
+  if (verified_amazon_price && verified_amazon_price.thumbnail) {
+    _v159ImageBlock = {
+      thumbnail_url: verified_amazon_price.thumbnail,
+      source:        'amazon',
+      alt_text:      parsed && parsed.canonical_search_string ? parsed.canonical_search_string : null,
+    };
+  } else if (retailer_deep_links && typeof retailer_deep_links === 'object') {
+    // First match in retailer_deep_links insertion order that has a
+    // valid thumbnail. retailer_deep_links is the host-keyed object
+    // built by fetchGoogleShoppingDeepLinks; each record now carries
+    // its own thumbnail courtesy of the V.159 capture above.
+    for (const _hostKey of Object.keys(retailer_deep_links)) {
+      if (_hostKey === '__v153_amazon_extras') continue;
+      const _rec = retailer_deep_links[_hostKey];
+      if (_rec && typeof _rec.thumbnail === 'string' && /^https?:\/\//i.test(_rec.thumbnail)) {
+        _v159ImageBlock = {
+          thumbnail_url: _rec.thumbnail,
+          source:        'google_shopping:' + _hostKey,
+          alt_text:      parsed && parsed.canonical_search_string ? parsed.canonical_search_string : null,
+        };
+        break;
+      }
+    }
+  }
   const identity = {
     canonical:        (parsed && parsed.canonical_search_string) || null,
     display_title:    (parsed && parsed.canonical_search_string) || null,
     category_eyebrow: (mega && mega.category_eyebrow) || null,
     mpn:              (parsed && parsed.mpn) || null,
     market_status:    (parsed && parsed.market_status) || null,
-    image: verified_amazon_price && verified_amazon_price.thumbnail ? {
-      thumbnail_url: verified_amazon_price.thumbnail,
-      source:        'amazon',
-      alt_text:      parsed && parsed.canonical_search_string ? parsed.canonical_search_string : null,
-    } : null,
+    image:            _v159ImageBlock,
   };
 
   // ── Verdict block ─────────────────────────────────────────────────
