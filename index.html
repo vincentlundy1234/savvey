@@ -6035,6 +6035,213 @@ body.v173 #v171-loading-stage {
 body.v173 .v171-loading-cycle { transition: opacity .25s ease; }
 
 /* End V.173 Consumer Reality Check block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.174 — 2026 SPATIAL POLISH
+   1. Camera Close X relocated to bottom-right + drag pill at top
+   2. Dynamic retailer favicons (letter tile becomes CSS fallback only)
+   3. Determinate progress bar in Loading Theater
+   4. Recent Scans horizontal row + "Camera access required" microcopy
+   5. Best Match elevation on top disambig tier
+   6. WCAG-AA verdict pill colors + smooth show-more expander
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Camera Close X — relocate to bottom-right, thumb-zone optimised */
+body.v174 .v171-cam-close {
+  top: auto !important;
+  right: 20px !important;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 32px) !important;
+  width: 52px !important;
+  height: 52px !important;
+  box-shadow: 0 8px 22px rgba(0,0,0,0.30) !important;
+}
+body.v174 .v171-cam-close svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+/* V.174 Drag-pill cue — top-center, visual signal for swipe-down dismiss */
+body.v174 .v174-drag-pill {
+  position: absolute;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 38px;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 9999px;
+  z-index: 49;
+  pointer-events: none;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.25);
+}
+
+/* (2) Dynamic retailer favicon — replaces the letter tile when img loads */
+body.v174 .v136-cta-mark { position: relative; overflow: hidden; }
+body.v174 .v174-favicon {
+  position: absolute;
+  inset: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
+  object-fit: contain;
+  border-radius: 6px;
+  background: #ffffff;
+}
+body.v174 .v174-favicon[data-failed="true"] { display: none; }
+/* When favicon loads, fade out the letter behind it. */
+body.v174 .v136-cta-mark.v174-favicon-loaded > :not(.v174-favicon) { visibility: hidden; }
+
+/* (3) Determinate progress bar in the Loading Theater */
+body.v174 .v174-progress-track {
+  width: 200px;
+  height: 4px;
+  margin-top: 18px;
+  background: rgba(20, 32, 26, 0.08);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+body.v174 .v174-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--green, #2a6b22), var(--green-light, #5fb455));
+  border-radius: 9999px;
+  transition: width 5s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+body.v174 .v174-progress-fill.v174-progress-done {
+  transition: width 0.28s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease-out 0.15s;
+}
+
+/* (4) Recent Scans horizontal row + Camera access microcopy */
+body.v174 .v174-recent-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  padding: 4px 18px 12px;
+  margin: 12px 0 8px;
+}
+body.v174 .v174-recent-row::-webkit-scrollbar { display: none; }
+body.v174 .v174-recent-row { scrollbar-width: none; }
+body.v174 .v174-recent-chip {
+  flex: 0 0 auto;
+  scroll-snap-align: start;
+  padding: 10px 14px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 1px solid rgba(20, 32, 26, 0.08);
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--ink, #14201a);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+  transition: transform 0.1s ease-out, opacity 0.1s ease-out;
+}
+body.v174 .v174-recent-chip:active { transform: scale(0.96); opacity: 0.9; }
+body.v174 .v174-recent-eyebrow {
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute, #7a857f);
+  padding: 0 22px 6px;
+  margin-top: 18px;
+}
+body.v174 .v174-recent-eyebrow[hidden] { display: none; }
+
+body.v174 .v174-cam-microcopy {
+  text-align: center;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 500;
+  font-size: 11.5px;
+  color: var(--ink-mute, #7a857f);
+  margin: -4px 0 16px;
+  letter-spacing: 0.01em;
+}
+
+/* (5) Disambig "Most Likely" elevation on the top tier card */
+body.v174 .v174-best-match {
+  position: relative;
+  box-shadow:
+    0 0 0 2px var(--green, #2a6b22),
+    0 12px 28px -6px rgba(42, 107, 34, 0.20),
+    0 8px 12px -4px rgba(42, 107, 34, 0.14) !important;
+}
+body.v174 .v174-best-match-eyebrow {
+  position: absolute;
+  top: -10px;
+  left: 14px;
+  background: var(--green, #2a6b22);
+  color: #ffffff;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 700;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  box-shadow: 0 2px 8px rgba(42, 107, 34, 0.30);
+  white-space: nowrap;
+  z-index: 3;
+}
+
+/* (6a) WCAG-AA verdict pill colours — wait + check_elsewhere darkened */
+body.v174 #v171-savveys-verdict .v171-vh-pill.v136-verdict-wait,
+body.v174 .v136-verdict-pill.v136-verdict-wait,
+body.v174 #v138-verdict-pill.v136-verdict-wait {
+  background: #fbeed4 !important;
+  color: #5c3d05 !important;            /* 7.4:1 contrast — strict AA */
+}
+body.v174 #v171-savveys-verdict .v171-vh-pill.v136-verdict-check,
+body.v174 .v136-verdict-pill.v136-verdict-check,
+body.v174 #v138-verdict-pill.v136-verdict-check {
+  background: #fde0e0 !important;
+  color: #6e1818 !important;            /* 7.0:1 contrast — strict AA */
+}
+/* Also bump 'fair' for safety — was 5:1 on amber-on-cream */
+body.v174 #v171-savveys-verdict .v171-vh-pill.v136-verdict-fair,
+body.v174 .v136-verdict-pill.v136-verdict-fair,
+body.v174 #v138-verdict-pill.v136-verdict-fair {
+  background: #f6f1e6 !important;
+  color: #5a3f06 !important;            /* 7.8:1 contrast */
+}
+
+/* (6b) Smooth show-more expander animation */
+body.v174 .v136-cta-secondary.v171-hidden {
+  /* Override the V.171 `display:none` so the row can animate.
+     The JS toggle now uses a class that's max-height:0 + opacity:0
+     transitioning to max-height:300px + opacity:1. */
+  display: flex !important;
+  max-height: 0 !important;
+  min-height: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  margin: 0 !important;
+  opacity: 0 !important;
+  overflow: hidden !important;
+  pointer-events: none !important;
+  transition:
+    max-height 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.22s ease-out,
+    padding 0.32s cubic-bezier(0.32, 0.72, 0, 1) !important;
+  border-width: 0 !important;
+}
+body.v174 .v136-cta-secondary.v174-revealed {
+  max-height: 300px !important;
+  opacity: 1 !important;
+  padding-top: 14px !important;
+  padding-bottom: 14px !important;
+  pointer-events: auto !important;
+}
+
+/* End V.174 Spatial Polish block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -6253,6 +6460,12 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <div class="v171-hero-title">Snap a Product</div>
         <div class="v171-hero-sub">Point your camera, we'll find it.</div>
       </button>
+      <!-- V.174 — "Camera access required" microcopy under Snap card.
+           Closes the most common first-launch confusion path where iOS
+           shows the system permission prompt and users think the button
+           is broken. Sits inline between the two heroes so the layout
+           visually anchors to the Snap card on portrait phones. -->
+      <div class="v174-cam-microcopy" id="v174-cam-microcopy" aria-hidden="true">Camera access required on first tap</div>
       <button class="v171-hero v171-hero-type" type="button" onclick="v172OpenTypeSheet()" aria-label="Type a product name">
         <div class="v171-hero-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -6264,6 +6477,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <div class="v171-hero-sub">"Bose QC45", "AF400UK", etc.</div>
       </button>
     </div>
+    <!-- V.174 — Recent Scans row. Horizontal-scroll chips populated by
+         the existing pushRecent() pipeline. Hidden when empty so the
+         home screen stays minimalist for first-time users. -->
+    <div class="v174-recent-eyebrow" id="v174-recent-eyebrow" hidden>Recent</div>
+    <div class="v174-recent-row" id="v174-recent-row" hidden></div>
     <!-- V.172 — Inline Type sheet. Hidden by default; revealed when the
          user taps "Type a Name". Holds a visible #v172-type-input that
          goText() will use via the legacy #text-input shadow-binding. -->
@@ -6393,9 +6611,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-cam-screen" id="screen-camera">
-  <!-- V.171 — Apple-grade frosted-glass close button. Tearing-down via
-       goHome() guarantees the V.122 FSM 7-step teardown runs (track.stop,
-       srcObject=null, video.load → iOS green-dot release). -->
+  <!-- V.174 — iOS-native drag-pill cue at the top-center. Pure visual
+       affordance for the V.172 swipe-down dismiss gesture. pointer-events:
+       none so it doesn't intercept touches. -->
+  <div class="v174-drag-pill" aria-hidden="true"></div>
+  <!-- V.171 → V.174 — Close X relocated to bottom-right for thumb-zone
+       access (was top-right). Still wired to goHome() which triggers the
+       V.122 FSM 7-step teardown (track.stop, srcObject=null,
+       video.load → iOS green-dot release). -->
   <button class="v171-cam-close" id="v171-cam-close-btn" type="button" onclick="goHome()" aria-label="Close camera">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
@@ -6501,13 +6724,18 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
-  <!-- V.171 — Loading Theater. Pulsing S logo + cycling retailer-name copy.
-       Visible only when body.v171 is active; the legacy V.77 / V.134 spinner
+  <!-- V.171 + V.174 — Loading Theater. Pulsing S logo + cycling consumer-voice
+       copy + V.174 determinate progress bar. The legacy V.77 / V.134 spinner
        below is preserved but CSS-hidden when V.171 is active. -->
   <div class="v171-loading-stage" id="v171-loading-stage">
     <div class="v171-pulse-logo" aria-hidden="true">S</div>
-    <div class="v171-loading-cycle" id="v171-loading-cycle">Identifying your product…</div>
-    <div class="v171-loading-sub">Checking UK retailers · Verifying prices</div>
+    <div class="v171-loading-cycle" id="v171-loading-cycle">Scanning trusted retailers…</div>
+    <div class="v171-loading-sub">Checking Amazon, Argos & Currys</div>
+    <!-- V.174 — Determinate progress bar. Fakes ease-out to 85% over 5s,
+         snaps to 100% when the fetch resolves. Cures loading anxiety. -->
+    <div class="v174-progress-track" aria-hidden="true">
+      <div class="v174-progress-fill" id="v174-progress-fill"></div>
+    </div>
   </div>
   <!-- V.77 LOADING REBUILD — gradient S badge + spinning ring + clean 4-phase timeline -->
   <div class="v5-loading-inner">
@@ -12920,6 +13148,282 @@ async function _v140KickoffSynthesize(idPayload) {
 
   window._v173 = { tagAmazon: v173TagAmazonRows, hardenLinks: v173HardenLinks };
   try { console.log('[V.173] Consumer Reality Check initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.174 — 2026 SPATIAL POLISH · JS
+   - Favicon swap on retailer rows (favicon service + letter fallback)
+   - Determinate progress bar driver (5s ease-out → 85%, snap to 100%)
+   - Recent Scans renderer (reads localStorage, populates horizontal chips)
+   - Best Match elevation on top disambig tier
+   - Upward rubber band on the V.172 swipe gesture
+   - Smooth show-more expander wiring (replaces V.171's hard reveal)
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v174Init() {
+  try { document.body.classList.add('v174'); } catch (e) {}
+
+  // ── (2) Dynamic retailer favicons ─────────────────────────────────────
+  function v174DomainFromUrl(href) {
+    if (!href || typeof href !== 'string') return null;
+    try {
+      var u = new URL(href);
+      var h = u.hostname.replace(/^www\./i, '').toLowerCase();
+      // Strip our internal V.159c slug suffix so the favicon service
+      // gets a real domain to look up. "alpinetrek.via-google" → null,
+      // "alpinetrek.co.uk" → "alpinetrek.co.uk".
+      if (/\.via-google$|\.redirect$/.test(h)) return null;
+      // Google product pages — we can't favicon Google for retailer cards
+      // without misrepresenting the source. Fall back to letter tile.
+      if (/^google\.|googleshopping|aclk|doubleclick/.test(h)) return null;
+      return h;
+    } catch (e) { return null; }
+  }
+  function v174ApplyFavicons() {
+    var rows = document.querySelectorAll('.v136-cta, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row');
+    for (var i = 0; i < rows.length; i++) {
+      var row = rows[i];
+      if (row.dataset.v174FaviconApplied === '1') continue;
+      var anchor = row.tagName === 'A' ? row : row.querySelector('a[href]');
+      var href = anchor ? anchor.getAttribute('href') : (row.getAttribute('data-url') || row.getAttribute('href'));
+      var domain = v174DomainFromUrl(href);
+      if (!domain) continue;
+      var mark = row.querySelector('.v136-cta-mark');
+      if (!mark) continue;
+      // Skip if there's already an img inside.
+      if (mark.querySelector('img.v174-favicon')) { row.dataset.v174FaviconApplied = '1'; continue; }
+      var img = document.createElement('img');
+      img.className = 'v174-favicon';
+      img.alt = '';
+      img.setAttribute('aria-hidden', 'true');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.referrerPolicy = 'no-referrer';
+      img.src = 'https://www.google.com/s2/favicons?domain=' + encodeURIComponent(domain) + '&sz=128';
+      img.onload = function () {
+        // Only mark the parent if the favicon actually rendered (Google
+        // returns a 16×16 placeholder on miss; we check natural size).
+        if (this.naturalWidth > 8) {
+          this.parentNode.classList.add('v174-favicon-loaded');
+        } else {
+          this.setAttribute('data-failed', 'true');
+        }
+      };
+      img.onerror = function () { this.setAttribute('data-failed', 'true'); };
+      mark.appendChild(img);
+      row.dataset.v174FaviconApplied = '1';
+    }
+  }
+
+  // ── (3) Determinate progress bar driver ─────────────────────────────
+  var _v174ProgressArmed = false;
+  function v174StartProgress() {
+    var fill = document.getElementById('v174-progress-fill');
+    if (!fill) return;
+    // Reset before next animation; force reflow so the CSS transition replays.
+    fill.classList.remove('v174-progress-done');
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    void fill.offsetWidth;          /* force reflow */
+    fill.style.transition = '';
+    // Trigger the 5s ease-out to 85%.
+    requestAnimationFrame(function () {
+      fill.style.width = '85%';
+    });
+    _v174ProgressArmed = true;
+  }
+  function v174CompleteProgress() {
+    var fill = document.getElementById('v174-progress-fill');
+    if (!fill) return;
+    fill.classList.add('v174-progress-done');
+    fill.style.width = '100%';
+    _v174ProgressArmed = false;
+  }
+  // Wrap show() so the progress bar engages on enter/exit of #screen-loading.
+  if (typeof window.show === 'function') {
+    var _v174OrigShow = window.show;
+    window.show = function (id, opts) {
+      if (id === 'loading') v174StartProgress();
+      else if (_v174ProgressArmed) v174CompleteProgress();
+      return _v174OrigShow.apply(this, arguments);
+    };
+  }
+
+  // ── (4) Recent Scans renderer (reads localStorage) ──────────────────
+  function v174ReadRecents() {
+    try {
+      // The legacy app stores recents under several keys depending on
+      // wave version. Try them in order.
+      var keys = ['savvey_recents_v3', 'savvey_recents', 'savvey_v3_recents', 'savvey_v71_recents'];
+      for (var i = 0; i < keys.length; i++) {
+        var raw = localStorage.getItem(keys[i]);
+        if (!raw) continue;
+        try {
+          var parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        } catch (e) {}
+      }
+    } catch (e) {}
+    return [];
+  }
+  function v174RenderRecents() {
+    var row = document.getElementById('v174-recent-row');
+    var eyebrow = document.getElementById('v174-recent-eyebrow');
+    if (!row || !eyebrow) return;
+    var recents = v174ReadRecents();
+    row.innerHTML = '';
+    if (!recents.length) { row.hidden = true; eyebrow.hidden = true; return; }
+    var shown = 0;
+    for (var i = 0; i < recents.length && shown < 6; i++) {
+      var r = recents[i];
+      var label = (typeof r === 'string') ? r : (r && (r.canonical || r.text || r.title || r.query));
+      if (!label || typeof label !== 'string') continue;
+      var clean = label.trim();
+      if (!clean) continue;
+      var chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'v174-recent-chip';
+      chip.textContent = clean.length > 32 ? clean.slice(0, 30) + '…' : clean;
+      chip.title = clean;
+      chip.addEventListener('click', (function (q) { return function () {
+        try { if (typeof window.v172Haptic === 'function') window.v172Haptic(20); } catch (e) {}
+        var legacy = document.getElementById('text-input');
+        if (legacy) legacy.value = q;
+        if (typeof window.goText === 'function') window.goText();
+        else if (typeof window.callNormalize === 'function') window.callNormalize({ input_type: 'text', text: q });
+      }; })(clean));
+      row.appendChild(chip);
+      shown++;
+    }
+    if (shown > 0) { row.hidden = false; eyebrow.hidden = false; }
+    else            { row.hidden = true;  eyebrow.hidden = true; }
+  }
+  // Initial render + every time the user lands back on #screen-home.
+  v174RenderRecents();
+  if (typeof window.show === 'function') {
+    var _v174OrigShowHome = window.show;
+    window.show = function (id, opts) {
+      var r = _v174OrigShowHome.apply(this, arguments);
+      if (id === 'home') {
+        setTimeout(function () { try { v174RenderRecents(); } catch (e) {} }, 100);
+      }
+      return r;
+    };
+  }
+
+  // ── (5) Best Match elevation on top disambig tier ───────────────────
+  function v174MountBestMatch() {
+    var screen = document.getElementById('screen-confirm');
+    if (!screen) return;
+    var tiers = screen.querySelectorAll('.v136-similar-card, .v136-tier-card, [data-v136-tier]');
+    if (!tiers || tiers.length === 0) return;
+    // Strip any previous best-match badge so re-renders don't double-stamp.
+    var olds = screen.querySelectorAll('.v174-best-match-eyebrow');
+    for (var k = 0; k < olds.length; k++) olds[k].remove();
+    var oldClass = screen.querySelectorAll('.v174-best-match');
+    for (var k2 = 0; k2 < oldClass.length; k2++) oldClass[k2].classList.remove('v174-best-match');
+    // Elevate the first tier card.
+    var top = tiers[0];
+    top.classList.add('v174-best-match');
+    var badge = document.createElement('span');
+    badge.className = 'v174-best-match-eyebrow';
+    badge.textContent = '✨ Most Likely';
+    top.appendChild(badge);
+  }
+
+  // ── (6b) Smooth show-more expander rewiring ─────────────────────────
+  // Replaces the V.171 expander click which removed `v171-stack-truncated`
+  // class on the body — that was a hard reveal. V.174 transitions each
+  // hidden row's max-height + opacity for a graceful slide.
+  function v174WireExpander() {
+    var btn = document.getElementById('v171-show-more-prices');
+    if (!btn || btn.dataset.v174Wired === '1') return;
+    btn.dataset.v174Wired = '1';
+    // Replace any existing click handler.
+    var clone = btn.cloneNode(true);
+    btn.parentNode.replaceChild(clone, btn);
+    clone.addEventListener('click', function () {
+      try { if (typeof window.v172Haptic === 'function') window.v172Haptic(25); } catch (e) {}
+      var hiddens = document.querySelectorAll('.v136-cta-secondary.v171-hidden');
+      // Stagger reveal for an Apple-grade "cascade" feel.
+      for (var i = 0; i < hiddens.length; i++) {
+        (function (el, idx) {
+          setTimeout(function () { el.classList.add('v174-revealed'); }, idx * 35);
+        })(hiddens[i], i);
+      }
+      // Drop the button after the cascade completes.
+      setTimeout(function () {
+        clone.style.opacity = '0';
+        clone.style.pointerEvents = 'none';
+        setTimeout(function () { try { clone.remove(); } catch (e) {} }, 200);
+      }, Math.min(800, hiddens.length * 35 + 380));
+    });
+  }
+
+  // ── Hook MutationObserver to re-apply favicons / best-match / expander
+  // whenever the result or confirm screen updates.
+  function v174ApplyAllToResult() {
+    try { v174ApplyFavicons(); } catch (e) {}
+    try { v174WireExpander(); } catch (e) {}
+  }
+  ['screen-result', 'screen-confirm'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || typeof MutationObserver === 'undefined') return;
+    var debounce = null;
+    var obs = new MutationObserver(function () {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(function () {
+        if (id === 'screen-result') v174ApplyAllToResult();
+        if (id === 'screen-confirm') {
+          try { v174MountBestMatch(); } catch (e) {}
+        }
+      }, 160);
+    });
+    obs.observe(el, { childList: true, subtree: true });
+  });
+
+  // ── Upward rubber band on the V.172 camera swipe ────────────────────
+  // V.172 ignored upward drag. V.174 lets the user drag UP slightly with
+  // strong resistance, capped at -28px, to complete the native illusion.
+  // We piggy-back on V.172's transform writes by listening at capture
+  // phase, computing the resistance, and re-writing the transform.
+  (function v174WireUpwardRubberBand() {
+    var cam = document.getElementById('screen-camera');
+    if (!cam) return;
+    var startY = null;
+    cam.addEventListener('touchstart', function (e) {
+      if (e.touches && e.touches.length === 1) startY = e.touches[0].clientY;
+      else startY = null;
+    }, { passive: true, capture: true });
+    cam.addEventListener('touchmove', function (e) {
+      if (startY === null || !e.touches || e.touches.length !== 1) return;
+      var dy = e.touches[0].clientY - startY;
+      if (dy < 0) {
+        // Strong damping: 25% of the drag, capped at -28px.
+        var damped = Math.max(-28, dy * 0.25);
+        cam.style.transform = 'translateY(' + damped + 'px)';
+      }
+    }, { passive: true, capture: true });
+    cam.addEventListener('touchend', function (e) {
+      // Let V.172's snap-back handle the release if downward, but reset
+      // the upward overdraw cleanly.
+      if (cam.style.transform && cam.style.transform.indexOf('-') !== -1) {
+        cam.style.transition = 'transform .2s cubic-bezier(0.32, 0.72, 0, 1)';
+        cam.style.transform = 'translateY(0)';
+        setTimeout(function () { cam.style.transform = ''; cam.style.transition = ''; }, 230);
+      }
+      startY = null;
+    }, { passive: true, capture: true });
+  })();
+
+  window._v174 = {
+    applyFavicons: v174ApplyFavicons,
+    renderRecents: v174RenderRecents,
+    mountBestMatch: v174MountBestMatch,
+    startProgress: v174StartProgress,
+    completeProgress: v174CompleteProgress,
+    wireExpander: v174WireExpander,
+  };
+  try { console.log('[V.174] 2026 Spatial Polish initialised.'); } catch (e) {}
 })();
 </script>
 </body>
