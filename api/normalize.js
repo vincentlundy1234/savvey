@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v163b';
+const VERSION             = 'normalize.js v3.4.5v163c';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v163b-1'; // V.163b — bumped so the static-token V.163 cache flushes and the AI-fingerprint dynamic path becomes authoritative.
+const CACHE_PREFIX = 'sav-v163c-1'; // V.163c — bumped after the Mark-II/II shorthand-acceptance fix to the matcher.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1760,20 +1760,41 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
   const missing = [];
   for (const tok of requiredTokens) {
     let matched = false;
-    if (tok.isRoman) {
+    // V.163b — generation/iteration tokens (Mark II, Mk 2, 2nd Gen, II, etc.)
+    // Recognise the AI's natural phrasing AND the merchant's common shorthand.
+    // A fingerprint of "Mark II" should accept all of: "Mark II", "Mk II",
+    // "Mark 2", "Mk 2", "II", "2" (bare standalone digit/numeral).
+    const markRomanMatch = tok.raw.match(/^(?:Mark|Mk)\s+(II|III|IV|V|VI|VII|VIII|IX|X|\d+)$/i);
+    if (markRomanMatch) {
+      const tail = markRomanMatch[1].toUpperCase();
+      const arab = _V163_ROMAN_TO_ARABIC[tail] || (/^\d+$/.test(tail) ? Number(tail) : null);
+      const alternates = [tail];
+      if (arab && !alternates.includes(String(arab))) alternates.push(String(arab));
+      // Build a regex that accepts:
+      //   (Mark|Mk)\s*<roman|arab>   ← explicit phrasing
+      //   \b<roman|arab>\b            ← bare shorthand the merchant used
+      const escAlts = alternates.join('|');
+      const rx = new RegExp(
+        '(?:Mark|Mk)\\s*(?:' + escAlts + ')\\b' +
+        '|' +
+        '\\b(?:' + escAlts + ')\\b',
+        'i'
+      );
+      matched = rx.test(T);
+    } else if (tok.isRoman) {
       const romanU = tok.raw.toUpperCase();
       const arab = _V163_ROMAN_TO_ARABIC[romanU];
-      // Plain roman/arabic standalone word
       const romanRx = new RegExp('\\b' + romanU + '\\b', 'i');
       const arabRx  = arab ? new RegExp('\\b' + arab + '\\b') : null;
-      // Mark / Mk + roman / arabic
       const markRx = new RegExp(
         '(?:Mark|Mk)\\s*0*(?:' + romanU + (arab ? ('|' + arab) : '') + ')\\b',
         'i'
       );
       matched = romanRx.test(T) || (arabRx && arabRx.test(T)) || markRx.test(T);
     } else {
-      // Alphanumeric model token — word-bound, case-insensitive
+      // Alphanumeric model token — word-bound, case-insensitive.
+      // Multi-word phrases (e.g. "iPhone 15", "PlayStation 5") match as a
+      // single span — the literal whitespace must be present in the title.
       const esc = tok.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       const rx  = new RegExp('\\b' + esc + '\\b', 'i');
       matched = rx.test(T);
@@ -1801,7 +1822,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v163b:${canonicalKey}`;
+  const ck = `savvey:retailers:v163c:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -3295,7 +3316,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v163b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v163c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
