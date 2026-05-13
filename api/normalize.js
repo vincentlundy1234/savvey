@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v168';
+const VERSION             = 'normalize.js v3.4.5v169';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v168-1'; // V.168 — bumped to flush V.165 responses that still routed thin (1-2 link) results to no_match.
+const CACHE_PREFIX = 'sav-v169-1'; // V.169 — bumped: eBay quarantine + AI predicted_price_floor_gbp reality anchor invalidate every previous response shape.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -187,6 +187,7 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 {
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
   "identity_fingerprint": ["AF400UK"] | ["QuietComfort", "45"] | ["iPhone 15", "128GB"],
+  "predicted_price_floor_gbp": 600 | 300 | 750,
   "confidence": "high" | "medium" | "low",
   "confidence_score": 95 | 73 | 22,
   "market_status": "Current Model" | "Replaced" | "Discontinued" | "Pre-release" | null,
@@ -208,6 +209,47 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 }
 
 Field rules:
+- predicted_price_floor_gbp: V.169 — INTEGER £ value. Your world-knowledge
+  estimate of the ABSOLUTE LOWEST plausible price for the CORE UNIT of the
+  canonical product when sold new at UK retail. This is the Reality Anchor
+  against accessory-spam Best Prices (a £18 listing for an £800 Roborock
+  S8 Pro Ultra is mathematically a "deal" but is a robot-vacuum filter, not
+  a vacuum). The backend checks if the cheapest scraped link is < 40% of
+  this floor and drops the entire stack as category_price_implausible if so.
+    Pick the rock-bottom of the typical UK new-retail band, NOT the median.
+    Concrete examples:
+      "Sony PlayStation 5 Slim Disc"        → 400  (was £479 RRP; current
+                                                   sale floor ~£399)
+      "Apple iPhone 15 Pro Max 256GB"       → 800  (used floor irrelevant;
+                                                   NEW lowest is ~£900-£1100;
+                                                   600 is too aggressive,
+                                                   1000 too restrictive,
+                                                   800 protects against
+                                                   accessories without
+                                                   killing fair listings)
+      "Roborock S8 Pro Ultra Robot Vacuum"  → 600  (£18 accessory FAR below;
+                                                   real floor is ~£800)
+      "Steam Deck OLED 512GB"               → 300  (Valve direct £479; 300
+                                                   accommodates current
+                                                   trade-in & flash sales;
+                                                   blocks the £89 part)
+      "Bose QuietComfort Ultra Headphones"  → 200  (RRP £449; current floor
+                                                   ~£250; 200 is the safety
+                                                   margin)
+      "Atomic Habits James Clear Paperback" → 4    (paperback floor; trade
+                                                   editions go to £5-£8)
+      "Marmite XO 250g"                     → 2    (Tesco/Sainsbury's £3.50;
+                                                   2 is the safety margin)
+      "Heinz Salad Cream 605g"              → 2    (supermarket £4; 2 floor)
+      "Yorkshire Tea 240 Bags"              → 4    (Tesco/Sainsbury's £6-9)
+      "Le Creuset Cast Iron Casserole 24cm" → 150  (sale floor; RRP £305)
+    For ultra-generic queries (e.g. canonical="Kettle"), set to 0 to skip
+    the implausibility check (no single floor makes sense across the
+    whole category).
+    Be HONEST and CONSERVATIVE — pick the floor low enough that any
+    legitimate listing survives, high enough that obvious accessories
+    don't. When in doubt, lean LOWER (keeps the legitimate floor; the
+    backend's 40% threshold still catches grossly wrong items).
 - identity_fingerprint: V.163 — 1 to 4 NON-NEGOTIABLE model identifiers that
   MUST appear (case-insensitive, word-bounded) in every legitimate retailer
   title for the canonical product. This is the array that powers Savvey's
@@ -1594,6 +1636,20 @@ function parseAndDefault(rawText) {
       .slice(0, 4);
   }
 
+  // V.169 — extract the AI-generated predicted_price_floor_gbp. This is
+  // the world-knowledge anchor against accessory-spam Best Prices. The
+  // backend uses 0.40 × this value as the implausibility threshold: if
+  // links[0].price_gbp < threshold, the whole stack is dropped as
+  // category_price_implausible. Strictly validated as a positive integer
+  // (or 0 to opt out for ultra-generic categories like "Kettle").
+  let predicted_price_floor_gbp = 0;
+  if (typeof parsed.predicted_price_floor_gbp === 'number' &&
+      isFinite(parsed.predicted_price_floor_gbp) &&
+      parsed.predicted_price_floor_gbp >= 0 &&
+      parsed.predicted_price_floor_gbp < 100000) {
+    predicted_price_floor_gbp = Math.round(parsed.predicted_price_floor_gbp);
+  }
+
   return {
     canonical_search_string: canonical,
     confidence: _finalConfidence,
@@ -1607,6 +1663,7 @@ function parseAndDefault(rawText) {
     amazon_search_query: amazonQ,
     savvey_says,
     identity_fingerprint, // V.163 — AI-generated false-positive shield tokens
+    predicted_price_floor_gbp, // V.169 — AI-generated Reality Anchor (£ integer; 0 = skip check)
     _v146_family_applied: _v146FamilyApplied, // diagnostic
   };
 }
@@ -1856,7 +1913,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v168:${canonicalKey}`;
+  const ck = `savvey:retailers:v169:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1910,8 +1967,11 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     let _droppedNoPrice = 0;
     let _droppedRedirector = 0;
     let _droppedUsed = 0;       // V.161 — condition !== new
-    let _squashedEbay = 0;      // V.161 — eBay dedup count
+    let _squashedEbay = 0;      // V.161 — eBay dedup count (legacy alias)
     let _droppedIdentity = 0;   // V.163 — strict identity filter
+    let _v169EbayQuarantineCount = 0;   // V.169 — eBay items routed to quarantine
+    let _v169EbayRescued = false;       // V.169 — was the quarantine promoted?
+    const _v169EbayQuarantine = {};     // V.169 — host-keyed quarantine bucket
     const _droppedSamples = [];
     // V.163 — AI-generated identity fingerprint is the PRIMARY source.
     // Haiku emits identity_fingerprint in its canonicalisation response
@@ -2062,18 +2122,53 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         _droppedNoUrl++;
         continue;
       }
-      // V.161 — eBAY SQUASHER. Any source string containing "ebay" (in any
-      // form: "eBay - sellername", "eBay UK", "ebay marketplace") gets
-      // forced into a single host key 'ebay.co.uk'. The standard dedup
-      // (cheapest-per-host wins) then collapses every eBay listing into one
-      // Retailer Stack card with the lowest price. V138_RETAILER_NAMES
-      // resolves the friendly display name to plain "eBay".
-      const _v161SrcStr = (typeof item.source === 'string' ? item.source : '')
+      // V.169 — EBAY QUARANTINE (Panel-revised mandate, supersedes the
+      // briefly-considered Nuclear Ban).  Any item whose source /
+      // seller_name / merchant.name / host carries an "ebay" token is
+      // forced into a SEPARATE quarantine map instead of the primary
+      // deepLinks map. After the main loop ends, IF AND ONLY IF deepLinks
+      // is empty, the cheapest quarantine entry is promoted back into
+      // deepLinks to save the long-tail (groceries / discontinued SKUs
+      // where eBay is genuinely the only UK indexed source).
+      //
+      // The cheapest-wins dedup inside the quarantine is identical to the
+      // primary path — V.161's host-collapsed eBay logic is preserved,
+      // just routed to a different bucket. Zero added network calls,
+      // sub-millisecond extra CPU per request, no impact on the 8 s
+      // SerpAPI timeout budget.
+      const _v169SrcStr = (typeof item.source === 'string' ? item.source : '')
                         + ' ' + (typeof item.seller_name === 'string' ? item.seller_name : '')
                         + ' ' + ((item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '');
-      if (/\bebay\b/i.test(_v161SrcStr) || /\bebay\./i.test(host)) {
-        if (deepLinks['ebay.co.uk']) _squashedEbay++;
+      const _v169IsEbay = /\bebay\b/i.test(_v169SrcStr) || /\bebay\./i.test(host || '');
+      if (_v169IsEbay) {
+        // Re-derive a clean eBay host for the quarantine bucket so the
+        // cheapest-wins dedup collapses every eBay variant into one entry.
         host = 'ebay.co.uk';
+        _v169EbayQuarantineCount++;
+        // Apply the same V.146 deep-price extraction the primary path uses,
+        // then write to the quarantine map with cheapest-wins semantics.
+        const _qPrice = _v146ExtractPrice(item);
+        const _qParsed = _qPrice ? _qPrice.price : null;
+        if (_qParsed != null) {
+          const _existing = _v169EbayQuarantine['ebay.co.uk'];
+          if (!_existing || _qParsed < _existing.price_gbp) {
+            const _qThumb = (typeof item.thumbnail === 'string' && /^https?:\/\//i.test(item.thumbnail))
+              ? item.thumbnail.slice(0, 500)
+              : ((typeof item.serpapi_thumbnail === 'string' && /^https?:\/\//i.test(item.serpapi_thumbnail))
+                  ? item.serpapi_thumbnail.slice(0, 500)
+                  : null);
+            _v169EbayQuarantine['ebay.co.uk'] = {
+              url:          ((typeof item.product_link === 'string' && item.product_link) || (typeof item.link === 'string' && item.link) || url || '').slice(0, 500),
+              title:        typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+              price:        _qPrice.raw,
+              price_gbp:    _qParsed,
+              price_source: _qPrice.source,
+              name:         'eBay',
+              thumbnail:    _qThumb,
+            };
+          }
+        }
+        continue;
       }
       // V.150 — before banning a Google redirector host, attempt to unwrap
       // it (the real merchant URL is wrapped in adurl=/url=/q=/dest=).
@@ -2192,6 +2287,21 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         thumbnail:    _v159Thumb,
       };
     }
+    // V.169 — EBAY QUARANTINE RESCUE. If the primary deepLinks map is empty
+    // after all standard retailers have been filtered, the canonical may
+    // genuinely only exist on eBay (groceries / discontinued / vintage).
+    // Promote the cheapest quarantine entry into deepLinks so the user
+    // gets at least one verified UK source instead of a hard no_match.
+    // Only fires when the primary stack would otherwise be zero — when
+    // legitimate retailers exist, the quarantine stays sealed.
+    if (Object.keys(deepLinks).length === 0 && Object.keys(_v169EbayQuarantine).length > 0) {
+      const _eb = _v169EbayQuarantine['ebay.co.uk'];
+      if (_eb) {
+        deepLinks['ebay.co.uk'] = _eb;
+        _v169EbayRescued = true;
+        try { console.log(`[${VERSION}] V.169 eBay quarantine rescue fired for "${query.slice(0, 60)}" — promoted cheapest eBay listing £${_eb.price_gbp} (no other UK retailers indexed).`); } catch (e) {}
+      }
+    }
     const _kept = Object.keys(deepLinks).length;
     const _withPrice = Object.values(deepLinks).filter(r => r.price_gbp != null).length;
     console.log(`[${VERSION}] google_shopping for "${query.slice(0,60)}": examined=${_examined} kept=${_kept} priced=${_withPrice} dropped_no_url=${_droppedNoUrl} no_price=${_droppedNoPrice} redirector=${_droppedRedirector} samples=${_droppedSamples.slice(0,3).join('|')}`);
@@ -2244,10 +2354,12 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       dropped_no_price:   _droppedNoPrice,
       dropped_redirector: _droppedRedirector,
       dropped_used:       _droppedUsed,     // V.161 — used/refurb filter
-      squashed_ebay:      _squashedEbay,    // V.161 — eBay squasher dedup count
+      squashed_ebay:      _squashedEbay,    // V.161 — eBay squasher dedup count (legacy)
       dropped_identity:   _droppedIdentity, // V.163 — strict identity filter
       identity_tokens:    _v163Required.map(t => t.raw),  // V.163 — what we required
       identity_source:    _v163Source,      // V.163 — 'ai' | 'deterministic_fallback' | 'none'
+      ebay_quarantined:   _v169EbayQuarantineCount, // V.169 — eBay items routed to quarantine
+      ebay_rescued:       _v169EbayRescued, // V.169 — was the quarantine promoted (primary stack was empty)?
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 8),   // V.163 — wider window for identity drops
       raw_samples:        _rawSamples,
@@ -2930,13 +3042,61 @@ function _v138BuildResponse({
       outcome = 'not_found';
       outcome_reason = 'matched_no_links_post_filter';
     } else if (_v168PricedLinks <= 2) {
-      // Preserve the original outcome_reason context (high_confidence_with_price /
-      // retailer_priced_no_amazon) but flag the thinness explicitly so the
-      // frontend can route to the matched_thin presentation if it wants.
       outcome = 'matched_thin';
       outcome_reason = 'matched_thin_' + _v168PricedLinks + '_link' + (_v168PricedLinks === 1 ? '' : 's');
     }
     // links.length >= 3 → outcome stays 'matched' (the original).
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // V.169 — THE REALITY ANCHOR (category-price implausibility check).
+  //
+  // Panel mandate: an £18 Best Price for an £800 Roborock is a critical
+  // trust-breaker. The V.145 median floor catches outliers WITHIN a
+  // cluster, but when the entire cluster is accessories (filters / mop
+  // pads / replacement parts that legitimately share the SKU name in
+  // their title), the median itself is corrupted and V.145 has nothing
+  // to compare against.
+  //
+  // Reality Anchor: the AI emitted predicted_price_floor_gbp at canonicalise
+  // time as a world-knowledge estimate of the rock-bottom new-retail floor
+  // for the CORE UNIT. If the cheapest scraped link is below 40% of that
+  // floor, the entire stack is presumed accessory-spam and the outcome
+  // flips to no_match.
+  //
+  // The 40% threshold is intentionally generous — legitimate flash sales,
+  // grey-market imports, and refurb specialists still survive. It only
+  // catches genuinely implausible prices (Steam Deck OLED 512GB £89.99 is
+  // 18% of the £300 AI floor → 0.18 < 0.40 → dropped).
+  //
+  // Skipped entirely when:
+  //   - predicted_price_floor_gbp === 0 (AI opted out for generic categories
+  //     like "Kettle" where no single floor makes sense)
+  //   - outcome is already not_found / no_match / disambig (nothing to drop)
+  //   - pricing.best_price is missing (no cheapest to compare against)
+  // ──────────────────────────────────────────────────────────────────
+  const _v169Floor = (parsed && typeof parsed.predicted_price_floor_gbp === 'number')
+                   ? parsed.predicted_price_floor_gbp : 0;
+  // V.169 — Panel-revised threshold: 30% of AI floor (was 40% earlier draft).
+  // Tighter cliff = stricter accessory-spam protection. Legitimate flash
+  // sales typically don't push below 30% of normal retail floor.
+  const _v169Threshold = _v169Floor > 0 ? Math.round(_v169Floor * 0.30 * 100) / 100 : 0;
+  const _v169BestPriceGbp = pricing && pricing.best_price && Number(pricing.best_price.value_gbp);
+  const _v169IsMatchedish = (outcome === 'matched' || outcome === 'matched_thin');
+  if (_v169IsMatchedish && _v169Floor > 0 && _v169BestPriceGbp > 0 && _v169BestPriceGbp < _v169Threshold) {
+    try {
+      console.log(`[${VERSION}] V.169 reality anchor TRIPPED for "${(parsed && parsed.canonical_search_string) || '?'}": ` +
+                  `best_price £${_v169BestPriceGbp} < threshold £${_v169Threshold} ` +
+                  `(40% of AI floor £${_v169Floor}). Dropping stack.`);
+    } catch (e) {}
+    outcome = 'no_match';
+    outcome_reason = 'category_price_implausible';
+    // Wipe the corrupted pricing so the frontend doesn't render the
+    // accessory price. links are left as-is for diagnostic transparency
+    // (frontend won't display them on no_match anyway).
+    pricing.best_price = null;
+    pricing.avg_market = null;
+    pricing.price_band = null;
   }
 
   // ── Identity block ────────────────────────────────────────────────
@@ -3157,7 +3317,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v168-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v169-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -3430,7 +3590,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v168:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v169:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -3834,6 +3994,10 @@ export default async function handler(req, res) {
     tiers:           _v138.tiers,
     disclosure:      _v138.disclosure,
     schema_version:  _v138.schema_version,
+    // V.169 — surface the AI's reality anchor + the threshold the
+    // backend used. Lets the benchmark / Panel verify the AI is emitting
+    // sensible floors and that implausibility decisions are auditable.
+    predicted_price_floor_gbp: (parsed && typeof parsed.predicted_price_floor_gbp === 'number') ? parsed.predicted_price_floor_gbp : null,
     // V.142 — synthesis_payload emitted whenever skip_synth=true so
     // /api/identify clients can drive /api/synthesize separately.
     synthesis_payload: body.skip_synth ? {
