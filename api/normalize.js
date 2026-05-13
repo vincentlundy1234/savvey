@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v170';
+const VERSION             = 'normalize.js v3.4.5v173';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v170-1'; // V.170 — bumped: fingerprint relaxation fallback recovers items the strict V.163 pass would have dropped.
+const CACHE_PREFIX = 'sav-v173-1'; // V.173 — bumped: consumer-voice prompt rewrite + bare-brand disambig routing change.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -866,6 +866,44 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
 
   const sys = `You are Savvey's result-text synthesizer for UK shoppers. Given a verified product (Pillars mode) or a low-confidence query with 3 tier alternatives (Tiers mode), return strictly formatted JSON.
 
+V.173 CONSUMER VOICE — non-negotiable, applies to every verdict_summary
+and tier_blurb you write:
+
+  YOU ARE A HELPFUL SHOPPING ASSISTANT. You speak to a UK shopper standing
+  in a store, holding their phone. You are NOT a financial analyst, you
+  are NOT an engineer, you are NOT a data scientist.
+
+  BANNED VOCABULARY (these reveal you're an AI and break the illusion):
+    "data variance" · "fair value" · "price band" · "median" · "spread" ·
+    "outliers" · "SKU" · "data point" · "sample size" · "matched_thin" ·
+    "coverage" · "indexed" · "scraped" · "fetched" · "retailer count" ·
+    "the AI" · "I searched" · "I found" · "I couldn't find" · "my data" ·
+    "my analysis" · "data variance" · "implausible" · "category-implausible"
+    Replace these with plain shopper language. NEVER refer to your own
+    process or struggles.
+
+  REQUIRED VOICE:
+    - Talk about the PRODUCT and the PRICE, not about your search process.
+    - When you cite a number, use it naturally: "Most shops list this
+      around £450" — not "the market median is £450".
+    - Name 1-2 specific retailers when explaining a deal: "Argos and
+      Currys are typically £20 more" — not "the spread suggests £20".
+    - Lead with the deal verdict in plain English: is it a good price or
+      not, and why, in one breath.
+    - Keep it warm, confident, brief. A shopper has 6 seconds before they
+      tap away.
+
+  WHY-IT'S-A-DEAL FORMULA (use when verdict is good_buy):
+    "<plain positioning>. At £X, that's <plain comparison vs typical
+    £Y> — <retailer or two who usually charge more>."
+    Example: "Solid mid-range air fryer. At £119, you're paying £40-50
+    less than Currys and John Lewis typically charge for this model."
+
+  WHY-TO-WAIT FORMULA (use when verdict is wait):
+    "Plain positioning. <one short sale-cycle clue>."
+    Example: "Brand-new model. Prices usually settle around £80 once
+    Argos and Currys start running their Spring deals in April."
+
 V.160 HARD RULE — PILLARS MODE (INPUT.alternatives absent):
   - verdict_label MUST be one of: "good_buy" | "fair" | "wait" | "check_elsewhere".
     null is FORBIDDEN here. If unsure, default to "fair".
@@ -881,23 +919,21 @@ V.160 HARD RULE — PILLARS MODE (INPUT.alternatives absent):
   - NEVER claim "price data unavailable" when INPUT.market_context is
     populated. If market_context exists, prices ARE available — use them.
 
-V.168 THIN-COVERAGE RULE — when INPUT.market_context.retailer_count is
-  1 or 2 (or INPUT.retailers has only 1-2 entries with no market_context),
-  the SKU has thin UK retail coverage. The verdict_summary MUST openly
-  acknowledge the scarcity rather than pretending the comparison stack
-  is robust. Trust through transparency.
-  Pattern: "<positioning sentence>. Only <N> verified UK retailer<s>
-            stock<s> this — <one short context clause>."
-  Examples:
-    1 retailer: "Standard mainline UK pricing at £8.50. Only one verified
-                 retailer indexed for this exact SKU — Yorkshire Tea is
-                 supermarket-dominant and rarely lists on price comparison."
-    2 retailers: "£11.99 floor sits below typical paperback retail. Just 2
-                  UK retailers stock this exact edition — the spread is
-                  narrow so the cheaper option is a clean win."
-  Still produce a valid verdict_label. With 1-2 retailers and a sensible
-  median, lean "fair" or "good_buy". Lean "check_elsewhere" only if the
-  single price is implausibly cheap or expensive for the category.
+V.173 THIN-COVERAGE RULE (replaces V.168) — when INPUT.retailers has only
+  1 or 2 entries, acknowledge scarcity in PLAIN LANGUAGE. No "indexed",
+  no "verified UK retailer", no "spread", no jargon.
+  Pattern: "<plain positioning>. <plain note about why this product is
+  hard to compare>."
+  Examples (consumer voice, no jargon):
+    1 retailer: "Standard supermarket pricing at £8.50. Yorkshire Tea is
+                 a Tesco/Sainsbury's regular — the cheapest place is
+                 usually your nearest big shop."
+    2 retailers: "£12 paperback pricing — Amazon's the cheapest live
+                  listing, but Waterstones and Blackwell's usually match it
+                  in store."
+  Still produce a valid verdict_label. With 1-2 retailers lean "fair" or
+  "good_buy". Lean "check_elsewhere" only if the price looks wrong for
+  the product.
 
 OUTPUT JSON ONLY, no preamble, no markdown fences:
 {
@@ -941,28 +977,24 @@ PILLARS MODE (INPUT.alternatives ABSENT — fires when amazon OR retailers prese
         "Top-end iPhone tier — Apple holds price firmly until the
          September refresh."
 
-    (c) V.160 — When INPUT.amazon is ABSENT and INPUT.retailers is present
-        (long-tail / specialist gear / niche imports — climbing hardware,
-        artisan ceramics, professional tools), anchor the summary on the
-        MARKET CONTEXT signals already computed in INPUT.market_context.
-        Cite the retailer count + price band; describe whether the market
-        is competitive (tight spread) or fragmented (wide spread); finish
-        with a one-clause shopping note for the category. NEVER fabricate
-        review counts or stars on this path — none exist in INPUT.
-        Use ONLY the numbers in INPUT.market_context.
-        Examples:
-        "Found at 17 UK retailers between £36 and £142, a 295% spread —
-         specialist climbing gear pricing is fragmented, the £36 floor
-         looks unusually strong."
-        "Stocked across 22 outdoor retailers; £10–£40 spread is typical
-         for locking carabiner range. Confirm gate type before checkout."
-        "Eight UK stockists, prices clustered £18–£22 — competitive
-         market, marginal savings beyond the cheapest listing."
+    (c) V.173 — When INPUT.amazon is ABSENT and INPUT.retailers is present
+        (long-tail / specialist gear / niche imports), explain the deal
+        in plain language. Use INPUT.market_context numbers as ground
+        truth but TRANSLATE them into shopper-friendly sentences. No
+        "spread", no "market_context", no "verified retailers" — just
+        plain "you'll find this anywhere from £X to £Y, and £A is the
+        best you'll see today."
+        Examples (consumer voice):
+        "Specialist climbing gear — UK stockists run £36-£142 for this
+         carabiner, so the £36 listing is a strong deal."
+        "Outdoor-shop pricing typically lands £10-£40 for this clip.
+         Worth checking gate type before you buy."
+        "Most stockists cluster £18-£22 for this size. Plenty of shops
+         in stock, so grab the cheapest with confidence."
 
     NEVER invent specific reviewer quotes, rating numbers, or review
-    counts that aren't in INPUT. But ALWAYS write something honest based
-    on what IS in INPUT. Returning null is V.150-era behaviour, no longer
-    permitted on any path.
+    counts that aren't in INPUT. ALWAYS write in plain shopper voice.
+    NEVER mention "the market", "data", or your own search.
 
   category_eyebrow: derive from canonical + obvious specs in the name.
     e.g. "Ninja Foodi Dual Zone AF300UK" → "Air Fryer · 7.6L · 2400W"
@@ -1913,7 +1945,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v170:${canonicalKey}`;
+  const ck = `savvey:retailers:v173:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -3095,7 +3127,29 @@ function _v138BuildResponse({
   // Without this, V.152b's retailer-rescue makes hasPrice=true for hot
   // family queries and the matched-branch wins, hiding the variant UI.
   const familyApplied = !!(parsed && parsed._v146_family_applied);
-  const shouldDisambig = (familyApplied || isLow || brandOnly || !hasPrice) && hasAlts;
+
+  // V.173 — "Bare brand/family" detection. The Founder QA flagged that
+  // "PS5", "Bose", "Nike" auto-resolved to a single product page instead
+  // of showing variant choices. New rule: when the user's RAW input (or
+  // the canonical) is short and obviously a brand/family token, AND
+  // alternatives_array has ≥2 entries, ALWAYS route to disambig — even
+  // if Haiku's confidence came back high.
+  function _v173IsBareBrandOrFamily(rawText, canonical) {
+    var probe = String(rawText || canonical || '').trim().toLowerCase();
+    if (!probe) return false;
+    // Single token (no spaces) of ≤ 8 chars almost always means brand/family.
+    if (!/\s/.test(probe) && probe.length <= 8) return true;
+    // Word-count ≤ 2 AND known top-frequency family/brand bare keyword.
+    var wc = probe.split(/\s+/).length;
+    if (wc <= 2) {
+      var bareList = /^(?:ps5|ps4|xbox|switch|nintendo|bose|sony|samsung|lg|dell|hp|apple|iphone|ipad|airpods|macbook|garmin|fitbit|dyson|shark|ninja|tefal|kettle|toaster|nike|adidas|puma|reebok|gucci|prada|chanel|dior|ysl|lego|playstation|playstation\s*5|nintendo\s*switch|google\s*pixel|pixel|tv|laptop|phone|watch|headphones|earbuds|vacuum|hairdryer|hair\s*dryer|kettle|fridge|oven|microwave)$/i;
+      if (bareList.test(probe)) return true;
+    }
+    return false;
+  }
+  // We don't have rawText in scope here; the canonical is the cleanest proxy.
+  var _v173BareBrand = _v173IsBareBrandOrFamily(null, parsed && parsed.canonical_search_string);
+  var shouldDisambig = (familyApplied || isLow || brandOnly || !hasPrice || _v173BareBrand) && hasAlts;
 
   // V.150 — when the Amazon picker fails but google_shopping returned 2+
   // priced retailers, promote to 'matched' instead of falling through to
@@ -3427,7 +3481,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v169-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v173-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -3700,7 +3754,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v170:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v173:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {

@@ -5957,6 +5957,84 @@ body.v172 #screen-home #type-door,
 body.v172 #screen-home #paste-door { display: none !important; }
 
 /* End V.172 Native App Overhaul block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.173 — CONSUMER REALITY CHECK (CSS polish + link clickability fixes)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── Outbound link clickability audit ────────────────────────────────── */
+/* user-select: none on the GLOBAL * (V.172) was correct, but `<a>` tags
+   inside the Retailer Stack need their normal pointer-events restored
+   explicitly so the V.172 capture-phase click handler can't steal them.
+   z-index lifted above any decorative pseudo-elements. */
+body.v173 a,
+body.v173 .v136-cta,
+body.v173 .v136-cta-primary,
+body.v173 .v136-cta-secondary,
+body.v173 .v138-retailer-row {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 2;
+  cursor: pointer;
+}
+body.v173 a:link,
+body.v173 a:visited { color: inherit; text-decoration: none; }
+
+/* ── Retailer Stack text overflow (extends V.161 truncation) ─────────── */
+body.v173 .v136-cta-name,
+body.v173 .v136-cta-sub {
+  word-wrap: break-word;       /* legacy IE alias */
+  overflow-wrap: anywhere;     /* modern, allows mid-word break on overflow */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  max-width: 100%;
+}
+body.v173 .v136-cta-body {
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 8px;          /* guarantees breathing room before the price */
+}
+body.v173 .v136-cta-price {
+  margin-left: 12px;
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+  min-width: 64px;             /* prevents the price column from collapsing */
+}
+
+/* ── Vertical breathing room between Verdict / Best Price / Stack ────── */
+body.v173 #v171-savveys-verdict { margin: 0 16px 22px; }
+body.v173 .v138-pillars-row,
+body.v173 #v138-best-price-row,
+body.v173 #v138-pillars { margin-bottom: 18px; }
+body.v173 .v136-cta-stack,
+body.v173 #v138-cta-stack { gap: 10px; padding: 0 16px; }
+body.v173 .v136-cta,
+body.v173 .v136-cta-primary,
+body.v173 .v136-cta-secondary { margin-bottom: 0; }
+body.v173 #v151-serp-diag { margin: 14px 16px 28px; }
+
+/* ── Amazon visibility guarantee (the "Amazon Disappearance" fix) ────── */
+/* Any retailer row carrying an Amazon class / data-attribute or whose
+   text label starts with "Amazon" is exempt from V.171 Link Avalanche
+   truncation. Amazon stays visible above the show-more pill regardless
+   of where it sorts on price. */
+body.v173 .v136-cta-secondary[data-retailer="amzn"],
+body.v173 .v136-cta-secondary.v173-amazon-keep,
+body.v173 .v136-cta-secondary[data-amazon-verified="true"] {
+  display: flex !important;
+}
+
+/* ── Loading Theater: visual breathing on the V.171 stage ────────────── */
+body.v173 #v171-loading-stage {
+  padding: 22px 22px;
+  min-height: 70vh;
+}
+body.v173 .v171-loading-cycle { transition: opacity .25s ease; }
+
+/* End V.173 Consumer Reality Check block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -12449,15 +12527,16 @@ async function _v140KickoffSynthesize(idPayload) {
   try { document.body.classList.add('v171'); } catch (e) {}
 
   // ── Loading Theater cycler ────────────────────────────────────────────
+  // V.173 — Consumer voice for the Loading Theater. Banished: "SKU",
+  // "AI Price Floor", "quarantine", "Ranking". Reads like a friendly
+  // shopping assistant on a tea break.
   var V171_LOADING_PHRASES = [
-    'Scanning Argos…',
-    'Scanning Amazon UK…',
-    'Scanning John Lewis…',
-    'Scanning Currys…',
-    'Evaluating AI Price Floor…',
-    'Cross-checking eBay quarantine…',
-    'Ranking by best price…',
-    'Identifying the exact SKU…',
+    'Scanning trusted retailers…',
+    'Finding the best deals…',
+    'Checking Amazon, Argos & Currys…',
+    'Comparing UK prices…',
+    'Spotting the cheapest shop…',
+    'Writing Savvey’s verdict…',
   ];
   var _v171LoadingTimer = null;
   function v171StartLoadingCycle() {
@@ -12770,6 +12849,77 @@ async function _v140KickoffSynthesize(idPayload) {
   })();
 
   try { console.log('[V.172] Native App Overhaul initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.173 — CONSUMER REALITY CHECK · JS
+   - body.v173 marker so the V.173 CSS rules apply
+   - Tag Amazon rows so the V.171 Link Avalanche truncation never hides them
+   - Harden outbound link clickability (the V.172 capture-phase click
+     handler is reviewed for any preventDefault paths)
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v173Init() {
+  try { document.body.classList.add('v173'); } catch (e) {}
+
+  // ── Amazon visibility guarantee (tag rows so V.171 truncation skips them)
+  function v173TagAmazonRows() {
+    var screen = document.getElementById('screen-result');
+    if (!screen) return;
+    var rows = screen.querySelectorAll('.v136-cta-secondary');
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var blob = ((r.textContent || '') + ' ' + (r.getAttribute('data-retailer') || '')).toLowerCase();
+      if (/\bamazon\b/.test(blob)) {
+        r.classList.add('v173-amazon-keep');
+        r.setAttribute('data-amazon-verified', 'true');
+        // Belt-and-braces: ensure it's not hidden by the V.171 truncation
+        // class on stale state.
+        r.classList.remove('v171-hidden');
+      }
+    }
+  }
+
+  // ── Outbound link clickability audit. The V.172 capture-phase document
+  // click handler ONLY calls v172Haptic — it does NOT preventDefault, so
+  // anchors and onclick handlers fire normally. But user-select: none was
+  // applied globally; on some iOS Safari builds that can interact badly
+  // with anchor activation via long-press. Explicit pointer-events: auto
+  // on every Retailer Stack row + force user-select: text on link text.
+  function v173HardenLinks() {
+    var screen = document.getElementById('screen-result');
+    if (!screen) return;
+    var anchors = screen.querySelectorAll('a, .v136-cta, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row');
+    for (var i = 0; i < anchors.length; i++) {
+      anchors[i].style.pointerEvents = 'auto';
+      // Encourage iOS to honour rel="noopener" + target="_blank" if set.
+      if (anchors[i].tagName === 'A' && !anchors[i].getAttribute('rel')) {
+        anchors[i].setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+  }
+
+  // Run on every result mutation so newly-rendered rows get tagged.
+  var screen = document.getElementById('screen-result');
+  if (screen && typeof MutationObserver !== 'undefined') {
+    var _v173Debounce = null;
+    var observer = new MutationObserver(function () {
+      if (_v173Debounce) clearTimeout(_v173Debounce);
+      _v173Debounce = setTimeout(function () {
+        try { v173TagAmazonRows(); } catch (e) {}
+        try { v173HardenLinks(); } catch (e) {}
+      }, 140);
+    });
+    observer.observe(screen, { childList: true, subtree: true });
+  }
+
+  // Initial pass in case content was already there.
+  setTimeout(function () {
+    try { v173TagAmazonRows(); } catch (e) {}
+    try { v173HardenLinks(); } catch (e) {}
+  }, 300);
+
+  window._v173 = { tagAmazon: v173TagAmazonRows, hardenLinks: v173HardenLinks };
+  try { console.log('[V.173] Consumer Reality Check initialised.'); } catch (e) {}
 })();
 </script>
 </body>
