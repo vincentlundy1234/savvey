@@ -5366,8 +5366,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v153';
-  var V126_GUARD          = 'savvey_v153_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v154';
+  var V126_GUARD          = 'savvey_v154_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -5456,7 +5456,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       } catch (e) {}
     }
     dbg.innerHTML =
-      'V.153 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
+      'V.154 DEBUG · ' + footer + ' · DPR ' + dpr + ' · ' + new Date().toLocaleTimeString() + '<br>'
       + 'door radius: <b>' + doorRadius + '</b> · door bg: <b>' + doorBg + '</b><br>'
       + 'door shadow: ' + (doorShadowRaw && doorShadowRaw !== 'none' ? '<b style="color:#9f9">YES</b> ' + doorShadowShort : '<b style="color:#fcc">NONE</b>') + '<br>'
       + 'savvey says: r=<b>' + savveyRadius + '</b> shadow=' + (savveyShadow && savveyShadow !== 'none' ? '<b style="color:#9f9">yes</b>' : '<b style="color:#fcc">no</b>') + '<br>'
@@ -5602,7 +5602,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v153</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v154</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -5886,6 +5886,17 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
 
     <p class="v136-mockup-note" id="v138-tier-note" style="display:none;">V.138 dynamic</p>
+
+    <!-- V.154 — Soft fallback for Vision hallucinations. When the user
+         snaps a wireless charger and Haiku writes "Google Nest", they
+         need an escape hatch that isn't an external Amazon search. This
+         button always routes back to the Type door with the canonical
+         pre-filled so the user can correct the AI's guess in one tap. -->
+    <button class="v154-not-what-i-scanned" id="v154-escape-btn"
+            type="button"
+            style="display:block; margin:18px auto 8px; padding:14px 22px; background:transparent; border:1px solid rgba(0,0,0,0.12); border-radius:24px; color:#2a6b22; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; font-size:14px; font-weight:600; cursor:pointer; -webkit-tap-highlight-color:transparent;">
+      Not what you scanned? Type the name instead
+    </button>
   </div>
 </div>
 <!-- end #screen-confirm -->
@@ -8538,6 +8549,33 @@ function _buildDisambigDetails(label, meta) {
 }
 
 function renderConfirm(a, b, payload) {
+  // V.154 — wire the escape-hatch button on every render so it always
+  // carries the current canonical as the type-door seed. preventDefault
+  // on the inner click handler keeps SerpAPI calls scoped to the user's
+  // explicit choice rather than the auto-loop.
+  try {
+    var _v154Btn = document.getElementById('v154-escape-btn');
+    if (_v154Btn) {
+      _v154Btn.onclick = function (ev) {
+        if (ev && ev.preventDefault) ev.preventDefault();
+        if (ev && ev.stopPropagation) ev.stopPropagation();
+        var seed = (payload && payload.identity && payload.identity.canonical)
+                || (payload && payload.canonical_search_string) || '';
+        // Reuse the existing bounceToType helper which routes to #screen-home
+        // with the text field pre-filled. Falls back to showing #screen-home.
+        try {
+          if (typeof bounceToType === 'function') {
+            bounceToType(seed, 'Tell us what it actually is.');
+          } else if (typeof show === 'function') {
+            show('home');
+          }
+        } catch (e) {
+          try { show('home'); } catch (e2) {}
+        }
+      };
+    }
+  } catch (e) { /* swallow — escape hatch must never crash render */ }
+
   // V.138 — DYNAMIC BINDING. Reads response.tiers[] (basic / top_rated /
   // premium) into the three-tier V.136 disambig DOM. Falls back to the
   // legacy disambig_candidates / alternatives_array shape when V.138

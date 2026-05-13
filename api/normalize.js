@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v153';
+const VERSION             = 'normalize.js v3.4.5v154';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v153-1';
+const CACHE_PREFIX = 'sav-v154-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1566,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v153:${canonicalKey}`;
+  const ck = `savvey:retailers:v154:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2372,11 +2372,18 @@ function _v138BuildResponse({
     const tierKeys = ['basic', 'top_rated', 'premium'];
     const tierPillText = ['BUDGET', 'TOP RATED', 'PREMIUM'];
 
-    // V.148 — disambig_kind: variant families (PS5 Slim/Pro/Disc) vs generic
-    // tiers (cheap/top-rated/premium teapots). Variant families get a clean
-    // render (no pills, no placeholder SVGs) and tap-to-re-search; generic
-    // tiers keep the BUDGET / TOP RATED / PREMIUM mockup.
-    const _isFamilyVariant = !!(parsed && parsed._v146_family_applied);
+    // V.148/V.154 — disambig_kind: family (clean tap-to-research) vs
+    // generic (BUDGET/TOP RATED/PREMIUM mockup). Family detection mirrors
+    // the _v138BuildResponse logic so the tier metadata stays in sync with
+    // the top-level disambig_kind.
+    const _V154_BRANDS_INNER = /\b(?:bose|sony|apple|samsung|google|pixel|nest|amazon\s+echo|ring|arlo|jbl|sennheiser|sonos|anker|belkin|mophie|logitech|razer|corsair|beats|marshall|jabra|skullcandy|airpods|ninja|shark|dyson|bosch|tefal|breville|russell\s*hobbs|kitchenaid|smeg|de\s*longhi|delonghi|kenwood|cuisinart|vitamix|nutribullet|magimix|krups|nespresso|tassimo|miele|hoover|vax|sebo|black\s*[&+]?\s*decker|dewalt|makita|milwaukee|stanley|einhell|ryobi|festool|karcher|stihl|husqvarna|playstation|xbox|nintendo|switch|fitbit|garmin|withings|oura|kindle|fire\s+tablet|onepl?us|xiaomi|huawei|motorola|nokia|hp|dell|lenovo|asus|acer|msi|microsoft\s+surface|ghd|babyliss|remington|braun|philips|oral[\s-]?b|colgate|nivea|loreal|l['’]?or[ée]al)\b/i;
+    const _innerCandidates = [
+      (parsed && parsed.canonical_search_string) || '',
+      ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
+    ];
+    const _innerHasBrand = _innerCandidates.some(s => typeof s === 'string' && _V154_BRANDS_INNER.test(s));
+    const _innerCatFamily = parsed && ['tech', 'home', 'diy', 'health', 'beauty'].includes(parsed.category);
+    const _isFamilyVariant = !!(parsed && parsed._v146_family_applied) || _innerHasBrand || _innerCatFamily;
     const built = altsArr.slice(0, 3).map((name, i) => {
       const meta = altsMeta[i] || {};
       const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
@@ -2431,8 +2438,36 @@ function _v138BuildResponse({
   // V.148 — top-level disambig_kind tag for the frontend's renderConfirm
   // branching. 'family' = variant disambig (PS5 Slim/Pro/Disc, iPhone 16 base/
   // Plus/Pro), 'generic' = BUDGET/TOP RATED/PREMIUM tiers, null = not disambig.
+  // V.154 — Dynamic family detection. The V.146 _v146_family_applied
+  // flag handles the 11 hardcoded variant families. But Haiku hallucinations
+  // ("Google Nest" for a wireless charger, "Bose" for headphones) produce
+  // disambig payloads whose canonical/alternatives are clearly branded
+  // electronics — these MUST render with the clean family layout (no
+  // BUDGET/TOP/PREMIUM pills, no mug SVGs, internal-loop tap), not the
+  // generic mockup. Detection: if canonical OR any alternative contains
+  // a known consumer-electronics / appliance / premium-brand signal, OR
+  // if category is 'tech'/'home'/'diy', we force disambig_kind='family'.
+  const V154_BRAND_SIGNALS = /\b(?:bose|sony|apple|samsung|google|pixel|nest|amazon\s+echo|ring|arlo|jbl|sennheiser|sonos|anker|belkin|mophie|logitech|razer|corsair|hyperx|steelseries|beats|marshall|jabra|skullcandy|airpods|ninja|shark|dyson|bosch|tefal|breville|russell\s*hobbs|kitchenaid|smeg|de\s*longhi|delonghi|kenwood|cuisinart|vitamix|nutribullet|magimix|krups|nespresso|tassimo|dolce\s+gusto|miele|hoover|vax|sebo|black\s*[&+]?\s*decker|dewalt|makita|milwaukee|stanley|einhell|ryobi|festool|hilti|karcher|stihl|husqvarna|playstation|xbox|nintendo|switch|fitbit|garmin|withings|oura|kindle|fire\s+tablet|onepl?us|xiaomi|huawei|motorola|nokia|hp|dell|lenovo|asus|acer|msi|microsoft\s+surface|ghd|babyliss|remington|braun|philips|oral[\s-]?b|colgate|sensodyne|nivea|loreal|l['’]?or[ée]al|aveda|aesop|charlotte\s+tilbury|fenty|nars|estee?\s*lauder|clinique|elemis)\b/i;
+  function _v154HasBrandSignal(strings) {
+    if (!Array.isArray(strings)) return false;
+    for (const s of strings) {
+      if (typeof s === 'string' && V154_BRAND_SIGNALS.test(s)) return true;
+    }
+    return false;
+  }
+  const _v154Candidates = [
+    (parsed && parsed.canonical_search_string) || '',
+    ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
+  ];
+  const _v154HasBrand = _v154HasBrandSignal(_v154Candidates);
+  const _v154TechCategory = (parsed && ['tech', 'home', 'diy', 'health', 'beauty'].includes(parsed.category));
   const _disambigKind = (outcome === 'disambig')
-    ? ((parsed && parsed._v146_family_applied) ? 'family' : 'generic')
+    ? (
+        (parsed && parsed._v146_family_applied) ? 'family'
+        : _v154HasBrand ? 'family'
+        : _v154TechCategory ? 'family'
+        : 'generic'
+      )
     : null;
   return {
     outcome,
@@ -2734,7 +2769,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v153:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v154:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
