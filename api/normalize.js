@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v165';
+const VERSION             = 'normalize.js v3.4.5v168';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v165-1'; // V.164+V.165 — bumped to flush pawn-shop-leaked + tiers-mismatched cached responses.
+const CACHE_PREFIX = 'sav-v168-1'; // V.168 — bumped to flush V.165 responses that still routed thin (1-2 link) results to no_match.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -838,6 +838,24 @@ V.160 HARD RULE — PILLARS MODE (INPUT.alternatives absent):
     market_context.retailer_count field.
   - NEVER claim "price data unavailable" when INPUT.market_context is
     populated. If market_context exists, prices ARE available — use them.
+
+V.168 THIN-COVERAGE RULE — when INPUT.market_context.retailer_count is
+  1 or 2 (or INPUT.retailers has only 1-2 entries with no market_context),
+  the SKU has thin UK retail coverage. The verdict_summary MUST openly
+  acknowledge the scarcity rather than pretending the comparison stack
+  is robust. Trust through transparency.
+  Pattern: "<positioning sentence>. Only <N> verified UK retailer<s>
+            stock<s> this — <one short context clause>."
+  Examples:
+    1 retailer: "Standard mainline UK pricing at £8.50. Only one verified
+                 retailer indexed for this exact SKU — Yorkshire Tea is
+                 supermarket-dominant and rarely lists on price comparison."
+    2 retailers: "£11.99 floor sits below typical paperback retail. Just 2
+                  UK retailers stock this exact edition — the spread is
+                  narrow so the cheaper option is a clean win."
+  Still produce a valid verdict_label. With 1-2 retailers and a sensible
+  median, lean "fair" or "good_buy". Lean "check_elsewhere" only if the
+  single price is implausibly cheap or expensive for the category.
 
 OUTPUT JSON ONLY, no preamble, no markdown fences:
 {
@@ -1838,7 +1856,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v165:${canonicalKey}`;
+  const ck = `savvey:retailers:v168:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2881,6 +2899,46 @@ function _v138BuildResponse({
     outcome_reason = 'no_amazon_match';
   }
 
+  // ──────────────────────────────────────────────────────────────────
+  // V.168 — "MATCHED THIN" RESCUE.
+  //
+  // Panel mandate: the ≥3-link floor was rejecting legitimate matches
+  // where Google Shopping genuinely only indexes 1 or 2 UK retailers
+  // (groceries: "Yorkshire Tea" → Amazon UK only; books: "Atomic Habits"
+  //  → Amazon + eBay). A user receiving 2 clean verified prices for a
+  // book is a SUCCESS, not a failure.
+  //
+  // New routing (applied AFTER the existing outcome decision so the
+  // V.139 disambig gate / V.146 family backstop still take precedence
+  // for low-confidence + variant-family queries):
+  //
+  //   outcome=matched + links.length === 0  → outcome='not_found'
+  //                                            (disambig screen, no
+  //                                             price stack to show)
+  //   outcome=matched + links.length 1 or 2 → outcome='matched_thin'
+  //                                            (renders the Four Pillars,
+  //                                             frontend surfaces a
+  //                                             scarcity acknowledgment)
+  //   outcome=matched + links.length >= 3   → outcome='matched' (unchanged)
+  //
+  //  All other outcomes (disambig, no_match from upstream Haiku
+  //  low-confidence) are left as-is.
+  // ──────────────────────────────────────────────────────────────────
+  if (outcome === 'matched' && Array.isArray(links)) {
+    const _v168PricedLinks = links.filter(l => l && l.price_gbp != null && !l.is_outlier).length;
+    if (_v168PricedLinks === 0) {
+      outcome = 'not_found';
+      outcome_reason = 'matched_no_links_post_filter';
+    } else if (_v168PricedLinks <= 2) {
+      // Preserve the original outcome_reason context (high_confidence_with_price /
+      // retailer_priced_no_amazon) but flag the thinness explicitly so the
+      // frontend can route to the matched_thin presentation if it wants.
+      outcome = 'matched_thin';
+      outcome_reason = 'matched_thin_' + _v168PricedLinks + '_link' + (_v168PricedLinks === 1 ? '' : 's');
+    }
+    // links.length >= 3 → outcome stays 'matched' (the original).
+  }
+
   // ── Identity block ────────────────────────────────────────────────
   // V.159 — IMAGE EXTRACTION AUDIT. Pillar 1 of the result UI requires a
   // product image. Previously identity.image was only populated when
@@ -3099,7 +3157,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v165-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v168-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -3372,7 +3430,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v165:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v168:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -3779,14 +3837,12 @@ export default async function handler(req, res) {
     // V.142 — synthesis_payload emitted whenever skip_synth=true so
     // /api/identify clients can drive /api/synthesize separately.
     synthesis_payload: body.skip_synth ? {
-      // V.165 — mode MUST follow the outcome, not just "are there alternatives".
-      // The HP ProBook case had outcome=matched AND alternatives_array.length>=2
-      // (variants exist as a family). Pre-V.165 logic stamped mode=tiers, the
-      // frontend rendered the matched Four Pillars screen, and the synth
-      // orchestrator's tier-branch tried to write to v138-tier-blurb-N IDs
-      // that don't exist on the result screen → Pillar 4 stayed empty.
-      // Fix: outcome=matched ⇒ pillars (verdict + summary). Otherwise tiers.
-      mode: (_v138.outcome === 'matched')
+      // V.165 — mode follows the outcome.
+      // V.168 — matched_thin ALSO renders the Four Pillars, so it gets
+      // pillars synthesis (verdict + summary). Disambig stays tiers.
+      // not_found / no_match get nothing renderable, so default to pillars
+      // (the synth call will no-op if synthesis_payload.canonical is missing).
+      mode: ((_v138.outcome === 'matched') || (_v138.outcome === 'matched_thin'))
             ? 'pillars'
             : ((Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length >= 2) ? 'tiers' : 'pillars'),
       canonical:     parsed.canonical_search_string || null,
