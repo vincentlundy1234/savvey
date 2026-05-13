@@ -7011,6 +7011,94 @@ body.v186-revealing .v172-home-header {
 }
 
 /* End V.186 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.188 — SCANNER SEAL & ESCAPE HATCH UNIFICATION
+   Lock both camera and barcode modals to 100dvh, force a hard seal at
+   bottom: 0 with no margin, and surface the unified frosted-glass X
+   close button on both screens in the thumb zone.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Viewport seal. Forced position: fixed + inset: 0 + 100dvh on BOTH
+   camera modals so iOS Safari's URL-bar dance and the parent .screen
+   container can't leave a bottom gap. */
+#screen-camera.active,
+#screen-barcode.active {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: 100% !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000 !important;
+  overflow: hidden !important;
+  z-index: 90 !important;
+}
+/* Fallback for any browser without dvh — svh + vh chain. */
+@supports not (height: 100dvh) {
+  #screen-camera.active,
+  #screen-barcode.active { height: 100svh !important; }
+}
+
+/* (3) Hide tab bar via z-index occlusion when barcode modal owns the
+   screen (mirrors V.185 camera modal rule). */
+body:has(#screen-barcode.active) #v183-tab-bar {
+  /* Tab bar at z-index 80 — barcode at 90 already covers it, but this
+     belt-and-braces display:none kills any safari rendering edge case. */
+  display: none !important;
+}
+
+/* (2) Unified Escape Hatch. New frosted-glass X close button on the
+   barcode screen, styled identically to the V.171 camera close X but
+   wired to cancelBarcode(). Sits in the bottom-right thumb zone above
+   the safe-area inset, z-index 9999 so nothing the html5-qrcode library
+   injects can occlude it. */
+.v188-bc-close {
+  position: absolute;
+  top: auto !important;
+  right: 20px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 32px);
+  width: 52px;
+  height: 52px;
+  border-radius: 9999px;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(20, 22, 24, 0.55);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  color: #ffffff;
+  z-index: 9999;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.30);
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1),
+              background .15s ease;
+}
+.v188-bc-close:active {
+  transform: scale(0.92);
+  background: rgba(20, 22, 24, 0.70);
+}
+.v188-bc-close svg {
+  width: 22px;
+  height: 22px;
+  stroke: #ffffff;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+/* Lift the camera X to the same z-index tier for consistency. */
+body.v171 .v171-cam-close { z-index: 9999 !important; }
+
+/* Hide the legacy tiny top-left .v5-cam-x on the barcode screen — the new
+   thumb-zone X supersedes it. (Top-bar SCAN pill remains.) */
+#screen-barcode .v5-cam-topbar .v5-cam-x { display: none !important; }
+
+/* End V.188 block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -7336,6 +7424,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-cam-screen" id="screen-barcode">
+  <!-- V.188 — Unified Escape Hatch. Frosted-glass thumb-zone X mirrors
+       the V.171/V.174 camera close button. Wired to cancelBarcode() so
+       the user is never trapped on the scanning screen. -->
+  <button class="v188-bc-close v181-spring" id="v188-bc-close-btn" type="button" onclick="cancelBarcode()" aria-label="Close scanner">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+    </svg>
+  </button>
   <!-- v5 BARCODE REBUILD (V.43) — full-bleed dark backdrop, mode-aware overlay -->
   <div class="v5-cam-bg" aria-hidden="true"></div>
   <div class="v5-cam-glow" aria-hidden="true"></div>
