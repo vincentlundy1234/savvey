@@ -6653,6 +6653,96 @@ body.v181 .v181-spring:active {
 }
 
 /* End V.181 Kinetic Merge block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.182 — FIT, FINISH & ROUTING RESCUE
+   Casualties from the V.181 glass cascade: white-on-white hero text,
+   small wordmark, harsh-black tagline, dark type sheet input, missing
+   close X on Type sheet. Plus the V.181 spring-physics routing fix
+   (lives in JS, not here).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Twin Heroes — force dark text on the V.181 light glass background.
+       Was rgba(255,255,255,1) on the Snap card → invisible after glass. */
+body.v181 .v171-hero,
+body.v181 .v171-hero-title,
+body.v181 .v171-hero-sub,
+body.v181 .v171-hero-icon {
+  color: var(--green-deep, #143d10) !important;
+  fill: var(--green-deep, #143d10);
+}
+body.v181 .v171-hero-icon svg { stroke: var(--green-deep, #143d10) !important; }
+body.v181 .v171-hero-snap,
+body.v181 .v171-hero-type {
+  background: rgba(255, 255, 255, 0.66) !important;   /* override green gradient on Snap */
+  background-image: none !important;
+}
+body.v181 .v171-hero-title { font-weight: 800; letter-spacing: -0.025em; }
+body.v181 .v171-hero-sub   { opacity: 0.78; font-weight: 600; }
+
+/* (2) Typography — SAVVEY wordmark +25%, tagline rich brand colour. */
+body.v181 .v172-wordmark {
+  font-size: 28px !important;        /* was 22px (+27%) */
+  letter-spacing: -0.012em;
+}
+body.v181 .v171-tagline {
+  color: var(--green-deep, #143d10) !important;   /* was raw ink; now rich forest */
+  letter-spacing: -0.028em;
+}
+body.v181 .v171-subtagline {
+  color: rgba(20, 32, 26, 0.62) !important;
+}
+
+/* (3) Type sheet — frosted glass surface + Apple-grade Close X. */
+body.v181 .v172-type-bar {
+  background: rgba(255, 255, 255, 0.68) !important;
+  backdrop-filter: blur(20px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(150%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
+  box-shadow:
+    0 18px 50px rgba(20, 32, 26, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+}
+body.v181 .v172-type-input {
+  background: transparent !important;
+  color: var(--ink, #14201a) !important;
+  caret-color: var(--green, #2a6b22);
+}
+body.v181 .v177-ghost {
+  color: rgba(20, 32, 26, 0.45) !important;        /* legible ghost on light glass */
+}
+
+/* Floating Close X for the Type sheet (mirrors the Camera close X). */
+body.v181 .v182-type-close {
+  position: absolute;
+  top: -14px;
+  right: -6px;
+  width: 36px;
+  height: 36px;
+  border-radius: 9999px;
+  border: 0;
+  cursor: pointer;
+  background: rgba(20, 22, 24, 0.55);
+  backdrop-filter: blur(14px) saturate(150%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.18);
+  z-index: 5;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s var(--ease-spatial, cubic-bezier(0.4, 0, 0.2, 1));
+}
+body.v181 .v182-type-close:active { transform: scale(0.92); }
+body.v181 .v182-type-close svg {
+  width: 16px; height: 16px;
+  stroke: #ffffff; stroke-width: 2.6; stroke-linecap: round;
+}
+/* Anchor for the close X */
+body.v181 .v172-type-sheet { position: relative; }
+
+/* End V.182 Fit & Finish block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -6868,7 +6958,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
             <circle cx="12" cy="13" r="4"/>
           </svg>
         </div>
-        <div class="v171-hero-title">Snap a Product</div>
+        <div class="v171-hero-title">Snap a Product or Box</div>
         <div class="v171-hero-sub">Point your camera, we'll find it.</div>
       </button>
       <!-- V.174 — "Camera access required" microcopy under Snap card.
@@ -6884,7 +6974,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </div>
-        <div class="v171-hero-title">Type a Name</div>
+        <div class="v171-hero-title">Type a Product Name</div>
         <div class="v171-hero-sub">"Bose QC45", "AF400UK", etc.</div>
       </button>
     </div>
@@ -6893,9 +6983,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
          home screen stays minimalist for first-time users. -->
     <div class="v174-recent-eyebrow" id="v174-recent-eyebrow" hidden>Recent</div>
     <div class="v174-recent-row" id="v174-recent-row" hidden></div>
-    <!-- V.172 — Inline Type sheet. Hidden by default; revealed when the
-         user taps "Type a Name". Holds a visible #v172-type-input that
-         goText() will use via the legacy #text-input shadow-binding. -->
+    <!-- V.172 + V.182 — Inline Type sheet. The V.182 Close X is JS-injected
+         on init so we don't touch the original wrapper here. -->
     <div class="v172-type-sheet" id="v172-type-sheet" hidden>
       <div class="v172-type-bar">
         <svg class="v172-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
@@ -14244,11 +14333,18 @@ async function _v140KickoffSynthesize(idPayload) {
   });
 
   // ── C · SPRING-PHYSICS BINDER (event-delegated) ────────────────────────
-  // Single solver instance per element, lazily created on first interaction.
-  // State stored in a WeakMap keyed by the element so it GCs cleanly when
-  // a retailer row is removed from the DOM.
+  // V.182 — Spring rewired with a routing-safe path:
+  //   1. Pre-mount the .v181-spring class on the visible targets at init
+  //      (no class mutations during pointer events — iOS would interpret
+  //      that as movement and refuse to synthesise the click).
+  //   2. Track pointerdown coords + time. On pointerup with no drag and no
+  //      native click within 80 ms, FORCE-FIRE the element's .click() so
+  //      the existing onclick handlers (navSnap, v172OpenTypeSheet, goText,
+  //      etc.) ALWAYS run. The native click is detected via a tiny
+  //      one-shot listener and the manual trigger is skipped if it fired.
   const SPRING = { TENSION: 340, FRICTION: 18, MASS: 1, EPS: 0.0005 };
   const springStates = new WeakMap();
+  const _v182LastDown = { el: null, x: 0, y: 0, t: 0, fired: false };
 
   function springTick(el) {
     const s = springStates.get(el);
@@ -14282,42 +14378,118 @@ async function _v140KickoffSynthesize(idPayload) {
   // Selectors of elements that earn the spring on tap.
   const SPRING_TARGETS = '.v171-hero, .v136-cta-primary, .v136-cta-secondary, .v138-retailer-row, #v171-show-more-prices, .v174-recent-chip, .v172-type-go';
 
-  // Delegated pointer handlers — capture-phase so they run BEFORE the V.172
-  // haptic listener but AFTER the V.179 anchor stopPropagation (which only
-  // fires for retailer-stack anchors, the same elements that earn springs).
-  // V.179's stopPropagation actually HELPS here because once it fires, the
-  // pointerdown event is consumed and the spring never sees it on the
-  // *child* anchor — but the spring's target is the ROW container, which
-  // catches the event on the way up. Both systems play nice.
+  // V.182 — Pre-mount the spring class on init so we never mutate classes
+  // during pointer events (which iOS treats as element movement and uses
+  // to suppress synthetic click).
+  function v182PreMountSprings() {
+    try {
+      document.querySelectorAll(SPRING_TARGETS).forEach(function (el) {
+        el.classList.add('v181-spring');
+      });
+    } catch (e) {}
+  }
+  v182PreMountSprings();
+  // Re-mount on result/home/confirm renders (event-delegated, no leaks).
+  ['screen-result', 'screen-home', 'screen-confirm'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (!el || typeof MutationObserver === 'undefined') return;
+    var d = null;
+    new MutationObserver(function () {
+      if (d) clearTimeout(d);
+      d = setTimeout(v182PreMountSprings, 140);
+    }).observe(el, { childList: true, subtree: true });
+  });
+
+  // V.182 — pointerdown: record coords + tag the element, but DEFER the
+  // spring write to the next animation frame. The pointer event must fully
+  // bubble + the browser must finish its tap-resolution logic FIRST.
   document.addEventListener('pointerdown', function (e) {
     try {
-      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      var el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
       if (!el) return;
-      springTarget(el, 0.94);
+      _v182LastDown.el    = el;
+      _v182LastDown.x     = e.clientX;
+      _v182LastDown.y     = e.clientY;
+      _v182LastDown.t     = Date.now();
+      _v182LastDown.fired = false;
+      // Tag a one-shot click listener on the element so we can detect
+      // whether the browser fired a native click after pointerup.
+      var onceClick = function () { _v182LastDown.fired = true; };
+      el.addEventListener('click', onceClick, { once: true, capture: true });
+      // Schedule the spring squish on the next frame.
+      requestAnimationFrame(function () { springTarget(el, 0.94); });
     } catch (err) {}
   }, true);
+
+  // V.182 — pointerup: release the spring AND defensively force the click
+  // if (a) the user didn't drag and (b) no native click fires within 80 ms.
   document.addEventListener('pointerup', function (e) {
     try {
-      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      var el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
       if (!el) return;
-      springTarget(el, 1.0);
+      requestAnimationFrame(function () { springTarget(el, 1.0); });
+      // Force-click rescue. Only fires if pointerdown was on the same
+      // element, the user didn't drag > 10 px, and no native click fired.
+      if (_v182LastDown.el === el) {
+        var dx = (e.clientX || 0) - _v182LastDown.x;
+        var dy = (e.clientY || 0) - _v182LastDown.y;
+        var dragged = Math.hypot(dx, dy) > 10;
+        var dt = Date.now() - _v182LastDown.t;
+        if (!dragged && dt < 1000) {
+          setTimeout(function () {
+            if (_v182LastDown.fired) return;        // native click won — done
+            try {
+              // Manual trigger — fires the inline onclick AND any
+              // bubbling handlers. Does NOT preventDefault or stopProp.
+              if (typeof el.click === 'function') el.click();
+              _v182LastDown.fired = true;
+            } catch (err) {}
+          }, 80);
+        }
+      }
     } catch (err) {}
   }, true);
   document.addEventListener('pointercancel', function (e) {
     try {
-      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
-      if (!el) return;
-      springTarget(el, 1.0);
+      var el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      if (el) requestAnimationFrame(function () { springTarget(el, 1.0); });
     } catch (err) {}
   }, true);
   document.addEventListener('pointerleave', function (e) {
     try {
-      const el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
+      var el = e.target && e.target.closest && e.target.closest(SPRING_TARGETS);
       if (!el) return;
-      const s = springStates.get(el);
-      if (s && s.target !== 1.0) springTarget(el, 1.0);
+      var s = springStates.get(el);
+      if (s && s.target !== 1.0) requestAnimationFrame(function () { springTarget(el, 1.0); });
     } catch (err) {}
   }, true);
+
+  // V.182 — Inject the floating Close X into the Type sheet so the user
+  // always has an Apple-grade escape hatch (mirrors the Camera close X).
+  // The button is positioned via body.v181 .v182-type-close CSS already in
+  // the stylesheet — we just need it in the DOM, once, idempotently.
+  (function v182InjectTypeClose() {
+    try {
+      var sheet = document.getElementById('v172-type-sheet');
+      if (!sheet) return;
+      if (sheet.querySelector('.v182-type-close')) return; // idempotent
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'v182-type-close';
+      btn.setAttribute('aria-label', 'Close');
+      btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+      btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof window.v172CloseTypeSheet === 'function') {
+          window.v172CloseTypeSheet();
+        } else {
+          sheet.hidden = true;
+        }
+      });
+      sheet.insertBefore(btn, sheet.firstChild);
+    } catch (e) {}
+  })();
 
   window._v181 = { applyGlass: v181ApplyGlass, springTarget };
   try { console.log('[V.181] Kinetic Merge initialised — aurora + glass + springs.'); } catch (e) {}
