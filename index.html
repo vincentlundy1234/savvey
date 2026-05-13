@@ -5124,20 +5124,43 @@
   .v136-cta-mark-curr { background: #4c1c91; color: #FFFFFF; }
   .v136-cta-mark-argo { background: #ed1c24; color: #FFFFFF; }
   .v136-cta-mark-jl   { background: #000000; color: #FFFFFF; }
-  .v136-cta-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .v136-cta-body {
+    flex: 1 1 auto;
+    min-width: 0;          /* allows children to shrink below intrinsic width */
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    overflow: hidden;      /* V.161 — clip overflowing retailer names */
+  }
   .v136-cta-name {
     font: 700 16px/1.2 system-ui, sans-serif;
     letter-spacing: -0.01em;
+    /* V.161 — graceful truncation when retailer names are pathological
+       (e.g. "Ebayglobalsolutions54321"). Without these three rules the
+       text bled into and overlapped the price column on the right. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 100%;
   }
   .v136-cta-primary .v136-cta-name { font-weight: 800; }
   .v136-cta-sub {
     font: 500 12px/1.3 system-ui, sans-serif;
     opacity: 0.78;
+    /* V.161 — same truncation for the delivery / sub line. */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+    max-width: 100%;
   }
   .v136-cta-price {
     font: 800 17px/1 system-ui, sans-serif;
     letter-spacing: -0.01em;
     flex: 0 0 auto;
+    margin-left: 12px;     /* V.161 — guaranteed gap between name + price */
+    white-space: nowrap;   /* never wrap the £ value itself */
   }
 
   /* ── Affiliate + mockup note ───────────────────────────────────────── */

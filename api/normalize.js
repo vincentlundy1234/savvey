@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v160c';
+const VERSION             = 'normalize.js v3.4.5v161';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v160-1'; // V.160 — bumped so identify-side cache cuts over alongside the synth cache (sav-v140-syn-1 → sav-v160-syn-1). Without bumping this, V.159c full responses (carrying their own null verdict block) keep getting served from the response cache and Pillar 4 stays empty even though Haiku is now happy.
+const CACHE_PREFIX = 'sav-v161-1'; // V.161 — bumped to invalidate V.160 responses that still carried 4× eBay clones and used Nespresso listings in the Retailer Stack.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1670,7 +1670,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v160:${canonicalKey}`;
+  const ck = `savvey:retailers:v161:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1723,7 +1723,13 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     let _droppedNoUrl = 0;
     let _droppedNoPrice = 0;
     let _droppedRedirector = 0;
+    let _droppedUsed = 0;       // V.161 — condition !== new
+    let _squashedEbay = 0;      // V.161 — eBay dedup count
     const _droppedSamples = [];
+    // V.161 — match strings used in SerpAPI's condition field. Real-world
+    // sample: "Used", "Refurbished", "Pre-owned", "Open Box", "Renewed",
+    // "Second hand". Match case-insensitively, allow whitespace variants.
+    const _v161UsedRx = /\b(used|refurb|refurbished|pre[\-\s]?owned|second[\-\s]?hand|open[\-\s]?box|renewed)\b/i;
     // V.144 — FILTER NUKE. Panel mandate: any SerpAPI shopping result with a
     // valid GBP price and a URL is accepted. NO retailer-name map check,
     // NO TLD whitelist (we just reject Google's own redirector hosts), NO
@@ -1733,6 +1739,25 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     // derived from host (game.co.uk → 'Game').
     for (const item of results) {
       _examined++;
+      // V.161 — CONDITION FILTER. SerpAPI google_shopping surfaces a
+      // `condition` field on a subset of cards (eBay, Facebook Marketplace,
+      // CEX, Music Magpie, refurb specialists). Drop anything that isn't
+      // explicitly new — a £47 used Nespresso was wrecking the £114 baseline
+      // for the new SKU. We also check item.title for inline "used /
+      // refurbished" markers since some sources don't populate the
+      // structured condition field.
+      const _condField  = (typeof item.condition === 'string') ? item.condition : '';
+      const _condTitle  = (typeof item.title === 'string') ? item.title : '';
+      const _condStock  = (typeof item.stock_state === 'string') ? item.stock_state : '';
+      if (_v161UsedRx.test(_condField) ||
+          _v161UsedRx.test(_condTitle) ||
+          _v161UsedRx.test(_condStock)) {
+        _droppedUsed++;
+        if (_droppedSamples.length < 5) {
+          _droppedSamples.push('used:' + (_condField || _condStock || _condTitle).slice(0, 24));
+        }
+        continue;
+      }
       // Pick the best URL. product_link is the merchant PDP and is preferred;
       // item.link is the Google aclk redirector which still works but is uglier.
       // V.150 — declared with `let` so the redirector-unwrap branch can
@@ -1750,6 +1775,19 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       } catch (e) {
         _droppedNoUrl++;
         continue;
+      }
+      // V.161 — eBAY SQUASHER. Any source string containing "ebay" (in any
+      // form: "eBay - sellername", "eBay UK", "ebay marketplace") gets
+      // forced into a single host key 'ebay.co.uk'. The standard dedup
+      // (cheapest-per-host wins) then collapses every eBay listing into one
+      // Retailer Stack card with the lowest price. V138_RETAILER_NAMES
+      // resolves the friendly display name to plain "eBay".
+      const _v161SrcStr = (typeof item.source === 'string' ? item.source : '')
+                        + ' ' + (typeof item.seller_name === 'string' ? item.seller_name : '')
+                        + ' ' + ((item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '');
+      if (/\bebay\b/i.test(_v161SrcStr) || /\bebay\./i.test(host)) {
+        if (deepLinks['ebay.co.uk']) _squashedEbay++;
+        host = 'ebay.co.uk';
       }
       // V.150 — before banning a Google redirector host, attempt to unwrap
       // it (the real merchant URL is wrapped in adurl=/url=/q=/dest=).
@@ -1919,6 +1957,8 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       dropped_no_url:     _droppedNoUrl,
       dropped_no_price:   _droppedNoPrice,
       dropped_redirector: _droppedRedirector,
+      dropped_used:       _droppedUsed,     // V.161 — used/refurb filter
+      squashed_ebay:      _squashedEbay,    // V.161 — eBay squasher dedup count
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 5),
       raw_samples:        _rawSamples,
@@ -2000,6 +2040,9 @@ const V138_RETAILER_NAMES = {
   'tesc': 'Tesco',
   'sain': "Sainsbury's",
   'ebay': 'eBay',
+  // V.161 — full-host alias so the eBay squasher (host:'ebay.co.uk')
+  // resolves the friendly name directly without going through _hostKey.
+  'ebay.co.uk': 'eBay',
   'bq':   'B&Q',
   'smyt': 'Smyths Toys',
   'scre': 'Screwfix',
@@ -2772,7 +2815,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v160c-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v161-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -3045,7 +3088,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v160:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v161:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
