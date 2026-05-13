@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v163c';
+const VERSION             = 'normalize.js v3.4.5v165';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v163c-1'; // V.163c — bumped after the Mark-II/II shorthand-acceptance fix to the matcher.
+const CACHE_PREFIX = 'sav-v165-1'; // V.164+V.165 — bumped to flush pawn-shop-leaked + tiers-mismatched cached responses.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1792,12 +1792,28 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
       );
       matched = romanRx.test(T) || (arabRx && arabRx.test(T)) || markRx.test(T);
     } else {
-      // Alphanumeric model token — word-bound, case-insensitive.
-      // Multi-word phrases (e.g. "iPhone 15", "PlayStation 5") match as a
-      // single span — the literal whitespace must be present in the title.
-      const esc = tok.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      const rx  = new RegExp('\\b' + esc + '\\b', 'i');
-      matched = rx.test(T);
+      // V.164 — STORAGE / UNIT WHITESPACE TOLERANCE. Real-world merchant
+      // titles write storage as both "256GB" and "256 GB" (also "1TB" /
+      // "1 TB", "415g" / "415 g", "1.7L" / "1.7 L"). The fingerprint and
+      // title can disagree on whitespace presence yet refer to the same
+      // SKU. Detect the storage/unit shape and emit a flexible regex that
+      // accepts either spacing.
+      const _v164StorageMatch = tok.raw.match(/^(\d+(?:\.\d+)?)\s*(GB|MB|TB|KB|G|L|ML|KG|MG|MM|CM|M|PC|PCS|PACK)$/i);
+      if (_v164StorageMatch) {
+        const num  = _v164StorageMatch[1];
+        const unit = _v164StorageMatch[2];
+        // `\b<num>\s*<unit>\b` — `\s*` allows 0..N whitespace between
+        // number and unit, so "256GB" and "256 GB" both pass.
+        const rx = new RegExp('\\b' + num.replace(/\./g, '\\.') + '\\s*' + unit + '\\b', 'i');
+        matched = rx.test(T);
+      } else {
+        // Alphanumeric model token — word-bound, case-insensitive.
+        // Multi-word phrases (e.g. "iPhone 15", "PlayStation 5") match as a
+        // single span — the literal whitespace must be present in the title.
+        const esc = tok.raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const rx  = new RegExp('\\b' + esc + '\\b', 'i');
+        matched = rx.test(T);
+      }
     }
     if (!matched) missing.push(tok.raw);
   }
@@ -1822,7 +1838,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v163c:${canonicalKey}`;
+  const ck = `savvey:retailers:v165:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1918,10 +1934,26 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     if (_v163Required.length > 0) {
       try { console.log(`[${VERSION}] V.163 identity tokens for "${query.slice(0,60)}" [source=${_v163Source}]: ${_v163Required.map(t => t.raw).join(', ')}`); } catch (e) {}
     }
-    // V.161 — match strings used in SerpAPI's condition field. Real-world
-    // sample: "Used", "Refurbished", "Pre-owned", "Open Box", "Renewed",
-    // "Second hand". Match case-insensitively, allow whitespace variants.
-    const _v161UsedRx = /\b(used|refurb|refurbished|pre[\-\s]?owned|second[\-\s]?hand|open[\-\s]?box|renewed)\b/i;
+    // V.164 — EXPANDED USED/REFURB REGEX. The HP ProBook £255 Cash Generator
+    // case proved V.161's regex was missing real-world condition markers.
+    // Expanded vocabulary: 'used', 'refurb*', 'pre-owned' (any spacing/case),
+    // 'preowned' (compounded), 'second-hand', 'second hand', 'secondhand',
+    // 'open box', 'open-box', 'openbox', 'renewed', 'reconditioned',
+    // 'previously owned', 'ex-display', 'ex display', 'ex-demo', 'graded',
+    // 'CPO' (certified pre-owned), 'A-grade'/'B-grade' (eBay/CEX grading).
+    // All case-insensitive via /i.
+    const _v164UsedRx = /\b(?:used|refurb(?:ished|ed)?|pre[\-\s]?owned|preowned|second[\-\s]?hand|secondhand|open[\-\s]?box|openbox|renewed|reconditioned|previously\s+owned|ex[\-\s]?display|ex[\-\s]?demo|graded|cpo|certified\s+pre[\-\s]?owned|[abc][\-\s]?grade|grade[\-\s]?[abc])\b/i;
+    // V.164 — pawn-shop / second-hand specialist domains. These merchants
+    // sell almost exclusively used / refurbished electronics. The HP ProBook
+    // £255 "Cash Generator" leak slipped past V.161 because the Pre-owned
+    // marker was buried in item.title where V.161 wasn't looking. V.164
+    // expands the field perimeter AND treats these hosts as condition-guilty
+    // by default for electronics queries. The user can still find used
+    // gear via eBay (which the V.161 squasher already collapses).
+    const _v164PawnShopRx = /\b(?:cash\s*generator|cashgenerator|cash\s*converters|cashconverters|cex|musicmagpie|music\s*magpie|webuyany|envirophone|smartphonechecker|gizmogrind|reboxed|backmarket|back\s*market|swappa|gazelle|decluttr|mazumamobile|gamestop\s*used)\b/i;
+    // V.161 alias kept for back-compat (downstream telemetry reads
+    // dropped_used; the field name doesn't change).
+    const _v161UsedRx = _v164UsedRx;
     // V.144 — FILTER NUKE. Panel mandate: any SerpAPI shopping result with a
     // valid GBP price and a URL is accepted. NO retailer-name map check,
     // NO TLD whitelist (we just reject Google's own redirector hosts), NO
@@ -1931,22 +1963,46 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     // derived from host (game.co.uk → 'Game').
     for (const item of results) {
       _examined++;
-      // V.161 — CONDITION FILTER. SerpAPI google_shopping surfaces a
-      // `condition` field on a subset of cards (eBay, Facebook Marketplace,
-      // CEX, Music Magpie, refurb specialists). Drop anything that isn't
-      // explicitly new — a £47 used Nespresso was wrecking the £114 baseline
-      // for the new SKU. We also check item.title for inline "used /
-      // refurbished" markers since some sources don't populate the
-      // structured condition field.
-      const _condField  = (typeof item.condition === 'string') ? item.condition : '';
-      const _condTitle  = (typeof item.title === 'string') ? item.title : '';
-      const _condStock  = (typeof item.stock_state === 'string') ? item.stock_state : '';
-      if (_v161UsedRx.test(_condField) ||
-          _v161UsedRx.test(_condTitle) ||
-          _v161UsedRx.test(_condStock)) {
+      // V.164 — CONDITION FILTER (EXPANDED FIELD PERIMETER).
+      // V.161 only checked condition / title / stock_state. The Cash
+      // Generator HP ProBook leak proved that's not enough — SerpAPI
+      // surfaces "Pre-owned" / "Used" markers in any of:
+      //   item.condition       — structured field, usually populated
+      //   item.title           — inline marker in the merchant headline
+      //   item.snippet         — Google's blurb under the title
+      //   item.details         — extra-info block on some cards
+      //   item.source          — merchant / seller string
+      //   item.seller_name     — alternate seller-string location
+      //   item.delivery        — sometimes carries "Pre-owned · Free returns"
+      //   item.stock_state     — V.161 original signal
+      //   item.merchant.name   — nested merchant identifier
+      // V.164 reads all nine and OR's them through the expanded regex.
+      const _condParts = [
+        item.condition,
+        item.title,
+        item.snippet,
+        item.details,
+        item.source,
+        item.seller_name,
+        item.delivery,
+        item.stock_state,
+        item.merchant && item.merchant.name,
+      ].filter(s => typeof s === 'string' && s.length > 0);
+      const _condBlob = _condParts.join(' · ');
+      const _matchedUsed   = _v164UsedRx.test(_condBlob);
+      const _matchedPawn   = _v164PawnShopRx.test(_condBlob);
+      // Pawn-shop hosts are condition-guilty by default. Any item whose
+      // source / seller_name / merchant.name matches a known second-hand
+      // specialist gets dropped even when no explicit "used" word appears
+      // in the title — those merchants only sell pre-owned stock anyway.
+      if (_matchedUsed || _matchedPawn) {
         _droppedUsed++;
-        if (_droppedSamples.length < 5) {
-          _droppedSamples.push('used:' + (_condField || _condStock || _condTitle).slice(0, 24));
+        if (_droppedSamples.length < 8) {
+          const _reason = _matchedUsed ? 'used' : 'pawnshop';
+          const _sample = _matchedPawn
+            ? (item.source || item.seller_name || (item.merchant && item.merchant.name) || '(no_source)')
+            : _condBlob;
+          _droppedSamples.push(_reason + ':' + String(_sample).slice(0, 40));
         }
         continue;
       }
@@ -3043,7 +3099,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'synthesis_payload.canonical required' });
       }
       const mode = (sp.mode === 'tiers') ? 'tiers' : 'pillars';
-      const synthKeyRaw = `sav-v161-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
+      const synthKeyRaw = `sav-v165-syn-1|${mode}|${canon.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0,80)}`;
       const synthKey = 'savvey:synth:' + crypto.createHash('sha256').update(synthKeyRaw).digest('hex').slice(0, 32);
       const cached = await kvGet(synthKey);
       if (cached && typeof cached === 'object') {
@@ -3316,7 +3372,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v163c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v165:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -3723,7 +3779,16 @@ export default async function handler(req, res) {
     // V.142 — synthesis_payload emitted whenever skip_synth=true so
     // /api/identify clients can drive /api/synthesize separately.
     synthesis_payload: body.skip_synth ? {
-      mode: (Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length >= 2) ? 'tiers' : 'pillars',
+      // V.165 — mode MUST follow the outcome, not just "are there alternatives".
+      // The HP ProBook case had outcome=matched AND alternatives_array.length>=2
+      // (variants exist as a family). Pre-V.165 logic stamped mode=tiers, the
+      // frontend rendered the matched Four Pillars screen, and the synth
+      // orchestrator's tier-branch tried to write to v138-tier-blurb-N IDs
+      // that don't exist on the result screen → Pillar 4 stayed empty.
+      // Fix: outcome=matched ⇒ pillars (verdict + summary). Otherwise tiers.
+      mode: (_v138.outcome === 'matched')
+            ? 'pillars'
+            : ((Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length >= 2) ? 'tiers' : 'pillars'),
       canonical:     parsed.canonical_search_string || null,
       category:      parsed.category || null,
       market_status: parsed.market_status || null,
