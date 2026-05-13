@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v154';
+const VERSION             = 'normalize.js v3.4.5v154b';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v154-1';
+const CACHE_PREFIX = 'sav-v154b-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1566,7 +1566,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
   if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v154:${canonicalKey}`;
+  const ck = `savvey:retailers:v154b:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2382,8 +2382,8 @@ function _v138BuildResponse({
       ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
     ];
     const _innerHasBrand = _innerCandidates.some(s => typeof s === 'string' && _V154_BRANDS_INNER.test(s));
-    const _innerCatFamily = parsed && ['tech', 'home', 'diy', 'health', 'beauty'].includes(parsed.category);
-    const _isFamilyVariant = !!(parsed && parsed._v146_family_applied) || _innerHasBrand || _innerCatFamily;
+    // V.154b — category gate dropped (see _disambigKind block above).
+    const _isFamilyVariant = !!(parsed && parsed._v146_family_applied) || _innerHasBrand;
     const built = altsArr.slice(0, 3).map((name, i) => {
       const meta = altsMeta[i] || {};
       const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
@@ -2460,12 +2460,14 @@ function _v138BuildResponse({
     ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
   ];
   const _v154HasBrand = _v154HasBrandSignal(_v154Candidates);
-  const _v154TechCategory = (parsed && ['tech', 'home', 'diy', 'health', 'beauty'].includes(parsed.category));
+  // V.154b — category gate dropped. "Teapot" / "kettle" / "white mug" have
+  // category='home' but are genuinely generic. Brand signal is the only
+  // discriminator now: if any branded keyword appears in canonical or
+  // alternatives, it's a family disambig; otherwise generic.
   const _disambigKind = (outcome === 'disambig')
     ? (
         (parsed && parsed._v146_family_applied) ? 'family'
         : _v154HasBrand ? 'family'
-        : _v154TechCategory ? 'family'
         : 'generic'
       )
     : null;
@@ -2769,7 +2771,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v154:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v154b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
