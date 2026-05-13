@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v156';
+const VERSION             = 'normalize.js v3.4.5v157';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v156-1';
+const CACHE_PREFIX = 'sav-v157-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1506,7 +1506,7 @@ function _shouldSafetyBlock(canonical) {
 // 'johnlewis.com') -> { url, title, price }. Canonical key derives from
 // seller_name via _SELLER_NAME_TO_HOST. Items with unknown sellers are
 // dropped (still no random aggregator junk).
-const GOOGLE_SHOPPING_TIMEOUT_MS = 2000; // V.69
+const GOOGLE_SHOPPING_TIMEOUT_MS = 8000; // V.157 — cold-lookup headroom (was 2s; obscure terms need >4s on SerpAPI free tier)
 const _SELLER_NAME_TO_HOST = (() => {
   const m = new Map();
   const add = (host, ...names) => names.forEach(n => m.set(n.toLowerCase(), host));
@@ -1581,7 +1581,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v156:${canonicalKey}`;
+  const ck = `savvey:retailers:v157:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2864,7 +2864,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v156:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v157:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -3313,16 +3313,32 @@ export default async function handler(req, res) {
   // V.97 — Don't cache failure responses when SerpAPI returned 429 (quota).
   // Otherwise we'd serve stale-empty for the full TTL after the quota refills.
   // Empty fail = no verified price, no retailer chips, no visual matches.
+  // V.157 — extended cache-skip predicate. Any network-class bail
+  // (timeout, network_error, network_timeout, serpapi_http_5xx) means the
+  // retailer stack is missing because of transient infra failure, NOT
+  // because the item genuinely has no competitors. Caching that would
+  // poison subsequent retries (V.156 surfaced this when retries returned
+  // cache=hit with BAIL=network_timeout 6 hours later).
+  const _v157BailReason = _v153LocalDiag && _v153LocalDiag.bail_reason;
+  const _v157NetworkBail = _v157BailReason && (
+       _v157BailReason === 'network_timeout'
+    || _v157BailReason === 'network_error'
+    || _v157BailReason === 'no_apikey'
+    || (typeof _v157BailReason === 'string' && _v157BailReason.startsWith('serpapi_http_5'))
+  );
   const _isQuotaFail = (_lastSerpStatus === 429 || _lastSerpStatus === 'fetch_error')
                        && !verified_amazon_price
                        && (!retailer_deep_links || Object.keys(retailer_deep_links).length === 0)
                        && !visual_matches;
-  if (!_isQuotaFail) {
+  if (_v157NetworkBail) {
+    console.warn(`[${VERSION}] V.157 skipping cache write — google_shopping ${_v157BailReason} for "${(parsed.canonical_search_string||'').slice(0,60)}". Allowing next request to retry fresh.`);
+  }
+  if (!_isQuotaFail && !_v157NetworkBail) {
     kvSet(cKey, responseBody, KV_TTL_SECONDS).catch(() => {});
     // Wave II — also write to canonical-keyed cache so different input
     // phrasings resolving to the same canonical share the cached response.
     // V.97 - canonical writes use 7-day TTL since canonical-level data is stable.
-    if (_canonicalKey && _canonicalKey.length > 22) {
+    if (_canonicalKey && _canonicalKey.length > 22 && !_v157NetworkBail) {
       kvSet(_canonicalKey, responseBody, CANONICAL_TTL_SECONDS).catch(() => {});
     }
   } else {
