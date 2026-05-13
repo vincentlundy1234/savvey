@@ -6930,8 +6930,8 @@ body.v172 #screen-camera.active {
     opacity .35s ease-out;
   will-change: transform, font-size, opacity;
 }
-.v186-logo .y { color: var(--green, #2a6b22); }
-.v186-logo .dot { color: var(--green, #2a6b22); }
+.v186-logo .y { color: var(--amber, #d68910); }   /* V.187 — brand orange Y */
+.v186-logo .dot { color: var(--green-dark, #1d4a18); }
 
 /* Choreography: when the splash is dismissing, the logo flies UP toward
    the home-header position and scales DOWN to roughly the v172 wordmark
@@ -6970,14 +6970,20 @@ body.v172 #screen-camera.active {
   transform: translateY(40px);
 }
 
-/* While the splash is up, hide the home content + tab bar so only the
-   aurora + logo + CTA are visible. They fade in on dismiss. */
+/* V.187 — COLLISION FIX. While the splash is up the home screen AND
+   the tab bar are taken OUT of the layout (display: none) so they can't
+   ghost-render behind the splash. The JS dismiss handler toggles them
+   back to their default display BEFORE adding .v186-revealing so the
+   browser has a frame to commit the layout, then the opacity transition
+   fires cleanly. */
 body.v186-arrival-active #screen-home,
 body.v186-arrival-active #v183-tab-bar {
-  opacity: 0;
-  transform: translateY(20px);
-  pointer-events: none;
+  display: none !important;
 }
+
+/* Reveal: the splash's dismiss flow re-shows these elements (inline
+   style), then this class lifts opacity from 0 → 1 with a delay so the
+   splash logo "lands" before they materialise. */
 body.v186-revealing #screen-home,
 body.v186-revealing #v183-tab-bar {
   opacity: 1;
@@ -6986,10 +6992,19 @@ body.v186-revealing #v183-tab-bar {
     opacity .55s cubic-bezier(0.4, 0, 0.2, 1) .25s,
     transform .55s cubic-bezier(0.4, 0, 0.2, 1) .25s;
 }
+/* Pre-reveal frame: opacity 0 + translateY so the .v186-revealing
+   transition has something to interpolate FROM. The inline-style flip
+   in JS happens between these two states. */
+body.v186-pre-reveal #screen-home,
+body.v186-pre-reveal #v183-tab-bar {
+  opacity: 0;
+  transform: translateY(20px);
+}
 /* The home header SAVVEY wordmark is the destination of the splash logo.
    Fade it in slightly later so the splash logo "lands" before the real
    header materialises. Eliminates the double-logo flash. */
-body.v186-arrival-active .v172-home-header { opacity: 0; }
+body.v186-arrival-active .v172-home-header,
+body.v186-pre-reveal .v172-home-header { opacity: 0; }
 body.v186-revealing .v172-home-header {
   opacity: 1;
   transition: opacity .35s ease-out .55s;
@@ -14762,10 +14777,24 @@ async function _v140KickoffSynthesize(idPayload) {
         dismissed = true;
         try { if (window.v172Haptic) window.v172Haptic(20); } catch (e) {}
         splash.classList.add('v186-dismissing');
-        // Reveal home content + tab bar while the splash animates out.
+        // V.187 — Choreography resync. The home + tab bar are display:none
+        // under .v186-arrival-active. We must:
+        //   1. Swap to .v186-pre-reveal so the new selectors take over
+        //      with opacity:0 + translateY (not display:none).
+        //   2. Force a reflow so the browser commits that "from" state.
+        //   3. Add .v186-revealing on the next frame so the opacity 0→1
+        //      transition actually fires (instead of jumping straight to 1).
         try {
           document.body.classList.remove('v186-arrival-active');
-          document.body.classList.add('v186-revealing');
+          document.body.classList.add('v186-pre-reveal');
+          // Force layout — guarantees the pre-reveal frame paints.
+          void document.body.offsetHeight;
+          requestAnimationFrame(function () {
+            try {
+              document.body.classList.remove('v186-pre-reveal');
+              document.body.classList.add('v186-revealing');
+            } catch (e) {}
+          });
         } catch (e) {}
         // Persist the arrival flag immediately so a refresh mid-animation
         // doesn't replay the splash.
