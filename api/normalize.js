@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v159b';
+const VERSION             = 'normalize.js v3.4.5v159c';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v159b-1'; // V.159b — bumped again to invalidate the V.159a "drop everything" cache (which empty-Retailer-Stacked long-tail products like Petzl)
+const CACHE_PREFIX = 'sav-v159c-1'; // V.159c — bumped to invalidate the V.159b cache (the /search ban was over-broad; Google Shopping product URLs use the /search path with ibp+prds query params and are legitimate product listings)
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1581,7 +1581,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v159b:${canonicalKey}`;
+  const ck = `savvey:retailers:v159c:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1679,9 +1679,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           || host.includes('doubleclick')
           || host === 'shopping.google.com';
       if (_isGoogleHost) {
-        // V.150 — try to unwrap the redirector first. _v150UnwrapGoogleRedirect
-        // extracts the real merchant target from adurl=/url=/q=/dest= params.
-        // Returns a clean merchant host + URL when it succeeds.
+        // V.150 — prefer the unwrapped merchant URL when present.
         const _unwrap = _v150UnwrapGoogleRedirect(item.link)
                      || _v150UnwrapGoogleRedirect(item.product_link)
                      || _v150UnwrapGoogleRedirect(url);
@@ -1689,39 +1687,36 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           host = _unwrap.host;
           url = _unwrap.url;
         } else {
-          // V.159b — Panel mandate, refined. The V.156 _v156UniversalSourceFallback
-          // path which SYNTHESIZED 'https://www.google.co.uk/search?q=...' URLs
-          // is BANNED (V.159a still excises it). But SerpAPI itself sometimes
-          // returns real product_link / link values on Google product hosts
-          // (e.g. shopping.google.com/product/12345/offers) that DO route to
-          // a specific product listing — those must be kept, not dropped.
-          //
-          // Strict ban: any URL of the shape google.<tld>/search?... — that's
-          // a search-results page, not a product listing. Drop these.
-          //
-          // Acceptable: SerpAPI-returned item.product_link / item.link that
-          // is NOT a /search URL. The host stays as the Google host for dedup
-          // (one entry per source merchant) but we re-derive a friendly slug
-          // from item.source for display, so the UI shows the merchant name
-          // even though the click target is the Google product page that
-          // resolves the real merchant link.
+          // V.159c — Panel mandate (final). The ONLY thing banned is URL
+          // synthesis on our side (V.152 + V.156 paths — already excised in
+          // V.159a). SerpAPI google_shopping legitimately returns Google
+          // Shopping product URLs of the shape:
+          //   google.<tld>/search?ibp=gwp;0,7&q=<title>&prds=pid:<id>
+          // These ARE specific product listings (ibp=gwp + prds=pid is
+          // Google's product-page protocol — they route to the product, not
+          // a generic search results page). Keeping them is correct under
+          // the mandate's intent: real merchant-linked URLs that the user
+          // can click and reach the product. The display host is re-derived
+          // from item.source so the Retailer Stack shows the merchant name
+          // (Telemarkpyrenees, Snowleader, etc.) rather than 'google.com'.
           const _candidate = (typeof item.product_link === 'string' && item.product_link)
                           || (typeof item.link === 'string' && item.link)
                           || url
                           || '';
-          let _candidateIsSearch = false;
-          try {
-            const _cu = new URL(_candidate);
-            _candidateIsSearch = /\/search(?:\/|$|\?)/.test(_cu.pathname + _cu.search);
-          } catch (e) { _candidateIsSearch = true; /* malformed → reject */ }
-          if (!_candidate || _candidateIsSearch) {
-            // No real candidate, or candidate is a /search results page.
-            // V.156 fallback would have synthesized one here — banned now.
+          if (!_candidate) {
             _droppedRedirector++;
             continue;
           }
-          // Keep the real SerpAPI URL; re-derive host from source for dedup.
+          // Sanity-check: must parse as a URL. Reject malformed.
+          try { new URL(_candidate); } catch (e) {
+            _droppedRedirector++;
+            continue;
+          }
           url = _candidate;
+          // Re-derive friendly host from the source string for dedup +
+          // display. Without this, every Google-served product collapses
+          // to a single 'google.com' dedup key and the Retailer Stack
+          // shows only one entry.
           const _srcKey = (typeof item.source === 'string' && item.source)
                        || (typeof item.seller_name === 'string' && item.seller_name)
                        || (item.merchant && typeof item.merchant.name === 'string' && item.merchant.name)
@@ -1732,10 +1727,6 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
               .replace(/[^a-z0-9]+/g, '')
               .slice(0, 30);
             if (_slug && _slug.length >= 2) host = _slug + '.via-google';
-          } else {
-            // No usable source string — collapse under the original Google
-            // host so dedup picks the cheapest one.
-            // host stays as-is (google.com / shopping.google.com / etc.)
           }
         }
       }
@@ -2956,7 +2947,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v159b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v159c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
