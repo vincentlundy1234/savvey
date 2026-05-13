@@ -6464,6 +6464,38 @@ body.v176 .v136-cta-price {
 }
 
 /* End V.176 Obsessive Spatial Design block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.177 — THE LIVING INVITE (Ghost Typing on the Type sheet)
+   ─────────────────────────────────────────────────────────────────────
+   A ghost-text layer drifts over the V.172 type sheet input, fading
+   through five rotating prompts every 3 s. Pauses on focus, resumes
+   on blur. Cross-fades via opacity transition for a "natural thought"
+   feel — never a snap-replace.
+   ═══════════════════════════════════════════════════════════════════════ */
+body.v177 .v172-type-bar { position: relative; }
+body.v177 .v172-type-input::placeholder { color: transparent; } /* hide native placeholder; ghost layer owns the text */
+body.v177 .v177-ghost {
+  position: absolute;
+  left: 46px;            /* sits to the right of the .v172-type-icon (22px + 14px gap + a hair) */
+  right: 60px;           /* leaves room for the .v172-type-go pill */
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--ink-mute, #7a857f);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 1;
+  transition: opacity .45s var(--ease-spatial, cubic-bezier(0.4, 0, 0.2, 1));
+}
+body.v177 .v177-ghost.v177-ghost-fading { opacity: 0; }
+body.v177 .v177-ghost.v177-ghost-hidden  { opacity: 0; transition: opacity .15s ease-out; }
+/* End V.177 Living Invite block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -6712,6 +6744,10 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         <svg class="v172-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
         </svg>
+        <!-- V.177 — Ghost text layer. Sits behind the native placeholder
+             (which is rendered transparent under body.v177) and cycles
+             through invitations every 3s. Pure CSS opacity cross-fade. -->
+        <span class="v177-ghost" id="v177-ghost" aria-hidden="true">Type "AirPods Pro"…</span>
         <input id="v172-type-input" class="v172-type-input"
                type="text" inputmode="search" enterkeyhint="search"
                autocomplete="off" autocorrect="off" spellcheck="false"
@@ -13655,6 +13691,116 @@ async function _v140KickoffSynthesize(idPayload) {
 (function v176Init() {
   try { document.body.classList.add('v176'); } catch (e) {}
   try { console.log('[V.176] Obsessive Spatial Design initialised.'); } catch (e) {}
+})();
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.177 — THE LIVING INVITE · JS
+   Ghost-typing cycler. 3s tick. Cross-fade via opacity. Pauses on focus,
+   resumes on blur, suppresses entirely while the user has typed value.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v177Init() {
+  try { document.body.classList.add('v177'); } catch (e) {}
+
+  var PHRASES = [
+    'Type "AirPods Pro"…',
+    'Type "Dyson Airwrap"…',
+    'Type "LEGO Star Wars"…',
+    'Type "Bose Headphones"…',
+    'Type "Ninja Creami"…',
+  ];
+  var TICK_MS  = 3000;
+  var FADE_MS  = 450;
+  var idx      = 0;
+  var timer    = null;
+  var paused   = false;
+
+  function ghostEl() { return document.getElementById('v177-ghost'); }
+  function inputEl() { return document.getElementById('v172-type-input'); }
+
+  function setGhost(text) {
+    var g = ghostEl();
+    if (!g) return;
+    g.textContent = text;
+  }
+
+  function fadeAndAdvance() {
+    if (paused) return;
+    var g = ghostEl();
+    var inp = inputEl();
+    if (!g || !inp) return;
+    // If the user has typed anything, suppress the ghost entirely.
+    if (inp.value && inp.value.length > 0) {
+      g.classList.add('v177-ghost-hidden');
+      return;
+    } else {
+      g.classList.remove('v177-ghost-hidden');
+    }
+    // Fade out current phrase.
+    g.classList.add('v177-ghost-fading');
+    setTimeout(function () {
+      idx = (idx + 1) % PHRASES.length;
+      setGhost(PHRASES[idx]);
+      // Fade back in.
+      g.classList.remove('v177-ghost-fading');
+    }, FADE_MS);
+  }
+
+  function start() {
+    if (timer) return;
+    paused = false;
+    timer = setInterval(fadeAndAdvance, TICK_MS);
+  }
+  function stop() {
+    paused = true;
+    if (timer) { clearInterval(timer); timer = null; }
+    var g = ghostEl();
+    if (g) g.classList.add('v177-ghost-hidden');
+  }
+  function resume() {
+    paused = false;
+    var g = ghostEl();
+    var inp = inputEl();
+    if (g && inp && (!inp.value || inp.value.length === 0)) {
+      g.classList.remove('v177-ghost-hidden');
+    }
+    start();
+  }
+
+  // Wire focus / blur on the V.172 type input.
+  (function wireInput() {
+    var inp = inputEl();
+    if (!inp) {
+      // Input may not be in DOM yet on cold parse; retry once.
+      return setTimeout(wireInput, 200);
+    }
+    inp.addEventListener('focus', stop);
+    inp.addEventListener('blur', resume);
+    inp.addEventListener('input', function () {
+      var g = ghostEl();
+      if (!g) return;
+      if (inp.value && inp.value.length > 0) {
+        g.classList.add('v177-ghost-hidden');
+      } else if (!paused) {
+        g.classList.remove('v177-ghost-hidden');
+      }
+    });
+  })();
+
+  // Visibility-change: stop cycling when the tab is hidden to save battery.
+  document.addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      if (timer) { clearInterval(timer); timer = null; }
+    } else if (!paused) {
+      start();
+    }
+  });
+
+  // Initialise — set first phrase and start the cycler.
+  setGhost(PHRASES[0]);
+  start();
+
+  window._v177 = { start: start, stop: stop, resume: resume };
+  try { console.log('[V.177] Living Invite ghost cycler initialised.'); } catch (e) {}
 })();
 </script>
 </body>
