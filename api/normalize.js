@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v163';
+const VERSION             = 'normalize.js v3.4.5v163b';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v163-1'; // V.163 — bumped so V.162 responses (carrying RP/R5 false-positive listings inside the Retailer Stack) get re-evaluated through the strict identity filter.
+const CACHE_PREFIX = 'sav-v163b-1'; // V.163b — bumped so the static-token V.163 cache flushes and the AI-fingerprint dynamic path becomes authoritative.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -186,6 +186,7 @@ function cacheKey(inputType, payload) {
 const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fences:
 {
   "canonical_search_string": "Ninja AF400UK" | "Bose QuietComfort 45" | "Apple iPhone 15 128GB",
+  "identity_fingerprint": ["AF400UK"] | ["QuietComfort", "45"] | ["iPhone 15", "128GB"],
   "confidence": "high" | "medium" | "low",
   "confidence_score": 95 | 73 | 22,
   "market_status": "Current Model" | "Replaced" | "Discontinued" | "Pre-release" | null,
@@ -207,6 +208,39 @@ const COMMON_SCHEMA_DOC = `Return ONLY this JSON, no preamble, no markdown fence
 }
 
 Field rules:
+- identity_fingerprint: V.163 — 1 to 4 NON-NEGOTIABLE model identifiers that
+  MUST appear (case-insensitive, word-bounded) in every legitimate retailer
+  title for the canonical product. This is the array that powers Savvey's
+  false-positive shield against Google Shopping's fuzzy matching.
+    What goes IN: model numbers ("R6", "AF400UK", "V15"), generation /
+    iteration markers ("Mark II", "Mk 2", "2nd Gen"), distinctive
+    sub-model qualifiers ("Sapphire", "Detect", "Pro", "Max", "Sport",
+    "Plus"), pack/size disambiguators when they create a different SKU
+    ("128GB", "1.7L", "415g"), colourway ONLY when it locks the SKU
+    ("Sapphire" for Garmin Fenix 7 Sapphire is a different SKU; "Black"
+    for a generic mug is not).
+    What stays OUT: brand names ("Canon", "Apple", "Bose"), category
+    nouns ("Camera", "Watch", "Headphones", "Body"), generic adjectives
+    ("Smart", "Wireless", "Cordless"), packaging words ("Bundle",
+    "Edition") unless they distinguish a SKU.
+    Concrete examples:
+      canonical "Canon EOS R6 Mark II Body"        → ["R6", "Mark II"]
+      canonical "Garmin Fenix 7 Sapphire Solar"    → ["Fenix 7", "Sapphire"]
+      canonical "Dyson V15 Detect Absolute"        → ["V15"]
+      canonical "Apple iPhone 15 128GB"            → ["iPhone 15", "128GB"]
+      canonical "Ninja Foodi AF400UK"              → ["AF400UK"]
+      canonical "Russell Hobbs Honeycomb Kettle"   → ["Honeycomb"]
+      canonical "Heinz Baked Beans 415g"           → ["Heinz Baked Beans", "415g"]
+      canonical "Sony PlayStation 5 Pro"           → ["PlayStation 5", "Pro"]
+      canonical "Sony PlayStation 5 Slim Disc"     → ["PlayStation 5", "Slim", "Disc"]
+      canonical "Kettle" (low confidence)          → []     ← empty array OK for generic
+    Backend uses this verbatim — every SerpAPI item.title must contain
+    each entry as a word-bounded match. Listings missing any token are
+    dropped before they reach the pricing pipeline. ZERO TOLERANCE for
+    near-misses. Better to return 3 exact-match retailers than 15 mixed
+    with the wrong product. Return [] when the canonical is itself
+    generic (low confidence) — no fingerprint means no identity filter,
+    which is the right behaviour for "kettle" / "headphones" / "mouse".
 - canonical_search_string: cleanest brand + family + model.
   V.120a PRESERVATION RULE (CRITICAL — do not strip these): when the user's input contains any of the following signals, you MUST carry them through into canonical_search_string verbatim. Do NOT abbreviate, summarise, or drop them.
     • Multi-pack quantity or count: "6 pack", "20 bags", "12 x", "Pack of 4", "x6", "case of 24". Keep the number AND the unit. A multipack is a different SKU at a different price.
@@ -266,7 +300,7 @@ EXAMPLES (showing exact JSON output shape for typical inputs):
 
 Example 1 — vague category (low conf, V.103 intent-categorized 3-option):
 INPUT: "kettle"
-OUTPUT: {"canonical_search_string": "Kettle", "confidence": "low", "alternative_string": null, "alternatives_array": ["Russell Hobbs Velocity 26480", "Tefal Avanti Classic 1.7L", "Smeg KLF03"], "alternatives_meta": [{"intent_label":"Best Value","rationale":"Cheapest reliable option with rapid boil.","typical_price_gbp":24.99,"est_price_range":"£20-£30","pack_size":"1.7L","tier_label":"Budget"},{"intent_label":"Top Reviewed","rationale":"UK high-street standard. Quiet, durable.","typical_price_gbp":49.00,"est_price_range":"£40-£55","pack_size":"1.7L","tier_label":"Mid-tier"},{"intent_label":"Premium Choice","rationale":"Iconic design, lifetime build quality.","typical_price_gbp":169.00,"est_price_range":"£150-£180","pack_size":"1.5L","tier_label":"Premium"}], "category": "home", "mpn": null, "amazon_search_query": "kettle", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+OUTPUT: {"canonical_search_string": "Kettle", "identity_fingerprint": [], "confidence": "low", "alternative_string": null, "alternatives_array": ["Russell Hobbs Velocity 26480", "Tefal Avanti Classic 1.7L", "Smeg KLF03"], "alternatives_meta": [{"intent_label":"Best Value","rationale":"Cheapest reliable option with rapid boil.","typical_price_gbp":24.99,"est_price_range":"£20-£30","pack_size":"1.7L","tier_label":"Budget"},{"intent_label":"Top Reviewed","rationale":"UK high-street standard. Quiet, durable.","typical_price_gbp":49.00,"est_price_range":"£40-£55","pack_size":"1.7L","tier_label":"Mid-tier"},{"intent_label":"Premium Choice","rationale":"Iconic design, lifetime build quality.","typical_price_gbp":169.00,"est_price_range":"£150-£180","pack_size":"1.5L","tier_label":"Premium"}], "category": "home", "mpn": null, "amazon_search_query": "kettle", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 
 Example 1b — vague category Dishwasher (same intent pattern):
 INPUT: "dishwasher"
@@ -274,19 +308,19 @@ OUTPUT: {"canonical_search_string": "Dishwasher", "confidence": "low", "alternat
 
 Example 2 — specific high-confidence:
 INPUT: "Bose QC45"
-OUTPUT: {"canonical_search_string": "Bose QuietComfort 45", "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "tech", "mpn": "QC45", "amazon_search_query": "Bose QuietComfort 45", "savvey_says": {"timing_advice": null, "consensus": "Best-in-class noise cancellation, comfortable for long sessions.", "confidence": "high"}}
+OUTPUT: {"canonical_search_string": "Bose QuietComfort 45", "identity_fingerprint": ["QuietComfort", "45"], "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "tech", "mpn": "QC45", "amazon_search_query": "Bose QuietComfort 45", "savvey_says": {"timing_advice": null, "consensus": "Best-in-class noise cancellation, comfortable for long sessions.", "confidence": "high"}}
 
 Example 3 — specific medium-confidence (variants):
 INPUT: "iPhone 15"
-OUTPUT: {"canonical_search_string": "Apple iPhone 15 128GB", "confidence": "medium", "alternative_string": "Apple iPhone 15 Plus", "alternatives_array": ["Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"], "category": "tech", "mpn": null, "amazon_search_query": "Apple iPhone 15 128GB", "savvey_says": {"timing_advice": null, "consensus": "Apple's mainline 2023 phone, USB-C and 48MP camera.", "confidence": "high"}}
+OUTPUT: {"canonical_search_string": "Apple iPhone 15 128GB", "identity_fingerprint": ["iPhone 15", "128GB"], "confidence": "medium", "alternative_string": "Apple iPhone 15 Plus", "alternatives_array": ["Apple iPhone 15 Pro", "Apple iPhone 15 Pro Max"], "category": "tech", "mpn": null, "amazon_search_query": "Apple iPhone 15 128GB", "savvey_says": {"timing_advice": null, "consensus": "Apple's mainline 2023 phone, USB-C and 48MP camera.", "confidence": "high"}}
 
 Example 4 — brand+category vague (low conf, popular UK products):
 INPUT: "Logitech mouse"
-OUTPUT: {"canonical_search_string": "Logitech mouse", "confidence": "low", "alternative_string": null, "alternatives_array": ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"], "category": "tech", "mpn": null, "amazon_search_query": "Logitech mouse", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+OUTPUT: {"canonical_search_string": "Logitech mouse", "identity_fingerprint": [], "confidence": "low", "alternative_string": null, "alternatives_array": ["Logitech MX Master 3S", "Logitech M185", "Logitech G502 HERO"], "category": "tech", "mpn": null, "amazon_search_query": "Logitech mouse", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 
 Example 5 — UK grocery:
 INPUT: "Heinz beans"
-OUTPUT: {"canonical_search_string": "Heinz Baked Beans 415g", "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "grocery", "mpn": null, "amazon_search_query": "Heinz Baked Beans 415g", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
+OUTPUT: {"canonical_search_string": "Heinz Baked Beans 415g", "identity_fingerprint": ["Heinz Baked Beans", "415g"], "confidence": "high", "alternative_string": null, "alternatives_array": [], "category": "grocery", "mpn": null, "amazon_search_query": "Heinz Baked Beans 415g", "savvey_says": {"timing_advice": null, "consensus": null, "confidence": "low"}}
 `;
 
 // V.69 - Shared system prefix injected as the cache_control:ephemeral block
@@ -1527,6 +1561,21 @@ function parseAndDefault(rawText) {
   // to 'medium' so the V.139 disambig gate doesn't short-circuit.
   const _finalConfidence = (_v146FamilyApplied && confidence === 'high') ? 'medium' : confidence;
 
+  // V.163 — extract the AI-generated identity_fingerprint. This is the
+  // dynamic, per-query non-negotiable identifier list the AI emitted in
+  // the Haiku canonicalisation call. Strictly validated — only strings
+  // up to 30 chars, max 4 entries. Empty array is a valid signal that
+  // the canonical itself is generic (e.g. "Kettle") and no identity
+  // filter should be applied downstream.
+  let identity_fingerprint = [];
+  if (Array.isArray(parsed.identity_fingerprint)) {
+    identity_fingerprint = parsed.identity_fingerprint
+      .filter(s => typeof s === 'string')
+      .map(s => s.trim())
+      .filter(s => s.length >= 1 && s.length <= 30)
+      .slice(0, 4);
+  }
+
   return {
     canonical_search_string: canonical,
     confidence: _finalConfidence,
@@ -1539,6 +1588,7 @@ function parseAndDefault(rawText) {
     mpn,
     amazon_search_query: amazonQ,
     savvey_says,
+    identity_fingerprint, // V.163 — AI-generated false-positive shield tokens
     _v146_family_applied: _v146FamilyApplied, // diagnostic
   };
 }
@@ -1732,7 +1782,7 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
   }
   return { pass: missing.length === 0, missing };
 }
-async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false) {
+async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false, _identityFingerprint = null) {
   // V.156 — diag-write on every bail path. Ensures _v153LocalDiag is
   // ALWAYS populated so the response carries telemetry even when SerpAPI
   // returned 0 results / errored / hit quota / aborted. No more silent
@@ -1751,7 +1801,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v163:${canonicalKey}`;
+  const ck = `savvey:retailers:v163b:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1808,12 +1858,44 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     let _squashedEbay = 0;      // V.161 — eBay dedup count
     let _droppedIdentity = 0;   // V.163 — strict identity filter
     const _droppedSamples = [];
-    // V.163 — extract required identity tokens from the canonical ONCE.
-    // Every SerpAPI item must contain ALL of these in item.title or it
-    // gets dropped as a false positive (cheaper-cousin SKU leakage).
-    const _v163Required = _v163ExtractCanonicalTokens(query);
+    // V.163 — AI-generated identity fingerprint is the PRIMARY source.
+    // Haiku emits identity_fingerprint in its canonicalisation response
+    // (parsed.identity_fingerprint), the handler threads it down to this
+    // call. Each entry becomes a non-negotiable must-match token in every
+    // SerpAPI item.title.
+    //
+    // Deterministic _v163ExtractCanonicalTokens(query) is the FALLBACK,
+    // used only if the AI returned an empty/missing fingerprint AND the
+    // canonical itself contains model-like tokens. Empty fingerprint on
+    // a generic canonical (e.g. "Kettle") legitimately skips the filter.
+    let _v163Required = [];
+    let _v163Source   = 'none';
+    if (Array.isArray(_identityFingerprint) && _identityFingerprint.length > 0) {
+      // Convert AI strings into the same { raw, isRoman, hasDigit, isMarker }
+      // shape _v163ItemMatchesIdentity already understands. Multi-word
+      // entries (e.g. "Mark II", "iPhone 15", "PlayStation 5") are kept as
+      // a single token — the matcher uses word-bounded regex so the whole
+      // phrase must appear in order.
+      for (const raw of _identityFingerprint) {
+        if (typeof raw !== 'string') continue;
+        const r = raw.trim();
+        if (!r) continue;
+        const isRoman = /^(II|III|IV|V|VI|VII|VIII|IX|X)$/i.test(r);
+        _v163Required.push({
+          raw:      r,
+          isRoman,
+          hasDigit: /\d/.test(r),
+          isMarker: /^(Pro|Max|Plus|Mini|Lite|Ultra|Sport|Premium|Air|Slim)$/i.test(r),
+        });
+      }
+      _v163Source = 'ai';
+    }
+    if (_v163Required.length === 0) {
+      _v163Required = _v163ExtractCanonicalTokens(query);
+      if (_v163Required.length > 0) _v163Source = 'deterministic_fallback';
+    }
     if (_v163Required.length > 0) {
-      try { console.log(`[${VERSION}] V.163 identity tokens for "${query.slice(0,60)}": ${_v163Required.map(t => t.raw).join(', ')}`); } catch (e) {}
+      try { console.log(`[${VERSION}] V.163 identity tokens for "${query.slice(0,60)}" [source=${_v163Source}]: ${_v163Required.map(t => t.raw).join(', ')}`); } catch (e) {}
     }
     // V.161 — match strings used in SerpAPI's condition field. Real-world
     // sample: "Used", "Refurbished", "Pre-owned", "Open Box", "Renewed",
@@ -2070,6 +2152,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       squashed_ebay:      _squashedEbay,    // V.161 — eBay squasher dedup count
       dropped_identity:   _droppedIdentity, // V.163 — strict identity filter
       identity_tokens:    _v163Required.map(t => t.raw),  // V.163 — what we required
+      identity_source:    _v163Source,      // V.163 — 'ai' | 'deterministic_fallback' | 'none'
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 8),   // V.163 — wider window for identity drops
       raw_samples:        _rawSamples,
@@ -3212,7 +3295,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v163:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v163b:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -3253,7 +3336,7 @@ export default async function handler(req, res) {
       : Promise.resolve(null);
     const [amazonRes, retailersRes, altAmazonRes] = await Promise.all([
       fetchVerifiedAmazonPrice(parsed.canonical_search_string, debugTrace),
-      fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey, _v153LocalDiag),
+      fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey, _v153LocalDiag, false, parsed.identity_fingerprint),
       fetchAlt,
     ]);
     verified_amazon_price = amazonRes;
