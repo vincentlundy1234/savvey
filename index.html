@@ -5506,6 +5506,284 @@ button:active, .btn:active, a[role="button"]:active,
    are now permanently removed from the DOM. Their CSS rules elsewhere in
    the cascade still exist but match nothing, so they're inert. No-op. */
 /* End V.166 UI Prune block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.171 — THE GLASS POLISH (frontend overhaul, Panel mandate 13 May 2026)
+
+   This block is the *authoritative* visual layer applied on top of the
+   existing markup. It scopes everything under `body.v171` so the legacy
+   styles still exist if we ever need to revert. JS at the end of the file
+   toggles the marker class on DOMContentLoaded.
+   ─────────────────────────────────────────────────────────────────────── */
+body.v171 .v5-bottom-nav { display: none !important; }
+body.v171 #screen-home .v5-home-wrap { padding-bottom: 32px; }
+body.v171 #screen-home .v5-greeting,
+body.v171 #screen-home .v5-greeting-smile,
+body.v171 #screen-home .v5-doors,
+body.v171 #screen-home .v102-secondary-row,
+body.v171 #screen-home .v5-door:not(.v171-hero),
+body.v171 #screen-home .v102-type-bar,
+body.v171 #screen-home #type-door,
+body.v171 #screen-home .v71-recent-strip,
+body.v171 #screen-home .v76-savings,
+body.v171 #screen-home #tagline { display: none !important; }
+
+/* ── V.171 Home: Twin Heroes ─────────────────────────────────────────── */
+body.v171 .v171-twin-heroes {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 22px 18px 28px;
+  max-width: 440px;
+  margin: 0 auto;
+}
+@media (min-width: 520px) {
+  body.v171 .v171-twin-heroes { flex-direction: row; }
+  body.v171 .v171-hero        { flex: 1 1 50%; }
+}
+body.v171 .v171-tagline {
+  font-family: var(--font-app, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif);
+  font-weight: 800;
+  font-size: 28px;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink, #14201a);
+  padding: 28px 22px 6px;
+  text-align: left;
+}
+body.v171 .v171-subtagline {
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 500;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--ink-soft, #4a5550);
+  padding: 0 22px 8px;
+}
+body.v171 .v171-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 220px;
+  padding: 28px 22px;
+  border: none;
+  border-radius: 24px;
+  background: #ffffff;
+  color: var(--ink, #14201a);
+  cursor: pointer;
+  text-align: center;
+  font-family: var(--font-app, system-ui, sans-serif);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.10),
+              0 8px 10px -6px rgba(0,0,0,0.10);
+  transition: transform .18s cubic-bezier(0.32, 0.72, 0, 1),
+              box-shadow .18s ease-out;
+}
+body.v171 .v171-hero:active {
+  transform: scale(0.97);
+  box-shadow: 0 4px 12px -3px rgba(0,0,0,0.10),
+              0 4px 6px -3px rgba(0,0,0,0.10);
+}
+body.v171 .v171-hero.v171-hero-snap {
+  background: linear-gradient(180deg, #2a6b22 0%, #1d4a18 100%);
+  color: #ffffff;
+  box-shadow: 0 12px 28px -6px rgba(42,107,34,0.32),
+              0 8px 12px -4px rgba(42,107,34,0.22);
+}
+body.v171 .v171-hero-icon {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+body.v171 .v171-hero-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: 1.8;
+}
+body.v171 .v171-hero-title {
+  font-weight: 800;
+  font-size: 20px;
+  letter-spacing: -0.015em;
+}
+body.v171 .v171-hero-sub {
+  font-weight: 600;
+  font-size: 13px;
+  opacity: 0.85;
+  line-height: 1.35;
+}
+
+/* ── V.171 Camera: Fluid Slide + Frosted Close X ─────────────────────── */
+body.v171 #screen-camera {
+  transition: transform .35s cubic-bezier(0.32, 0.72, 0, 1),
+              opacity .25s ease-out;
+}
+body.v171 #screen-camera:not(.active) {
+  transform: translateY(100%);
+  opacity: 0;
+  pointer-events: none;
+}
+body.v171 #screen-camera.active {
+  transform: translateY(0);
+  opacity: 1;
+}
+body.v171 .v171-cam-close {
+  position: absolute;
+  top: max(env(safe-area-inset-top), 16px);
+  right: 16px;
+  width: 44px;
+  height: 44px;
+  border-radius: 9999px;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 50;
+  -webkit-tap-highlight-color: transparent;
+  background: rgba(20, 22, 24, 0.55);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  color: #ffffff;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgba(0,0,0,0.18);
+  transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1),
+              background .15s ease;
+}
+body.v171 .v171-cam-close:active {
+  transform: scale(0.92);
+  background: rgba(20, 22, 24, 0.70);
+}
+body.v171 .v171-cam-close svg {
+  width: 20px;
+  height: 20px;
+  stroke: #ffffff;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+}
+
+/* ── V.171 Loading Theater ───────────────────────────────────────────── */
+body.v171 #screen-loading .v171-loading-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  min-height: 60vh;
+  padding: 22px;
+  font-family: var(--font-app, system-ui, sans-serif);
+}
+body.v171 .v171-pulse-logo {
+  width: 84px; height: 84px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #2a6b22 0%, #1d4a18 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 800;
+  font-size: 48px;
+  letter-spacing: -0.04em;
+  box-shadow: 0 12px 30px -8px rgba(42,107,34,0.40);
+  animation: v171-pulse 1.6s ease-in-out infinite;
+}
+@keyframes v171-pulse {
+  0%,100% { transform: scale(1);    box-shadow: 0 12px 30px -8px rgba(42,107,34,0.40); }
+  50%     { transform: scale(1.06); box-shadow: 0 16px 36px -8px rgba(42,107,34,0.55); }
+}
+body.v171 .v171-loading-cycle {
+  font-weight: 600;
+  font-size: 17px;
+  color: var(--ink, #14201a);
+  text-align: center;
+  min-height: 26px;
+  letter-spacing: -0.01em;
+}
+body.v171 .v171-loading-sub {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--ink-mute, #7a857f);
+  text-align: center;
+}
+
+/* ── V.171 Result Screen: Savvey's Verdict (moved to top) ────────────── */
+body.v171 #v171-savveys-verdict {
+  background: #ffffff;
+  border: 1px solid rgba(20,32,26,0.06);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  margin: 0 16px 18px;
+  box-shadow: 0 10px 25px -5px rgba(0,0,0,0.10),
+              0 8px 10px -6px rgba(0,0,0,0.10);
+  font-family: var(--font-app, system-ui, sans-serif);
+}
+body.v171 #v171-savveys-verdict .v171-vh-title {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--green, #2a6b22);
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+body.v171 #v171-savveys-verdict .v171-vh-pill {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+body.v171 #v171-savveys-verdict .v171-vh-pill.v136-verdict-good   { background: #e8f3e6; color: #1d4a18; }
+body.v171 #v171-savveys-verdict .v171-vh-pill.v136-verdict-fair   { background: #f6f1e6; color: #6b4f08; }
+body.v171 #v171-savveys-verdict .v171-vh-pill.v136-verdict-wait   { background: #fbeed4; color: #a06a08; }
+body.v171 #v171-savveys-verdict .v171-vh-pill.v136-verdict-check  { background: #fde0e0; color: #8a2a2a; }
+body.v171 #v171-savveys-verdict .v171-vh-summary {
+  font-weight: 500;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--ink, #14201a);
+}
+/* When V.171 verdict block exists, hide the original V.136 verdict from the
+   middle of the result screen — it lives at the top now. */
+body.v171 #v171-savveys-verdict ~ * #v138-verdict-pill,
+body.v171 #v171-savveys-verdict ~ * #v138-verdict-text { display: none !important; }
+body.v171.v171-verdict-mounted #v138-verdict-pill,
+body.v171.v171-verdict-mounted #v138-verdict-text { display: none !important; }
+
+/* ── V.171 Link Avalanche: truncate retailer stack at 5 ─────────────── */
+body.v171.v171-stack-truncated .v136-cta-secondary.v171-hidden { display: none !important; }
+body.v171 #v171-show-more-prices {
+  display: block;
+  margin: 12px auto 8px;
+  padding: 12px 22px;
+  background: #ffffff;
+  border: 1px solid rgba(20,32,26,0.10);
+  border-radius: 9999px;
+  font-family: var(--font-app, system-ui, sans-serif);
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--green, #2a6b22);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform .15s cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+body.v171 #v171-show-more-prices:active { transform: scale(0.97); }
+
+/* Hide the legacy V.77 / V.134 loading inner when V.171 stage is mounted. */
+body.v171 #screen-loading .v5-loading-inner { display: none !important; }
+/* End V.171 Glass Polish block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -5696,7 +5974,37 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen active" id="screen-home">
+  <!-- V.171 — Glass Polish home overlay. Twin Heroes layout. The legacy V.40
+       door layout below is preserved in the DOM but CSS-hidden when
+       <body class="v171"> is active. JS at end of file toggles the class. -->
+  <div class="v171-home" role="region" aria-label="Savvey home">
+    <h1 class="v171-tagline">What are you<br>shopping for?</h1>
+    <p class="v171-subtagline">Snap a product to check the price — or type the name.</p>
+    <div class="v171-twin-heroes">
+      <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
+        <div class="v171-hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </div>
+        <div class="v171-hero-title">Snap a Product</div>
+        <div class="v171-hero-sub">Point your camera, we'll find it.</div>
+      </button>
+      <button class="v171-hero v171-hero-type" type="button" onclick="(function(){var el=document.getElementById('text-input'); if(el){el.focus(); el.scrollIntoView({block:'center', behavior:'smooth'});}})()" aria-label="Type a product name">
+        <div class="v171-hero-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="7"/>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </div>
+        <div class="v171-hero-title">Type a Name</div>
+        <div class="v171-hero-sub">"Bose QC45", "AF400UK", etc.</div>
+      </button>
+    </div>
+  </div>
   <!-- v5 REBUILD (V.40): rebuilt to match Claude Design v5 spec -->
+  <!-- V.171 — markup below preserved but hidden via body.v171 selector. -->
   <!-- Top wordmark + Hello Savver :) greeting -->
   <div class="v5-home-wrap">
     <div class="v5-home-header">
@@ -5803,6 +6111,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-cam-screen" id="screen-camera">
+  <!-- V.171 — Apple-grade frosted-glass close button. Tearing-down via
+       goHome() guarantees the V.122 FSM 7-step teardown runs (track.stop,
+       srcObject=null, video.load → iOS green-dot release). -->
+  <button class="v171-cam-close" id="v171-cam-close-btn" type="button" onclick="goHome()" aria-label="Close camera">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
+    </svg>
+  </button>
   <!-- v5 CAMERA REBUILD (V.43) — full-bleed dark backdrop -->
   <div class="v5-cam-bg" aria-hidden="true"></div>
   <div class="v5-cam-glow" aria-hidden="true"></div>
@@ -5903,6 +6219,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
+  <!-- V.171 — Loading Theater. Pulsing S logo + cycling retailer-name copy.
+       Visible only when body.v171 is active; the legacy V.77 / V.134 spinner
+       below is preserved but CSS-hidden when V.171 is active. -->
+  <div class="v171-loading-stage" id="v171-loading-stage">
+    <div class="v171-pulse-logo" aria-hidden="true">S</div>
+    <div class="v171-loading-cycle" id="v171-loading-cycle">Identifying your product…</div>
+    <div class="v171-loading-sub">Checking UK retailers · Verifying prices</div>
+  </div>
   <!-- V.77 LOADING REBUILD — gradient S badge + spinning ring + clean 4-phase timeline -->
   <div class="v5-loading-inner">
 
@@ -11910,5 +12234,163 @@ async function _v140KickoffSynthesize(idPayload) {
 /* End V.140 synthesize orchestrator */
 </script>
 
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   V.171 — GLASS POLISH · JS HOOKS
+   Activates body.v171 class, runs the Loading Theater cycler, mounts the
+   Savvey's Verdict card at the top of #screen-result on render, and adds
+   the Link Avalanche truncation + show-more expander.
+   ═══════════════════════════════════════════════════════════════════════ */
+(function v171Init(){
+  try { document.body.classList.add('v171'); } catch (e) {}
+
+  // ── Loading Theater cycler ────────────────────────────────────────────
+  var V171_LOADING_PHRASES = [
+    'Scanning Argos…',
+    'Scanning Amazon UK…',
+    'Scanning John Lewis…',
+    'Scanning Currys…',
+    'Evaluating AI Price Floor…',
+    'Cross-checking eBay quarantine…',
+    'Ranking by best price…',
+    'Identifying the exact SKU…',
+  ];
+  var _v171LoadingTimer = null;
+  function v171StartLoadingCycle() {
+    var el = document.getElementById('v171-loading-cycle');
+    if (!el) return;
+    var i = 0;
+    el.textContent = V171_LOADING_PHRASES[0];
+    if (_v171LoadingTimer) clearInterval(_v171LoadingTimer);
+    _v171LoadingTimer = setInterval(function () {
+      i = (i + 1) % V171_LOADING_PHRASES.length;
+      el.style.opacity = '0';
+      setTimeout(function () {
+        el.textContent = V171_LOADING_PHRASES[i];
+        el.style.opacity = '1';
+      }, 180);
+    }, 900);
+  }
+  function v171StopLoadingCycle() {
+    if (_v171LoadingTimer) { clearInterval(_v171LoadingTimer); _v171LoadingTimer = null; }
+  }
+  // Hook into the existing show() function. Wrap rather than replace so
+  // every other call site still works.
+  if (typeof window.show === 'function') {
+    var _v171OrigShow = window.show;
+    window.show = function (id, opts) {
+      if (id === 'loading') v171StartLoadingCycle();
+      else                  v171StopLoadingCycle();
+      return _v171OrigShow.apply(this, arguments);
+    };
+  }
+
+  // ── Savvey's Verdict mount + Link Avalanche ──────────────────────────
+  // Watch #screen-result for content changes via MutationObserver. When the
+  // verdict pill / verdict text fields populate, lift them into a premium
+  // "Savvey's Verdict" card at the top of the screen. Same for the retailer
+  // stack: truncate to 5, add show-more.
+  function v171MountVerdict() {
+    var screen = document.getElementById('screen-result');
+    if (!screen) return;
+    var pill = document.getElementById('v138-verdict-pill');
+    var text = document.getElementById('v138-verdict-text');
+    if (!pill || !text) return;
+    var pillContent = (pill.textContent || '').trim();
+    var pillClass   = pill.className || '';
+    var summary     = (text.textContent || '').trim();
+    // Only mount when at least one of them has content.
+    if (!pillContent && !summary) return;
+    // Pull the verdict-pill colour class so the v171 card mirrors it.
+    var colorClass = 'v136-verdict-fair';
+    if (/v136-verdict-good/.test(pillClass))  colorClass = 'v136-verdict-good';
+    else if (/v136-verdict-fair/.test(pillClass))  colorClass = 'v136-verdict-fair';
+    else if (/v136-verdict-wait/.test(pillClass))  colorClass = 'v136-verdict-wait';
+    else if (/v136-verdict-check/.test(pillClass)) colorClass = 'v136-verdict-check';
+    var existing = document.getElementById('v171-savveys-verdict');
+    if (existing) existing.remove();
+    var card = document.createElement('div');
+    card.id = 'v171-savveys-verdict';
+    card.innerHTML =
+      '<div class="v171-vh-title">✨ Savvey’s Verdict</div>' +
+      (pillContent ? '<span class="v171-vh-pill ' + colorClass + '">' + pillContent + '</span>' : '') +
+      (summary ? '<div class="v171-vh-summary">' + summary.replace(/[<>]/g, '') + '</div>' : '');
+    // Insert at the very top of #screen-result (above all existing cards).
+    if (screen.firstChild) screen.insertBefore(card, screen.firstChild);
+    else                   screen.appendChild(card);
+    document.body.classList.add('v171-verdict-mounted');
+  }
+
+  // Link Avalanche truncation. The retailer stack lives under #v138-cta-stack
+  // (or similar). Truncate at 5; show a "Show all N prices" button below.
+  function v171TruncateStack() {
+    var screen = document.getElementById('screen-result');
+    if (!screen) return;
+    var stack = screen.querySelector('.v136-cta-stack, #v138-cta-stack, [data-v136-stack]')
+              || screen;
+    var rows = stack.querySelectorAll('.v136-cta-secondary');
+    if (!rows || rows.length <= 5) {
+      var oldBtn = document.getElementById('v171-show-more-prices');
+      if (oldBtn) oldBtn.remove();
+      document.body.classList.remove('v171-stack-truncated');
+      return;
+    }
+    var hiddenCount = 0;
+    for (var i = 4; i < rows.length; i++) {  // Keep primary + first 4 secondary
+      rows[i].classList.add('v171-hidden');
+      hiddenCount++;
+    }
+    document.body.classList.add('v171-stack-truncated');
+    var existing = document.getElementById('v171-show-more-prices');
+    if (existing) existing.remove();
+    if (hiddenCount > 0) {
+      var btn = document.createElement('button');
+      btn.id = 'v171-show-more-prices';
+      btn.type = 'button';
+      btn.textContent = 'Show all ' + rows.length + ' prices';
+      btn.onclick = function () {
+        document.body.classList.remove('v171-stack-truncated');
+        btn.remove();
+      };
+      // Insert after the last visible secondary row.
+      rows[3].parentNode.insertBefore(btn, rows[4]);
+    }
+  }
+
+  // Observe #screen-result for verdict + stack rendering completion.
+  var resultScreen = document.getElementById('screen-result');
+  if (resultScreen && typeof MutationObserver !== 'undefined') {
+    var _v171Debounce = null;
+    var observer = new MutationObserver(function () {
+      if (_v171Debounce) clearTimeout(_v171Debounce);
+      _v171Debounce = setTimeout(function () {
+        try { v171MountVerdict(); } catch (e) {}
+        try { v171TruncateStack(); } catch (e) {}
+      }, 120);
+    });
+    observer.observe(resultScreen, { childList: true, subtree: true, characterData: true });
+  }
+
+  // Wire to show() too — for screen entry.
+  if (typeof window.show === 'function') {
+    var _v171OrigShow2 = window.show;
+    window.show = function (id, opts) {
+      var r = _v171OrigShow2.apply(this, arguments);
+      if (id === 'result') {
+        setTimeout(function () {
+          try { v171MountVerdict(); } catch (e) {}
+          try { v171TruncateStack(); } catch (e) {}
+        }, 250);
+      }
+      return r;
+    };
+  }
+
+  // Expose for debug.
+  window._v171 = { mountVerdict: v171MountVerdict, truncateStack: v171TruncateStack,
+                   startLoading: v171StartLoadingCycle, stopLoading: v171StopLoadingCycle };
+  try { console.log('[V.171] Glass Polish initialised.'); } catch (e) {}
+})();
+</script>
 </body>
 </html>

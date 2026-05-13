@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v169';
+const VERSION             = 'normalize.js v3.4.5v170';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v169-1'; // V.169 — bumped: eBay quarantine + AI predicted_price_floor_gbp reality anchor invalidate every previous response shape.
+const CACHE_PREFIX = 'sav-v170-1'; // V.170 — bumped: fingerprint relaxation fallback recovers items the strict V.163 pass would have dropped.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1913,7 +1913,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v169:${canonicalKey}`;
+  const ck = `savvey:retailers:v170:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -2287,6 +2287,115 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         thumbnail:    _v159Thumb,
       };
     }
+    // V.170 — FINGERPRINT RELAXATION FALLBACK.
+    //
+    // The V.169 blind audit flagged the "Apple AirPods Pro 2nd Gen USB-C"
+    // case: the strict V.163 identity filter dropped every SerpAPI listing
+    // because merchant titles abbreviate "2nd Gen" as "2", "2nd", "Gen 2",
+    // "Generation 2", etc. — none of which match the literal "2nd Gen"
+    // token via the existing word-bound regex.
+    //
+    // Fallback algorithm (only fires when primary deepLinks is empty AND
+    // the strict pass dropped ≥1 identity victim):
+    //   - Re-evaluate the SAME results array (no new network call)
+    //   - Accept any item whose title matches (requiredTokens.length - 1)
+    //     of the N required tokens, instead of all N
+    //   - Generation tokens like "2nd Gen", "3rd Gen", "Gen 2" are treated
+    //     equivalently via _v170NormalizeGenerationToken
+    //   - All other filters (condition, eBay quarantine, URL extraction,
+    //     V.150 unwrap, V.145 median floor) still apply
+    //   - Counter _v170RelaxedRescuedCount surfaces in diag for audit
+    //   - Skipped for N <= 1 (single-token fingerprints already match
+    //     "Yorkshire Tea 240" against any "Yorkshire Tea" title; nothing
+    //     to relax)
+    let _v170RelaxedRescuedCount = 0;
+    if (Object.keys(deepLinks).length === 0 && _droppedIdentity > 0 && _v163Required.length >= 2) {
+      try { console.log(`[${VERSION}] V.170 fingerprint relaxation fallback firing for "${query.slice(0,60)}" — strict pass dropped ${_droppedIdentity} identity victims, primary deepLinks empty. Allowing (N-1) of ${_v163Required.length} token matches.`); } catch (e) {}
+      // Helper: match an item with relaxed (N-1)-of-N rule. Also expands
+      // generation-token equivalence so "2nd Gen" matches "2" / "2nd" /
+      // "Gen 2" / "Generation 2".
+      const _v170MatchRelaxed = (title, required) => {
+        if (!title || typeof title !== 'string') return false;
+        const minRequired = Math.max(1, required.length - 1);
+        let matched = 0;
+        for (const tok of required) {
+          const r = _v163ItemMatchesIdentity(title, [tok]);
+          if (r.pass) { matched++; continue; }
+          // V.170 — generation-token equivalence. "2nd Gen" ≡ "2" ≡ "2nd" ≡
+          // "Gen 2" ≡ "Generation 2".
+          const _genMatch = tok.raw.match(/^(\d+)(?:st|nd|rd|th)?\s*(?:Gen(?:eration)?)?$/i);
+          if (_genMatch) {
+            const n = _genMatch[1];
+            const ord = n + (n === '1' ? 'st' : n === '2' ? 'nd' : n === '3' ? 'rd' : 'th');
+            const rx = new RegExp('\\b(?:' + n + '(?:st|nd|rd|th)?|Gen(?:eration)?\\s*' + n + '|' + ord + '\\s*Gen(?:eration)?)\\b', 'i');
+            if (rx.test(title)) { matched++; continue; }
+          }
+        }
+        return matched >= minRequired;
+      };
+      // Re-loop through the original SerpAPI results array. Skip used /
+      // pawn-shop matches (V.164 still applies). Skip eBay (V.169 quarantine
+      // already routed those; they don't need a second chance — the
+      // quarantine rescue will fire later if deepLinks ends empty).
+      // Otherwise relaxed-match the title and run the same URL + price
+      // extraction the strict pass would have run.
+      for (const item of results) {
+        // Skip if already passed strict (V.163 wouldn't have dropped it).
+        const _strict = _v163ItemMatchesIdentity(item.title, _v163Required);
+        if (_strict.pass) continue;
+        // Skip used / refurb / pawn shops.
+        const _condParts = [item.condition, item.title, item.snippet, item.details, item.source, item.seller_name, item.delivery, item.stock_state, item.merchant && item.merchant.name].filter(s => typeof s === 'string' && s.length > 0);
+        const _condBlob = _condParts.join(' · ');
+        if (_v164UsedRx.test(_condBlob) || _v164PawnShopRx.test(_condBlob)) continue;
+        // Skip eBay (handled by quarantine).
+        const _ebaySrc = (typeof item.source === 'string' ? item.source : '')
+                       + ' ' + (typeof item.seller_name === 'string' ? item.seller_name : '')
+                       + ' ' + ((item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '');
+        if (/\bebay\b/i.test(_ebaySrc)) continue;
+        // Relaxed match — accept (N-1)-of-N tokens with generation equivalence.
+        if (!_v170MatchRelaxed(item.title, _v163Required)) continue;
+        // Run the V.150 / price extraction pipeline (compact inline since
+        // we can't easily reuse the loop body).
+        let _url = item.product_link || item.link;
+        if (!_url || typeof _url !== 'string') continue;
+        let _host = null;
+        try { _host = new URL(String(_url)).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { continue; }
+        // Reuse V.150 unwrap for Google hosts.
+        const _isGoogle = !_host || /\b(?:google\.|aclk|doubleclick|googleshopping)/i.test(_host) || _host === 'shopping.google.com';
+        if (_isGoogle) {
+          const _u = _v150UnwrapGoogleRedirect(item.link) || _v150UnwrapGoogleRedirect(item.product_link) || _v150UnwrapGoogleRedirect(_url);
+          if (_u && _u.host) { _host = _u.host; _url = _u.url; }
+          else {
+            // V.159c — keep real SerpAPI URL; re-derive host slug from source.
+            const _src = item.source || item.seller_name || (item.merchant && item.merchant.name);
+            if (_src) {
+              const _slug = String(_src).toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '').slice(0, 30);
+              if (_slug && _slug.length >= 2) _host = _slug + '.via-google';
+            }
+          }
+        }
+        const _px = _v146ExtractPrice(item);
+        if (!_px || _px.price == null) continue;
+        if (deepLinks[_host]) {
+          if (_px.price >= deepLinks[_host].price_gbp) continue;
+        }
+        const _hostKey = _host ? _host.split('.')[0] : null;
+        const _mapped = V138_RETAILER_NAMES[_host] || (_hostKey && V138_RETAILER_NAMES[_hostKey]);
+        const _disp = _mapped || (_hostKey ? (_hostKey.charAt(0).toUpperCase() + _hostKey.slice(1)) : 'Retailer');
+        deepLinks[_host] = {
+          url:          (_url || '').slice(0, 500),
+          title:        typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+          price:        _px.raw,
+          price_gbp:    _px.price,
+          price_source: _px.source,
+          name:         _disp,
+          thumbnail:    (typeof item.thumbnail === 'string' && /^https?:\/\//i.test(item.thumbnail)) ? item.thumbnail.slice(0, 500) : null,
+          _v170_relaxed: true,
+        };
+        _v170RelaxedRescuedCount++;
+      }
+    }
+
     // V.169 — EBAY QUARANTINE RESCUE. If the primary deepLinks map is empty
     // after all standard retailers have been filtered, the canonical may
     // genuinely only exist on eBay (groceries / discontinued / vintage).
@@ -2360,6 +2469,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       identity_source:    _v163Source,      // V.163 — 'ai' | 'deterministic_fallback' | 'none'
       ebay_quarantined:   _v169EbayQuarantineCount, // V.169 — eBay items routed to quarantine
       ebay_rescued:       _v169EbayRescued, // V.169 — was the quarantine promoted (primary stack was empty)?
+      relaxed_rescued:    _v170RelaxedRescuedCount, // V.170 — items rescued by (N-1) relaxed fingerprint match
       samples:            _v146Samples,
       dropped_samples:    _droppedSamples.slice(0, 8),   // V.163 — wider window for identity drops
       raw_samples:        _rawSamples,
@@ -3590,7 +3700,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v169:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v170:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
