@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v155';
+const VERSION             = 'normalize.js v3.4.5v156';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -146,7 +146,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v155-1';
+const CACHE_PREFIX = 'sav-v156-1';
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -1563,10 +1563,25 @@ function _resolveSeller(item) {
   return null;
 }
 async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false) {
+  // V.156 — diag-write on every bail path. Ensures _v153LocalDiag is
+  // ALWAYS populated so the response carries telemetry even when SerpAPI
+  // returned 0 results / errored / hit quota / aborted. No more silent
+  // blackouts on the response payload.
+  const _v156Bail = (reason, extra) => {
+    if (_diagOut) Object.assign(_diagOut, {
+      examined: 0, kept: 0, priced: 0,
+      dropped_no_url: 0, dropped_no_price: 0, dropped_redirector: 0,
+      samples: [], dropped_samples: [], raw_samples: [],
+      cache_hit: false,
+      bail_reason: reason,
+      ...(extra || {}),
+    });
+    return null;
+  };
   const apiKey = process.env.SERPAPI_KEY;
-  if (!apiKey) return null;
-  if (!query || typeof query !== 'string' || query.length < 2) return null;
-  const ck = `savvey:retailers:v155:${canonicalKey}`;
+  if (!apiKey) return _v156Bail('no_apikey');
+  if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
+  const ck = `savvey:retailers:v156:${canonicalKey}`;
   if (!_forceFresh) {
     const cached = await kvGet(ck);
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
@@ -1610,7 +1625,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     clearTimeout(timer);
     if (!r.ok) {
       console.warn(`[${VERSION}] google_shopping HTTP ${r.status} for "${query.slice(0, 60)}"`);
-      return null;
+      return _v156Bail('serpapi_http_' + r.status, { http_status: r.status });
     }
     const j = await r.json();
     const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
@@ -1672,13 +1687,19 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           host = _unwrap.host;
           url = _unwrap.url;
         } else {
-          // V.152b — when the URL is a Google aggregator page with no
-          // unwrappable merchant URL, resolve the merchant from item.source
-          // and build a search URL on that merchant. SerpAPI uses this
-          // shape extensively for hot consumer-electronics queries.
-          const _resolved = _v152ResolveFromSource(item.source, query)
-                         || _v152ResolveFromSource(item.seller_name, query)
-                         || _v152ResolveFromSource(item.merchant && item.merchant.name, query);
+          // V.152b — try the hardcoded UK retailer regex table first.
+          let _resolved = _v152ResolveFromSource(item.source, query)
+                       || _v152ResolveFromSource(item.seller_name, query)
+                       || _v152ResolveFromSource(item.merchant && item.merchant.name, query);
+          // V.156 — UNIVERSAL FALLBACK. If V.152b missed (niche merchant
+          // like Lamp24, ShopTo, MOHD, Crema Coffee, etc.), derive a
+          // synthetic display host from the source string and build a
+          // Google Shopping search URL. No retailer left behind.
+          if (!_resolved || !_resolved.host) {
+            _resolved = _v156UniversalSourceFallback(item.source, query)
+                     || _v156UniversalSourceFallback(item.seller_name, query)
+                     || _v156UniversalSourceFallback(item.merchant && item.merchant.name, query);
+          }
           if (_resolved && _resolved.host) {
             host = _resolved.host;
             url = _resolved.url;
@@ -1790,7 +1811,8 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   } catch (err) {
     clearTimeout(timer);
     console.warn(`[${VERSION}] google_shopping fetch error for "${query.slice(0, 60)}":`, err.message);
-    return null;
+    const _isAbort = err && (err.name === 'AbortError' || /aborted|timeout/i.test(String(err.message || err)));
+    return _v156Bail(_isAbort ? 'network_timeout' : 'network_error', { error: String(err && err.message || err).slice(0, 160) });
   }
 }
 
@@ -1932,6 +1954,52 @@ const V152_SOURCE_RESOLVERS = [
   { rx: /littlewoods/i,           host: 'littlewoods.com',     name: 'Littlewoods',   pathT: q => '/web/search.html?Ntt=' + encodeURIComponent(q), origin: 'https://www.littlewoods.com' },
   { rx: /pro\s*direct/i,         host: 'prodirectsport.com',  name: 'Pro:Direct',    pathT: q => '/search?w=' + encodeURIComponent(q), origin: 'https://www.prodirectsport.com' },
 ];
+// V.156 — UNIVERSAL SOURCE-HOST FALLBACK. When V.152b's hardcoded
+// retailer regex table misses (long-tail merchants: Lamp24, MOHD, ShopTo,
+// Ocado, Iceland, Crema Coffee, Laptops Direct, etc.), V.156 derives a
+// synthetic display host from the cleaned source string and builds a
+// Google Shopping search URL filtered to that merchant + product. This
+// is the "no retailer left behind" path — replaces the V.144 drop-as-
+// redirector behaviour for unrecognised UK merchants.
+function _v156UniversalSourceFallback(source, canonical) {
+  try {
+    if (!source || typeof source !== 'string' || !canonical) return null;
+    // Clean the source name. Strip seller suffixes, parenthesised
+    // qualifiers, redundant store/marketplace/seller tokens.
+    let clean = String(source)
+      .replace(/\s*[\-\u2013\u2014|\u00b7\u2022]\s*.*$/i, '')      // strip after dash/pipe
+      .replace(/\s*\([^)]*\)\s*/g, '')                                  // strip parens
+      .replace(/\s+(?:UK|Ltd|Limited|Inc|Store|Online|Marketplace|Seller|Shop)$/i, '')
+      .trim();
+    if (!clean || clean.length < 2 || clean.length > 60) return null;
+    // Slug for hostname (lowercase alphanumerics only).
+    const slug = clean.toLowerCase()
+      .replace(/&/g, 'and')
+      .replace(/[^a-z0-9]+/g, '')
+      .slice(0, 30);
+    if (!slug || slug.length < 2) return null;
+    // Synthetic host. We can't know the actual TLD without an HTTP probe,
+    // so we use `<slug>.co.uk` as a sensible UK default. The host is used
+    // only as a dedup key + V.138_DELIVERY_NOTES lookup; the actual click
+    // target is the Google Shopping search URL below.
+    const host = slug + '.co.uk';
+    // Build Google Shopping search URL filtered to merchant + product.
+    // tbm=shop scopes results to Shopping rather than web; q includes
+    // both the merchant name and the canonical so Google's algorithm
+    // surfaces the exact listing first.
+    const q = encodeURIComponent(clean + ' ' + canonical).slice(0, 250);
+    const url = 'https://www.google.co.uk/search?q=' + q + '&tbm=shop';
+    return {
+      host:  host,
+      url:   url,
+      name:  clean,
+      source: 'v156_universal_fallback',
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
 function _v152ResolveFromSource(source, canonical) {
   if (!source || typeof source !== 'string' || !canonical) return null;
   for (const r of V152_SOURCE_RESOLVERS) {
@@ -2796,7 +2864,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v155:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v156:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
