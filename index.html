@@ -6819,10 +6819,16 @@ body.v181 .v172-type-sheet { position: relative; }
 }
 .v183-tab-primary.is-active .v183-tab-icon { color: var(--green-deep, #143d10); }
 
-/* Hide the global anchor when the camera modal owns the screen, and on
-   the welcome flow so users can't escape onboarding via the nav. */
-body:has(#screen-camera.active) #v183-tab-bar,
+/* V.183 → V.185 — Visibility rules.
+   - Camera modal hides the bar via z-index occlusion (V.185 immersion).
+   - Welcome flow hides the bar with display:none so onboarding isn't
+     escapable via the nav.
+   - Type sheet open + input focused → hide so the iOS keyboard doesn't
+     push the bar above itself. */
 body:has(#screen-welcome.active) #v183-tab-bar {
+  display: none !important;
+}
+body.v185-type-focus #v183-tab-bar {
   display: none !important;
 }
 
@@ -6849,6 +6855,41 @@ body.v181 .v182-type-close,
 }
 
 /* End V.183/V.184 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.185 — THE MODAL IMMERSION
+   Native iOS modal layering: the Camera consumes the entire viewport
+   and occludes the V.183 tab bar via z-index (not display:none) so the
+   V.171 slide-up transition reveals/hides the bar smoothly.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Lift the camera modal above the tab bar (z-index 80) and the legacy
+   bottom-nav (z-index 50). 90 stays below modals at 100+. */
+#screen-camera {
+  z-index: 90 !important;
+}
+body.v171 #screen-camera,
+body.v172 #screen-camera {
+  z-index: 90 !important;
+}
+/* Make sure the camera modal is full-bleed so the bar never peeks
+   through transparent gaps during the slide-up. */
+body.v171 #screen-camera.active,
+body.v172 #screen-camera.active {
+  background: #000 !important;
+  inset: 0;
+}
+
+/* Anchor the tab bar to the visual viewport so iOS doesn't lift it
+   above the keyboard when an input is focused. Falls back gracefully
+   on browsers without VirtualKeyboard API. */
+@supports (bottom: env(keyboard-inset-height)) {
+  #v183-tab-bar {
+    bottom: env(keyboard-inset-height, 0px);
+  }
+}
+
+/* End V.185 block */
 </style>
 <script>
 // v3.4.5b — PostHog wire-up (panel-mandated, GTM + Ex-Founder both flagged
@@ -14569,6 +14610,38 @@ async function _v140KickoffSynthesize(idPayload) {
       if (s && s.target !== 1.0) requestAnimationFrame(function () { springTarget(el, 1.0); });
     } catch (err) {}
   }, true);
+
+  // V.185 — Keyboard avoidance for the V.183 tab bar. When the user
+  // focuses #v172-type-input the iOS soft keyboard appears; without this
+  // body class toggle, position:fixed bars float ABOVE the keyboard which
+  // looks broken. We hide the bar while the input owns focus, and we
+  // also opt into the VirtualKeyboard API on Chromium so the @supports
+  // env(keyboard-inset-height) rule in CSS engages where available.
+  (function v185KeyboardAvoidance() {
+    try {
+      if ('virtualKeyboard' in navigator) {
+        navigator.virtualKeyboard.overlaysContent = true;
+      }
+    } catch (e) {}
+    function bind() {
+      var input = document.getElementById('v172-type-input');
+      if (!input || input.__v185Bound) return;
+      input.__v185Bound = true;
+      input.addEventListener('focus', function () {
+        try { document.body.classList.add('v185-type-focus'); } catch (e) {}
+      });
+      input.addEventListener('blur', function () {
+        try { document.body.classList.remove('v185-type-focus'); } catch (e) {}
+      });
+    }
+    bind();
+    // Re-bind if the Type sheet markup is re-rendered later.
+    if (typeof MutationObserver !== 'undefined') {
+      try {
+        new MutationObserver(bind).observe(document.body, { childList: true, subtree: true });
+      } catch (e) {}
+    }
+  })();
 
   // V.184 — Escape Hatch Correction: the V.182 Type-sheet X injection has
   // been REMOVED. The Founder confirmed the X belongs strictly on the
