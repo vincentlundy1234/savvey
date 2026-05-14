@@ -123,6 +123,13 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'amazon.co.uk',
   'argos.co.uk',
   'currys.co.uk',
+  'ee.co.uk',
+  'three.co.uk',
+  'o2.co.uk',
+  'vodafone.co.uk',
+  'sky.com',
+  'bt.com',
+  'shop.bt.com',
   'johnlewis.com',
   'very.co.uk',
   'ao.com',
@@ -2161,7 +2168,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v175:${canonicalKey}`;
+  const ck = `savvey:retailers:v199:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
