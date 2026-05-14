@@ -1,4 +1,4 @@
-# SAVVEY DESIGN RULES — The Memory Vault
+# SAVVEY FRONTEND RULES — The Memory Vault
 
 > **Authority:** Savvey Product Panel mandate V.191 (13 May 2026).
 > **Scope:** All UI, motion, and interaction work on the Savvey PWA.
@@ -121,7 +121,26 @@ First-time users experience a single seamless dissolve:
 
 ---
 
-## 8. Brand
+## 8. The Four Pillars & Retailer Stack — `#screen-result`
+
+The result screen layout is **locked**. Every match-confidence outcome renders the same four-pillar contract before the affiliate stack.
+
+1. **Identity** — exact product name, clean cropped image, category sub-line.
+2. **Best Price** — lowest verified price `£X.XX` with the winning retailer name underneath. Never a pawn-shop or used/refurb listing. Outlier rejection: any price < 50% of the median is discarded.
+3. **Market Context** — median average across the market plus the number of retailers checked (e.g. "Average £399 across 5 stores").
+4. **AI Verdict** — 1–2 sentence Haiku summary plus the coloured verdict pill (Walk away / Better deal available / Worth a look / Pretty good / Best price).
+
+Immediately below the four pillars, the **Affiliate Retailer Stack** renders:
+- Amazon primary (when verified) at the top in green with prime/delivery sub-line.
+- 2–4 competitors (Currys, Argos, John Lewis, etc.) with logo, price, stock text.
+
+**Outbound link discipline:** every retailer card and CTA outbound link **MUST** use `<a target="_top" rel="external" referrerpolicy="strict-origin-when-cross-origin">`. `target="_top"` is mandatory so the link breaks out of any iOS PWA scope or wrapper; `rel="external"` flags it for affiliate tracking and accessibility.
+
+Disambiguation (`#screen-confirm`) and `no_match` fallback (`amazon_search_fallback`) follow the same outbound-link discipline.
+
+---
+
+## 9. Brand
 
 - Name: **Savvey**
 - Tagline: **shop smart.**
@@ -136,7 +155,7 @@ First-time users experience a single seamless dissolve:
 
 ---
 
-## 9. The Oath of Compliance
+## 10. The Oath of Compliance
 
 > Before writing any new UI code or modifying existing layouts, I (Claude) will consult these rules. I will not introduce flat colors, standard CSS transitions for buttons, or web-standard navigation paradigms. Savvey is a kinetic, native-feeling iOS-grade application.
 

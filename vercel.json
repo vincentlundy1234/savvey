@@ -4,6 +4,14 @@
       "memory": 256,
       "maxDuration": 12
     },
+    "api/identify.js": {
+      "memory": 256,
+      "maxDuration": 12
+    },
+    "api/synthesize.js": {
+      "memory": 256,
+      "maxDuration": 12
+    },
     "api/health.js": {
       "memory": 128,
       "maxDuration": 3

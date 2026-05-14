@@ -1063,6 +1063,9 @@ CRITICAL RULES (apply to ALL modes):
 
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 4000);
+  // V.191 — granular Haiku mega-synth timing.
+  const _v191HaikuStart = Date.now();
+  console.log(`[V.191][timer] haiku.mega_synth START`);
   try {
     if (trace) trace.push({step:'mega_synthesis.start', mode: input.alternatives ? 'tiers' : 'pillars', has_amazon: !!input.amazon, has_alts: !!input.alternatives});
     const r = await fetch(ANTHROPIC_ENDPOINT, {
@@ -1076,6 +1079,7 @@ CRITICAL RULES (apply to ALL modes):
       }),
       signal: ac.signal,
     });
+    console.log(`[V.191][timer] haiku.mega_synth DONE ${Date.now()-_v191HaikuStart}ms status=${r.status}`);
     if (!r.ok) {
       console.warn(`[${VERSION}] callHaikuMegaSynthesis HTTP ${r.status}`);
       if (trace) trace.push({step:'mega_synthesis.http_error', status: r.status});
@@ -1293,9 +1297,14 @@ async function fetchVerifiedAmazonPrice(query, trace = null) {
 
   const controller = new AbortController();
   const timeout    = setTimeout(() => controller.abort(), SERPAPI_TIMEOUT_MS);
+  // V.191 — granular SerpAPI timing. Logs are surfaced in Vercel runtime
+  // logs so we can identify which third-party leg is hanging.
+  const _v191SerpStart = Date.now();
+  console.log(`[V.191][timer] serpapi.amazon START q="${query.slice(0,60)}"`);
   try {
     const r = await fetch(url.toString(), { signal: controller.signal });
     clearTimeout(timeout);
+    console.log(`[V.191][timer] serpapi.amazon DONE ${Date.now()-_v191SerpStart}ms status=${r.status}`);
     _lastSerpStatus = r.status;
     if (!r.ok) {
       console.warn(`[${VERSION}] SerpAPI HTTP ${r.status} for "${query.slice(0, 60)}"`);
@@ -2007,9 +2016,13 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   url.searchParams.set('api_key', apiKey);
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), GOOGLE_SHOPPING_TIMEOUT_MS);
+  // V.191 — granular google_shopping timing.
+  const _v191GshopStart = Date.now();
+  console.log(`[V.191][timer] serpapi.google_shopping START q="${query.slice(0,60)}"`);
   try {
     const r = await fetch(url.toString(), { signal: ac.signal });
     clearTimeout(timer);
+    console.log(`[V.191][timer] serpapi.google_shopping DONE ${Date.now()-_v191GshopStart}ms status=${r.status}`);
     if (!r.ok) {
       console.warn(`[${VERSION}] google_shopping HTTP ${r.status} for "${query.slice(0, 60)}"`);
       return _v156Bail('serpapi_http_' + r.status, { http_status: r.status });

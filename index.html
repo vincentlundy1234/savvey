@@ -9905,12 +9905,20 @@ async function callNormalize(body) {
   const _ac = new AbortController();
   _savveyActiveAbort = _ac;
   const _mySeq = ++_savveyFetchSeq;
-  const _ato = setTimeout(() => _ac.abort(), 15000);
-  // V.140 — track WHY we aborted. The 15s timeout firing must surface an
-  // explicit error to the user, not be swallowed like a user-initiated nav.
+  // V.191 — Client-side AbortController tightened from 15s → 10s. The
+  // backend vercel function ceiling is 12s; the client must give up
+  // BEFORE the server does so the UI surfaces a clean timeout instead
+  // of waiting for a (possibly hung) 504. A single _ato_v191 handle
+  // owns the timer; we no longer create-then-immediately-clear an
+  // earlier _ato as the V.140 code did.
   var _timedOut = false;
-  if (_ato) clearTimeout(_ato);
-  var _ato_v140 = setTimeout(() => { _timedOut = true; try { _ac.abort(); } catch {} }, 15000);
+  var _ato_v191 = setTimeout(function () {
+    _timedOut = true;
+    try { console.warn('[V.191] /api/identify timeout after 10s — aborting.'); } catch (e) {}
+    try { _ac.abort(); } catch (e) {}
+  }, 10000);
+  // Back-compat alias so any older finally{} block still finds the handle.
+  var _ato_v140 = _ato_v191;
   try {
     const r = await fetch('/api/identify', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
