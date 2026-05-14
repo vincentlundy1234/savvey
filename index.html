@@ -7222,6 +7222,131 @@ body.v181 #screen-loading.active { background: transparent; }
 /* End V.115 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.122 — KINETIC POLISH (Performance + Loading + UI Cruft)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) PERFORMANCE — re-enable native momentum scrolling + GPU
+       compositor layers stripped during the V.114/V.115 nuclear reset. */
+html, body {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: none;
+}
+.screen.active,
+#screen-home.active,
+#screen-result.active,
+#screen-confirm.active,
+.v136-wrap,
+.v138-retailer-stack {
+  -webkit-overflow-scrolling: touch;
+  overflow-y: auto;
+}
+/* GPU layer promotion for every animated surface. */
+#v180-aurora,
+#v183-tab-bar,
+.v114-trust,
+.v114-trust-track,
+.v114-trust-glow,
+.v115-logo,
+.v122-loading-disc,
+.v181-spring,
+.v171-hero,
+.v172-type-go,
+.v186-cta,
+.v188-bc-close,
+.v171-cam-close,
+.v136-card,
+.v138-retailer-row {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.v114-trust-track,
+.v114-trust-glow,
+.v122-loading-disc,
+#v180-aurora {
+  will-change: transform, opacity;
+}
+.v181-spring,
+.v171-hero,
+.v172-type-go,
+.v186-cta {
+  will-change: transform;
+}
+
+/* (2) LOADING SCREEN — calm, minimal, centred pulsing S-disc. */
+#screen-loading.active {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  background: #faf7f0;
+}
+body.v181 #screen-loading.active { background: transparent; }
+/* Hide every legacy loading element so the V.122 stage is the sole UI. */
+#screen-loading .v5-loading-inner,
+#screen-loading .v134-loading-spinner,
+#screen-loading .v5-loading-orbit,
+#screen-loading .v5-loading-timeline,
+#screen-loading .loading-text,
+#screen-loading .loading-sub,
+#screen-loading .v5-loading-footer,
+#screen-loading .v171-loading-stage,
+#screen-loading .v174-progress-track {
+  display: none !important;
+}
+.v122-loading-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+  padding: 0 24px calc(env(safe-area-inset-bottom, 0px) + 96px);
+  width: 100%;
+  max-width: 360px;
+  text-align: center;
+}
+.v122-loading-disc {
+  width: 88px;
+  height: 88px;
+  border-radius: 9999px;
+  background: linear-gradient(135deg, #2a6b22 0%, #143d10 100%);
+  box-shadow:
+    0 12px 32px -8px rgba(20, 32, 26, 0.30),
+    0 6px 12px -4px rgba(20, 32, 26, 0.20),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: v122-pulse 2.4s ease-in-out infinite;
+}
+.v122-loading-letter {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 44px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+@keyframes v122-pulse {
+  0%, 100% { transform: scale(1.00); opacity: 0.95; }
+  50%      { transform: scale(1.08); opacity: 1.00; }
+}
+.v122-loading-copy {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(20, 32, 26, 0.72);
+  margin: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .v122-loading-disc { animation: none; }
+}
+
+/* End V.122 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
    Pure @keyframes + transform: translateX with will-change. Grayscale,
    muted opacity, premium feel. Sits at the bottom of the home screen
@@ -8044,15 +8169,20 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <div class="screen v5-loading-screen" id="screen-loading">
-  <!-- V.171 + V.174 — Loading Theater. Pulsing S logo + cycling consumer-voice
-       copy + V.174 determinate progress bar. The legacy V.77 / V.134 spinner
-       below is preserved but CSS-hidden when V.171 is active. -->
-  <div class="v171-loading-stage" id="v171-loading-stage">
+  <!-- V.122 — Loading Screen Redesign. Calm + premium. Single centered
+       green S-disc with a soft pulse animation, one calm line of copy.
+       Legacy V.171 / V.77 / V.134 / V.174 chrome is preserved in DOM
+       (CSS-hidden) for back-compat with any code that targets it. -->
+  <div class="v122-loading-stage">
+    <div class="v122-loading-disc" aria-hidden="true">
+      <span class="v122-loading-letter">S</span>
+    </div>
+    <p class="v122-loading-copy">Savvey is checking the market...</p>
+  </div>
+  <div class="v171-loading-stage" id="v171-loading-stage" hidden>
     <div class="v171-pulse-logo" aria-hidden="true">S</div>
     <div class="v171-loading-cycle" id="v171-loading-cycle">Scanning trusted retailers…</div>
     <div class="v171-loading-sub">Checking Amazon, Argos & Currys</div>
-    <!-- V.174 — Determinate progress bar. Fakes ease-out to 85% over 5s,
-         snaps to 100% when the fetch resolves. Cures loading anxiety. -->
     <div class="v174-progress-track" aria-hidden="true">
       <div class="v174-progress-fill" id="v174-progress-fill"></div>
     </div>
@@ -8454,12 +8584,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </div>
   </div>
   <div class="v136-wrap">
-    <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/>
-      </svg>
-      Home
-    </button>
+    <!-- V.122 — redundant "Home" button removed per Founder mandate.
+         The V.183 tab bar provides the canonical Home affordance. -->
 
     <!-- Pillar 1 + 2: Identity + Pricing -->
     <div class="v136-card v136-hero-card">
