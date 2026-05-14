@@ -10380,22 +10380,16 @@ function cancelBarcode() {
 }
 
 async function callNormalize(body) {
-  // V.193 — Optimistic Load. Skip the loading theatre and go straight to
-  // #screen-result with shimmer skeleton blocks so the screen is never
-  // blank. The .v193-skeleton body class hides the real result content
-  // (which is empty/legacy at this point) and reveals the #v193-skel-host
-  // shimmer block. renderResult() / showError() / no_match fallback all
-  // remove the class on success so the real DOM swaps in.
-  // For barcode + image (Snap) we keep the loading theatre because the
-  // user still expects camera-teardown transitions to play out — the
-  // skeleton path is for Type and URL fast routes.
-  var _v193UseSkel = (body.input_type === 'text' || body.input_type === 'url');
-  if (_v193UseSkel) {
-    try { document.body.classList.add('v193-skeleton'); } catch (e) {}
-    show('result');
-  } else {
-    show('loading');
-  }
+  // V.120 — ROUTING FLOW PATCH. Replaces the V.193 optimistic-skeleton
+  // route for text/url with a stable loading state. The skeleton flashed
+  // briefly on disambig outcomes (e.g. "PS5") because the user was
+  // routed to #screen-result before the API revealed outcome='disambig'.
+  // The skeleton-on-result was an optimistic UX choice that produced
+  // the FOUC. Fix: every input type now lands on #screen-loading first;
+  // the response handler then routes to the correct destination
+  // (result / confirm / error) based on the actual outcome.
+  try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
+  show('loading');
   // V.194 — Parallel Kickoff connection warm-up. The instant submit fires
   // we open a TCP+TLS handshake to the API origin in parallel with the
   // real /api/identify request. This means by the time the Haiku synth
@@ -11079,40 +11073,68 @@ function renderConfirm(a, b, payload) {
             // V.148 closed loop — intercept tap and re-route through
             // the standard text-search pipeline so the user lands on
             // the Four Pillars for that exact variant.
-            // V.204 — Disambiguation Rescue. Use both .onclick AND a
-            // capture-phase addEventListener so iOS PWA tap-resolution
-            // edge cases cannot swallow the handler. Force
-            // pointer-events: auto inline so the V.203 fade transition
-            // (or any future opacity tween) cannot block taps.
-            cardEl.setAttribute('href', '#');
+            // V.120 — VARIANT CLICK CRASH FIX. The V.204 dual-binding
+            // (onclick + capture-phase addEventListener) was firing the
+            // handler TWICE — the second call's stale state was
+            // race-causing the "kicked back to home" symptom. We now:
+            //   (a) STRIP the href entirely (was href="#" which iOS
+            //       follows on synthetic click despite preventDefault),
+            //   (b) bind ONLY via addEventListener (single source of
+            //       truth — no .onclick dual fire),
+            //   (c) preventDefault + stopPropagation + stopImmediate
+            //       are the absolute first three lines so no parent
+            //       handler, no V.181 spring force-click, and no native
+            //       anchor navigation can fire after us.
+            //   (d) callNormalize is wrapped in a SECOND try/catch
+            //       inside a setTimeout(0) so any synchronous throw
+            //       cannot bubble up to a parent handler that would
+            //       interpret it as "navigate home".
+            cardEl.removeAttribute('href');
             cardEl.removeAttribute('target');
             cardEl.removeAttribute('rel');
+            cardEl.setAttribute('role', 'button');
+            cardEl.setAttribute('tabindex', '0');
             cardEl.style.pointerEvents = 'auto';
             cardEl.style.cursor = 'pointer';
             var _v204VariantName = t.name || canon;
-            var _v204Handler = (function (variantName) {
+            var _v120Handler = (function (variantName) {
               return function (ev) {
-                if (ev && ev.preventDefault) ev.preventDefault();
-                if (ev && ev.stopPropagation) ev.stopPropagation();
-                try { console.log('[V.204] Variant Card Tapped:', variantName); } catch (e) {}
-                try {
-                  callNormalize({ input_type: 'text', text: variantName });
-                } catch (err) {
-                  console.warn('[V.148] variant re-search failed', err);
-                  // Fallback so the user is never stranded.
-                  window.location.href = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(variantName);
-                }
+                try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (e) {}
+                try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {}
+                try { if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation(); } catch (e) {}
+                try { console.log('[V.120] Variant Card Tapped:', variantName); } catch (e) {}
+                try { if (window.v118DebugToast) window.v118DebugToast('VARIANT: ' + variantName, 'info'); } catch (e) {}
+                // Decouple from the click event loop so a sync throw
+                // can't bubble back to the bound anchor.
+                setTimeout(function () {
+                  try {
+                    callNormalize({ input_type: 'text', text: variantName });
+                  } catch (err) {
+                    console.warn('[V.120] variant re-search failed', err);
+                    try { if (window.v118DebugToast) window.v118DebugToast('variant err: ' + (err && err.message || err), 'err'); } catch (e) {}
+                  }
+                }, 0);
                 return false;
               };
             })(_v204VariantName);
-            // Wipe any prior listener registered via the V.204 marker so
-            // re-renders don't stack handlers.
+            // Wipe any prior listener so re-renders don't stack.
+            if (cardEl._v120Listener) {
+              try { cardEl.removeEventListener('click', cardEl._v120Listener, true); } catch (e) {}
+            }
             if (cardEl._v204Listener) {
               try { cardEl.removeEventListener('click', cardEl._v204Listener, true); } catch (e) {}
+              cardEl._v204Listener = null;
             }
-            cardEl._v204Listener = _v204Handler;
-            cardEl.onclick = _v204Handler;
-            cardEl.addEventListener('click', _v204Handler, true);
+            cardEl._v120Listener = _v120Handler;
+            // Single binding — capture phase ONLY, no .onclick.
+            cardEl.onclick = null;
+            cardEl.addEventListener('click', _v120Handler, true);
+            // Keyboard Enter support since we stripped the href.
+            cardEl.addEventListener('keydown', function (e) {
+              if (e && (e.key === 'Enter' || e.key === ' ')) {
+                _v120Handler(e);
+              }
+            });
           } else {
             // Generic tier — external Amazon-search link as before.
             var fbUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(t.name || canon);
