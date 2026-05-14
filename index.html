@@ -4754,15 +4754,38 @@
     box-shadow: none !important;
     background: transparent !important;
   }
-  /* Make sure the video element fills the mount and stays opaque-black
-     so we have a real preview. */
+  /* V.125 — Video MUST be transparent so the live stream paints. The
+     legacy `background: #000` rule was producing the "solid black box"
+     symptom whenever iOS Safari black-framed a paused stream. Z-index
+     locked to 1 so the cutout + laser layers stack predictably above. */
   #barcode-reader video {
     display: block !important;
     width: 100% !important;
     height: 100% !important;
     object-fit: cover !important;
-    background: #000 !important;
+    background: transparent !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
   }
+  /* Hard-stamp the V.125 z-index hierarchy on the barcode screen:
+     1 = video, 2 = cutout (dark surround via box-shadow), 3 = laser. */
+  #screen-barcode .v123-bc-cutout { z-index: 2 !important; }
+  #screen-barcode .v123-bc-laser  { z-index: 3 !important; }
+  /* The #barcode-reader mount itself is also explicit. */
+  #screen-barcode #barcode-reader,
+  #screen-barcode .v5-barcode-mount {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: transparent !important;
+    z-index: 1 !important;
+  }
+  /* And the legacy v5-cam-bg / v5-cam-glow chrome on the barcode screen
+     stays in the deep background so it cannot occlude the stream. */
+  #screen-barcode .v5-cam-bg,
+  #screen-barcode .v5-cam-glow { z-index: 0 !important; }
   /* ═════════════════════════ END V.131 SCANNER UI PURGE ═════════════════ */
 
   /* ═════════════════════════ V.134 SAFE LOADING ROLLBACK ═════════════════
@@ -10535,9 +10558,28 @@ async function goBarcode() {
 
 async function goBarcodeNative(formats) {
   const detector = new BarcodeDetector({ formats });
+  // V.125 — make sure any Snap (Door 1) MediaStream is fully stopped
+  // before Door 3 requests the camera. iOS will not hand a second
+  // stream over while the first is still held by the Snap <video>.
+  try { if (typeof stopAllScanners === 'function') stopAllScanners(); } catch (e) {}
+  try { if (window.camStream && window.camStream.getTracks) { window.camStream.getTracks().forEach(function(t){ t.stop(); }); window.camStream = null; } } catch (e) {}
+  try { if (window.v118DebugToast) window.v118DebugToast('BARCODE init (native)', 'info'); } catch (e) {}
   const wrap = document.getElementById('barcode-reader');
-  wrap.innerHTML = '<video autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>';
-  const video = wrap.querySelector('video');
+  wrap.innerHTML = '';
+  // V.125 — build the <video> element with strict iOS-PWA attributes
+  // set BEFORE srcObject is attached. autoplay + playsinline +
+  // webkit-playsinline + muted is the iron-clad combination for
+  // mobile Safari + iOS PWA + Android WebView auto-play.
+  const video = document.createElement('video');
+  video.setAttribute('autoplay', '');
+  video.setAttribute('playsinline', '');
+  video.setAttribute('webkit-playsinline', '');
+  video.setAttribute('muted', '');
+  video.muted = true;
+  video.autoplay = true;
+  video.playsInline = true;
+  video.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:transparent;z-index:1;';
+  wrap.appendChild(video);
   let stream;
   try {
     stream = await navigator.mediaDevices.getUserMedia({
@@ -10545,11 +10587,24 @@ async function goBarcodeNative(formats) {
     });
   } catch (err) {
     track('barcode_native_camera_denied', { reason: String(err && err.name || err).slice(0, 40) });
+    try { if (window.v118DebugToast) window.v118DebugToast('BARCODE getUserMedia ' + (err && err.name || err), 'err'); } catch (e) {}
     showError("Camera permission denied.", 'Allow camera access or type the product name instead.');
     return;
   }
   video.srcObject = stream;
-  await video.play().catch(() => {});
+  // V.125 — explicit play() with full error surfacing. Most iOS-PWA
+  // auto-play hangs are silent NotAllowedError on play(). Without
+  // surfacing it the Founder sees the black box; with it the V.118
+  // debug toast shows the exact reason.
+  try {
+    await video.play();
+    try { if (window.v118DebugToast) window.v118DebugToast('BARCODE video.play() ok', 'ok'); } catch (e) {}
+  } catch (playErr) {
+    try { console.warn('[V.125] video.play() rejected:', playErr); } catch (e) {}
+    try { if (window.v118DebugToast) window.v118DebugToast('BARCODE play err: ' + (playErr && playErr.message || playErr), 'err'); } catch (e) {}
+    // Try once more after a tick — iOS sometimes wins on the second attempt
+    setTimeout(function () { try { video.play(); } catch (e) {} }, 120);
+  }
   let stopped = false;
   _barcodeDetectorEvt = {
     stop: () => {
