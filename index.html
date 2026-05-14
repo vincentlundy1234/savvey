@@ -9075,6 +9075,31 @@ function show(id, opts) {
     _target.classList.add('active');
     _savveyLastShownAt[id] = _now;
   }
+  // V.117 — SURGICAL STATE REPAIR. Inline-style override on every screen
+  // so the active one OWNS the stack (z-index 10, full opacity, taps on)
+  // and every inactive one is BANNED from the stack (z-index -1, opacity 0,
+  // pointer-events: none). Belt-and-braces over the V.114 display:none
+  // guard — protects against any future CSS regression that lets an
+  // inactive screen swallow taps. Camera + barcode modals override z-index
+  // to 90 via their .active rule (V.185) — left untouched.
+  try {
+    document.querySelectorAll('.screen').forEach(function (s) {
+      var isActive = (s === _target);
+      var isModal = (s.id === 'screen-camera' || s.id === 'screen-barcode');
+      if (isActive) {
+        s.style.opacity = '1';
+        s.style.pointerEvents = 'auto';
+        s.style.zIndex = isModal ? '90' : '10';
+        s.removeAttribute('aria-hidden');
+      } else {
+        s.style.opacity = '0';
+        s.style.pointerEvents = 'none';
+        s.style.zIndex = '-1';
+        s.setAttribute('aria-hidden', 'true');
+      }
+    });
+    try { console.log('[V.117] show("' + id + '") — active screen owns stack (z=' + (id === 'camera' || id === 'barcode' ? '90' : '10') + '), others banned (z=-1, taps off).'); } catch (e) {}
+  } catch (e) {}
   window.scrollTo(0, 0);
   if (id === 'home') document.getElementById('hint').textContent = '';
   if (!opts || !opts.fromPop) {
