@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v199c';
+const VERSION             = 'normalize.js v3.4.5v200';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -359,6 +359,100 @@ const V199_UK_TRUSTED_SOURCE_SLUGS = new Set([
   'sky',
   'bt', 'btshop',
 ]);
+// V.200 — Premium-brand minimum floors. Used when n<3 priced listings
+// surface (median is unstable) AND the canonical mentions a premium
+// brand. Stops £89 AirPods Pro 2, £200 Galaxy S24 Ultra etc. from
+// winning Best Price on sparse data.
+const V200_PREMIUM_BRAND_FLOOR = [
+  // brand regex (i),                                  min £, label
+  { rx: /\bapple\b.*\b(airpods|earpods)\b/i,           min: 100,  label: 'Apple AirPods' },
+  { rx: /\bapple\b.*\biphone\b/i,                      min: 300,  label: 'Apple iPhone' },
+  { rx: /\bapple\b.*\bmacbook\b/i,                     min: 700,  label: 'Apple MacBook' },
+  { rx: /\bapple\b.*\bipad\b/i,                        min: 250,  label: 'Apple iPad' },
+  { rx: /\bapple\b.*\bwatch\b/i,                       min: 200,  label: 'Apple Watch' },
+  { rx: /\bairpods\b/i,                                 min: 100,  label: 'AirPods' },
+  { rx: /\bsamsung\b.*\bgalaxy\s+s\d+\s+ultra\b/i,     min: 600,  label: 'Galaxy S Ultra' },
+  { rx: /\bsamsung\b.*\bgalaxy\s+s\d+/i,               min: 400,  label: 'Galaxy S' },
+  { rx: /\bsamsung\b.*\b(qled|oled|neo)\b.*\b(55|65|75|85)\b/i, min: 600, label: 'Samsung flagship TV' },
+  { rx: /\bsony\b.*\bxm[345]\b/i,                      min: 180,  label: 'Sony XM headphones' },
+  { rx: /\bsony\b.*\bbravia\b/i,                       min: 400,  label: 'Sony Bravia TV' },
+  { rx: /\bsony\b.*\bplaystation\s*5\s*pro\b/i,        min: 600,  label: 'PS5 Pro' },
+  { rx: /\bsony\b.*\bplaystation\s*5\b/i,              min: 350,  label: 'PS5' },
+  { rx: /\bbose\b.*\bquietcomfort\s+ultra\b/i,         min: 250,  label: 'Bose QC Ultra' },
+  { rx: /\bbose\b.*\bquietcomfort\b/i,                 min: 150,  label: 'Bose QC' },
+  { rx: /\bdyson\b.*\bsupersonic\b/i,                  min: 250,  label: 'Dyson Supersonic' },
+  { rx: /\bdyson\b.*\b(v15|v12|v11|v10|gen5)\b/i,      min: 350,  label: 'Dyson V vacuum' },
+  { rx: /\bdyson\b.*\bairwrap\b/i,                     min: 350,  label: 'Dyson Airwrap' },
+  { rx: /\bnikon\b.*\bz\d/i,                           min: 1200, label: 'Nikon Z body' },
+  { rx: /\bcanon\b.*\beos\s+r\d/i,                     min: 1000, label: 'Canon EOS R body' },
+  { rx: /\bgarmin\b.*\bfenix\b/i,                      min: 350,  label: 'Garmin Fenix' },
+  { rx: /\bgarmin\b.*\bforerunner\s+\d{3}/i,           min: 150,  label: 'Garmin Forerunner' },
+  { rx: /\blg\b.*\boled.*\b(55|65|77|83)\b/i,          min: 600,  label: 'LG OLED TV' },
+  { rx: /\bsteam\s+deck\b.*\boled\b/i,                 min: 350,  label: 'Steam Deck OLED' },
+  { rx: /\bnintendo\b.*\bswitch\s+oled\b/i,            min: 220,  label: 'Switch OLED' },
+  { rx: /\bkitchenaid\b.*\bartisan\b/i,                min: 280,  label: 'KitchenAid Artisan' },
+  { rx: /\ble\s*creuset\b.*\bsignature\b/i,            min: 150,  label: 'Le Creuset Signature' },
+];
+function _v200GetPremiumBrandFloor(canonical) {
+  if (!canonical || typeof canonical !== 'string') return 0;
+  for (const entry of V200_PREMIUM_BRAND_FLOOR) {
+    if (entry.rx.test(canonical)) return entry.min;
+  }
+  return 0;
+}
+
+// V.200 — Zero-Trust TLD filter. ANY host whose TLD is not .co.uk, .uk,
+// .com, or .net is rejected outright (foreign Italian/French/German/Spanish
+// stores like Tattahome.com? Actually most fake-UK sites use .com. The
+// real defence is the TLD lock: .it/.fr/.de/.es/.nl/.pt/.eu/etc are nuked.
+// `.com` and `.net` still have to pass the explicit allow-list.
+const V200_TLD_ALLOWED = new Set(['uk', 'com', 'net']);
+function _v200IsTldAllowed(host) {
+  if (!host || typeof host !== 'string') return false;
+  const h = host.toLowerCase().replace(/^www\./, '');
+  // Extract the last domain segment as the TLD.
+  const parts = h.split('.');
+  if (parts.length < 2) return false;
+  const last = parts[parts.length - 1];
+  // .co.uk handled by 'uk' being the last segment.
+  return V200_TLD_ALLOWED.has(last);
+}
+
+// V.200 — Generic-noun fallback map. When Haiku falls through to
+// no_match / identification_failed on a single-word recognisable noun,
+// the handler injects these as the disambig alternatives_array so the
+// user reaches Outcome 3 instead of a dead end.
+const V200_GENERIC_FALLBACK = {
+  notebook:    ['Moleskine Classic Notebook A5', 'Leuchtturm1917 Medium A5 Dotted', 'Rhodia Webnotebook A5'],
+  lamp:        ['IKEA Tertial Work Lamp', 'John Lewis Anyday Touch Table Lamp', 'Anglepoise Type 75 Mini'],
+  pen:         ['BIC Cristal Original Ballpoint', 'Pilot G-2 07 Gel Rollerball', 'Lamy Safari Fountain Pen'],
+  kettle:      ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
+  mug:         ['Argos Home Plain White Mug Set of 4', 'Denby White Stoneware Mug', 'Emma Bridgewater Toast & Marmalade Mug'],
+  vase:        ['IKEA Berakna Vase', 'John Lewis Anyday Glass Vase', 'LSA International Flower Vase'],
+  candle:      ['Yankee Candle Large Jar', 'The White Company Signature Candle', 'Diptyque Baies Candle 190g'],
+  scissors:    ['Fiskars Classic Universal Scissors', 'Joseph Joseph PowerGrip Scissors', 'Wilkinson Sword Stainless Steel Scissors'],
+  umbrella:    ['Fulton Open Close Superslim Umbrella', 'Senz Original Storm Umbrella', 'Blunt Metro Umbrella'],
+  blanket:     ['IKEA Polarvide Throw', 'John Lewis Soft & Cosy Throw', 'The White Company Cashmere Throw'],
+  chair:       ['IKEA Markus Office Chair', 'John Lewis Anyday Dining Chair', 'Herman Miller Aeron'],
+  rug:         ['IKEA Stockholm Flatwoven Rug', 'John Lewis Anyday Plain Wool Rug', 'Ruggable Washable Rug'],
+  clock:       ['Newgate Echo Wall Clock', 'IKEA Stomma Wall Clock', 'Karlsson Vintage Wall Clock'],
+  mirror:      ['IKEA Stave Mirror', 'John Lewis Anyday Round Wall Mirror', 'Cox & Cox Antique Wall Mirror'],
+  towel:       ['John Lewis Egyptian Cotton Bath Towel', 'Christy Supreme Hygro Towel', 'The White Company Hydrocotton Towel'],
+  pillow:      ['John Lewis Synthetic Soft Touch Pillow', 'The Fine Bedding Co Boutique Silk Pillow', 'Dunelm Hotel Soft Pillow'],
+  duvet:       ['John Lewis Synthetic Soft Touch Duvet 10.5 Tog', 'Slumberdown Anti-Allergy Duvet', 'Silentnight Yours & Mine Dual Duvet'],
+  jar:         ['Kilner Clip Top Jar 1L', 'Le Parfait Super Jar 750ml', 'Mason Cash Storage Jar'],
+  bowl:        ['Mason Cash Cane Mixing Bowl', 'Denby White Cereal Bowl', 'Le Creuset Stoneware Bowl'],
+  plate:       ['John Lewis Anyday Dinner Plate', 'Denby White Dinner Plate', 'Le Creuset Stoneware Dinner Plate'],
+  notebooks:   ['Moleskine Classic Notebook A5', 'Leuchtturm1917 Medium A5 Dotted', 'Rhodia Webnotebook A5'],
+  lamps:       ['IKEA Tertial Work Lamp', 'John Lewis Anyday Touch Table Lamp', 'Anglepoise Type 75 Mini'],
+};
+function _v200GenericFallback(rawInput) {
+  if (!rawInput || typeof rawInput !== 'string') return null;
+  const t = rawInput.trim().toLowerCase().replace(/[^a-z]+/g, '');
+  if (!t || t.length < 3 || t.length > 16) return null;
+  return V200_GENERIC_FALLBACK[t] || null;
+}
+
 function _v199IsTrustedSourceSlug(slug) {
   if (!slug || typeof slug !== 'string') return false;
   const s = slug.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
@@ -405,7 +499,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v199b-1'; // V.199b — source-slug allow-list catches via-google snapklik/gedoutlet path that V.199 missed.
+const CACHE_PREFIX = 'sav-v200-1'; // V.200 — Zero-Trust patch: TLD lock, n<3 floor, generic noun fallback, routing rescue.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -2262,7 +2356,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v199b:${canonicalKey}`;
+  const ck = `savvey:retailers:v200:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -2510,6 +2604,16 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           _droppedRedirector++;
           continue;
         }
+      } else if (!_v200IsTldAllowed(host)) {
+        // V.200 — Zero-Trust TLD Filter. Any foreign TLD (.it, .fr, .de,
+        // .es, .nl, .pt, .eu, etc.) is rejected outright. Tattahome.it,
+        // Telemarkpyrenees.fr, Snowleader.fr et al are nuked here even if
+        // they slip past the host allow-list.
+        if (_droppedSamples.length < 8) {
+          _droppedSamples.push('foreign_tld:' + (host || '').slice(0, 40));
+        }
+        _droppedRedirector++;
+        continue;
       } else if (!_v199IsTrustedHost(host)) {
         if (_droppedSamples.length < 8) {
           _droppedSamples.push('untrusted_host:' + (host || '').slice(0, 40));
@@ -3285,7 +3389,7 @@ function _v143ParsePrice(raw) {
   return Number(n.toFixed(2));
 }
 
-function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links, category }) {
+function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links, category, canonical }) {
   const links = [];
   const allPrices = [];
 
@@ -3451,9 +3555,39 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
     for (const l of links) {
       if (l.price_gbp != null && !l.is_outlier) allPrices.push(l.price_gbp);
     }
+  } else if (allPrices.length > 0) {
+    // V.200 — N<3 FLOOR. Median is unstable, but we still apply the
+    // V199 category floor PLUS the V.200 premium-brand floor. This
+    // catches £89 AirPods Pro 2 bait on sparse data.
+    const _v200CatFloor    = _v199GetCategoryFloor(typeof category === 'string' ? category : null);
+    const _v200BrandFloor  = _v200GetPremiumBrandFloor(typeof canonical === 'string' ? canonical : null);
+    _v145Floor = Math.max(_v200CatFloor, _v200BrandFloor);
+    if (_v145Floor > 0) {
+      for (const l of links) {
+        if (l.price_gbp != null && l.price_gbp < _v145Floor) {
+          l.is_outlier = true;
+          _v145Outliers++;
+          if (_v195RejectedSample.length < 5) {
+            _v195RejectedSample.push({
+              retailer: l.retailer || l.retailer_key || 'unknown',
+              price_gbp: l.price_gbp,
+              title: (l.title || '').slice(0, 80),
+            });
+          }
+        }
+      }
+      try {
+        console.log(`[V.200][nlt3] n=${allPrices.length} cat_floor=£${_v200CatFloor} brand_floor=£${_v200BrandFloor} effective=£${_v145Floor.toFixed(2)} rejected=${_v145Outliers} samples=${JSON.stringify(_v195RejectedSample)}`);
+      } catch (e) {}
+      allPrices.length = 0;
+      for (const l of links) {
+        if (l.price_gbp != null && !l.is_outlier) allPrices.push(l.price_gbp);
+      }
+    } else {
+      try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (no category/brand floor configured)`); } catch (e) {}
+    }
   } else {
-    // V.195 — log skip-reason when we have too few prices to compute a stable median.
-    try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (median requires n>=3)`); } catch (e) {}
+    try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (no priced listings)`); } catch (e) {}
   }
 
   // (3) V.162 — STRICT BEST PRICE CROWN. The cheapest non-outlier retailer
@@ -3579,7 +3713,8 @@ function _v138BuildResponse({
   const { pricing, links } = _v138BuildPricingAndLinks({
     verified_amazon_price,
     retailer_deep_links,
-    category: (parsed && parsed.category) || null, // V.199 — thread category for absolute floor
+    category: (parsed && parsed.category) || null,            // V.199 — thread category for absolute floor
+    canonical: (parsed && parsed.canonical_search_string) || null, // V.200 — premium brand floor needs canonical
   });
 
   // ── Outcome routing (V.139: Generic Item Pivot) ───────────────────
@@ -3737,16 +3872,75 @@ function _v138BuildResponse({
     try {
       console.log(`[${VERSION}] V.169 reality anchor TRIPPED for "${(parsed && parsed.canonical_search_string) || '?'}": ` +
                   `best_price £${_v169BestPriceGbp} < threshold £${_v169Threshold} ` +
-                  `(40% of AI floor £${_v169Floor}). Dropping stack.`);
+                  `(30% of AI floor £${_v169Floor}). Dropping link and re-electing.`);
     } catch (e) {}
-    outcome = 'no_match';
-    outcome_reason = 'category_price_implausible';
-    // Wipe the corrupted pricing so the frontend doesn't render the
-    // accessory price. links are left as-is for diagnostic transparency
-    // (frontend won't display them on no_match anyway).
-    pricing.best_price = null;
-    pricing.avg_market = null;
-    pricing.price_band = null;
+    // V.200 — ROUTING RESCUE. Instead of wiping the entire pricing block
+    // and downgrading to no_match (which discards legitimate co-listed
+    // competitors), mark the offending link as an outlier and re-elect
+    // best_price from the remaining priced survivors.
+    if (Array.isArray(links)) {
+      for (const l of links) {
+        if (l && l.is_primary && Number(l.price_gbp) === _v169BestPriceGbp) {
+          l.is_primary = false;
+          l.is_outlier = true;
+          try { console.log(`[V.200][rescue] flagged ${l.retailer} £${l.price_gbp} as reality-anchor outlier; re-electing best_price from survivors`); } catch (e) {}
+          break;
+        }
+      }
+      // Re-elect: cheapest non-outlier priced survivor wins.
+      const _v200Survivors = links
+        .filter(l => l && l.price_gbp != null && Number(l.price_gbp) > 0 && !l.is_outlier)
+        .sort((a, b) => a.price_gbp - b.price_gbp);
+      if (_v200Survivors[0]) {
+        _v200Survivors[0].is_primary = true;
+        const _new = _v200Survivors[0];
+        pricing.best_price = {
+          value_gbp:     _new.price_gbp,
+          value_str:     _new.price_str || `£${Number(_new.price_gbp).toFixed(2)}`,
+          retailer:      _new.retailer,
+          retailer_key:  _new.retailer_key,
+          url:           _new.url,
+          verified_at:   new Date().toISOString(),
+          stock_state:   _new.stock_state,
+          delivery_note: _new.delivery_note,
+        };
+        // Recompute avg_market from survivors only.
+        const _v200SurvivorPrices = _v200Survivors.map(l => Number(l.price_gbp)).filter(p => p > 0);
+        if (_v200SurvivorPrices.length >= 1) {
+          const _mean = _v200SurvivorPrices.reduce((a, b) => a + b, 0) / _v200SurvivorPrices.length;
+          pricing.avg_market = {
+            value_gbp:       Number(_mean.toFixed(2)),
+            value_str:       `£${_mean.toFixed(2)}`,
+            retailer_count:  _v200SurvivorPrices.length,
+            n:               _v200SurvivorPrices.length,
+            sub:             `across ${_v200SurvivorPrices.length} UK retailers`,
+            method:          'mean_post_reality_anchor',
+          };
+          const _lo = Math.min(..._v200SurvivorPrices);
+          const _hi = Math.max(..._v200SurvivorPrices);
+          pricing.price_band = {
+            low: Number(_lo.toFixed(2)),
+            high: Number(_hi.toFixed(2)),
+            spread_pct: (_lo > 0 && _hi > _lo) ? Number(((_hi - _lo) / _lo * 100).toFixed(1)) : 0,
+          };
+        }
+        try { console.log(`[V.200][rescue] new best_price → ${_new.retailer} £${_new.price_gbp} (was £${_v169BestPriceGbp})`); } catch (e) {}
+        // Keep outcome as matched/matched_thin — DO NOT wipe.
+      } else {
+        // No survivors — fall back to the original no_match path.
+        outcome = 'no_match';
+        outcome_reason = 'category_price_implausible';
+        pricing.best_price = null;
+        pricing.avg_market = null;
+        pricing.price_band = null;
+      }
+    } else {
+      outcome = 'no_match';
+      outcome_reason = 'category_price_implausible';
+      pricing.best_price = null;
+      pricing.avg_market = null;
+      pricing.price_band = null;
+    }
   }
 
   // ── Identity block ────────────────────────────────────────────────
@@ -4240,7 +4434,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v199c:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v200:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -4619,6 +4813,34 @@ export default async function handler(req, res) {
   // V.121 fields are preserved alongside for back-compat (existing analytics +
   // older frontend hashes).
   // V.140 — accept 2-4 alternatives for the tiers-mega routing (was strict ===3).
+  // V.200 — Ambiguity Catcher. If the user typed a single-word generic
+  // noun (e.g. "notebook", "lamp", "pen") AND Haiku returned empty
+  // alternatives_array, forcibly inject 3 hard-coded generic-tier
+  // candidates so the UI routes to disambig (Outcome 3) instead of
+  // dropping into no_match / identification_failed.
+  const _v200RawInput = (typeof body.text === 'string') ? body.text : null;
+  const _v200CurrentAlts = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
+  if (_v200RawInput && _v200CurrentAlts === 0) {
+    const _v200Tiers = _v200GenericFallback(_v200RawInput);
+    if (_v200Tiers && _v200Tiers.length === 3) {
+      try { console.log(`[V.200][generic_fallback] "${_v200RawInput}" → injecting 3 hard-coded generic tiers (Budget/Top Rated/Premium)`); } catch (e) {}
+      parsed.alternatives_array = _v200Tiers.slice();
+      parsed.alternatives_meta = _v200Tiers.map((name, i) => ({
+        intent_label: ['Best Value', 'Top Rated', 'Premium Choice'][i],
+        rationale:    ['Cheapest reliable option.', 'Most popular UK pick.', 'Top-end build quality.'][i],
+        typical_price_gbp: null,
+        est_price_range:   null,
+        pack_size:         null,
+        tier_label:        ['Budget', 'Mid-tier', 'Premium'][i],
+      }));
+      parsed.confidence = 'low';
+      // Force-pivot the canonical so the disambig screen reads cleanly.
+      if (!parsed.canonical_search_string || parsed.canonical_search_string.toLowerCase() === _v200RawInput.toLowerCase()) {
+        parsed.canonical_search_string = _v200RawInput.charAt(0).toUpperCase() + _v200RawInput.slice(1).toLowerCase();
+      }
+    }
+  }
+
   const _altsLenFinal = Array.isArray(parsed.alternatives_array) ? parsed.alternatives_array.length : 0;
   const _megaForBuild = (_altsLenFinal >= 2 && _altsLenFinal <= 4)
     ? _megaTiers
