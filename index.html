@@ -7804,7 +7804,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
                type="text" inputmode="search" enterkeyhint="search"
                autocomplete="off" autocorrect="off" spellcheck="false"
                placeholder="Simply search, we find the price">
-        <button class="v172-type-go" type="button" onclick="v172SubmitType()" aria-label="Search">
+        <button class="v172-type-go" type="button" onclick="v172SubmitType(event)" aria-label="Search">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/>
           </svg>
@@ -14378,9 +14378,18 @@ async function _v140KickoffSynthesize(idPayload) {
     if (input) input.value = '';
     if (sheet) sheet.hidden = true;
   };
-  window.v172SubmitType = function () {
+  window.v172SubmitType = function (ev) {
+    // V.118 — ABSOLUTE FIRST LINE: preventDefault + stopPropagation so a
+    // mobile keyboard "Go" / "Search" button or an iOS PWA wrapper
+    // cannot trigger a native page reload before our routing fires.
+    try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (e) {}
+    try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {}
+    try { if (typeof window.v118DebugToast === 'function') window.v118DebugToast('submit → v172SubmitType()', 'info'); } catch (e) {}
     var input = document.getElementById('v172-type-input');
-    if (!input) return;
+    if (!input) {
+      try { if (typeof window.v118DebugToast === 'function') window.v118DebugToast('v172-type-input MISSING', 'err'); } catch (e) {}
+      return;
+    }
     var text = (input.value || '').trim();
     if (!text) { input.focus(); return; }
     v172Haptic(50);
@@ -15635,6 +15644,181 @@ async function _v140KickoffSynthesize(idPayload) {
 
   window._v181 = { applyGlass: v181ApplyGlass, springTarget };
   try { console.log('[V.181] Kinetic Merge initialised — aurora + glass + springs.'); } catch (e) {}
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
+// V.118 — GLASSBREAKER & FIELD DEBUGGER
+// On-screen red toast for mobile debugging. Default-enabled so the
+// Founder can see exactly what their finger is hitting and what the API
+// is doing without DevTools access. Toggle via localStorage:
+//   localStorage.setItem('savvey_debug', '0') to hide.
+//   localStorage.setItem('savvey_debug', '1') (or unset) to show.
+// Long-press the toast (1.2s) toggles it on/off live.
+// ═══════════════════════════════════════════════════════════════════════
+(function v118Debugger() {
+  try {
+    var DEFAULT_ON = true;
+    var stored;
+    try { stored = localStorage.getItem('savvey_debug'); } catch (e) {}
+    var urlForce = /[?&]debug=1\b/.test(location.search);
+    var urlHide  = /[?&]debug=0\b/.test(location.search);
+    var enabled = urlForce ? true : urlHide ? false : (stored === '0' ? false : (stored === '1' ? true : DEFAULT_ON));
+
+    // Build the toast element.
+    var toast = document.createElement('div');
+    toast.id = 'v118-debug-toast';
+    toast.setAttribute('aria-live', 'polite');
+    toast.style.cssText = [
+      'position:fixed',
+      'top:env(safe-area-inset-top, 8px)',
+      'left:8px',
+      'right:8px',
+      'z-index:99999',
+      'background:rgba(220,38,38,0.92)',
+      'color:#fff',
+      'font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif',
+      'font-size:11px',
+      'font-weight:600',
+      'line-height:1.35',
+      'padding:8px 12px',
+      'border-radius:10px',
+      'box-shadow:0 6px 18px rgba(0,0,0,0.25)',
+      'max-height:90px',
+      'overflow:auto',
+      'white-space:pre-wrap',
+      'word-break:break-word',
+      'pointer-events:auto',
+      '-webkit-tap-highlight-color:transparent',
+      'transition:opacity .18s ease-out, transform .18s ease-out',
+      'opacity:' + (enabled ? '1' : '0'),
+      'transform:translateY(' + (enabled ? '0' : '-100%') + ')',
+    ].join(';');
+    toast.textContent = '[V.118] Debug toast ready · long-press to toggle';
+    document.body.appendChild(toast);
+
+    var lines = [];
+    function render() {
+      try { toast.textContent = lines.slice(-4).join('\n'); } catch (e) {}
+    }
+    function push(msg, kind) {
+      var t = new Date();
+      var hh = String(t.getHours()).padStart(2, '0');
+      var mm = String(t.getMinutes()).padStart(2, '0');
+      var ss = String(t.getSeconds()).padStart(2, '0');
+      var prefix = kind === 'err' ? '✗ ' : kind === 'ok' ? '✓ ' : '· ';
+      lines.push(hh + ':' + mm + ':' + ss + ' ' + prefix + String(msg).slice(0, 220));
+      if (lines.length > 12) lines = lines.slice(-12);
+      render();
+      // Flash red border briefly on errors.
+      if (kind === 'err') {
+        try {
+          toast.style.boxShadow = '0 0 0 2px #fff inset, 0 6px 18px rgba(0,0,0,0.35)';
+          setTimeout(function () { toast.style.boxShadow = '0 6px 18px rgba(0,0,0,0.25)'; }, 280);
+        } catch (e) {}
+      }
+    }
+    function setEnabled(on) {
+      enabled = !!on;
+      toast.style.opacity = on ? '1' : '0';
+      toast.style.transform = on ? 'translateY(0)' : 'translateY(-100%)';
+      try { localStorage.setItem('savvey_debug', on ? '1' : '0'); } catch (e) {}
+    }
+
+    // Public API.
+    window.v118DebugToast = push;
+    window.v118DebugToggle = function () { setEnabled(!enabled); };
+
+    // Long-press toast to toggle.
+    var lpTimer = null;
+    toast.addEventListener('pointerdown', function () {
+      lpTimer = setTimeout(function () { setEnabled(false); }, 1200);
+    });
+    toast.addEventListener('pointerup', function () { if (lpTimer) clearTimeout(lpTimer); });
+    toast.addEventListener('pointercancel', function () { if (lpTimer) clearTimeout(lpTimer); });
+
+    // Global click logger — capture phase so we see EVERY tap target.
+    document.addEventListener('click', function (e) {
+      try {
+        var t = e.target;
+        if (!t) return;
+        var tag = (t.tagName || '?').toLowerCase();
+        var id  = t.id ? '#' + t.id : '';
+        var cls = (typeof t.className === 'string' && t.className) ? '.' + t.className.trim().split(/\s+/).slice(0,3).join('.') : '';
+        var txt = (t.innerText || t.value || '').trim().slice(0, 32);
+        var pe = '';
+        try { pe = getComputedStyle(t).pointerEvents; } catch (e2) {}
+        push('TAP ' + tag + id + cls + (txt ? ' "' + txt + '"' : '') + ' pe=' + pe, 'info');
+      } catch (e3) {}
+    }, true);
+
+    // Surface the V.117 router events too.
+    var _origShow = window.show;
+    if (typeof _origShow === 'function') {
+      window.show = function (id, opts) {
+        push('SHOW ' + id, 'info');
+        try { return _origShow.apply(this, arguments); } catch (err) {
+          push('SHOW err: ' + (err && err.message || err), 'err');
+          throw err;
+        }
+      };
+    }
+
+    // Surface fetch failures.
+    var _origFetch = window.fetch;
+    if (typeof _origFetch === 'function') {
+      window.fetch = function (input, init) {
+        var url = '';
+        try { url = (typeof input === 'string') ? input : (input && input.url) || ''; } catch (e) {}
+        var short = url.length > 36 ? '…' + url.slice(-32) : url;
+        if (url.indexOf('/api/') !== -1) push('FETCH ' + short, 'info');
+        var p;
+        try { p = _origFetch.apply(this, arguments); }
+        catch (err) {
+          push('FETCH throw: ' + (err && err.message || err), 'err');
+          throw err;
+        }
+        return p.then(function (r) {
+          if (url.indexOf('/api/') !== -1) {
+            if (r && r.ok) push('FETCH ok ' + r.status + ' ' + short, 'ok');
+            else push('FETCH bad ' + (r && r.status) + ' ' + short, 'err');
+          }
+          return r;
+        }).catch(function (err) {
+          if (url.indexOf('/api/') !== -1) push('FETCH catch: ' + (err && err.message || err) + ' ' + short, 'err');
+          throw err;
+        });
+      };
+    }
+
+    // API FAILSAFE — if the loading screen sits for > 20s with no
+    // resolution, force-rescue back to the error screen.
+    setInterval(function () {
+      try {
+        var loading = document.getElementById('screen-loading');
+        if (!loading || !loading.classList.contains('active')) return;
+        if (!window._savveyLoadingEnteredAt) { window._savveyLoadingEnteredAt = Date.now(); return; }
+        var elapsed = Date.now() - window._savveyLoadingEnteredAt;
+        if (elapsed > 20000) {
+          push('LOADING stuck ' + Math.round(elapsed/1000) + 's → force-home', 'err');
+          window._savveyLoadingEnteredAt = 0;
+          try { if (typeof window.show === 'function') window.show('home'); } catch (e) {}
+        }
+      } catch (e) {}
+    }, 2000);
+    // Reset timer when loading deactivates.
+    setInterval(function () {
+      try {
+        var loading = document.getElementById('screen-loading');
+        if (loading && !loading.classList.contains('active')) {
+          window._savveyLoadingEnteredAt = 0;
+        }
+      } catch (e) {}
+    }, 1000);
+
+    push('[V.118] Debugger live. Long-press to hide.', 'ok');
+  } catch (e) {
+    try { console.error('[V.118] debugger init failed:', e); } catch (e2) {}
+  }
 })();
 </script>
 </body>
