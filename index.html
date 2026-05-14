@@ -7229,24 +7229,29 @@ body.v181 #screen-loading.active { background: transparent; }
    ═══════════════════════════════════════════════════════════════════════ */
 
 .v114-trust {
-  margin: 18px 0 28px;
-  padding: 0 0 4px;
+  margin: 22px 0 32px;
+  padding: 10px 0;
   user-select: none;
   pointer-events: none;
+  position: relative;
 }
 .v114-trust-header {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
-  color: rgba(20, 32, 26, 0.45);
+  color: rgba(20, 32, 26, 0.72);
   text-align: center;
-  margin: 0 0 10px;
+  margin: 0 auto 14px;
+  width: 100%;
+  display: block;
 }
 .v114-trust-track-wrap {
   overflow: hidden;
   width: 100%;
+  position: relative;
+  padding: 6px 0;
   -webkit-mask-image: linear-gradient(to right,
     transparent 0,
     #000 8%,
@@ -7258,47 +7263,52 @@ body.v181 #screen-loading.active { background: transparent; }
     #000 92%,
     transparent 100%);
 }
+/* V.115 — Animated background glow that pulses behind the marquee so
+   the carousel feels alive against the aurora. Pure CSS, GPU-friendly. */
+.v114-trust-glow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse 60% 70% at 50% 50%,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0.18) 45%,
+    rgba(255, 255, 255, 0) 75%);
+  animation: v115-glow-pulse 6s ease-in-out infinite;
+  will-change: opacity, transform;
+  border-radius: 18px;
+}
+@keyframes v115-glow-pulse {
+  0%, 100% { opacity: 0.55; transform: scaleX(0.96); }
+  50%      { opacity: 1;    transform: scaleX(1.04); }
+}
 .v114-trust-track {
   display: inline-flex;
   align-items: center;
-  gap: 32px;
+  gap: 40px;
   white-space: nowrap;
   transform: translateX(0);
   will-change: transform;
-  animation: v114-marquee 32s linear infinite;
+  animation: v114-marquee 56s linear infinite;
   padding: 4px 0;
-}
-.v114-trust-item {
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  color: rgba(20, 32, 26, 0.55);
-  filter: grayscale(1);
-  opacity: 0.7;
-}
-.v114-trust-dot {
-  font-size: 18px;
-  font-weight: 700;
-  color: rgba(20, 32, 26, 0.3);
-  opacity: 0.6;
+  position: relative;
+  z-index: 1;
 }
 
-/* V.115 — Inline-SVG logo marks. Monochrome via currentColor on a
-   single muted green-deep, with filter: grayscale + low opacity so the
-   feel is uniformly premium. Each SVG sets its own viewBox width so
-   the marks land at consistent visual weight. */
+/* V.115 — Inline-SVG logo marks. Larger height (28px) and higher
+   contrast (0.78 alpha) per Founder feedback. Single CSS color tones
+   every brand identically into a premium dark-green monochrome. */
 .v115-logo {
   display: inline-flex;
   align-items: center;
-  height: 22px;
-  color: rgba(20, 32, 26, 0.55);
+  height: 28px;
+  color: rgba(20, 32, 26, 0.82);
   filter: grayscale(1);
-  opacity: 0.65;
+  opacity: 0.88;
   flex-shrink: 0;
 }
 .v115-logo svg {
-  height: 22px;
+  height: 28px;
   width: auto;
   display: block;
 }
@@ -7688,7 +7698,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        door layout below is preserved in the DOM but CSS-hidden when
        <body class="v171"> is active. JS at end of file toggles the class. -->
   <div class="v171-home" role="region" aria-label="Savvey home">
-    <h1 class="v171-tagline">What are you<br>shopping for?</h1>
+    <h1 class="v171-tagline">We search to Save.</h1>
     <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
       <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
@@ -7724,47 +7734,58 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <div class="v174-recent-eyebrow" id="v174-recent-eyebrow" hidden>Recent</div>
     <div class="v174-recent-row" id="v174-recent-row" hidden></div>
     <!-- V.114 / V.115 — Trust Banner. Pure CSS marquee, GPU-accelerated
-         via transform: translateX + will-change. V.115 upgrades the
-         text wordmarks to monochrome inline SVG logo-marks. Header
-         lives above the scrolling track. The track contains the
-         retailer logo list duplicated twice so the keyframe wraps
-         seamlessly. All SVGs are styled via currentColor so a single
-         CSS color rule tones every brand identically (muted green-deep,
-         opacity 0.7) for the premium glass aesthetic. -->
+         via transform: translateX + will-change. 14 high-contrast inline
+         SVG retailer logos. Header upgraded to 14px / 500 weight for
+         legibility per Founder mandate. Animated glow background pulses
+         subtly to lift the carousel against the aurora. -->
     <div class="v114-trust" aria-hidden="true">
       <div class="v114-trust-header">We quick check so you don't have to.</div>
       <div class="v114-trust-track-wrap">
+        <div class="v114-trust-glow" aria-hidden="true"></div>
         <div class="v114-trust-track">
-          <!-- Pass 1 -->
-          <span class="v115-logo v115-logo-amazon" aria-label="Amazon">
-            <svg viewBox="0 0 90 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.5">amazon</text><path d="M3 19 Q22 24 42 19" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
-          </span>
-          <span class="v115-logo v115-logo-tesco" aria-label="Tesco">
-            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="800" letter-spacing="0.6">TESCO</text></svg>
-          </span>
-          <span class="v115-logo v115-logo-boots" aria-label="Boots">
-            <svg viewBox="0 0 64 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.3">Boots</text></svg>
-          </span>
-          <span class="v115-logo v115-logo-argos" aria-label="Argos">
-            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.2">Argos</text></svg>
-          </span>
-          <span class="v115-logo v115-logo-bandq" aria-label="B and Q">
-            <svg viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/><text x="22" y="16" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">B&amp;Q</text></svg>
-          </span>
-          <span class="v115-logo v115-logo-screwfix" aria-label="Screwfix">
-            <svg viewBox="0 0 86 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="15" font-weight="800" letter-spacing="-0.3">Screwfix</text></svg>
-          </span>
-          <span class="v115-logo v115-logo-google" aria-label="Google">
-            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="600" letter-spacing="-0.4">Google</text></svg>
-          </span>
+          <span class="v115-logo" aria-label="Amazon"><svg viewBox="0 0 96 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.7">amazon</text><path d="M2 23 Q24 28 44 23" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span>
+          <span class="v115-logo" aria-label="Tesco"><svg viewBox="0 0 74 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="0.6">TESCO</text></svg></span>
+          <span class="v115-logo" aria-label="Boots"><svg viewBox="0 0 66 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" font-style="italic" letter-spacing="-0.4">Boots</text></svg></span>
+          <span class="v115-logo" aria-label="Argos"><svg viewBox="0 0 72 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.2">Argos</text></svg></span>
+          <span class="v115-logo" aria-label="Currys"><svg viewBox="0 0 78 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.3">Currys</text></svg></span>
+          <span class="v115-logo" aria-label="John Lewis"><svg viewBox="0 0 110 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" font-weight="700" letter-spacing="-0.2">John Lewis</text></svg></span>
+          <span class="v115-logo" aria-label="B and Q"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0.7" y="2" width="48.6" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="1.7"/><text x="25" y="19" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="14" font-weight="900" letter-spacing="0.5">B&amp;Q</text></svg></span>
+          <span class="v115-logo" aria-label="Screwfix"><svg viewBox="0 0 96 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="-0.4">Screwfix</text></svg></span>
+          <span class="v115-logo" aria-label="Wickes"><svg viewBox="0 0 76 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.2">Wickes</text></svg></span>
+          <span class="v115-logo" aria-label="Halfords"><svg viewBox="0 0 92 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Halfords</text></svg></span>
+          <span class="v115-logo" aria-label="Sainsbury's"><svg viewBox="0 0 116 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.5">Sainsbury's</text></svg></span>
+          <span class="v115-logo" aria-label="Marks &amp; Spencer"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="1.5">M&amp;S</text></svg></span>
+          <span class="v115-logo" aria-label="ASDA"><svg viewBox="0 0 68 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="0.4">ASDA</text></svg></span>
+          <span class="v115-logo" aria-label="AO.com"><svg viewBox="0 0 64 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="900" letter-spacing="-0.4">ao.com</text></svg></span>
+          <span class="v115-logo" aria-label="Smyths"><svg viewBox="0 0 82 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.2">Smyths</text></svg></span>
+          <span class="v115-logo" aria-label="Game"><svg viewBox="0 0 60 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="-0.3">GAME</text></svg></span>
+          <span class="v115-logo" aria-label="Dunelm"><svg viewBox="0 0 80 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Dunelm</text></svg></span>
+          <span class="v115-logo" aria-label="Waitrose"><svg viewBox="0 0 92 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" font-weight="700" letter-spacing="-0.2">Waitrose</text></svg></span>
+          <span class="v115-logo" aria-label="Homebase"><svg viewBox="0 0 104 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Homebase</text></svg></span>
+          <span class="v115-logo" aria-label="Very"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.4">Very</text></svg></span>
+          <span class="v115-logo" aria-label="Google"><svg viewBox="0 0 76 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4">Google</text></svg></span>
           <!-- Pass 2 (duplicate for seamless loop) -->
-          <span class="v115-logo v115-logo-amazon" aria-hidden="true"><svg viewBox="0 0 90 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.5">amazon</text><path d="M3 19 Q22 24 42 19" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
-          <span class="v115-logo v115-logo-tesco" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="800" letter-spacing="0.6">TESCO</text></svg></span>
-          <span class="v115-logo v115-logo-boots" aria-hidden="true"><svg viewBox="0 0 64 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.3">Boots</text></svg></span>
-          <span class="v115-logo v115-logo-argos" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.2">Argos</text></svg></span>
-          <span class="v115-logo v115-logo-bandq" aria-hidden="true"><svg viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/><text x="22" y="16" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">B&amp;Q</text></svg></span>
-          <span class="v115-logo v115-logo-screwfix" aria-hidden="true"><svg viewBox="0 0 86 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="15" font-weight="800" letter-spacing="-0.3">Screwfix</text></svg></span>
-          <span class="v115-logo v115-logo-google" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="600" letter-spacing="-0.4">Google</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 96 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.7">amazon</text><path d="M2 23 Q24 28 44 23" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 74 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="0.6">TESCO</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 66 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" font-style="italic" letter-spacing="-0.4">Boots</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 72 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.2">Argos</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 78 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.3">Currys</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 110 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" font-weight="700" letter-spacing="-0.2">John Lewis</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0.7" y="2" width="48.6" height="22" rx="4" fill="none" stroke="currentColor" stroke-width="1.7"/><text x="25" y="19" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="14" font-weight="900" letter-spacing="0.5">B&amp;Q</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 96 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="-0.4">Screwfix</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 76 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.2">Wickes</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 92 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Halfords</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 116 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.5">Sainsbury's</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="1.5">M&amp;S</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 68 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="0.4">ASDA</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 64 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="900" letter-spacing="-0.4">ao.com</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 82 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.2">Smyths</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 60 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="900" letter-spacing="-0.3">GAME</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 80 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Dunelm</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 92 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="18" font-weight="700" letter-spacing="-0.2">Waitrose</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 104 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="800" letter-spacing="-0.3">Homebase</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 50 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="20" font-weight="800" letter-spacing="-0.4">Very</text></svg></span>
+          <span class="v115-logo" aria-hidden="true"><svg viewBox="0 0 76 26" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="19" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4">Google</text></svg></span>
         </div>
       </div>
     </div>
