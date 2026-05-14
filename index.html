@@ -7473,6 +7473,33 @@ body.v171 .v171-hero-type.v126-is-open {
 /* End V.126 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.127 — HOME SCREEN SCROLL CONTRACT
+   Base-style guarantee that #screen-home has the physical bounds to
+   scroll once forceScrollRecovery() restores its inline overflow-y.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+#screen-home {
+  height: 100dvh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@supports not (height: 100dvh) {
+  #screen-home {
+    height: 100svh;
+    max-height: 100svh;
+  }
+}
+/* When #screen-home is .active the V.117 inline z-index/opacity rules
+   take over; we just need the height/overflow to remain in force. */
+#screen-home.active {
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* End V.127 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
    Pure @keyframes + transform: translateX with will-change. Grayscale,
    muted opacity, premium feel. Sits at the bottom of the home screen
@@ -9402,16 +9429,27 @@ function goHome(opts) {
   // teardown. Idempotent — safe to run on every goHome call.
   try { v124ScrollRecovery('goHome'); } catch (e) {}
 }
-// V.124 — Recovery routine. Public so cancelCamera / cancelBarcode /
-// closeModal can all call it without duplicating the literal styles.
-function v124ScrollRecovery(reason) {
+// V.124 / V.127 — Centralised scroll recovery. Single source of truth
+// for every method of returning home (cancelCamera / cancelBarcode /
+// goHome / nav-bar Home tap / native swipe-back popstate). The mandate
+// is brute-force: clear every inline style and overlay that could be
+// holding the body hostage. Aliased as both v124ScrollRecovery (legacy
+// callsites) and forceScrollRecovery (V.127 mandate name).
+function forceScrollRecovery(reason) {
   try {
-    document.body.style.overflow      = 'auto';
+    document.body.style.overflow      = '';
     document.body.style.pointerEvents = 'auto';
     document.body.style.touchAction   = '';
-    document.documentElement.style.overflow      = 'auto';
+    document.documentElement.style.overflow      = '';
     document.documentElement.style.pointerEvents = 'auto';
     document.documentElement.style.touchAction   = '';
+    // Ensure #screen-home has the contract it needs to scroll.
+    var homeEl = document.getElementById('screen-home');
+    if (homeEl) {
+      homeEl.style.overflowY = 'auto';
+      homeEl.style.webkitOverflowScrolling = 'touch';
+      homeEl.style.pointerEvents = 'auto';
+    }
     // Kill any orphan backdrop/overlay that survived a teardown.
     document.querySelectorAll('.v104-tension, .modal-backdrop, .v172-swipe-bg, [data-orphan-overlay]')
       .forEach(function (el) {
@@ -9425,9 +9463,13 @@ function v124ScrollRecovery(reason) {
     var bar = document.getElementById('v183-tab-bar');
     if (bar) { bar.style.pointerEvents = 'auto'; }
     try { if (window.v118DebugToast) window.v118DebugToast('SCROLL RECOVERY (' + (reason || '?') + ')', 'ok'); } catch (e) {}
-    try { console.log('[V.124] scroll recovery applied — reason:', reason); } catch (e) {}
+    try { console.log('[V.127] forceScrollRecovery — reason:', reason); } catch (e) {}
   } catch (e) {}
 }
+// Legacy alias so V.124 callsites continue to work.
+function v124ScrollRecovery(reason) { return forceScrollRecovery(reason); }
+// Public hook for any future code path.
+window.forceScrollRecovery = forceScrollRecovery;
 // v3.4.5m — Wave C bottom-nav handlers. Each guarantees state-reset back
 // to the corresponding 4-Door entry point per panel mandate (Systems
 // Architect: 'instantly reset the camera hardware and clear the
@@ -9492,6 +9534,14 @@ window.addEventListener('popstate', (e) => {
     if (_barcodeDetectorEvt) { try { _barcodeDetectorEvt.stop(); } catch {} _barcodeDetectorEvt = null; }
   }
   show(target, { fromPop: true });
+  // V.127 — Native swipe-back guarantee. When the browser pops history
+  // back to the home state, fire the centralised scroll recovery so the
+  // body and #screen-home are forcibly unlocked. Covers the iOS edge-
+  // swipe gesture and Android back-button gesture that bypass the
+  // custom Home button. Idempotent.
+  if (target === 'home') {
+    try { forceScrollRecovery('popstate'); } catch (err) {}
+  }
 });
 // v3.4.5o Wave E — Snap zoom (pinch + tap-to-cycle).
 // Uses MediaStreamTrack.applyConstraints({ advanced: [{ zoom }] }) with a
@@ -16004,6 +16054,13 @@ async function _v140KickoffSynthesize(idPayload) {
           // Reset any in-flight state and route to home.
           try { if (typeof window.v172CloseTypeSheet === 'function') window.v172CloseTypeSheet(); } catch (err) {}
           if (typeof window.goHome === 'function') window.goHome();
+          // V.127 — explicit scroll-recovery on the bottom-nav Home
+          // tap so this code path matches the popstate / cancelCamera
+          // contract. goHome already invokes forceScrollRecovery, but
+          // a direct call here covers any future refactor that
+          // bypasses goHome (e.g. SPA optimisations that short-circuit
+          // unchanged-screen transitions).
+          try { if (typeof window.forceScrollRecovery === 'function') window.forceScrollRecovery('v183_tab_home'); } catch (err) {}
         } else if (tab === 'snap') {
           if (typeof window.goSnap === 'function') window.goSnap();
         } else if (tab === 'type') {
