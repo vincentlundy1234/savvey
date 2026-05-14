@@ -140,7 +140,63 @@ Disambiguation (`#screen-confirm`) and `no_match` fallback (`amazon_search_fallb
 
 ---
 
-## 9. Brand
+## 9. Kinetic Performance & Event Integrity — V.203 / V.204
+
+These rules are immutable. Any future UI work must obey them or the Founder's field tests will regress.
+
+### Hardware Acceleration (60fps lock)
+
+Every animated surface **MUST** be promoted to its own GPU compositor layer:
+
+- `transform: translateZ(0); backface-visibility: hidden;` on `#v180-aurora`, `#v183-tab-bar`, `#v186-arrival`, every `.v181-glass` / `.v181-glass-dark` card, every `.v181-spring` target, the camera and scanner close X buttons, the type sheet, the V.136 result card, and every V.138 retailer row.
+- `will-change: transform` on tactile targets. `will-change: transform, opacity` on elements that animate both each frame (aurora, type sheet, retailer rows).
+- Banned: animating `height`, `margin`, `top`, `left`, or any property that triggers layout. Only `transform` and `opacity` may animate.
+
+### Native Touch & Scroll
+
+Mandatory on every interactive selector and on `html`/`body`:
+
+- `touch-action: manipulation;` — kills the iOS 300ms tap delay. Applied to every button, anchor, `[role="button"]`, `.v181-spring`, `.v183-tab`, `.v171-hero`, `.v172-type-go`, `.v186-cta`, `.v188-bc-close`, `.v171-cam-close`, `.v174-recent-chip`, `.v138-retailer-row`, `.v136-cta-*`, `.v136-similar-card`, `.v136-tier-card`.
+- `-webkit-tap-highlight-color: transparent;` on the same set.
+- `-webkit-overflow-scrolling: touch;` on `html`, `body`, and every scroll container so iOS momentum scrolling feels native.
+- `overscroll-behavior: none;` on `html` and `body` is **mandatory** — it kills the whole-app rubber-band bounce that breaks the native PWA illusion.
+- The pinch-zoom-locked camera surface uses `touch-action: none;` — that exemption is deliberate; do not change it.
+
+### State Transition Smoothing
+
+Screen swaps **MUST NOT** be harsh `display: none → display: block` cuts:
+
+- `.screen { opacity: 0; transition: opacity .22s cubic-bezier(0.4, 0, 0.2, 1); }`
+- `.screen.active { opacity: 1; }`
+- Camera + barcode modals are excluded (they own their V.171 transform slide-up).
+
+### Spring Physics rAF Discipline
+
+The V.181 critically-damped spring solver must clean up after itself:
+
+- `springTick()` zeros `s.velocity` on settle.
+- When settled at `scale === 1`, the inline `style.transform` is **cleared** so the GPU compositor layer collapses. Leaving `transform: scale(1)` indefinitely leaks compositor layers.
+- `requestAnimationFrame` chain self-terminates via the EPS check — never schedule another frame after settle.
+- Per-element `WeakMap` state GCs automatically when the element is removed from the DOM.
+
+### Event Hijack Prevention (Dynamic Cards)
+
+Click listeners on dynamically rendered cards (disambiguation variants, retailer rows, recent chips, any future click target spawned by JS) **MUST** be defended with all of:
+
+- `pointer-events: auto !important;`
+- `position: relative;`
+- `z-index: 5;` (or higher than any transition/fade layer)
+- `touch-action: manipulation;`
+- `-webkit-tap-highlight-color: transparent;`
+- Handler registered via BOTH `cardEl.onclick` AND `cardEl.addEventListener('click', handler, true)` (capture-phase) so iOS PWA tap-resolution edge cases cannot drop both paths.
+- Handler stashed on a property (e.g. `cardEl._v204Listener`) so re-renders can `removeEventListener` cleanly and avoid handler stacking.
+- A diagnostic `console.log('[V.X] Card Tapped:', value)` line inside the handler so the Founder can verify in DevTools that the JS is registering touches.
+
+This is the law that saved the Disambiguation cards after the V.203 polish swallowed them. Do not regress.
+
+---
+
+## 10. Brand
 
 - Name: **Savvey**
 - Tagline: **shop smart.**
@@ -155,7 +211,7 @@ Disambiguation (`#screen-confirm`) and `no_match` fallback (`amazon_search_fallb
 
 ---
 
-## 10. The Oath of Compliance
+## 11. The Oath of Compliance
 
 > Before writing any new UI code or modifying existing layouts, I (Claude) will consult these rules. I will not introduce flat colors, standard CSS transitions for buttons, or web-standard navigation paradigms. Savvey is a kinetic, native-feeling iOS-grade application.
 
