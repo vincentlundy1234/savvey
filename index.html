@@ -4554,11 +4554,15 @@
     animation: v130-bc-laser-sweep 1.8s linear infinite;
     will-change: transform;
   }
+  /* V.114 — Use calc-relative sweep so the laser always lands flush with
+     the cutout bottom edge regardless of cutout height (was hardcoded
+     148px from the V.130 fixed-height era). Plus a tiny inset so the
+     line never clips the rounded corner. */
   @keyframes v130-bc-laser-sweep {
-    0%   { transform: translateY(0);     opacity: 0; }
+    0%   { transform: translateY(4px);             opacity: 0; }
     8%   { opacity: 1; }
     92%  { opacity: 1; }
-    100% { transform: translateY(148px); opacity: 0; }
+    100% { transform: translateY(calc(150px - 6px)); opacity: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .v123-bc-cutout, .v123-bc-laser { animation: none; }
@@ -7097,24 +7101,27 @@ input[type="submit"],
 /* Touch-action: none survives where it's a deliberate pinch-zoom anchor
    (the camera surface). Don't override those. */
 
-/* (3) State transition smoothing — soften the .screen swaps. The legacy
-   .screen { display: none; } / .active { display: flex/block; } cut is
-   preserved (because the screens use very different layout primitives)
-   but we layer on an opacity fade so the perceived transition is silky. */
-.screen {
-  opacity: 0;
-  transition: opacity .22s cubic-bezier(0.4, 0, 0.2, 1);
+/* V.114 — STATE RESCUE. The previous V.203 opacity-0 / opacity-1
+   transition layered .22s of overlap during screen swaps, which let
+   #screen-disambig (#screen-confirm) bleed beneath #screen-home on
+   fast routes. The display: none / display: block legacy toggle is
+   restored as the single source of truth, with an opacity-1 lock on
+   active and an explicit z-index hierarchy so only one screen is ever
+   visible at a time. Camera + barcode modals own their own z-index 90+
+   layer (V.185). */
+.screen:not(.active) {
+  display: none !important;
+  opacity: 1;
 }
 .screen.active {
-  opacity: 1;
+  opacity: 1 !important;
+  z-index: 1;
+  position: relative;
 }
-/* The camera + barcode modals already have V.171 transform animations;
-   they override this rule. */
-body.v171 #screen-camera,
-body.v172 #screen-camera,
-body.v171 #screen-barcode,
-body.v172 #screen-barcode {
-  opacity: 1;
+/* Camera + barcode modals are full-screen at z-index 90 (V.185) — keep them. */
+#screen-camera.active,
+#screen-barcode.active {
+  z-index: 90 !important;
 }
 
 /* (4) Spring-physics-friendly defaults. The JS spring solver writes
@@ -7152,6 +7159,78 @@ body.v172 #screen-barcode {
 }
 
 /* End V.204 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
+   V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
+   Pure @keyframes + transform: translateX with will-change. Grayscale,
+   muted opacity, premium feel. Sits at the bottom of the home screen
+   above the V.183 tab bar.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.v114-trust {
+  margin: 18px 0 28px;
+  padding: 0 0 4px;
+  user-select: none;
+  pointer-events: none;
+}
+.v114-trust-header {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(20, 32, 26, 0.45);
+  text-align: center;
+  margin: 0 0 10px;
+}
+.v114-trust-track-wrap {
+  overflow: hidden;
+  width: 100%;
+  -webkit-mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 8%,
+    #000 92%,
+    transparent 100%);
+  mask-image: linear-gradient(to right,
+    transparent 0,
+    #000 8%,
+    #000 92%,
+    transparent 100%);
+}
+.v114-trust-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 22px;
+  white-space: nowrap;
+  transform: translateX(0);
+  will-change: transform;
+  animation: v114-marquee 32s linear infinite;
+}
+.v114-trust-item {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(20, 32, 26, 0.55);
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+.v114-trust-dot {
+  font-size: 18px;
+  font-weight: 700;
+  color: rgba(20, 32, 26, 0.3);
+  opacity: 0.6;
+}
+@keyframes v114-marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+/* Honour reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .v114-trust-track { animation: none; }
+}
+
+/* End V.114 Trust Banner */
 
 /* ═══════════════════════════════════════════════════════════════════════
    V.193 — ASYNCHRONOUS DELIVERY & SKELETON UI
@@ -7317,6 +7396,10 @@ body.v171 .v171-cam-close { z-index: 9999 !important; }
 /* Hide the legacy tiny top-left .v5-cam-x on the barcode screen — the new
    thumb-zone X supersedes it. (Top-bar SCAN pill remains.) */
 #screen-barcode .v5-cam-topbar .v5-cam-x { display: none !important; }
+/* V.114 — Founder mandate: hide the legacy top-left X on the camera too.
+   The V.171/V.174 frosted-glass thumb-zone X is the sole close button. */
+#screen-camera .v5-cam-topbar .v5-cam-x,
+#screen-camera .v5-cam-topbar .cam-cancel { display: none !important; }
 
 /* End V.188 block */
 </style>
@@ -7525,7 +7608,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        <body class="v171"> is active. JS at end of file toggles the class. -->
   <div class="v171-home" role="region" aria-label="Savvey home">
     <h1 class="v171-tagline">What are you<br>shopping for?</h1>
-    <p class="v171-subtagline">Snap a product to check the price — or type the name.</p>
+    <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
       <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
         <div class="v171-hero-icon" aria-hidden="true">
@@ -7534,8 +7617,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
             <circle cx="12" cy="13" r="4"/>
           </svg>
         </div>
-        <div class="v171-hero-title">Snap a Product or Box</div>
-        <div class="v171-hero-sub">Point your camera, we'll find it.</div>
+        <div class="v171-hero-title">Snap to Save</div>
+        <div class="v171-hero-sub">Point Your Camera, we'll find it.</div>
       </button>
       <!-- V.174 — "Camera access required" microcopy under Snap card.
            Closes the most common first-launch confusion path where iOS
@@ -7550,8 +7633,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
             <line x1="21" y1="21" x2="16.65" y2="16.65"/>
           </svg>
         </div>
-        <div class="v171-hero-title">Type a Product Name</div>
-        <div class="v171-hero-sub">"Bose QC45", "AF400UK", etc.</div>
+        <div class="v171-hero-title">Search to Save</div>
+        <div class="v171-hero-sub">Type a Product Name.</div>
       </button>
     </div>
     <!-- V.174 — Recent Scans row. Horizontal-scroll chips populated by
@@ -7559,6 +7642,46 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
          home screen stays minimalist for first-time users. -->
     <div class="v174-recent-eyebrow" id="v174-recent-eyebrow" hidden>Recent</div>
     <div class="v174-recent-row" id="v174-recent-row" hidden></div>
+    <!-- V.114 — Trust Banner. Pure CSS marquee, GPU-accelerated via
+         transform: translateX + will-change. Header lives above the
+         scrolling track. The track contains the retailer wordmark list
+         duplicated twice so the keyframe wraps seamlessly. -->
+    <div class="v114-trust" aria-hidden="true">
+      <div class="v114-trust-header">We quick check so you don't have to.</div>
+      <div class="v114-trust-track-wrap">
+        <div class="v114-trust-track">
+          <span class="v114-trust-item">Amazon</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">Tesco</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">Boots</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">Argos</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">B&amp;Q</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">Screwfix</span>
+          <span class="v114-trust-dot">·</span>
+          <span class="v114-trust-item">Google</span>
+          <span class="v114-trust-dot">·</span>
+          <!-- duplicate set for seamless loop -->
+          <span class="v114-trust-item" aria-hidden="true">Amazon</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">Tesco</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">Boots</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">Argos</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">B&amp;Q</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">Screwfix</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <span class="v114-trust-item" aria-hidden="true">Google</span>
+          <span class="v114-trust-dot" aria-hidden="true">·</span>
+        </div>
+      </div>
+    </div>
     <!-- V.172 + V.182 — Inline Type sheet. The V.182 Close X is JS-injected
          on init so we don't touch the original wrapper here. -->
     <div class="v172-type-sheet" id="v172-type-sheet" hidden>
@@ -7743,7 +7866,9 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   </div>
 
   <!-- Auto-fade hint (engine: cam-hint) -->
-  <div class="v5-cam-hint cam-hint" id="cam-hint">Frame it.</div>
+  <!-- V.114 — "Frame it." hint removed per Founder mandate. Element kept
+       hidden for back-compat with the V.1 auto-fade IIFE. -->
+  <div class="v5-cam-hint cam-hint" id="cam-hint" hidden style="display:none !important;"></div>
 
   <!-- Cutout: 240x280 vertical frame for product Snap. V.82 added centering reticle. -->
   <div class="v5-cam-cutout">
