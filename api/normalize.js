@@ -113,6 +113,164 @@ const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.
                                           // rather burn searches than serve wrong numbers.
 const KV_TIMEOUT_MS       = 1500;
 
+// V.199 — UK Authority Allow-List. Positive allow-list of known UK
+// first-party retailers + reputable UK marketplaces. ANY host not on
+// this list (or its subdomain set) is dropped before Best Price.
+// Grey-market aggregators (Snapklik.com, Gedoutlet.com, Etoren.com,
+// Telemarkpyrenees, Snowleader, etc.) get nuked regardless of price.
+const V199_UK_TRUSTED_HOSTS = new Set([
+  // First-party UK retailers
+  'amazon.co.uk',
+  'argos.co.uk',
+  'currys.co.uk',
+  'johnlewis.com',
+  'very.co.uk',
+  'ao.com',
+  'ao-deals.com',
+  'boots.com',
+  'tesco.com',
+  'asda.com',
+  'sainsburys.co.uk',
+  'sainsburys.com',
+  'morrisons.com',
+  'marks-and-spencer.com',
+  'marksandspencer.com',
+  'next.co.uk',
+  'game.co.uk',
+  'smyths.toys',
+  'smythstoys.com',
+  'screwfix.com',
+  'toolstation.com',
+  'b-and-q.co.uk',
+  'diy.com',
+  'wickes.co.uk',
+  'homebase.co.uk',
+  'dunelm.com',
+  'therange.co.uk',
+  'wilko.com',
+  'wayfair.co.uk',
+  'lakeland.co.uk',
+  'johnlewisfinance.com',
+  'johnlewispartnership.co.uk',
+  'waitrose.com',
+  // Brand direct UK
+  'dyson.co.uk',
+  'apple.com',
+  'shop.apple.com',
+  'samsung.com',
+  'lg.com',
+  'sony.co.uk',
+  'bose.co.uk',
+  'sennheiser.com',
+  'shark.co.uk',
+  'sharkclean.co.uk',
+  'ninjakitchen.co.uk',
+  'lego.com',
+  'nike.com',
+  'adidas.co.uk',
+  'fitflop.com',
+  'lecreuset.co.uk',
+  'lecreuset.com',
+  'lecol.cc',
+  // Reputable UK marketplaces & specialists
+  'onbuy.com',
+  'ebuyer.com',
+  'box.co.uk',
+  'scan.co.uk',
+  'overclockers.co.uk',
+  'cclonline.com',
+  'novatech.co.uk',
+  'mediamarkt.co.uk',
+  'richersounds.com',
+  'sevenoakssoundandvision.co.uk',
+  'peterjones.co.uk',
+  'hughesdirect.co.uk',
+  'reliantdirect.co.uk',
+  'donaghybros.co.uk',
+  'appliancesdirect.co.uk',
+  'cookersandovens.co.uk',
+  'electrical-superstore.co.uk',
+  'marksandelectrical.co.uk',
+  'fashionworld.co.uk',
+  'lookagain.co.uk',
+  'jdwilliams.co.uk',
+  'simplybe.co.uk',
+  'studio.co.uk',
+  'boots-uk.com',
+  'superdrug.com',
+  // Books / media specialists
+  'waterstones.com',
+  'wordery.com',
+  'bookdepository.com',
+  'foyles.co.uk',
+  'hive.co.uk',
+  // Tech specialists
+  'cex.co.uk',  // kept but priced separately (used hub — already pawnshop-filtered)
+]);
+
+// V.199 — Category absolute floors. The 0.65 × median rule fails when
+// median itself is unstable (n<5) or when bait pricing tunes itself
+// to the floor. Per-category absolute floors protect against that.
+const V199_CATEGORY_FLOOR = {
+  'tv':            200,
+  'television':    200,
+  'laptop':        250,
+  'desktop':       300,
+  'phone':         150,
+  'smartphone':    150,
+  'headphones':    50,
+  'earbuds':       40,
+  'console':       250,
+  'gaming':        100,
+  'hairdryer':     80,
+  'hair_tools':    80,
+  'vacuum':        80,
+  'air_fryer':     50,
+  'kettle':        15,
+  'toaster':       15,
+  'coffee_maker':  30,
+  'camera':        200,
+  'smartwatch':    100,
+  'fitness':       40,
+  'speaker':       30,
+  'soundbar':      80,
+  'monitor':       100,
+  'tablet':        150,
+  'printer':       40,
+  'car_seat':      80,
+  'pushchair':     150,
+  'stroller':      150,
+  'cosmetics':     5,
+  'skincare':      5,
+  'food':          1,
+  'grocery':       1,
+  'beverage':      1,
+  'book':          3,
+  'toy':           5,
+  'lego':          10,
+  'generic':       5,
+};
+function _v199GetCategoryFloor(category) {
+  if (!category || typeof category !== 'string') return 5;
+  const c = category.toLowerCase().replace(/[-\s]+/g, '_');
+  if (V199_CATEGORY_FLOOR[c] != null) return V199_CATEGORY_FLOOR[c];
+  // Fuzzy match — any key that appears as a substring of the category.
+  for (const k of Object.keys(V199_CATEGORY_FLOOR)) {
+    if (c.includes(k) || k.includes(c)) return V199_CATEGORY_FLOOR[k];
+  }
+  return 5;
+}
+function _v199IsTrustedHost(host) {
+  if (!host || typeof host !== 'string') return false;
+  const h = host.replace(/^www\./, '').toLowerCase();
+  if (V199_UK_TRUSTED_HOSTS.has(h)) return true;
+  // Allow subdomains of trusted hosts (shop.argos.co.uk, m.amazon.co.uk).
+  for (const trusted of V199_UK_TRUSTED_HOSTS) {
+    if (h.endsWith('.' + trusted)) return true;
+  }
+  return false;
+}
+
 let _kv = null;
 let _kvFailed = false;
 async function _getKv() {
@@ -146,7 +304,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v175-1'; // V.175 — bumped: raw-input bare-brand check + medium-confidence disambig gate.
+const CACHE_PREFIX = 'sav-v199-1'; // V.199 — bumped: UK allow-list + 0.65x median floor + generic-noun safety net invalidate every stale entry.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -427,7 +585,33 @@ V.141 LAZY-NOUN BAN: NEVER output a single-word generic canonical like
 "Product", "Item", "Object", "Thing", "Appliance", or "Device". If the
 user typed a bare category noun, return that category noun ONCE as canonical
 BUT also populate alternatives_array with 3 specific UK products. The lazy
-stop-words above are banned regardless of input.`;
+stop-words above are banned regardless of input.
+
+V.199 GENERIC-NOUN SAFETY NET (CRITICAL — DO NOT VIOLATE):
+For any ultra-generic single-noun input that maps to a recognisable retail
+category ("kettle", "mug", "white mug", "lamp", "pen", "vase", "frying
+pan", "towel", "candle", "notebook", "scissors", "umbrella", "blanket",
+"chair", "rug", "clock", "mirror"), you MUST:
+  1. Set confidence="low".
+  2. Populate alternatives_array with EXACTLY 3 specific, real, popular
+     UK products in that category. Use concrete model names a UK shopper
+     would recognise. These three serve as the BUDGET / TOP RATED /
+     PREMIUM tiers respectively.
+  3. NEVER return an empty alternatives_array on a recognisable generic
+     noun. An empty array forces the backend into no_match — which is
+     a UX dead end and BANNED for these inputs.
+Examples:
+- "kettle" → alternatives_array: ["Russell Hobbs Velocity 26480",
+  "Tefal Avanti Classic 1.7L", "Smeg KLF03"]
+- "white mug" → alternatives_array: ["Argos Home Plain White Mug Set of
+  4", "Denby White Stoneware Mug", "Emma Bridgewater Toast & Marmalade
+  Mug"]
+- "lamp" → alternatives_array: ["IKEA Tertial Work Lamp",
+  "John Lewis Anyday Touch Table Lamp", "Anglepoise Type 75 Mini"]
+- "frying pan" → alternatives_array: ["Tefal Comfort Max 24cm",
+  "ProCook Gourmet Stainless Steel 28cm", "Le Creuset Toughened Non-Stick 28cm"]
+The same rule applies to two-word generic phrases ("white mug",
+"frying pan") that ARE descriptive but don't pin a specific SKU.`;
 
 const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier.
 
@@ -2197,6 +2381,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         _droppedNoUrl++;
         continue;
       }
+      // V.199 — UK AUTHORITY ALLOW-LIST. Positive gate: only hosts on the
+      // V199_UK_TRUSTED_HOSTS list (or their subdomains) survive past this
+      // point. eBay quarantine runs after — its bucket is exempt from this
+      // gate because eBay is the long-tail saviour for groceries / very
+      // obscure SKUs (V.169 design). Snapklik, Gedoutlet, Etoren, Snowleader,
+      // Telemarkpyrenees, Onbuy.com (sometimes), and all non-UK aggregators
+      // get dropped here.
+      // Google-redirect hosts that survived the V.150 unwrap are exempt —
+      // they're routing to real merchant PDPs (ibp=gwp / prds=pid shape).
+      const _v199HostIsGoogleProductLink = host && (host === 'google.com' || host === 'google.co.uk' || host.startsWith('google.') || host.endsWith('.google.com'));
+      if (!_v199HostIsGoogleProductLink && !_v199IsTrustedHost(host)) {
+        // Detect ebay BEFORE we drop — eBay items take the quarantine route
+        // and must not be killed here. Cheap inline check, hits V.169 below.
+        const _v199EbayCheck = /\bebay\./i.test(host || '');
+        if (!_v199EbayCheck) {
+          if (_droppedSamples.length < 8) {
+            _droppedSamples.push('untrusted_host:' + (host || '').slice(0, 40));
+          }
+          _droppedRedirector++; // re-use existing counter so diag picks it up
+          continue;
+        }
+      }
       // V.169 — EBAY QUARANTINE (Panel-revised mandate, supersedes the
       // briefly-considered Nuclear Ban).  Any item whose source /
       // seller_name / merchant.name / host carries an "ebay" token is
@@ -2468,6 +2674,88 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
           _v170_relaxed: true,
         };
         _v170RelaxedRescuedCount++;
+      }
+    }
+
+    // V.199 — SUPER-RELAXED FALLBACK. Fires AFTER V.170 still produces an
+    // empty primary stack. Strips size-suffix tokens entirely (e.g. "55",
+    // "55 inch") and matches the remaining identity tokens with substring
+    // semantics (no word boundary). This rescues flagship TV / monitor SKUs
+    // where the merchant packs the size into a joined SKU like
+    // "OLED55C34LA" — V.163's strict and V.170's word-bounded relaxation
+    // both fail because "55" never appears word-bounded outside the joined
+    // SKU, and "C3" is buried in "OLED55C34LA" without word edges.
+    let _v199SuperRelaxedRescuedCount = 0;
+    if (Object.keys(deepLinks).length === 0 && _v163Required.length >= 2) {
+      try { console.log(`[${VERSION}] V.199 super-relaxed fallback firing for "${query.slice(0,60)}" — V.170 produced 0 results, stripping size tokens and matching substrings.`); } catch (e) {}
+      // Identify and strip size-suffix tokens (pure digits 32-100, or
+      // "<digits> inch"). These represent screen sizes that merchants
+      // often embed in joined SKU codes without word boundaries.
+      const _v199StrippedTokens = _v163Required.filter(t => {
+        if (!t || !t.raw) return false;
+        const r = String(t.raw).trim().toLowerCase();
+        // Strip pure 2-3 digit size tokens that are likely TV/monitor inches.
+        if (/^(?:[23456789]\d|100)$/.test(r)) return false;
+        // Strip "55 inch", "55in", "55"" style.
+        if (/^\d{2,3}\s*(?:inch|in|"|')$/.test(r)) return false;
+        return true;
+      });
+      if (_v199StrippedTokens.length > 0 && _v199StrippedTokens.length < _v163Required.length) {
+        try { console.log(`[${VERSION}] V.199 stripped ${_v163Required.length - _v199StrippedTokens.length} size token(s), now requiring: ${_v199StrippedTokens.map(t=>t.raw).join(', ')}`); } catch (e) {}
+      }
+      // Substring matcher — no word boundaries. Case-insensitive.
+      const _v199SubstrMatch = (title, required) => {
+        if (!title || typeof title !== 'string') return false;
+        if (required.length === 0) return false;
+        const T = title.toLowerCase();
+        const minRequired = Math.max(1, required.length - 1);
+        let matched = 0;
+        for (const tok of required) {
+          if (!tok || !tok.raw) continue;
+          if (T.indexOf(String(tok.raw).toLowerCase()) !== -1) matched++;
+        }
+        return matched >= minRequired;
+      };
+      for (const item of results) {
+        if (!item || typeof item !== 'object') continue;
+        if (!item.title || typeof item.title !== 'string') continue;
+        // Skip items already in deepLinks (host collision).
+        // Used / pawn / eBay skip same as V.170.
+        const _condParts = [item.condition, item.title, item.snippet, item.details, item.source, item.seller_name, item.delivery, item.stock_state, item.merchant && item.merchant.name].filter(s => typeof s === 'string' && s.length > 0);
+        const _condBlob = _condParts.join(' · ');
+        if (_v164UsedRx.test(_condBlob) || _v164PawnShopRx.test(_condBlob)) continue;
+        const _ebSrc = (typeof item.source === 'string' ? item.source : '') + ' ' + (typeof item.seller_name === 'string' ? item.seller_name : '') + ' ' + ((item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '');
+        if (/\bebay\b/i.test(_ebSrc)) continue;
+        if (!_v199SubstrMatch(item.title, _v199StrippedTokens)) continue;
+        let _url = item.product_link || item.link;
+        if (!_url || typeof _url !== 'string') continue;
+        let _host = null;
+        try { _host = new URL(String(_url)).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { continue; }
+        // V.199 — must still pass UK allow-list.
+        const _v199GoogleHost = _host && (_host === 'google.com' || _host === 'google.co.uk' || _host.startsWith('google.') || _host.endsWith('.google.com'));
+        if (!_v199GoogleHost && !_v199IsTrustedHost(_host)) continue;
+        if (_v199GoogleHost) {
+          const _u = _v150UnwrapGoogleRedirect(item.link) || _v150UnwrapGoogleRedirect(item.product_link) || _v150UnwrapGoogleRedirect(_url);
+          if (_u && _u.host) { _host = _u.host; _url = _u.url; }
+        }
+        if (deepLinks[_host]) continue;
+        const _px = _v146ExtractPrice(item);
+        if (!_px || _px.price == null) continue;
+        const _disp = (typeof item.source === 'string') ? item.source : (typeof item.seller_name === 'string' ? item.seller_name : ((item.merchant && item.merchant.name) || _host));
+        deepLinks[_host] = {
+          url:          (_url || '').slice(0, 500),
+          title:        item.title.slice(0, 200),
+          price:        _px.raw,
+          price_gbp:    _px.price,
+          price_source: _px.source,
+          name:         _disp,
+          thumbnail:    (typeof item.thumbnail === 'string' && /^https?:\/\//i.test(item.thumbnail)) ? item.thumbnail.slice(0, 500) : null,
+          _v199_super_relaxed: true,
+        };
+        _v199SuperRelaxedRescuedCount++;
+      }
+      if (_v199SuperRelaxedRescuedCount > 0) {
+        try { console.log(`[${VERSION}] V.199 super-relaxed rescued ${_v199SuperRelaxedRescuedCount} listing(s).`); } catch (e) {}
       }
     }
 
@@ -2883,7 +3171,7 @@ function _v143ParsePrice(raw) {
   return Number(n.toFixed(2));
 }
 
-function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links }) {
+function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links, category }) {
   const links = [];
   const allPrices = [];
 
@@ -3017,7 +3305,13 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
     _v145Median = (sorted.length % 2 === 0)
       ? (sorted[mid - 1] + sorted[mid]) / 2
       : sorted[mid];
-    _v145Floor = _v145Median * 0.5;
+    // V.199 — Bait-price floor tightened from 0.5x → 0.65x median PLUS a
+    // per-category absolute floor. Median * 0.65 kills the ~£151 Bose bait
+    // and ~£189 Dyson Supersonic outlet bait that slipped V.195's 0.5x.
+    // Category floor catches the case where median itself is suppressed
+    // by a cluster of suspiciously-cheap accessories.
+    const _v199CatFloor = _v199GetCategoryFloor(typeof category === 'string' ? category : null);
+    _v145Floor = Math.max(_v145Median * 0.65, _v199CatFloor);
     // Mark outlier links; filter allPrices in-place.
     for (const l of links) {
       if (l.price_gbp != null && l.price_gbp < _v145Floor) {
@@ -3168,7 +3462,11 @@ function _v138BuildResponse({
   rawInputText, // V.175 — raw user text so the bare-brand gate inspects
                 //         the ORIGINAL query, not Haiku's resolved canonical
 }) {
-  const { pricing, links } = _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links });
+  const { pricing, links } = _v138BuildPricingAndLinks({
+    verified_amazon_price,
+    retailer_deep_links,
+    category: (parsed && parsed.category) || null, // V.199 — thread category for absolute floor
+  });
 
   // ── Outcome routing (V.139: Generic Item Pivot) ───────────────────
   // Panel-mandated broadening: if we can't verify a price, route to
