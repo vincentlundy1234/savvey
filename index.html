@@ -7013,6 +7013,121 @@ body.v186-revealing .v172-home-header {
 /* End V.186 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.203 — KINETIC POLISH & FLOW AUDIT
+   Pure CSS/JS polish. No routing or data changes. Goals:
+     - Lock 60fps on the aurora canvas, glass surfaces, and spring buttons.
+     - Universal touch-action: manipulation kills the iOS 300ms tap delay.
+     - Native iOS momentum scrolling + no rubber-band bounce.
+     - Smooth screen transitions instead of display:none cuts.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Hardware acceleration — push every animated layer onto its own GPU
+   compositor so the main thread stays free for input + JS. */
+#v180-aurora,
+#v183-tab-bar,
+#v186-arrival,
+.v181-glass,
+.v181-glass-dark,
+.v181-spring,
+.v171-hero,
+.v171-cam-close,
+.v188-bc-close,
+.v172-type-sheet,
+.v136-card,
+.v138-retailer-row {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.v181-spring,
+.v171-hero,
+.v183-tab,
+.v172-type-go,
+.v188-bc-close,
+.v171-cam-close,
+.v186-cta {
+  will-change: transform;
+}
+#v180-aurora {
+  will-change: transform, opacity;
+}
+.v172-type-bar,
+.v138-retailer-row,
+.v136-card {
+  will-change: transform, opacity;
+}
+
+/* (2) Touch + scroll mechanics — kill 300ms tap delay universally,
+   enable momentum scrolling, and prevent the whole-app rubber-band
+   bounce that breaks the native PWA illusion. */
+html, body {
+  overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
+  touch-action: manipulation;
+}
+button,
+a,
+[role="button"],
+input[type="button"],
+input[type="submit"],
+.v181-spring,
+.v183-tab,
+.v171-hero,
+.v172-type-go,
+.v186-cta,
+.v188-bc-close,
+.v171-cam-close,
+.v174-recent-chip,
+.v136-retailer-card,
+.v138-retailer-row,
+.v136-cta-primary,
+.v136-cta-secondary {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.screen,
+#screen-result,
+#screen-confirm,
+#screen-home,
+.v136-wrap,
+.v138-retailer-stack {
+  -webkit-overflow-scrolling: touch;
+}
+/* Touch-action: none survives where it's a deliberate pinch-zoom anchor
+   (the camera surface). Don't override those. */
+
+/* (3) State transition smoothing — soften the .screen swaps. The legacy
+   .screen { display: none; } / .active { display: flex/block; } cut is
+   preserved (because the screens use very different layout primitives)
+   but we layer on an opacity fade so the perceived transition is silky. */
+.screen {
+  opacity: 0;
+  transition: opacity .22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.screen.active {
+  opacity: 1;
+}
+/* The camera + barcode modals already have V.171 transform animations;
+   they override this rule. */
+body.v171 #screen-camera,
+body.v172 #screen-camera,
+body.v171 #screen-barcode,
+body.v172 #screen-barcode {
+  opacity: 1;
+}
+
+/* (4) Spring-physics-friendly defaults. The JS spring solver writes
+   `transform: scale(X)` inline; promote the targets so the write hits
+   the GPU compositor with zero layout cost. */
+.v181-spring {
+  transition: none;       /* spring solver owns the transform */
+  transform-origin: center center;
+}
+
+/* End V.203 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.193 — ASYNCHRONOUS DELIVERY & SKELETON UI
    The instant the user submits, we paint the result screen with shimmer
    skeleton blocks. Real data swaps in seamlessly as identify + synthesize
@@ -14871,8 +14986,17 @@ async function _v140KickoffSynthesize(idPayload) {
     if (Math.abs(s.velocity) > SPRING.EPS || Math.abs(s.scale - s.target) > SPRING.EPS) {
       s.raf = requestAnimationFrame(function () { springTick(el); });
     } else {
+      // V.203 — clean termination. Snap to target and, when the spring is
+      // fully at rest at scale 1, clear the inline transform so the GPU
+      // compositor layer can collapse and we don't leak `style.transform`
+      // entries on every previously-tapped element.
       s.scale = s.target;
-      el.style.transform = 'scale(' + s.target + ')';
+      s.velocity = 0;
+      if (Math.abs(s.target - 1.0) < SPRING.EPS) {
+        el.style.transform = '';
+      } else {
+        el.style.transform = 'scale(' + s.target + ')';
+      }
     }
   }
   function springTarget(el, target) {
