@@ -14911,6 +14911,30 @@ async function _v140KickoffSynthesize(idPayload) {
     for (var k = 0; k < olds.length; k++) olds[k].remove();
     var oldClass = screen.querySelectorAll('.v174-best-match');
     for (var k2 = 0; k2 < oldClass.length; k2++) oldClass[k2].classList.remove('v174-best-match');
+    // V.123 — gate the "Most Likely" badge. Only mount when:
+    //   (a) the API payload carries confidence === 'high', OR
+    //   (b) the original raw input contained a recognised brand token.
+    // Pure generic fallbacks ("lamp", "kettle", "headphones") get NO
+    // "Most Likely" star — they rely on the BUDGET / TOP RATED / PREMIUM
+    // tier labels to communicate intent.
+    try {
+      var _v123Payload = (window.lastResult && window.lastResult) || (typeof lastResult !== 'undefined' ? lastResult : null);
+      var _v123Confidence = (_v123Payload && (_v123Payload.confidence || (_v123Payload._meta && _v123Payload._meta.confidence))) || null;
+      var _v123Raw = (_v123Payload && (_v123Payload._raw_input || _v123Payload._input_text)) || '';
+      // Fallback to the most recent legacy text-input value if the payload
+      // doesn't carry the raw query.
+      if (!_v123Raw) {
+        try { var legacy = document.getElementById('text-input'); if (legacy) _v123Raw = legacy.value || ''; } catch (e) {}
+      }
+      var _v123BrandRx = /\b(apple|samsung|sony|dyson|bose|sennheiser|nikon|canon|garmin|fitbit|lg|microsoft|nintendo|playstation|xbox|miele|bosch|kenwood|kitchenaid|le\s*creuset|tefal|ninja|shark|breville|smeg|delonghi|nespresso|philips|russell\s*hobbs|panasonic|anglepoise|lumie|hue|hisense|sage|jbl|sonos|nike|adidas|asics|new\s*balance|adidas|puma|reebok|lego|moleskine|leuchtturm|rhodia|fiskars|cuisinart|honeywell|levoit|amazfit|tp-link|netgear)\b/i;
+      var _v123HasBrand = _v123Raw && _v123BrandRx.test(_v123Raw);
+      var _v123IsGenericFallback = !!(_v123Payload && (_v123Payload.outcome_reason === 'v201_pre_haiku_generic'
+                                                    || _v123Payload.outcome_reason === 'v200_generic_fallback'
+                                                    || (_v123Payload._meta && _v123Payload._meta.short_circuit === 'v201_pre_haiku_generic')));
+      var _v123ShouldBadge = !_v123IsGenericFallback && (_v123Confidence === 'high' || _v123HasBrand);
+      try { console.log('[V.123] best-match badge gate — confidence=' + _v123Confidence + ' raw="' + String(_v123Raw).slice(0, 30) + '" hasBrand=' + _v123HasBrand + ' isGeneric=' + _v123IsGenericFallback + ' → badge=' + _v123ShouldBadge); } catch (e) {}
+      if (!_v123ShouldBadge) return;
+    } catch (e) { return; }
     // Elevate the first tier card.
     var top = tiers[0];
     top.classList.add('v174-best-match');

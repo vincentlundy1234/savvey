@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v202';
+const VERSION             = 'normalize.js v3.4.5v123-ai-tagging';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -422,29 +422,34 @@ function _v200IsTldAllowed(host) {
 // no_match / identification_failed on a single-word recognisable noun,
 // the handler injects these as the disambig alternatives_array so the
 // user reaches Outcome 3 instead of a dead end.
+// V.123 — Store-exclusive own-brands purged. Every entry now lists
+// widely-distributed named-brand products available across Amazon,
+// Currys, Argos, John Lewis, Very, etc. so the price-comparison
+// promise holds. Sub-category pivot applied where useful (lamp →
+// desk / wake-up / floor; headphones → budget / TR / premium).
 const V200_GENERIC_FALLBACK = {
   notebook:    ['Moleskine Classic Notebook A5', 'Leuchtturm1917 Medium A5 Dotted', 'Rhodia Webnotebook A5'],
-  lamp:        ['IKEA Tertial Work Lamp', 'John Lewis Anyday Touch Table Lamp', 'Anglepoise Type 75 Mini'],
+  lamp:        ['Philips Hue White Ambiance Desk Lamp', 'Lumie Bodyclock Shine 300 Wake-up Light', 'Anglepoise Type 75 Floor Lamp'],
   pen:         ['BIC Cristal Original Ballpoint', 'Pilot G-2 07 Gel Rollerball', 'Lamy Safari Fountain Pen'],
   kettle:      ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
-  mug:         ['Argos Home Plain White Mug Set of 4', 'Denby White Stoneware Mug', 'Emma Bridgewater Toast & Marmalade Mug'],
-  vase:        ['IKEA Berakna Vase', 'John Lewis Anyday Glass Vase', 'LSA International Flower Vase'],
-  candle:      ['Yankee Candle Large Jar', 'The White Company Signature Candle', 'Diptyque Baies Candle 190g'],
+  mug:         ['Denby White Stoneware Mug', 'Emma Bridgewater Toast & Marmalade Mug', 'Le Creuset Cappuccino Mug'],
+  vase:        ['LSA International Flower Vase', 'Bloomingville Stoneware Vase', 'Stelton Curved Vase'],
+  candle:      ['Yankee Candle Large Jar', 'NEOM Real Luxury Scented Candle', 'Diptyque Baies Candle 190g'],
   scissors:    ['Fiskars Classic Universal Scissors', 'Joseph Joseph PowerGrip Scissors', 'Wilkinson Sword Stainless Steel Scissors'],
   umbrella:    ['Fulton Open Close Superslim Umbrella', 'Senz Original Storm Umbrella', 'Blunt Metro Umbrella'],
-  blanket:     ['IKEA Polarvide Throw', 'John Lewis Soft & Cosy Throw', 'The White Company Cashmere Throw'],
-  chair:       ['IKEA Markus Office Chair', 'John Lewis Anyday Dining Chair', 'Herman Miller Aeron'],
-  rug:         ['IKEA Stockholm Flatwoven Rug', 'John Lewis Anyday Plain Wool Rug', 'Ruggable Washable Rug'],
-  clock:       ['Newgate Echo Wall Clock', 'IKEA Stomma Wall Clock', 'Karlsson Vintage Wall Clock'],
-  mirror:      ['IKEA Stave Mirror', 'John Lewis Anyday Round Wall Mirror', 'Cox & Cox Antique Wall Mirror'],
-  towel:       ['John Lewis Egyptian Cotton Bath Towel', 'Christy Supreme Hygro Towel', 'The White Company Hydrocotton Towel'],
-  pillow:      ['John Lewis Synthetic Soft Touch Pillow', 'The Fine Bedding Co Boutique Silk Pillow', 'Dunelm Hotel Soft Pillow'],
-  duvet:       ['John Lewis Synthetic Soft Touch Duvet 10.5 Tog', 'Slumberdown Anti-Allergy Duvet', 'Silentnight Yours & Mine Dual Duvet'],
+  blanket:     ['Slumberdown Cosy Nights Throw', 'Silentnight Anti-Allergy Throw', 'Yorkshire Bedding Sherpa Throw'],
+  chair:       ['Hbada Ergonomic Office Chair', 'Songmics Mesh Office Chair', 'Herman Miller Aeron'],
+  rug:         ['Ruggable Washable Rug', 'Asiatic Pebble Rug', 'Modern Rugs Twilight'],
+  clock:       ['Newgate Echo Wall Clock', 'Karlsson Vintage Wall Clock', 'Acctim Sweep Wall Clock'],
+  mirror:      ['Casa Chic Round Wall Mirror', 'Frelan Tilt Mirror', 'Beliani Round Wall Mirror'],
+  towel:       ['Christy Supreme Hygro Towel', 'Allure Bath Fashions Egyptian Cotton Towel', 'Slumberdown Hotel Quality Towel'],
+  pillow:      ['Slumberdown Anti-Allergy Pillow', 'Silentnight Hotel Collection Pillow', 'The Fine Bedding Co Boutique Silk Pillow'],
+  duvet:       ['Slumberdown Anti-Allergy Duvet 10.5 Tog', 'Silentnight Yours & Mine Dual Duvet', 'Snuggledown Hotel Luxury Duvet'],
   jar:         ['Kilner Clip Top Jar 1L', 'Le Parfait Super Jar 750ml', 'Mason Cash Storage Jar'],
   bowl:        ['Mason Cash Cane Mixing Bowl', 'Denby White Cereal Bowl', 'Le Creuset Stoneware Bowl'],
-  plate:       ['John Lewis Anyday Dinner Plate', 'Denby White Dinner Plate', 'Le Creuset Stoneware Dinner Plate'],
+  plate:       ['Denby White Dinner Plate', 'Le Creuset Stoneware Dinner Plate', 'Villeroy & Boch Dinner Plate'],
   notebooks:   ['Moleskine Classic Notebook A5', 'Leuchtturm1917 Medium A5 Dotted', 'Rhodia Webnotebook A5'],
-  lamps:       ['IKEA Tertial Work Lamp', 'John Lewis Anyday Touch Table Lamp', 'Anglepoise Type 75 Mini'],
+  lamps:       ['Philips Hue White Ambiance Desk Lamp', 'Lumie Bodyclock Shine 300 Wake-up Light', 'Anglepoise Type 75 Floor Lamp'],
 };
 // V.201 — ONE GATE Admission. Centralises every TLD / host / source check
 // so EVERY deepLinks write site uses the same admission logic. eBay items
@@ -498,6 +503,9 @@ function _v201IsPremiumBrand(canonical) {
 // generics that V.201 missed ("toaster" identification_failed, "running
 // shoes" relied on Haiku obeying the prompt). Now pre-Haiku short-circuit
 // covers ~60 recognisable UK retail nouns.
+// V.123 — Store-exclusive own-brands purged. Every entry now lists
+// widely-distributed named-brand products only. BT Smart Hub removed
+// (BT-exclusive). IKEA Markus removed (IKEA-exclusive).
 const V202_GENERIC_FALLBACK_EXTRA = {
   // Kitchen appliances
   toaster:         ['Russell Hobbs Inspire 2-Slice Toaster', 'Dualit Lite 2-Slice Toaster', 'KitchenAid Artisan 2-Slice Toaster'],
@@ -520,9 +528,9 @@ const V202_GENERIC_FALLBACK_EXTRA = {
   hairdryer:       ['Remington D3190 Hair Dryer', 'BaByliss 2000W Salon Light Hair Dryer', 'Dyson Supersonic HD07'],
   hairstraightener:['BaByliss 235 Elegance Straightener', 'Remington S5500 Pearl', 'GHD Original Styler'],
   electrictoothbrush:['Oral-B Pro 600 CrossAction', 'Philips Sonicare ProtectiveClean 4300', 'Oral-B iO Series 7'],
-  // Audio / video
-  headphones:      ['Sony WH-CH520', 'Sony WH-1000XM5', 'Bose QuietComfort Ultra Headphones'],
-  earbuds:         ['Apple AirPods 4', 'Sony WF-C700N', 'Bose QuietComfort Ultra Earbuds'],
+  // Audio / video — V.123: sub-category pivot (budget / TR / premium)
+  headphones:      ['Sony WH-CH520 Budget Over-Ear', 'Sony WH-1000XM5 Noise Cancelling', 'Bose QuietComfort Ultra Headphones'],
+  earbuds:         ['Anker Soundcore Liberty 4 NC', 'Sony WF-C700N', 'Bose QuietComfort Ultra Earbuds'],
   speaker:         ['JBL Flip 6', 'Sonos Era 100', 'Bose SoundLink Revolve+ II'],
   soundbar:        ['Samsung HW-B450', 'Sonos Beam Gen 2', 'Sony HT-A5000'],
   tv:              ['Hisense 50A6KTUK 50" 4K', 'Samsung UE55CU8000 55" Crystal UHD', 'LG OLED55C34LA 55" OLED'],
@@ -536,16 +544,21 @@ const V202_GENERIC_FALLBACK_EXTRA = {
   watch:           ['Casio MQ-24-7B2LL', 'Garmin Forerunner 55', 'Apple Watch Series 10'],
   smartwatch:      ['Amazfit Bip 5', 'Garmin Vivoactive 5', 'Apple Watch Series 10'],
   fitnesstracker:  ['Xiaomi Mi Band 8', 'Fitbit Charge 6', 'Garmin Vivosmart 5'],
-  router:          ['TP-Link Archer AX23', 'BT Smart Hub 2', 'Netgear Nighthawk RAX50'],
+  // V.123 — BT Smart Hub removed (BT-exclusive). Replaced with widely-sold Asus router.
+  router:          ['TP-Link Archer AX23', 'Asus RT-AX55', 'Netgear Nighthawk RAX50'],
   printer:         ['HP DeskJet 2710e', 'Canon PIXMA TS3450', 'Epson Expression Home XP-2200'],
-  // Two-word generics (V.202 Fix L)
+  // Two-word generics — V.123 lamp pivot to sub-categories.
   runningshoes:    ['Nike Revolution 7', 'ASICS Gel-Contend 7', 'New Balance 520 v8'],
   trainers:        ['Nike Revolution 7', 'Adidas Runfalcon 3.0', 'New Balance 520 v8'],
-  officechair:     ['IKEA Markus Office Chair', 'Herman Miller Aeron', 'Hbada Ergonomic Office Chair'],
+  // V.123 — IKEA Markus removed (IKEA-exclusive). All three are widely-sold.
+  officechair:     ['Hbada Ergonomic Office Chair', 'Songmics Mesh Office Chair', 'Herman Miller Aeron'],
   electrickettle:  ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
   wirelessmouse:   ['Logitech M185 Wireless Mouse', 'Logitech MX Master 3S', 'Razer Pro Click Mini'],
   bluetoothspeaker:['JBL Flip 6', 'Bose SoundLink Flex', 'Anker Soundcore 2'],
   airpurifier:     ['Levoit Core 300', 'Dyson TP07 Pure Cool', 'Philips Series 800'],
+  desklamp:        ['Philips Hue White Ambiance Desk Lamp', 'BenQ ScreenBar Plus', 'TaoTronics LED Desk Lamp'],
+  floorlamp:       ['Anglepoise Type 75 Floor Lamp', 'Tomons Wood Tripod Floor Lamp', 'Brightech Sky LED Torchiere'],
+  tablelamp:       ['Philips Hue Go Portable Table Lamp', 'Anglepoise Type 75 Mini', 'Tomons Wood Tripod Table Lamp'],
   electrictoothbrush2:['Oral-B Pro 600', 'Philips Sonicare 4300', 'Oral-B iO 7'],
 };
 function _v200GenericFallback(rawInput) {
@@ -603,7 +616,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v202-1'; // V.202 — Fatal Flaw patch: JSON envelope, n=1 AI band, expanded generic map.
+const CACHE_PREFIX = 'sav-v123-1'; // V.123 — Store-exclusive ban + sub-category pivot. Invalidate all V.202 cached generic suggestions.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -899,17 +912,47 @@ pan", "towel", "candle", "notebook", "scissors", "umbrella", "blanket",
   3. NEVER return an empty alternatives_array on a recognisable generic
      noun. An empty array forces the backend into no_match — which is
      a UX dead end and BANNED for these inputs.
-Examples:
+
+V.123 STORE-EXCLUSIVE BAN (CRITICAL — DO NOT VIOLATE):
+When suggesting specific product variants for a generic category, you
+MUST NEVER suggest store-exclusive own-brand products. Banned brand
+prefixes include: "IKEA ", "John Lewis ", "John Lewis Anyday ",
+"Argos Home ", "M&S ", "Marks & Spencer ", "Dunelm ", "Habitat ",
+"The Range ", "Wilko ", "Tesco ", "Sainsbury's ", "ASDA ",
+"Morrisons ", "Waitrose ", "Boots ", "Superdrug ", "Aldi ",
+"Lidl ", "The White Company ", "Next ", "Very ", "Currys ",
+"Argos ", "B&Q ", "Wickes ", "Homebase ".
+
+You MUST only suggest widely-distributed named-brand products that are
+sold across multiple competing retailers (Amazon, Currys, Argos, John
+Lewis, Very, etc.). For "Lamp" — Philips Hue, Anglepoise, Lumie, BenQ.
+For "Kettle" — Russell Hobbs, Tefal, Smeg, Breville. For "Toaster" —
+Russell Hobbs, Dualit, KitchenAid, Breville. For "Vacuum" — Dyson,
+Shark, Miele, Bosch, Henry. For "Headphones" — Sony, Bose, Sennheiser,
+Apple, JBL. For "Speaker" — JBL, Bose, Sonos, Anker.
+
+V.123 CATEGORY PIVOT (for generic single-noun inputs):
+Prefer sub-category variants over same-category model copies. Example
+for "Lamp": ["Philips Hue White Ambiance Desk Lamp",
+"Lumie Bodyclock Shine 300 Wake-up Light",
+"Anglepoise Type 75 Floor Lamp"] — three DIFFERENT use-cases (desk
+work / wake-up / floor reading), not three table lamps. Example for
+"Headphones": ["Sony WH-CH520 (Budget over-ear)",
+"Sony WH-1000XM5 (Top-rated noise cancelling)",
+"Bose QuietComfort Ultra (Premium)"].
+
+Examples after V.123 rules:
 - "kettle" → alternatives_array: ["Russell Hobbs Velocity 26480",
   "Tefal Avanti Classic 1.7L", "Smeg KLF03"]
-- "white mug" → alternatives_array: ["Argos Home Plain White Mug Set of
-  4", "Denby White Stoneware Mug", "Emma Bridgewater Toast & Marmalade
-  Mug"]
-- "lamp" → alternatives_array: ["IKEA Tertial Work Lamp",
-  "John Lewis Anyday Touch Table Lamp", "Anglepoise Type 75 Mini"]
+- "lamp" → alternatives_array: ["Philips Hue White Ambiance Desk Lamp",
+  "Lumie Bodyclock Shine 300 Wake-up Light",
+  "Anglepoise Type 75 Floor Lamp"]
+- "white mug" → alternatives_array: ["Denby White Stoneware Mug",
+  "Emma Bridgewater Toast & Marmalade Mug", "Le Creuset Cappuccino Mug"]
 - "frying pan" → alternatives_array: ["Tefal Comfort Max 24cm",
-  "ProCook Gourmet Stainless Steel 28cm", "Le Creuset Toughened Non-Stick 28cm"]
-The same rule applies to two-word generic phrases ("white mug",
+  "ProCook Gourmet Stainless Steel 28cm",
+  "Le Creuset Toughened Non-Stick 28cm"]
+The same rules apply to two-word generic phrases ("white mug",
 "frying pan") that ARE descriptive but don't pin a specific SKU.`;
 
 const BARCODE_SYSTEM_PROMPT = `You are a UK retail barcode (EAN/UPC) → product identifier.
@@ -2460,7 +2503,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v202:${canonicalKey}`;
+  const ck = `savvey:retailers:v123:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -4684,7 +4727,7 @@ async function _v202InnerHandler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v202:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v123:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
