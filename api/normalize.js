@@ -1784,7 +1784,7 @@ function _shouldSafetyBlock(canonical) {
 // 'johnlewis.com') -> { url, title, price }. Canonical key derives from
 // seller_name via _SELLER_NAME_TO_HOST. Items with unknown sellers are
 // dropped (still no random aggregator junk).
-const GOOGLE_SHOPPING_TIMEOUT_MS = 8000; // V.157 — cold-lookup headroom (was 2s; obscure terms need >4s on SerpAPI free tier)
+const GOOGLE_SHOPPING_TIMEOUT_MS = 3500; // V.193 — Ruthless circuit breaker. Was 8000ms; Panel mandate is "partial stack in 3.5s beats complete stack in 8s". Any competitor we don't have by 3.5s is dropped; the frontend gracefully renders Amazon + whatever else returned.
 const _SELLER_NAME_TO_HOST = (() => {
   const m = new Map();
   const add = (host, ...names) => names.forEach(n => m.set(n.toLowerCase(), host));

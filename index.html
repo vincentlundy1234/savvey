@@ -7013,6 +7013,85 @@ body.v186-revealing .v172-home-header {
 /* End V.186 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.193 — ASYNCHRONOUS DELIVERY & SKELETON UI
+   The instant the user submits, we paint the result screen with shimmer
+   skeleton blocks. Real data swaps in seamlessly as identify + synthesize
+   responses land independently. The screen is never blank.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@keyframes v193-shimmer {
+  0%   { background-position: -468px 0; }
+  100% { background-position:  468px 0; }
+}
+
+.v193-skel {
+  background-color: rgba(20, 32, 26, 0.06);
+  background-image: linear-gradient(
+    90deg,
+    rgba(20, 32, 26, 0.06)  0%,
+    rgba(255, 255, 255, 0.55) 50%,
+    rgba(20, 32, 26, 0.06)  100%
+  );
+  background-size: 468px 100%;
+  background-repeat: no-repeat;
+  animation: v193-shimmer 1.4s linear infinite;
+  border-radius: 8px;
+  color: transparent !important;
+  user-select: none;
+  pointer-events: none;
+}
+
+.v193-skel-bar      { height: 14px; border-radius: 6px; margin: 6px 0; }
+.v193-skel-bar-lg   { height: 22px; border-radius: 8px; margin: 8px 0; }
+.v193-skel-bar-xl   { height: 36px; border-radius: 10px; margin: 10px 0; }
+.v193-skel-w-30     { width: 30%; }
+.v193-skel-w-45     { width: 45%; }
+.v193-skel-w-60     { width: 60%; }
+.v193-skel-w-75     { width: 75%; }
+.v193-skel-w-90     { width: 90%; }
+
+.v193-skel-card {
+  background: rgba(255, 255, 255, 0.62);
+  backdrop-filter: blur(20px) saturate(150%);
+  -webkit-backdrop-filter: blur(20px) saturate(150%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 16px;
+  padding: 18px 16px;
+  margin: 14px 0;
+  box-shadow:
+    0 10px 25px -5px rgba(20, 32, 26, 0.10),
+    0 8px 10px -6px rgba(20, 32, 26, 0.10);
+}
+.v193-skel-thumb {
+  width: 56px; height: 56px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.v193-skel-row {
+  display: flex; align-items: center; gap: 14px;
+  margin: 10px 0;
+}
+.v193-skel-row > .v193-skel-rows-stack {
+  flex: 1; min-width: 0;
+}
+
+/* Hide the legacy V.171 loading stage during V.193 result-skeleton flow.
+   The skeleton screen replaces the loading theatre entirely for Type and
+   Snap submits — the user goes straight to #screen-result. */
+body.v193-skeleton #screen-loading,
+body.v193-skeleton .v171-loading-stage {
+  display: none !important;
+}
+
+/* While the skeleton is up, suppress the real-content fade-in lines so
+   we don't double-paint. renderResult() removes .v193-skeleton on body
+   when it writes the real DOM. */
+body.v193-skeleton #v193-skel-host { display: block; }
+#v193-skel-host { display: none; }
+
+/* End V.193 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.188 — SCANNER SEAL & ESCAPE HATCH UNIFICATION
    Lock both camera and barcode modals to 100dvh, force a hard seal at
    bottom: 0 with no margin, and surface the unified frosted-glass X
@@ -7974,6 +8053,33 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
      are GONE; any historical render code that targets them is wrapped
      in a `if (false)` block to prevent runtime errors. -->
 <div class="screen v136-mockup-screen" id="screen-result" style="position:relative;">
+  <!-- V.193 — Skeleton host. Painted before /api/identify resolves so the
+       screen is never blank. renderResult() removes body.v193-skeleton and
+       this host is hidden once the real DOM lands. -->
+  <div id="v193-skel-host" aria-hidden="true">
+    <div class="v136-wrap">
+      <div class="v193-skel-card">
+        <div class="v193-skel-row">
+          <div class="v193-skel v193-skel-thumb"></div>
+          <div class="v193-skel-rows-stack">
+            <div class="v193-skel v193-skel-bar v193-skel-w-45"></div>
+            <div class="v193-skel v193-skel-bar-lg v193-skel-w-75"></div>
+          </div>
+        </div>
+      </div>
+      <div class="v193-skel-card">
+        <div class="v193-skel v193-skel-bar v193-skel-w-30"></div>
+        <div class="v193-skel v193-skel-bar-xl v193-skel-w-60"></div>
+        <div class="v193-skel v193-skel-bar v193-skel-w-45"></div>
+      </div>
+      <div class="v193-skel-card">
+        <div class="v193-skel v193-skel-bar v193-skel-w-30"></div>
+        <div class="v193-skel-row"><div class="v193-skel v193-skel-thumb" style="width:36px;height:36px;border-radius:8px;"></div><div class="v193-skel-rows-stack"><div class="v193-skel v193-skel-bar v193-skel-w-60"></div><div class="v193-skel v193-skel-bar v193-skel-w-45"></div></div></div>
+        <div class="v193-skel-row"><div class="v193-skel v193-skel-thumb" style="width:36px;height:36px;border-radius:8px;"></div><div class="v193-skel-rows-stack"><div class="v193-skel v193-skel-bar v193-skel-w-75"></div><div class="v193-skel v193-skel-bar v193-skel-w-45"></div></div></div>
+        <div class="v193-skel-row"><div class="v193-skel v193-skel-thumb" style="width:36px;height:36px;border-radius:8px;"></div><div class="v193-skel-rows-stack"><div class="v193-skel v193-skel-bar v193-skel-w-60"></div><div class="v193-skel v193-skel-bar v193-skel-w-30"></div></div></div>
+      </div>
+    </div>
+  </div>
   <div class="v136-wrap">
     <button class="v136-back" type="button" onclick="goHome()" aria-label="Back to home">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -9876,7 +9982,22 @@ function cancelBarcode() {
 }
 
 async function callNormalize(body) {
-  show('loading');
+  // V.193 — Optimistic Load. Skip the loading theatre and go straight to
+  // #screen-result with shimmer skeleton blocks so the screen is never
+  // blank. The .v193-skeleton body class hides the real result content
+  // (which is empty/legacy at this point) and reveals the #v193-skel-host
+  // shimmer block. renderResult() / showError() / no_match fallback all
+  // remove the class on success so the real DOM swaps in.
+  // For barcode + image (Snap) we keep the loading theatre because the
+  // user still expects camera-teardown transitions to play out — the
+  // skeleton path is for Type and URL fast routes.
+  var _v193UseSkel = (body.input_type === 'text' || body.input_type === 'url');
+  if (_v193UseSkel) {
+    try { document.body.classList.add('v193-skeleton'); } catch (e) {}
+    show('result');
+  } else {
+    show('loading');
+  }
   // v3.4.5e — capture which door fired this query for PostHog segmentation
   // (panel-mandated). Maps backend input_type -> user-facing door label so
   // verdict_shown + cta_tapped events carry door='snap'|'paste'|'type'|'scan'.
@@ -10444,6 +10565,8 @@ function _buildDisambigDetails(label, meta) {
 }
 
 function renderConfirm(a, b, payload) {
+  // V.193 — kill skeleton (disambig route lands on #screen-confirm, not result).
+  try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
   // V.154 — wire the escape-hatch button on every render so it always
   // carries the current canonical as the type-door seed. preventDefault
   // on the inner click handler keeps SerpAPI calls scoped to the user's
@@ -10884,6 +11007,9 @@ async function disambigPick(idx, label, payload) {
 
 
 function renderResult(displayName, payload) {
+  // V.193 — Skeleton dismount. The instant we have real data we kill the
+  // shimmer block so the genuine four-pillar DOM paints in.
+  try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
   // V.138 — DYNAMIC BINDING. Reads V.138 schema fields (identity, pricing,
   // verdict, links) off `payload` and injects them into the V.136 four-pillar
   // DOM. Falls back to legacy fields (verified_amazon_price, savvey_says,
@@ -11741,6 +11867,8 @@ async function shareResult() {
 }
 
 function showError(title, sub) {
+  // V.193 — kill skeleton so the error screen isn't masked by shimmer.
+  try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
   document.getElementById('error-title').textContent = title;
   document.getElementById('error-sub').textContent = sub;
   show('error');
