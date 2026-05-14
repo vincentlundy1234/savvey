@@ -7347,6 +7347,62 @@ body.v181 #screen-loading.active { background: transparent; }
 /* End V.122 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.124 — CRUCIBLE FINISH (hero tagline + tier icon shimmer)
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Hero tagline scaled to 36px Bold with proper breathing room. */
+body.v171 h1.v124-hero-tagline,
+.v124-hero-tagline {
+  font-size: 36px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+  letter-spacing: -0.02em !important;
+  text-align: center !important;
+  color: var(--green-deep, #143d10) !important;
+  margin: 24px auto 22px !important;
+  padding: 0 16px !important;
+  max-width: 460px !important;
+}
+@media (max-width: 380px) {
+  body.v171 h1.v124-hero-tagline,
+  .v124-hero-tagline {
+    font-size: 30px !important;
+    margin: 18px auto 18px !important;
+  }
+}
+
+/* (2) Tier icon — clean monochromatic Search-glass with subtle shimmer
+       so the placeholder reads as "we're loading something here", not
+       "we picked a mug". Replaces the legacy hardcoded cup SVGs. */
+.v124-tier-img {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+}
+.v124-tier-img::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg,
+    transparent 0%,
+    rgba(255,255,255,0.45) 50%,
+    transparent 100%);
+  background-size: 200% 100%;
+  animation: v124-shimmer 1.8s linear infinite;
+  pointer-events: none;
+  border-radius: 14px;
+}
+@keyframes v124-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v124-tier-img::after { animation: none; opacity: 0.25; }
+}
+
+/* End V.124 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
    Pure @keyframes + transform: translateX with will-change. Grayscale,
    muted opacity, premium feel. Sits at the bottom of the home screen
@@ -7823,7 +7879,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        door layout below is preserved in the DOM but CSS-hidden when
        <body class="v171"> is active. JS at end of file toggles the class. -->
   <div class="v171-home" role="region" aria-label="Savvey home">
-    <h1 class="v171-tagline">We search to Save.</h1>
+    <h1 class="v171-tagline v124-hero-tagline">We search so you can save</h1>
     <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
       <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
@@ -8251,11 +8307,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </div>
 
     <a class="v136-similar-card" id="v138-tier-card-0" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-basic" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#EEEEF1"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FAFAFC" stroke="#C7CAD0" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#C7CAD0" stroke-width="2"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -8271,14 +8327,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
 
     <a class="v136-similar-card" id="v138-tier-card-1" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-mid" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#E4DED5"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#5C5048" stroke="#3A332D" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#3A332D" stroke-width="2"/>
-          <circle cx="32" cy="44" r="1.2" fill="#A89A8A"/>
-          <circle cx="44" cy="50" r="1" fill="#A89A8A"/>
-          <circle cx="38" cy="56" r="1.4" fill="#A89A8A"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -8294,15 +8347,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
 
     <a class="v136-similar-card" id="v138-tier-card-2" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-premium" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#FBF3E8"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FFFFFF" stroke="#D4A672" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#D4A672" stroke-width="2"/>
-          <circle cx="32" cy="40" r="2" fill="#E89B5C" opacity="0.7"/>
-          <circle cx="42" cy="46" r="1.5" fill="#C26A3A" opacity="0.7"/>
-          <circle cx="36" cy="52" r="1.8" fill="#E89B5C" opacity="0.7"/>
-          <circle cx="46" cy="38" r="1.2" fill="#C26A3A" opacity="0.7"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -8476,11 +8525,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </div>
 
     <a class="v136-similar-card" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-basic" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#EEEEF1"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FAFAFC" stroke="#C7CAD0" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#C7CAD0" stroke-width="2"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -8496,14 +8545,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
 
     <a class="v136-similar-card" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-mid" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#E4DED5"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#5C5048" stroke="#3A332D" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#3A332D" stroke-width="2"/>
-          <circle cx="32" cy="44" r="1.2" fill="#A89A8A"/>
-          <circle cx="44" cy="50" r="1" fill="#A89A8A"/>
-          <circle cx="38" cy="56" r="1.4" fill="#A89A8A"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -8519,15 +8565,11 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     </a>
 
     <a class="v136-similar-card" href="#" onclick="return false;">
-      <div class="v136-similar-img v136-tier-img-premium" aria-hidden="true">
+      <div class="v136-similar-img v124-tier-img" aria-hidden="true">
         <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
-          <rect width="80" height="80" rx="14" fill="#FBF3E8"/>
-          <path d="M22 28 L22 60 Q22 64 26 64 L52 64 Q56 64 56 60 L56 28 Z" fill="#FFFFFF" stroke="#D4A672" stroke-width="1.5"/>
-          <path d="M56 36 Q66 36 66 46 Q66 56 56 56" fill="none" stroke="#D4A672" stroke-width="2"/>
-          <circle cx="32" cy="40" r="2" fill="#E89B5C" opacity="0.7"/>
-          <circle cx="42" cy="46" r="1.5" fill="#C26A3A" opacity="0.7"/>
-          <circle cx="36" cy="52" r="1.8" fill="#E89B5C" opacity="0.7"/>
-          <circle cx="46" cy="38" r="1.2" fill="#C26A3A" opacity="0.7"/>
+          <rect width="80" height="80" rx="14" fill="rgba(20,32,26,0.05)"/>
+          <circle cx="33" cy="33" r="14" fill="none" stroke="rgba(20,32,26,0.45)" stroke-width="2.4"/>
+          <line x1="44" y1="44" x2="56" y2="56" stroke="rgba(20,32,26,0.45)" stroke-width="2.4" stroke-linecap="round"/>
         </svg>
       </div>
       <div class="v136-similar-body">
@@ -9279,6 +9321,38 @@ function goHome(opts) {
   _v166ClearInput('text-input');
   setActiveNav('home');
   show('home', opts);
+  // V.124 — SCROLL RECOVERY. Explicitly restore body/html scroll +
+  // pointer-events in case any camera-modal / loading-state cleanup
+  // leaked an `overflow: hidden` or `pointer-events: none` onto the
+  // root. Also nukes any orphan backdrop overlay that survived the
+  // teardown. Idempotent — safe to run on every goHome call.
+  try { v124ScrollRecovery('goHome'); } catch (e) {}
+}
+// V.124 — Recovery routine. Public so cancelCamera / cancelBarcode /
+// closeModal can all call it without duplicating the literal styles.
+function v124ScrollRecovery(reason) {
+  try {
+    document.body.style.overflow      = 'auto';
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.touchAction   = '';
+    document.documentElement.style.overflow      = 'auto';
+    document.documentElement.style.pointerEvents = 'auto';
+    document.documentElement.style.touchAction   = '';
+    // Kill any orphan backdrop/overlay that survived a teardown.
+    document.querySelectorAll('.v104-tension, .modal-backdrop, .v172-swipe-bg, [data-orphan-overlay]')
+      .forEach(function (el) {
+        if (el && el.style) {
+          el.style.display       = 'none';
+          el.style.pointerEvents = 'none';
+        }
+      });
+    // Restore the V.183 tab bar in case it inherited an overlay's
+    // pointer-events: none lock.
+    var bar = document.getElementById('v183-tab-bar');
+    if (bar) { bar.style.pointerEvents = 'auto'; }
+    try { if (window.v118DebugToast) window.v118DebugToast('SCROLL RECOVERY (' + (reason || '?') + ')', 'ok'); } catch (e) {}
+    try { console.log('[V.124] scroll recovery applied — reason:', reason); } catch (e) {}
+  } catch (e) {}
 }
 // v3.4.5m — Wave C bottom-nav handlers. Each guarantees state-reset back
 // to the corresponding 4-Door entry point per panel mandate (Systems
@@ -9885,6 +9959,10 @@ async function goSnap() {
 function cancelCamera() {
   if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
   goHome();
+  // V.124 — defensive: goHome already calls v124ScrollRecovery, but a
+  // direct call here covers any callsite that hits cancelCamera with
+  // goHome stubbed out (test harness, etc.).
+  try { v124ScrollRecovery('cancelCamera'); } catch (e) {}
 }
 // Wave GG (7 May 2026 evening) — Vision accuracy gain via:
 //   (a) tight-crop preprocessing — centre 60% square crop of the frame.
