@@ -7426,6 +7426,53 @@ body.v171 h1.v124-hero-tagline,
 /* End V.124 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.126 — PROGRESSIVE DROP (Type accordion under Search to Save)
+   The .v172-type-sheet now lives inside .v126-accordion. The hero
+   "Search to Save" button toggles .is-open on the wrapper, which
+   triggers a max-height / opacity / transform animation. Native iOS
+   keyboard slides up when the input auto-focuses.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.v126-accordion {
+  /* Default (collapsed) state */
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateY(-10px);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  /* Override the V.172 sheet's stand-alone defaults so the wrapper
+     drives visibility instead of the legacy `hidden` attribute. */
+}
+.v126-accordion .v172-type-sheet {
+  /* Internal sheet always renders — the wrapper does the gating. */
+  display: block !important;
+  position: relative;
+  margin-top: 12px;
+}
+.v126-accordion.is-open {
+  /* Expanded state */
+  max-height: 180px;
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+/* Highlight the Search-to-Save hero card subtly while the accordion
+   is open so the user sees the connection between trigger and panel. */
+body.v171 .v171-hero-type.v126-is-open {
+  box-shadow:
+    0 10px 25px -5px rgba(20, 32, 26, 0.18),
+    0 0 0 1.5px rgba(42, 107, 34, 0.35) !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .v126-accordion { transition: opacity 0.15s linear; }
+}
+
+/* End V.126 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
    Pure @keyframes + transform: translateX with will-change. Grayscale,
    muted opacity, premium feel. Sits at the bottom of the home screen
@@ -7993,9 +8040,12 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </div>
       </div>
     </div>
-    <!-- V.172 + V.182 — Inline Type sheet. The V.182 Close X is JS-injected
-         on init so we don't touch the original wrapper here. -->
-    <div class="v172-type-sheet" id="v172-type-sheet" hidden>
+    <!-- V.126 — Progressive Drop accordion wrapper. The original
+         v172-type-sheet markup is preserved inside; only the wrapper
+         gains the .v126-accordion class which manages max-height /
+         opacity / transform transitions. -->
+    <div class="v126-accordion" id="v126-accordion">
+    <div class="v172-type-sheet" id="v172-type-sheet">
       <div class="v172-type-bar">
         <svg class="v172-type-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
@@ -8016,6 +8066,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       </div>
       <button class="v172-type-cancel" type="button" onclick="v172CloseTypeSheet()">Cancel</button>
     </div>
+    </div><!-- /.v126-accordion -->
   </div>
   <!-- v5 REBUILD (V.40): rebuilt to match Claude Design v5 spec -->
   <!-- V.171 — markup below preserved but hidden via body.v171 selector. -->
@@ -14640,24 +14691,48 @@ async function _v140KickoffSynthesize(idPayload) {
   window.v172Haptic = v172Haptic;
 
   // ── Type Sheet (resurrects the dead "Type a Name" route) ────────────
+  // V.126 — Progressive Drop. Open/close toggles the .is-open class on
+  // .v126-accordion so CSS transitions handle the slide-down. Auto-focus
+  // the input after 50ms so the native mobile keyboard slides up while
+  // the accordion is mid-expand. Toggle behaviour: a second tap on the
+  // "Search to Save" button COLLAPSES the accordion (so users can hide
+  // the keyboard without typing).
   window.v172OpenTypeSheet = function () {
     v172Haptic(20);
+    var acc   = document.getElementById('v126-accordion');
     var sheet = document.getElementById('v172-type-sheet');
     var input = document.getElementById('v172-type-input');
+    var hero  = document.querySelector('.v171-hero-type');
     if (!sheet || !input) return;
-    sheet.hidden = false;
-    // Defer focus to next frame so the slide-in animation has begun and
-    // iOS Safari raises the keyboard from a stable layout.
+    if (sheet.hasAttribute('hidden')) sheet.removeAttribute('hidden');
+    // V.126 — Toggle: if already open, this tap collapses instead.
+    if (acc && acc.classList.contains('is-open')) {
+      window.v172CloseTypeSheet();
+      return;
+    }
+    if (acc) acc.classList.add('is-open');
+    if (hero) hero.classList.add('v126-is-open');
+    // Auto-focus so the mobile keyboard slides up in sync with the
+    // accordion expansion. 50ms matches the early frames of the .3s
+    // transition — iOS Safari raises the keyboard cleanly.
     setTimeout(function () {
       try { input.focus({ preventScroll: false }); } catch (e) { input.focus(); }
       try { input.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch (e) {}
-    }, 60);
+    }, 50);
+    try { if (window.v118DebugToast) window.v118DebugToast('V.126 accordion OPEN', 'ok'); } catch (e) {}
   };
   window.v172CloseTypeSheet = function () {
+    var acc   = document.getElementById('v126-accordion');
     var sheet = document.getElementById('v172-type-sheet');
     var input = document.getElementById('v172-type-input');
-    if (input) input.value = '';
-    if (sheet) sheet.hidden = true;
+    var hero  = document.querySelector('.v171-hero-type');
+    if (acc)   acc.classList.remove('is-open');
+    if (hero)  hero.classList.remove('v126-is-open');
+    if (input) { input.blur(); input.value = ''; }
+    // Keep the underlying sheet in flow so the accordion measures
+    // properly; the wrapper's max-height:0 hides it visually.
+    if (sheet) sheet.removeAttribute('hidden');
+    try { if (window.v118DebugToast) window.v118DebugToast('V.126 accordion CLOSE', 'info'); } catch (e) {}
   };
   window.v172SubmitType = function (ev) {
     // V.118 — ABSOLUTE FIRST LINE: preventDefault + stopPropagation so a
