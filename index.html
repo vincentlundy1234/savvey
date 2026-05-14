@@ -7128,6 +7128,32 @@ body.v172 #screen-barcode {
 /* End V.203 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.204 — DISAMBIGUATION RESCUE
+   Force disambig variant cards to be tappable regardless of any future
+   V.203 / V.181 / V.171 transition layer that might land above them.
+   ═══════════════════════════════════════════════════════════════════════ */
+#screen-confirm .v136-similar-card,
+#screen-confirm .v136-tier-card,
+.v136-similar-card,
+.v136-tier-card {
+  pointer-events: auto !important;
+  cursor: pointer;
+  position: relative;
+  z-index: 5;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* During the .v203 fade-in, anchors must still receive taps. opacity
+   doesn't block pointer events but some iOS rendering paths can flicker
+   during the transition — anchor children get an explicit guard. */
+#screen-confirm .v136-similar-card *,
+#screen-confirm .v136-tier-card * {
+  pointer-events: auto;
+}
+
+/* End V.204 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.193 — ASYNCHRONOUS DELIVERY & SKELETON UI
    The instant the user submits, we paint the result screen with shimmer
    skeleton blocks. Real data swaps in seamlessly as identify + synthesize
@@ -10796,13 +10822,22 @@ function renderConfirm(a, b, payload) {
             // V.148 closed loop — intercept tap and re-route through
             // the standard text-search pipeline so the user lands on
             // the Four Pillars for that exact variant.
+            // V.204 — Disambiguation Rescue. Use both .onclick AND a
+            // capture-phase addEventListener so iOS PWA tap-resolution
+            // edge cases cannot swallow the handler. Force
+            // pointer-events: auto inline so the V.203 fade transition
+            // (or any future opacity tween) cannot block taps.
             cardEl.setAttribute('href', '#');
             cardEl.removeAttribute('target');
             cardEl.removeAttribute('rel');
-            cardEl.onclick = (function (variantName) {
+            cardEl.style.pointerEvents = 'auto';
+            cardEl.style.cursor = 'pointer';
+            var _v204VariantName = t.name || canon;
+            var _v204Handler = (function (variantName) {
               return function (ev) {
                 if (ev && ev.preventDefault) ev.preventDefault();
                 if (ev && ev.stopPropagation) ev.stopPropagation();
+                try { console.log('[V.204] Variant Card Tapped:', variantName); } catch (e) {}
                 try {
                   callNormalize({ input_type: 'text', text: variantName });
                 } catch (err) {
@@ -10812,7 +10847,15 @@ function renderConfirm(a, b, payload) {
                 }
                 return false;
               };
-            })(t.name || canon);
+            })(_v204VariantName);
+            // Wipe any prior listener registered via the V.204 marker so
+            // re-renders don't stack handlers.
+            if (cardEl._v204Listener) {
+              try { cardEl.removeEventListener('click', cardEl._v204Listener, true); } catch (e) {}
+            }
+            cardEl._v204Listener = _v204Handler;
+            cardEl.onclick = _v204Handler;
+            cardEl.addEventListener('click', _v204Handler, true);
           } else {
             // Generic tier — external Amazon-search link as before.
             var fbUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(t.name || canon);
