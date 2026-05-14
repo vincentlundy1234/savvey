@@ -278,6 +278,100 @@ function _v199IsTrustedHost(host) {
   return false;
 }
 
+// V.199 — Source-string allow-list. When V.150 keeps a Google product-link
+// URL (host = google.com), the actual seller is in item.source / seller_name
+// / merchant.name. The host-based allow-list cannot evaluate these because
+// the URL host is a Google redirector. This slug-derived set covers them.
+// Each entry is the slug form: lowercase, '&' → 'and', strip non-alphanum.
+const V199_UK_TRUSTED_SOURCE_SLUGS = new Set([
+  'amazon', 'amazonuk',
+  'argos',
+  'currys', 'currysplc',
+  'johnlewis', 'johnlewisandpartners', 'johnlewispartners',
+  'very', 'verycom',
+  'ao', 'aocom',
+  'boots', 'bootscom',
+  'tesco',
+  'asda',
+  'sainsburys',
+  'morrisons',
+  'marksandspencer', 'marksspencer', 'mands',
+  'next', 'nextretail',
+  'game', 'gamecouk',
+  'smyths', 'smythstoys',
+  'screwfix',
+  'toolstation',
+  'bandq', 'bq',
+  'wickes',
+  'homebase',
+  'dunelm',
+  'therange',
+  'wilko',
+  'wayfair',
+  'lakeland',
+  'waitrose',
+  'dyson',
+  'apple', 'appleuk', 'shopapple',
+  'samsung',
+  'lg', 'lgelectronics',
+  'sony',
+  'bose',
+  'sennheiser',
+  'shark', 'sharkclean',
+  'ninja', 'ninjakitchen',
+  'lego',
+  'nike',
+  'adidas',
+  'lecreuset',
+  'onbuy', 'onbuycom',
+  'ebuyer',
+  'box',
+  'scan',
+  'overclockers', 'overclockersuk',
+  'cclonline',
+  'novatech',
+  'mediamarkt',
+  'richersounds',
+  'sevenoakssoundandvision', 'sevenoaks',
+  'peterjones',
+  'hughesdirect', 'hughes',
+  'reliantdirect',
+  'donaghybros',
+  'appliancesdirect',
+  'cookersandovens',
+  'electricalsuperstore',
+  'marksandelectrical',
+  'fashionworld',
+  'lookagain',
+  'jdwilliams',
+  'simplybe',
+  'studio',
+  'superdrug',
+  'waterstones',
+  'wordery',
+  'bookdepository',
+  'foyles',
+  'hive',
+  'ee', 'eecouk',
+  'three', 'threecouk',
+  'o2',
+  'vodafone',
+  'sky',
+  'bt', 'btshop',
+]);
+function _v199IsTrustedSourceSlug(slug) {
+  if (!slug || typeof slug !== 'string') return false;
+  const s = slug.toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, '');
+  if (!s) return false;
+  if (V199_UK_TRUSTED_SOURCE_SLUGS.has(s)) return true;
+  // Suffix-strip: "snapklikcom" should not match anything; but "amazonuk"
+  // should map to "amazon" if the bare brand is on the list.
+  if (s.endsWith('com') && V199_UK_TRUSTED_SOURCE_SLUGS.has(s.slice(0, -3))) return true;
+  if (s.endsWith('couk') && V199_UK_TRUSTED_SOURCE_SLUGS.has(s.slice(0, -4))) return true;
+  if (s.endsWith('uk') && V199_UK_TRUSTED_SOURCE_SLUGS.has(s.slice(0, -2))) return true;
+  return false;
+}
+
 let _kv = null;
 let _kvFailed = false;
 async function _getKv() {
@@ -311,7 +405,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v199-1'; // V.199 — bumped: UK allow-list + 0.65x median floor + generic-noun safety net invalidate every stale entry.
+const CACHE_PREFIX = 'sav-v199b-1'; // V.199b — source-slug allow-list catches via-google snapklik/gedoutlet path that V.199 missed.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -2168,7 +2262,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v199:${canonicalKey}`;
+  const ck = `savvey:retailers:v199b:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -2393,22 +2487,35 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       // point. eBay quarantine runs after — its bucket is exempt from this
       // gate because eBay is the long-tail saviour for groceries / very
       // obscure SKUs (V.169 design). Snapklik, Gedoutlet, Etoren, Snowleader,
-      // Telemarkpyrenees, Onbuy.com (sometimes), and all non-UK aggregators
-      // get dropped here.
-      // Google-redirect hosts that survived the V.150 unwrap are exempt —
-      // they're routing to real merchant PDPs (ibp=gwp / prds=pid shape).
+      // Telemarkpyrenees, and all non-UK aggregators get dropped here.
+      // When the host is a Google product-link (V.150 fallback), we ALSO
+      // check the source/seller_name slug against V199_UK_TRUSTED_SOURCE_SLUGS
+      // because the real seller identity is in item.source, not in the host.
       const _v199HostIsGoogleProductLink = host && (host === 'google.com' || host === 'google.co.uk' || host.startsWith('google.') || host.endsWith('.google.com'));
-      if (!_v199HostIsGoogleProductLink && !_v199IsTrustedHost(host)) {
-        // Detect ebay BEFORE we drop — eBay items take the quarantine route
-        // and must not be killed here. Cheap inline check, hits V.169 below.
-        const _v199EbayCheck = /\bebay\./i.test(host || '');
-        if (!_v199EbayCheck) {
+      const _v199EbayCheck = /\bebay\./i.test(host || '');
+      if (_v199EbayCheck) {
+        // fall through — eBay routed by V.169 quarantine below
+      } else if (_v199HostIsGoogleProductLink) {
+        // For Google product-link URLs, the seller is in item.source.
+        // Build the same slug the via-google fallback would use and check
+        // it against the UK trusted source set.
+        const _v199Src = (typeof item.source === 'string' && item.source)
+                      || (typeof item.seller_name === 'string' && item.seller_name)
+                      || (item.merchant && item.merchant.name)
+                      || '';
+        if (!_v199IsTrustedSourceSlug(_v199Src)) {
           if (_droppedSamples.length < 8) {
-            _droppedSamples.push('untrusted_host:' + (host || '').slice(0, 40));
+            _droppedSamples.push('untrusted_source:' + String(_v199Src).slice(0, 40));
           }
-          _droppedRedirector++; // re-use existing counter so diag picks it up
+          _droppedRedirector++;
           continue;
         }
+      } else if (!_v199IsTrustedHost(host)) {
+        if (_droppedSamples.length < 8) {
+          _droppedSamples.push('untrusted_host:' + (host || '').slice(0, 40));
+        }
+        _droppedRedirector++;
+        continue;
       }
       // V.169 — EBAY QUARANTINE (Panel-revised mandate, supersedes the
       // briefly-considered Nuclear Ban).  Any item whose source /
