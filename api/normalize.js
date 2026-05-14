@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v201';
+const VERSION             = 'normalize.js v3.4.5v202';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -494,10 +494,66 @@ function _v201IsPremiumBrand(canonical) {
   return m ? m[1].replace(/\s+/g, ' ').trim() : null;
 }
 
+// V.202 — Expanded generic map. Adds the appliance / electronics / two-word
+// generics that V.201 missed ("toaster" identification_failed, "running
+// shoes" relied on Haiku obeying the prompt). Now pre-Haiku short-circuit
+// covers ~60 recognisable UK retail nouns.
+const V202_GENERIC_FALLBACK_EXTRA = {
+  // Kitchen appliances
+  toaster:         ['Russell Hobbs Inspire 2-Slice Toaster', 'Dualit Lite 2-Slice Toaster', 'KitchenAid Artisan 2-Slice Toaster'],
+  microwave:       ['Russell Hobbs RHM2076S 20L', 'Panasonic NN-E27JWMBPQ 800W', 'Samsung MS23K3513AS 23L'],
+  fridge:          ['Beko CFG3582DS Fridge Freezer', 'Hisense RB400N4WC1 Fridge Freezer', 'Samsung RB34T602ESA Fridge Freezer'],
+  freezer:         ['Beko FXFP3691W Frost Free Freezer', 'Hisense FV306N4AW1 Tall Freezer', 'AEG AGB728E5NW Frost Free Freezer'],
+  oven:            ['Beko BBIE12300XD Built-In Oven', 'Bosch HBS534BS0B Built-In Oven', 'Neff B1ACE4HN0B Built-In Oven'],
+  dishwasher:      ['Beko DEN16X20 Full Size Dishwasher', 'Bosch SMS2HVI66G Series 2', 'Hotpoint HFC 3C26 W'],
+  blender:         ['Nutribullet 600 Series', 'Ninja Foodi Power Blender CB100UK', 'Vitamix E310 Explorian'],
+  mixer:           ['KitchenAid Artisan 4.8L', 'Kenwood Chef XL KVL4100W', 'Bosch MUM5 Velocity'],
+  juicer:          ['Sage Nutri Juicer Cold BJE830BSS', 'Philips HR1832/01', 'Ninja Cold Press Pro JC100UK'],
+  coffeemachine:   ['DeLonghi Magnifica S ECAM22.110.SB', 'Sage Barista Express SES875BSS', 'Nespresso Vertuo Next'],
+  // Home appliances
+  vacuum:          ['Shark Anti Hair Wrap Plus IZ400UKT', 'Dyson V8 Absolute', 'Miele Triflex HX1 Pro'],
+  iron:            ['Tefal FV9845 Ultimate Pure', 'Philips Azur GC4567/86', 'Russell Hobbs One Temperature 25090'],
+  fan:             ['Honeywell HT900E TurboForce', 'Dyson AM07 Cool Tower Fan', 'MeacoFan 1056 Air Circulator'],
+  heater:          ['Dimplex DXUC2Ti 2kW Ceramic', 'De’Longhi HCX9124E Ceramic Heater', 'Russell Hobbs RHOFH5002B'],
+  humidifier:      ['Levoit Classic 200 Ultrasonic', 'Philips HU4811/10', 'Meaco Deluxe 202'],
+  // Beauty / personal care
+  hairdryer:       ['Remington D3190 Hair Dryer', 'BaByliss 2000W Salon Light Hair Dryer', 'Dyson Supersonic HD07'],
+  hairstraightener:['BaByliss 235 Elegance Straightener', 'Remington S5500 Pearl', 'GHD Original Styler'],
+  electrictoothbrush:['Oral-B Pro 600 CrossAction', 'Philips Sonicare ProtectiveClean 4300', 'Oral-B iO Series 7'],
+  // Audio / video
+  headphones:      ['Sony WH-CH520', 'Sony WH-1000XM5', 'Bose QuietComfort Ultra Headphones'],
+  earbuds:         ['Apple AirPods 4', 'Sony WF-C700N', 'Bose QuietComfort Ultra Earbuds'],
+  speaker:         ['JBL Flip 6', 'Sonos Era 100', 'Bose SoundLink Revolve+ II'],
+  soundbar:        ['Samsung HW-B450', 'Sonos Beam Gen 2', 'Sony HT-A5000'],
+  tv:              ['Hisense 50A6KTUK 50" 4K', 'Samsung UE55CU8000 55" Crystal UHD', 'LG OLED55C34LA 55" OLED'],
+  monitor:         ['LG 27UL500-W 27" 4K', 'Dell S2722QC 27" 4K', 'Samsung Odyssey G7 LS32BG750NPXXU'],
+  camera:          ['Canon EOS R50 Mirrorless', 'Sony Alpha A6400', 'Nikon Z fc'],
+  // Tech
+  laptop:          ['HP 15s-fq2570sa', 'Lenovo IdeaPad Slim 3', 'Apple MacBook Air M2 13"'],
+  tablet:          ['Apple iPad 10.9" 10th Gen', 'Samsung Galaxy Tab A9+', 'Lenovo Tab M10 Plus'],
+  phone:           ['Samsung Galaxy A15', 'Apple iPhone 15 128GB', 'Google Pixel 8a'],
+  smartphone:      ['Samsung Galaxy A15', 'Apple iPhone 15 128GB', 'Google Pixel 8a'],
+  watch:           ['Casio MQ-24-7B2LL', 'Garmin Forerunner 55', 'Apple Watch Series 10'],
+  smartwatch:      ['Amazfit Bip 5', 'Garmin Vivoactive 5', 'Apple Watch Series 10'],
+  fitnesstracker:  ['Xiaomi Mi Band 8', 'Fitbit Charge 6', 'Garmin Vivosmart 5'],
+  router:          ['TP-Link Archer AX23', 'BT Smart Hub 2', 'Netgear Nighthawk RAX50'],
+  printer:         ['HP DeskJet 2710e', 'Canon PIXMA TS3450', 'Epson Expression Home XP-2200'],
+  // Two-word generics (V.202 Fix L)
+  runningshoes:    ['Nike Revolution 7', 'ASICS Gel-Contend 7', 'New Balance 520 v8'],
+  trainers:        ['Nike Revolution 7', 'Adidas Runfalcon 3.0', 'New Balance 520 v8'],
+  officechair:     ['IKEA Markus Office Chair', 'Herman Miller Aeron', 'Hbada Ergonomic Office Chair'],
+  electrickettle:  ['Russell Hobbs Velocity 26480', 'Tefal Avanti Classic 1.7L', 'Smeg KLF03'],
+  wirelessmouse:   ['Logitech M185 Wireless Mouse', 'Logitech MX Master 3S', 'Razer Pro Click Mini'],
+  bluetoothspeaker:['JBL Flip 6', 'Bose SoundLink Flex', 'Anker Soundcore 2'],
+  airpurifier:     ['Levoit Core 300', 'Dyson TP07 Pure Cool', 'Philips Series 800'],
+  electrictoothbrush2:['Oral-B Pro 600', 'Philips Sonicare 4300', 'Oral-B iO 7'],
+};
 function _v200GenericFallback(rawInput) {
   if (!rawInput || typeof rawInput !== 'string') return null;
   const t = rawInput.trim().toLowerCase().replace(/[^a-z]+/g, '');
-  if (!t || t.length < 3 || t.length > 16) return null;
+  if (!t || t.length < 3 || t.length > 24) return null;
+  // V.202 — check expanded map first.
+  if (V202_GENERIC_FALLBACK_EXTRA[t]) return V202_GENERIC_FALLBACK_EXTRA[t];
   return V200_GENERIC_FALLBACK[t] || null;
 }
 
@@ -547,7 +603,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v201-1'; // V.201 — Zero-Leak patch: one-gate admission, pre-Haiku generic short-circuit, premium soft-match.
+const CACHE_PREFIX = 'sav-v202-1'; // V.202 — Fatal Flaw patch: JSON envelope, n=1 AI band, expanded generic map.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -2404,7 +2460,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v201:${canonicalKey}`;
+  const ck = `savvey:retailers:v202:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -3424,7 +3480,7 @@ function _v143ParsePrice(raw) {
   return Number(n.toFixed(2));
 }
 
-function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links, category, canonical }) {
+function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links, category, canonical, predicted_price_floor_gbp }) {
   const links = [];
   const allPrices = [];
 
@@ -3592,14 +3648,27 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
     }
   } else if (allPrices.length > 0) {
     // V.200 — N<3 FLOOR. Median is unstable, but we still apply the
-    // V199 category floor PLUS the V.200 premium-brand floor. This
-    // catches £89 AirPods Pro 2 bait on sparse data.
+    // V199 category floor PLUS the V.200 premium-brand floor.
+    // V.202 — Additionally apply an AI-anchored MSRP band when n=1.
+    // If Haiku's predicted_price_floor_gbp is known, require the single
+    // price to fall inside [floor * 0.65, floor * 4.0]. Out of band →
+    // outlier → soft-match rescue kicks in downstream.
     const _v200CatFloor    = _v199GetCategoryFloor(typeof category === 'string' ? category : null);
     const _v200BrandFloor  = _v200GetPremiumBrandFloor(typeof canonical === 'string' ? canonical : null);
     _v145Floor = Math.max(_v200CatFloor, _v200BrandFloor);
-    if (_v145Floor > 0) {
+    // V.202 — AI MSRP band (only when n=1 to avoid clobbering plausible spreads).
+    let _v202AiLo = null;
+    let _v202AiHi = null;
+    const _v202AiFloor = Number(predicted_price_floor_gbp);
+    if (allPrices.length === 1 && _v202AiFloor > 0) {
+      _v202AiLo = _v202AiFloor * 0.65;
+      _v202AiHi = _v202AiFloor * 4.0;
+      _v145Floor = Math.max(_v145Floor, _v202AiLo);
+    }
+    if (_v145Floor > 0 || _v202AiHi != null) {
       for (const l of links) {
-        if (l.price_gbp != null && l.price_gbp < _v145Floor) {
+        if (l.price_gbp == null) continue;
+        if (_v145Floor > 0 && l.price_gbp < _v145Floor) {
           l.is_outlier = true;
           _v145Outliers++;
           if (_v195RejectedSample.length < 5) {
@@ -3607,19 +3676,38 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
               retailer: l.retailer || l.retailer_key || 'unknown',
               price_gbp: l.price_gbp,
               title: (l.title || '').slice(0, 80),
+              reason: 'below_floor',
+            });
+          }
+          continue;
+        }
+        // V.202 — AI MSRP ceiling check (only when n=1).
+        if (_v202AiHi != null && l.price_gbp > _v202AiHi) {
+          l.is_outlier = true;
+          _v145Outliers++;
+          if (_v195RejectedSample.length < 5) {
+            _v195RejectedSample.push({
+              retailer: l.retailer || l.retailer_key || 'unknown',
+              price_gbp: l.price_gbp,
+              title: (l.title || '').slice(0, 80),
+              reason: 'above_ai_ceiling',
             });
           }
         }
       }
       try {
-        console.log(`[V.200][nlt3] n=${allPrices.length} cat_floor=£${_v200CatFloor} brand_floor=£${_v200BrandFloor} effective=£${_v145Floor.toFixed(2)} rejected=${_v145Outliers} samples=${JSON.stringify(_v195RejectedSample)}`);
+        if (_v202AiHi != null) {
+          console.log(`[V.202][n1_ai_band] n=1 ai_floor=£${_v202AiFloor} band=[£${_v202AiLo.toFixed(2)}, £${_v202AiHi.toFixed(2)}] cat=£${_v200CatFloor} brand=£${_v200BrandFloor} effective_floor=£${_v145Floor.toFixed(2)} rejected=${_v145Outliers} samples=${JSON.stringify(_v195RejectedSample)}`);
+        } else {
+          console.log(`[V.200][nlt3] n=${allPrices.length} cat_floor=£${_v200CatFloor} brand_floor=£${_v200BrandFloor} effective=£${_v145Floor.toFixed(2)} rejected=${_v145Outliers} samples=${JSON.stringify(_v195RejectedSample)}`);
+        }
       } catch (e) {}
       allPrices.length = 0;
       for (const l of links) {
         if (l.price_gbp != null && !l.is_outlier) allPrices.push(l.price_gbp);
       }
     } else {
-      try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (no category/brand floor configured)`); } catch (e) {}
+      try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (no category/brand/ai floor configured)`); } catch (e) {}
     }
   } else {
     try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (no priced listings)`); } catch (e) {}
@@ -3750,6 +3838,7 @@ function _v138BuildResponse({
     retailer_deep_links,
     category: (parsed && parsed.category) || null,            // V.199 — thread category for absolute floor
     canonical: (parsed && parsed.canonical_search_string) || null, // V.200 — premium brand floor needs canonical
+    predicted_price_floor_gbp: (parsed && typeof parsed.predicted_price_floor_gbp === 'number') ? parsed.predicted_price_floor_gbp : null, // V.202 — n=1 AI band
   });
 
   // ── Outcome routing (V.139: Generic Item Pivot) ───────────────────
@@ -4228,7 +4317,12 @@ function _v138BuildResponse({
   };
 }
 
-export default async function handler(req, res) {
+// V.202 — Fix J. Internal handler wrapped by the exported handler in a
+// top-level try/catch. ANY uncaught exception that bubbles out of the
+// internal handler is converted into a clean JSON error envelope so the
+// frontend never sees a raw Vercel HTML 500/504 page (which crashed the
+// V.201 Dyson Airwrap test with "Unexpected token 'A'... not valid JSON").
+async function _v202InnerHandler(req, res) {
   applySecurityHeaders(res, ORIGIN);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST')    return res.status(405).json({ error: 'Method not allowed' });
@@ -4590,7 +4684,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v201:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v202:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
@@ -5141,4 +5235,46 @@ export default async function handler(req, res) {
     console.warn(`[${VERSION}] V.97 skipping cache write — SerpAPI quota fail (status=${_lastSerpStatus}). Lets next request retry fresh.`);
   }
   return res.status(200).json(responseBody);
+}
+
+// V.202 Fix J — JSON ERROR ENVELOPE. Exported handler wraps the internal
+// implementation in a top-level try/catch. Any thrown exception that the
+// internal handler doesn't catch is converted into a valid JSON response
+// so the frontend NEVER sees a raw Vercel HTML 500/504 error page.
+export default async function handler(req, res) {
+  const _v202T0 = Date.now();
+  try {
+    return await _v202InnerHandler(req, res);
+  } catch (err) {
+    const _msg = err && err.message ? String(err.message).slice(0, 240) : String(err).slice(0, 240);
+    const _name = err && err.name ? String(err.name).slice(0, 40) : 'Error';
+    try {
+      console.error(`[${VERSION}] [V.202][envelope] UNCAUGHT ${_name}: ${_msg}`);
+      if (err && err.stack) console.error(err.stack.toString().slice(0, 1200));
+    } catch (e) {}
+    // If headers were already sent (handler wrote a partial response then
+    // threw mid-stream) we can't write a new envelope. Just bail.
+    if (res.headersSent) {
+      try { res.end(); } catch (e2) {}
+      return;
+    }
+    try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+    return res.status(200).json({
+      outcome: 'no_match',
+      outcome_reason: 'v202_envelope_caught',
+      error: 'upstream_exception',
+      message: 'Savvey hit an unexpected hiccup — try again in a moment.',
+      links: [],
+      pricing: { best_price: null, avg_market: null, price_band: null },
+      identity: null,
+      alternatives_array: [],
+      _meta: {
+        version: VERSION,
+        envelope: 'v202_caught',
+        exception_name: _name,
+        exception_message: _msg,
+        latency_ms: Date.now() - _v202T0,
+      },
+    });
+  }
 }
