@@ -9998,6 +9998,20 @@ async function callNormalize(body) {
   } else {
     show('loading');
   }
+  // V.194 — Parallel Kickoff connection warm-up. The instant submit fires
+  // we open a TCP+TLS handshake to the API origin in parallel with the
+  // real /api/identify request. This means by the time the Haiku synth
+  // call lands a few hundred ms later, its connection is already pooled
+  // and the handshake cost is zero. Non-blocking; failures are silent.
+  try {
+    var _v194WarmStart = Date.now();
+    fetch('/api/health', { method: 'GET', cache: 'no-store', keepalive: true })
+      .then(function (r) {
+        try { console.log('[V.194][warmup] /api/health ' + r.status + ' in ' + (Date.now() - _v194WarmStart) + 'ms'); } catch (e) {}
+      })
+      .catch(function () { /* warmup failures are silent */ });
+    console.log('[V.194][kickoff] t=0  /api/identify firing in parallel with warmup');
+  } catch (e) {}
   // v3.4.5e — capture which door fired this query for PostHog segmentation
   // (panel-mandated). Maps backend input_type -> user-facing door label so
   // verdict_shown + cta_tapped events carry door='snap'|'paste'|'type'|'scan'.

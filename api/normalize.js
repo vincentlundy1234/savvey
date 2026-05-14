@@ -1979,8 +1979,13 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
   const ck = `savvey:retailers:v175:${canonicalKey}`;
   if (!_forceFresh) {
+    // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
+    // path; we log it explicitly so the Panel can audit hit-rate per query.
+    const _v194CacheStart = Date.now();
     const cached = await kvGet(ck);
+    const _v194CacheMs = Date.now() - _v194CacheStart;
     if (cached && typeof cached === 'object' && Object.keys(cached).length > 0) {
+      try { console.log(`[V.194][cache] HIT key="${canonicalKey.slice(0,60)}" entries=${Object.keys(cached).length} ms=${_v194CacheMs}`); } catch (e) {}
       const _cachedCount = Object.keys(cached).length;
       // V.153 — populate diag for the cache_hit path so we never leak
       // stale module-level state across requests.
@@ -2006,6 +2011,8 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       } else {
         return cached;
       }
+    } else {
+      try { console.log(`[V.194][cache] MISS key="${canonicalKey.slice(0,60)}" ms=${_v194CacheMs}`); } catch (e) {}
     }
   }
   const url = new URL('https://serpapi.com/search.json');
@@ -3003,6 +3010,7 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
   let _v145Floor = null;
   let _v145Median = null;
   let _v145Outliers = 0;
+  let _v195RejectedSample = [];
   if (allPrices.length >= 3) {
     const sorted = allPrices.slice().sort((a, b) => a - b);
     const mid = Math.floor(sorted.length / 2);
@@ -3015,13 +3023,29 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links 
       if (l.price_gbp != null && l.price_gbp < _v145Floor) {
         l.is_outlier = true;
         _v145Outliers++;
+        // V.195 — capture first 5 rejected SKUs for the Vercel runtime log
+        // so the Panel can audit accessory-spam rejections without DOM access.
+        if (_v195RejectedSample.length < 5) {
+          _v195RejectedSample.push({
+            retailer: l.retailer || l.retailer_key || 'unknown',
+            price_gbp: l.price_gbp,
+            title: (l.title || '').slice(0, 80),
+          });
+        }
       }
     }
+    // V.195 — single-line Panel-readable summary of the BS-Detector pass.
+    try {
+      console.log(`[V.195][outlier] median=£${_v145Median.toFixed(2)} floor=£${_v145Floor.toFixed(2)} examined=${allPrices.length} rejected=${_v145Outliers} samples=${JSON.stringify(_v195RejectedSample)}`);
+    } catch (e) {}
     // Rebuild allPrices excluding outliers.
     allPrices.length = 0;
     for (const l of links) {
       if (l.price_gbp != null && !l.is_outlier) allPrices.push(l.price_gbp);
     }
+  } else {
+    // V.195 — log skip-reason when we have too few prices to compute a stable median.
+    try { console.log(`[V.195][outlier] SKIP n=${allPrices.length} (median requires n>=3)`); } catch (e) {}
   }
 
   // (3) V.162 — STRICT BEST PRICE CROWN. The cheapest non-outlier retailer
