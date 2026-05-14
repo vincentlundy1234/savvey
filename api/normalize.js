@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v200';
+const VERSION             = 'normalize.js v3.4.5v201';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -446,6 +446,54 @@ const V200_GENERIC_FALLBACK = {
   notebooks:   ['Moleskine Classic Notebook A5', 'Leuchtturm1917 Medium A5 Dotted', 'Rhodia Webnotebook A5'],
   lamps:       ['IKEA Tertial Work Lamp', 'John Lewis Anyday Touch Table Lamp', 'Anglepoise Type 75 Mini'],
 };
+// V.201 — ONE GATE Admission. Centralises every TLD / host / source check
+// so EVERY deepLinks write site uses the same admission logic. eBay items
+// are exempt (they route to V.169 quarantine; admission decides at the
+// quarantine-rescue step instead of here).
+function _v201Admit(host, source) {
+  if (!host || typeof host !== 'string') return { admit: false, reason: 'no_host' };
+  const h = host.replace(/^www\./, '').toLowerCase();
+  // Google product-link host: real seller is in `source`. Allow only if
+  // the source slug is on the UK-trusted list.
+  const isGoogle = h === 'google.com' || h === 'google.co.uk' || h.startsWith('google.') || h.endsWith('.google.com');
+  if (isGoogle) {
+    if (!source || !_v199IsTrustedSourceSlug(source)) {
+      return { admit: false, reason: 'untrusted_source:' + String(source || '').slice(0, 40) };
+    }
+    return { admit: true, reason: 'google_via_trusted_source' };
+  }
+  // TLD lock: only .uk (covers .co.uk / .org.uk / .ac.uk) OR .com / .net.
+  // Anything else (.it / .fr / .de / .es / .nl / .pt / .eu / .ie / .au / .ca etc.)
+  // is hard-dropped.
+  const parts = h.split('.');
+  if (parts.length < 2) return { admit: false, reason: 'malformed_host' };
+  const tld = parts[parts.length - 1];
+  if (!V200_TLD_ALLOWED.has(tld)) {
+    return { admit: false, reason: 'foreign_tld:' + tld };
+  }
+  // .com / .net require explicit allow-list match (or subdomain of one).
+  // .uk hosts (e.g. argos.co.uk, johnlewis.co.uk variants) are admitted
+  // by default but still preferentially matched against the allow-list.
+  if (tld === 'uk') return { admit: true, reason: 'uk_tld' };
+  // .com / .net: must pass the strict whitelist.
+  if (_v199IsTrustedHost(h)) return { admit: true, reason: 'trusted_host' };
+  return { admit: false, reason: 'untrusted_host:' + h };
+}
+
+// V.201 — Premium-brand detection for Soft-Match Rescue. When ALL priced
+// links get dropped as outliers AND the canonical matches a premium brand,
+// return matched_thin with an Amazon search CTA instead of no_match.
+function _v201IsPremiumBrand(canonical) {
+  if (!canonical || typeof canonical !== 'string') return null;
+  for (const entry of V200_PREMIUM_BRAND_FLOOR) {
+    if (entry.rx.test(canonical)) return entry.label;
+  }
+  // Also match bare brand names that aren't in the floor table.
+  const bareBrandRx = /\b(apple|samsung|sony|dyson|bose|sennheiser|nikon|canon|garmin|fitbit|lg|samsung|google|microsoft|nintendo|playstation|xbox|miele|bosch|kenwood|kitchenaid|le\s*creuset|tefal|ninja|shark|breville|smeg|delonghi|nespresso)\b/i;
+  const m = canonical.match(bareBrandRx);
+  return m ? m[1].replace(/\s+/g, ' ').trim() : null;
+}
+
 function _v200GenericFallback(rawInput) {
   if (!rawInput || typeof rawInput !== 'string') return null;
   const t = rawInput.trim().toLowerCase().replace(/[^a-z]+/g, '');
@@ -499,7 +547,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v200-1'; // V.200 — Zero-Trust patch: TLD lock, n<3 floor, generic noun fallback, routing rescue.
+const CACHE_PREFIX = 'sav-v201-1'; // V.201 — Zero-Leak patch: one-gate admission, pre-Haiku generic short-circuit, premium soft-match.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -2356,7 +2404,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v200:${canonicalKey}`;
+  const ck = `savvey:retailers:v201:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -2585,41 +2633,21 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       // When the host is a Google product-link (V.150 fallback), we ALSO
       // check the source/seller_name slug against V199_UK_TRUSTED_SOURCE_SLUGS
       // because the real seller identity is in item.source, not in the host.
-      const _v199HostIsGoogleProductLink = host && (host === 'google.com' || host === 'google.co.uk' || host.startsWith('google.') || host.endsWith('.google.com'));
-      const _v199EbayCheck = /\bebay\./i.test(host || '');
-      if (_v199EbayCheck) {
-        // fall through — eBay routed by V.169 quarantine below
-      } else if (_v199HostIsGoogleProductLink) {
-        // For Google product-link URLs, the seller is in item.source.
-        // Build the same slug the via-google fallback would use and check
-        // it against the UK trusted source set.
-        const _v199Src = (typeof item.source === 'string' && item.source)
+      const _v201EbayCheck = /\bebay\./i.test(host || '');
+      if (!_v201EbayCheck) {
+        // V.201 — ONE GATE admission. Single check, single source of truth.
+        const _v201Src = (typeof item.source === 'string' && item.source)
                       || (typeof item.seller_name === 'string' && item.seller_name)
                       || (item.merchant && item.merchant.name)
                       || '';
-        if (!_v199IsTrustedSourceSlug(_v199Src)) {
+        const _v201Verdict = _v201Admit(host, _v201Src);
+        if (!_v201Verdict.admit) {
           if (_droppedSamples.length < 8) {
-            _droppedSamples.push('untrusted_source:' + String(_v199Src).slice(0, 40));
+            _droppedSamples.push(_v201Verdict.reason);
           }
           _droppedRedirector++;
           continue;
         }
-      } else if (!_v200IsTldAllowed(host)) {
-        // V.200 — Zero-Trust TLD Filter. Any foreign TLD (.it, .fr, .de,
-        // .es, .nl, .pt, .eu, etc.) is rejected outright. Tattahome.it,
-        // Telemarkpyrenees.fr, Snowleader.fr et al are nuked here even if
-        // they slip past the host allow-list.
-        if (_droppedSamples.length < 8) {
-          _droppedSamples.push('foreign_tld:' + (host || '').slice(0, 40));
-        }
-        _droppedRedirector++;
-        continue;
-      } else if (!_v199IsTrustedHost(host)) {
-        if (_droppedSamples.length < 8) {
-          _droppedSamples.push('untrusted_host:' + (host || '').slice(0, 40));
-        }
-        _droppedRedirector++;
-        continue;
       }
       // V.169 — EBAY QUARANTINE (Panel-revised mandate, supersedes the
       // briefly-considered Nuclear Ban).  Any item whose source /
@@ -2873,6 +2901,11 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             }
           }
         }
+        // V.201 — ONE GATE admission applied to the V.170 relaxed pass.
+        const _v201RelaxedSrc = item.source || item.seller_name || (item.merchant && item.merchant.name) || '';
+        const _v201HostForAdmit = (_host && _host.endsWith('.via-google')) ? 'google.com' : _host;
+        const _v201RelaxedVerdict = _v201Admit(_v201HostForAdmit, _v201RelaxedSrc);
+        if (!_v201RelaxedVerdict.admit) continue;
         const _px = _v146ExtractPrice(item);
         if (!_px || _px.price == null) continue;
         if (deepLinks[_host]) {
@@ -2949,9 +2982,11 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
         if (!_url || typeof _url !== 'string') continue;
         let _host = null;
         try { _host = new URL(String(_url)).hostname.replace(/^www\./, '').toLowerCase(); } catch (e) { continue; }
-        // V.199 — must still pass UK allow-list.
+        // V.201 — ONE GATE admission applied to V.199 super-relaxed pass.
+        const _v201SuperSrc = item.source || item.seller_name || (item.merchant && item.merchant.name) || '';
+        const _v201SuperVerdict = _v201Admit(_host, _v201SuperSrc);
+        if (!_v201SuperVerdict.admit) continue;
         const _v199GoogleHost = _host && (_host === 'google.com' || _host === 'google.co.uk' || _host.startsWith('google.') || _host.endsWith('.google.com'));
-        if (!_v199GoogleHost && !_v199IsTrustedHost(_host)) continue;
         if (_v199GoogleHost) {
           const _u = _v150UnwrapGoogleRedirect(item.link) || _v150UnwrapGoogleRedirect(item.product_link) || _v150UnwrapGoogleRedirect(_url);
           if (_u && _u.host) { _host = _u.host; _url = _u.url; }
@@ -3833,6 +3868,60 @@ function _v138BuildResponse({
     // links.length >= 3 → outcome stays 'matched' (the original).
   }
 
+  // V.201 — PREMIUM BRAND SOFT-MATCH RESCUE. When all priced links get
+  // dropped as outliers (sparse data + bait pricing → zero survivors),
+  // and the canonical matches a premium brand, we no longer fall through
+  // to no_match. Return matched_thin with a synthetic Amazon-search CTA
+  // so the user lands on the result screen with a clear next action.
+  const _v201NoSurvivors = !Array.isArray(links) || links.filter(l => l && l.price_gbp != null && !l.is_outlier).length === 0;
+  if (_v201NoSurvivors && (outcome === 'not_found' || outcome === 'no_match')) {
+    const _v201CanonStr = parsed && parsed.canonical_search_string;
+    const _v201Brand = _v201IsPremiumBrand(_v201CanonStr);
+    if (_v201Brand) {
+      try { console.log(`[V.201][soft_match] no priced survivors for "${_v201CanonStr}" but premium brand detected ("${_v201Brand}"); returning matched_thin soft-match CTA.`); } catch (e) {}
+      outcome = 'matched_thin';
+      outcome_reason = 'v201_premium_brand_soft_match';
+      // Synthesise a CTA-only link so the frontend renders an actionable
+      // card instead of a blank Best Price slot. Marked v201_soft_match
+      // so the renderer can apply the "Verified UK prices unavailable"
+      // copy treatment.
+      const _v201AmazonSearchUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(_v201CanonStr);
+      const _v201SoftLink = {
+        retailer:        'Amazon UK',
+        retailer_key:    'amzn_search_fallback',
+        is_primary:      true,
+        is_outlier:      false,
+        url:             _v201AmazonSearchUrl,
+        price_gbp:       null,
+        price_str:       null,
+        stock_state:     'unknown',
+        delivery_note:   'Search results · prices vary',
+        affiliate:       false,
+        v201_soft_match: true,
+        soft_match_copy: 'Verified UK prices for ' + _v201CanonStr + ' currently unavailable. Tap to search Amazon UK safely.',
+      };
+      // Mutate the const links array in place so the existing closure
+      // references stay valid. Clear it first, then push the soft-match
+      // link as the sole entry.
+      links.length = 0;
+      links.push(_v201SoftLink);
+      pricing.best_price = {
+        value_gbp:       null,
+        value_str:       'See Amazon',
+        retailer:        'Amazon UK',
+        retailer_key:    'amzn_search_fallback',
+        url:             _v201AmazonSearchUrl,
+        verified_at:     new Date().toISOString(),
+        stock_state:     'unknown',
+        delivery_note:   'Search results · prices vary',
+        v201_soft_match: true,
+        soft_match_copy: 'Verified UK prices for ' + _v201CanonStr + ' currently unavailable. Tap to search Amazon UK safely.',
+      };
+      pricing.avg_market = null;
+      pricing.price_band = null;
+    }
+  }
+
   // ──────────────────────────────────────────────────────────────────
   // V.169 — THE REALITY ANCHOR (category-price implausibility check).
   //
@@ -4299,6 +4388,73 @@ export default async function handler(req, res) {
       const text = String(body.text || '').trim();
       if (!text) return res.status(400).json({ error: 'text required' });
       if (text.length > 200) return res.status(400).json({ error: 'text too long (>200 chars)' });
+      // V.201 — PRE-HAIKU GENERIC SHORT-CIRCUIT. Single-word generic noun
+      // input never reaches Haiku. We inject a synthetic canonicalisation
+      // payload with 3 hard-coded UK-popular tiers and route straight to
+      // Outcome 3 disambig. Saves 2-3s per generic query AND guarantees
+      // the safety net fires regardless of Haiku state.
+      const _v201GenericTiers = _v200GenericFallback(text);
+      if (_v201GenericTiers && _v201GenericTiers.length === 3) {
+        try { console.log(`[V.201][pre_haiku_generic] "${text}" → short-circuit to 3-tier disambig (no Haiku call)`); } catch (e) {}
+        const _v201SyntheticParsed = {
+          canonical_search_string: text.charAt(0).toUpperCase() + text.slice(1).toLowerCase(),
+          identity_fingerprint: [],
+          confidence: 'low',
+          confidence_score: 25,
+          alternative_string: null,
+          alternatives_array: _v201GenericTiers.slice(),
+          alternatives_meta: _v201GenericTiers.map((name, i) => ({
+            intent_label: ['Best Value', 'Top Rated', 'Premium Choice'][i],
+            rationale:    ['Cheapest reliable option.', 'Most popular UK pick.', 'Top-end build quality.'][i],
+            typical_price_gbp: null,
+            est_price_range:   null,
+            pack_size:         null,
+            tier_label:        ['Budget', 'Mid-tier', 'Premium'][i],
+          })),
+          category: 'generic',
+          mpn: null,
+          amazon_search_query: text,
+          predicted_price_floor_gbp: 0,
+          savvey_says: { timing_advice: null, consensus: null, confidence: 'low' },
+        };
+        const _v201Response = {
+          outcome: 'disambig',
+          outcome_reason: 'v201_pre_haiku_generic',
+          canonical_search_string: _v201SyntheticParsed.canonical_search_string,
+          identity_fingerprint: [],
+          confidence: 'low',
+          alternatives_array: _v201SyntheticParsed.alternatives_array,
+          alternatives_meta:  _v201SyntheticParsed.alternatives_meta,
+          category: 'generic',
+          amazon_search_query: text,
+          amazon_search_fallback: 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(text),
+          identity: {
+            display_name: _v201SyntheticParsed.canonical_search_string,
+            category_eyebrow: 'Generic — pick a style',
+            thumbnail_url: null,
+          },
+          pricing: { best_price: null, avg_market: null, price_band: null },
+          links: [],
+          tiers: _v201SyntheticParsed.alternatives_array.map((name, i) => ({
+            name,
+            intent_label: ['Best Value', 'Top Rated', 'Premium Choice'][i],
+            rationale:    ['Cheapest reliable option.', 'Most popular UK pick.', 'Top-end build quality.'][i],
+            tier_label:   ['Budget', 'Mid-tier', 'Premium'][i],
+            est_price_range: null,
+            typical_price_gbp: null,
+            url: 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(name),
+          })),
+          _meta: {
+            version: VERSION,
+            input_type: 'text',
+            latency_ms: Date.now() - t0,
+            cache: 'miss',
+            leg: 'identify',
+            short_circuit: 'v201_pre_haiku_generic',
+          },
+        };
+        return res.status(200).json(_v201Response);
+      }
       rawText = await withCircuit('anthropic',
         () => callHaikuText(TEXT_SYSTEM_PROMPT, `Query: "${text}"`),
         { onOpen: () => null }
@@ -4434,7 +4590,7 @@ export default async function handler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v200:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v201:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
