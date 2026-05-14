@@ -7161,6 +7161,67 @@ input[type="submit"],
 /* End V.204 block */
 
 /* ═══════════════════════════════════════════════════════════════════════
+   V.115 — ROUTING AUDIT (Loading + Dead Links)
+   Founder field test: loading screen failing to transition cleanly,
+   product/retailer links unclickable. Tighten both with explicit
+   z-index + pointer-events guarantees.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* (1) Loading screen — ensure it always renders on top of home and
+   below modals when show('loading') fires. */
+#screen-loading.active {
+  display: flex !important;
+  opacity: 1 !important;
+  z-index: 5 !important;
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  background: #faf7f0;  /* matches body cream so aurora doesn't strobe */
+}
+body.v181 #screen-loading.active { background: transparent; }
+
+/* (2) Dead Links — outbound product links must always receive taps.
+   The V.181/V.183 glass surfaces and the V.114 trust banner sit at
+   lower z-indexes; anchor children of the retailer stack and CTAs
+   now claim z-index: 10 with pointer-events: auto so nothing can
+   ever swallow a tap on the real product link. */
+#screen-result .v138-retailer-row,
+#screen-result .v138-retailer-row a,
+#screen-result .v136-cta-primary,
+#screen-result .v136-cta-secondary,
+#screen-result a[href]:not([href="#"]):not([href=""]),
+#screen-confirm .v136-cta-primary,
+#screen-confirm .v136-cta-secondary,
+#screen-confirm a[href]:not([href="#"]):not([href=""]) {
+  pointer-events: auto !important;
+  position: relative;
+  z-index: 10;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+/* Belt-and-braces — any retailer card across the app gets the same
+   guarantee. */
+.v138-retailer-row,
+.v138-retailer-row * {
+  pointer-events: auto;
+}
+.v138-retailer-row[href],
+.v138-retailer-row a[href] {
+  pointer-events: auto !important;
+  z-index: 10;
+  position: relative;
+}
+/* The trust banner sits BELOW interactive zones with pointer-events:none
+   so it never intercepts taps that should reach a retailer card. */
+.v114-trust,
+.v114-trust * {
+  pointer-events: none !important;
+}
+
+/* End V.115 block */
+
+/* ═══════════════════════════════════════════════════════════════════════
    V.114 — TRUST BANNER (GPU-accelerated marquee, vanilla CSS only)
    Pure @keyframes + transform: translateX with will-change. Grayscale,
    muted opacity, premium feel. Sits at the bottom of the home screen
@@ -7200,11 +7261,12 @@ input[type="submit"],
 .v114-trust-track {
   display: inline-flex;
   align-items: center;
-  gap: 22px;
+  gap: 32px;
   white-space: nowrap;
   transform: translateX(0);
   will-change: transform;
   animation: v114-marquee 32s linear infinite;
+  padding: 4px 0;
 }
 .v114-trust-item {
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -7220,6 +7282,25 @@ input[type="submit"],
   font-weight: 700;
   color: rgba(20, 32, 26, 0.3);
   opacity: 0.6;
+}
+
+/* V.115 — Inline-SVG logo marks. Monochrome via currentColor on a
+   single muted green-deep, with filter: grayscale + low opacity so the
+   feel is uniformly premium. Each SVG sets its own viewBox width so
+   the marks land at consistent visual weight. */
+.v115-logo {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  color: rgba(20, 32, 26, 0.55);
+  filter: grayscale(1);
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+.v115-logo svg {
+  height: 22px;
+  width: auto;
+  display: block;
 }
 @keyframes v114-marquee {
   0%   { transform: translateX(0); }
@@ -7642,43 +7723,48 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
          home screen stays minimalist for first-time users. -->
     <div class="v174-recent-eyebrow" id="v174-recent-eyebrow" hidden>Recent</div>
     <div class="v174-recent-row" id="v174-recent-row" hidden></div>
-    <!-- V.114 — Trust Banner. Pure CSS marquee, GPU-accelerated via
-         transform: translateX + will-change. Header lives above the
-         scrolling track. The track contains the retailer wordmark list
-         duplicated twice so the keyframe wraps seamlessly. -->
+    <!-- V.114 / V.115 — Trust Banner. Pure CSS marquee, GPU-accelerated
+         via transform: translateX + will-change. V.115 upgrades the
+         text wordmarks to monochrome inline SVG logo-marks. Header
+         lives above the scrolling track. The track contains the
+         retailer logo list duplicated twice so the keyframe wraps
+         seamlessly. All SVGs are styled via currentColor so a single
+         CSS color rule tones every brand identically (muted green-deep,
+         opacity 0.7) for the premium glass aesthetic. -->
     <div class="v114-trust" aria-hidden="true">
       <div class="v114-trust-header">We quick check so you don't have to.</div>
       <div class="v114-trust-track-wrap">
         <div class="v114-trust-track">
-          <span class="v114-trust-item">Amazon</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">Tesco</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">Boots</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">Argos</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">B&amp;Q</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">Screwfix</span>
-          <span class="v114-trust-dot">·</span>
-          <span class="v114-trust-item">Google</span>
-          <span class="v114-trust-dot">·</span>
-          <!-- duplicate set for seamless loop -->
-          <span class="v114-trust-item" aria-hidden="true">Amazon</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">Tesco</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">Boots</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">Argos</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">B&amp;Q</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">Screwfix</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
-          <span class="v114-trust-item" aria-hidden="true">Google</span>
-          <span class="v114-trust-dot" aria-hidden="true">·</span>
+          <!-- Pass 1 -->
+          <span class="v115-logo v115-logo-amazon" aria-label="Amazon">
+            <svg viewBox="0 0 90 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.5">amazon</text><path d="M3 19 Q22 24 42 19" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg>
+          </span>
+          <span class="v115-logo v115-logo-tesco" aria-label="Tesco">
+            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="800" letter-spacing="0.6">TESCO</text></svg>
+          </span>
+          <span class="v115-logo v115-logo-boots" aria-label="Boots">
+            <svg viewBox="0 0 64 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.3">Boots</text></svg>
+          </span>
+          <span class="v115-logo v115-logo-argos" aria-label="Argos">
+            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.2">Argos</text></svg>
+          </span>
+          <span class="v115-logo v115-logo-bandq" aria-label="B and Q">
+            <svg viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/><text x="22" y="16" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">B&amp;Q</text></svg>
+          </span>
+          <span class="v115-logo v115-logo-screwfix" aria-label="Screwfix">
+            <svg viewBox="0 0 86 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="15" font-weight="800" letter-spacing="-0.3">Screwfix</text></svg>
+          </span>
+          <span class="v115-logo v115-logo-google" aria-label="Google">
+            <svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="600" letter-spacing="-0.4">Google</text></svg>
+          </span>
+          <!-- Pass 2 (duplicate for seamless loop) -->
+          <span class="v115-logo v115-logo-amazon" aria-hidden="true"><svg viewBox="0 0 90 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.5">amazon</text><path d="M3 19 Q22 24 42 19" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round"/></svg></span>
+          <span class="v115-logo v115-logo-tesco" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="800" letter-spacing="0.6">TESCO</text></svg></span>
+          <span class="v115-logo v115-logo-boots" aria-hidden="true"><svg viewBox="0 0 64 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" font-style="italic" letter-spacing="-0.3">Boots</text></svg></span>
+          <span class="v115-logo v115-logo-argos" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="700" letter-spacing="-0.2">Argos</text></svg></span>
+          <span class="v115-logo v115-logo-bandq" aria-hidden="true"><svg viewBox="0 0 44 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><rect x="0" y="2" width="44" height="18" rx="3" fill="none" stroke="currentColor" stroke-width="1.4"/><text x="22" y="16" text-anchor="middle" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="11" font-weight="800" letter-spacing="0.5">B&amp;Q</text></svg></span>
+          <span class="v115-logo v115-logo-screwfix" aria-hidden="true"><svg viewBox="0 0 86 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="15" font-weight="800" letter-spacing="-0.3">Screwfix</text></svg></span>
+          <span class="v115-logo v115-logo-google" aria-hidden="true"><svg viewBox="0 0 70 22" xmlns="http://www.w3.org/2000/svg" fill="currentColor"><text x="0" y="16" font-family="system-ui,-apple-system,BlinkMacSystemFont,sans-serif" font-size="16" font-weight="600" letter-spacing="-0.4">Google</text></svg></span>
         </div>
       </div>
     </div>
