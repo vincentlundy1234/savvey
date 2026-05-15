@@ -998,7 +998,7 @@ If the user's input is a bare brand name with no product type
 V.132 DESCRIPTION FIELD — MANDATORY ON BOTH BRANCHES (CRITICAL):
 Whether the input triggers V.131 Curator (broad brand) OR V.128 Strict
 Commercial Tiering (category noun), every alternatives_meta[i] entry
-MUST carry a non-empty `description` field. The frontend renders this
+MUST carry a non-empty "description" field. The frontend renders this
 text directly under the product name on every disambig card — leaving
 it null = a blank space where guidance should be.
 
@@ -5351,7 +5351,6 @@ async function _v202InnerHandler(req, res) {
   // product with rating + reviews. Cost: 1 extra Haiku call. Latency: +500-700ms
   // but parallelisable with other calls in the future. Skipped for low-conf or
   // missing-rating to avoid hallucination.
-  let review_synthesis = null;
   if (verified_amazon_price && verified_amazon_price.rating && verified_amazon_price.reviews && parsed.confidence !== 'low') {
     try {
       review_synthesis = await generateReviewSynthesis(
