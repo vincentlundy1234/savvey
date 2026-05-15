@@ -5553,7 +5553,13 @@ body.v171 #screen-home .v102-type-bar,
 body.v171 #screen-home #type-door,
 body.v171 #screen-home .v71-recent-strip,
 body.v171 #screen-home .v76-savings,
-body.v171 #screen-home #tagline { display: none !important; }
+body.v171 #screen-home #tagline,
+body.v171 #screen-home .v5-home-header,
+body.v171 #screen-home .v5-wordmark,
+body.v171 #screen-home .v5-hero-snap,
+body.v171 #screen-home .v5-hero-snap-content,
+body.v171 #screen-home .v5-hero-snap-title,
+body.v171 #screen-home .v5-hero-snap-sub { display: none !important; }
 
 /* ── V.171 Home: Twin Heroes ─────────────────────────────────────────── */
 body.v171 .v171-twin-heroes {
@@ -7979,7 +7985,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <h1 class="v171-tagline v124-hero-tagline">Shop Smart. We Search, You Save.</h1>
     <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
-      <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
+      <button class="v171-hero v171-hero-snap v181-spring" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
         <div class="v171-hero-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -7995,7 +8001,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
            is broken. Sits inline between the two heroes so the layout
            visually anchors to the Snap card on portrait phones. -->
       <div class="v174-cam-microcopy" id="v174-cam-microcopy" aria-hidden="true">Camera access required on first tap</div>
-      <button class="v171-hero v171-hero-type" type="button" onclick="v172OpenTypeSheet()" aria-label="Type a product name">
+      <button class="v171-hero v171-hero-type v181-spring" type="button" onclick="v172OpenTypeSheet()" aria-label="Type a product name">
         <div class="v171-hero-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="11" cy="11" r="7"/>
@@ -8219,7 +8225,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        access (was top-right). Still wired to goHome() which triggers the
        V.122 FSM 7-step teardown (track.stop, srcObject=null,
        video.load → iOS green-dot release). -->
-  <button class="v171-cam-close" id="v171-cam-close-btn" type="button" onclick="goHome()" aria-label="Close camera">
+  <button class="v171-cam-close" id="v171-cam-close-btn" type="button" onclick="cancelCamera()" aria-label="Close camera">
     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
       <line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>
     </svg>
@@ -16642,7 +16648,7 @@ async function _v140KickoffSynthesize(idPayload) {
 // ═══════════════════════════════════════════════════════════════════════
 (function v118Debugger() {
   try {
-    var DEFAULT_ON = true;
+    var DEFAULT_ON = false; // V.135 — hide debug toast for clean UI. Long-press top edge or set localStorage.savvey_debug=1 to re-enable.
     var stored;
     try { stored = localStorage.getItem('savvey_debug'); } catch (e) {}
     var urlForce = /[?&]debug=1\b/.test(location.search);
