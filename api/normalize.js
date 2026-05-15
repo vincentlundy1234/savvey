@@ -2667,7 +2667,7 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
 // ════════════════════════════════════════════════════════════════════
 // V.144 — Tier thumbnail fetcher. Lightweight SerpAPI google_shopping
 // call that extracts ONLY the first item's thumbnail URL. Cached under
-// savvey:tier_thumb:v144b:<slug> with 24h TTL so repeat searches share
+// savvey:tier_thumb:v144e:<slug> with 24h TTL so repeat searches share
 // the lookup cost. Returns null on any failure path so the V.143
 // frontend placeholder can take over gracefully.
 // ════════════════════════════════════════════════════════════════════
@@ -2676,7 +2676,7 @@ async function _v144FetchTierThumbnail(query) {
   const q = query.trim();
   if (q.length < 2 || q.length > 150) return null;
   const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 100);
-  const cacheKey = 'savvey:tier_thumb:v144b:' + slug;
+  const cacheKey = 'savvey:tier_thumb:v144e:' + slug;
   try {
     const cached = await kvGet(cacheKey);
     if (cached && typeof cached === 'object') {
@@ -2687,13 +2687,17 @@ async function _v144FetchTierThumbnail(query) {
   } catch (e) {}
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return null;
+  // V.144e — switched from engine=google_shopping (returns knowledge-graph
+  // cards for branded products with empty shopping_results) to google_images,
+  // which reliably returns a thumbnails_results array for any query.
   const url = new URL('https://serpapi.com/search.json');
-  url.searchParams.set('engine', 'google_shopping');
+  url.searchParams.set('engine', 'google_images');
   url.searchParams.set('q', q);
   url.searchParams.set('gl', 'uk');
   url.searchParams.set('hl', 'en');
-  url.searchParams.set('num', '5'); // small page; we only need first valid thumbnail
+  url.searchParams.set('num', '10');
   url.searchParams.set('api_key', apiKey);
+  try { console.log('[V.144e][tier_thumb] FETCH q="' + q.slice(0,60) + '"'); } catch (e) {}
   const ac = new AbortController();
   const timer = setTimeout(() => ac.abort(), 4000); // V.144b — was 2500. SerpAPI cold-start spiked above 2.5s on common queries, leaving popular products thumbnail-less.
   let thumb = null;
@@ -2706,12 +2710,13 @@ async function _v144FetchTierThumbnail(query) {
       // arrays depending on the query class. Branded products (Bose, Dyson,
       // Apple) often land in 'inline_shopping_results' or 'immersive_products'
       // not the standard 'shopping_results'. Scan all known arrays in order.
+      // V.144e — google_images returns images_results (primary) +
+      // suggested_searches (secondary). Each item has thumbnail (Google
+      // CDN, fast) and original (source-site, slower). Prefer thumbnail.
       const _v144Arrays = [
+        j.images_results,
         j.shopping_results,
-        j.inline_shopping_results,
-        j.immersive_products,
-        j.featured_results,
-        j.related_products,
+        j.inline_images,
       ].filter(Array.isArray);
       outer: for (const arr of _v144Arrays) {
         for (const item of arr) {
@@ -2731,6 +2736,7 @@ async function _v144FetchTierThumbnail(query) {
     try { console.warn(`[V.144] tier thumb fetch failed for "${q.slice(0,40)}": ${e && e.message}`); } catch (er) {}
   }
   // V.144b — only cache successful hits. Caching nulls was poisoning popular queries when an early SerpAPI cold-start timed out — every subsequent request returned null for 24h. Misses now retry fresh; SerpAPI cost is bounded by repeat-query rate.
+  try { console.log('[V.144e][tier_thumb] RESULT q="' + q.slice(0,60) + '" -> ' + (thumb ? 'HIT host=' + (new URL(thumb)).hostname : 'NULL')); } catch (e) {}
   if (thumb) { try { await kvSet(cacheKey, { url: thumb }, 24 * 60 * 60); } catch (e) {} }
   return thumb;
 }
