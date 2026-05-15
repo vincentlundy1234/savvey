@@ -8123,8 +8123,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v154-PAYLOAD-CAP';
-  var V126_GUARD          = 'savvey_v154_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v155-UGLY-TRUTH';
+  var V126_GUARD          = 'savvey_v155_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8468,7 +8468,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v154</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v155</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9227,6 +9227,78 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <script>
+// ─────────────────────────────────────────────────────────────────────────
+// V.155 — RAW ERROR DUMP. The Founder demanded the ugly truth. No polished
+// timeout UI. Every fetch failure (whether the server returned 500 or the
+// browser threw client-side) is dumped to this fixed-position <pre> at the
+// top of the viewport, in monospace red text, with error.name, error.message,
+// error.stack (when available) and the most recent SNAP payload size. Also
+// auto-enables the v118DebugToast so [V.147][snap] PAYLOAD ... is visible
+// without the user having to long-press the hidden toggle.
+// ─────────────────────────────────────────────────────────────────────────
+(function _v155Init() {
+  try { localStorage.setItem('savvey_debug', '1'); } catch (e) {}
+  var pane = null;
+  function mount() {
+    if (pane && document.body.contains(pane)) return pane;
+    pane = document.createElement('pre');
+    pane.id = '_v155-raw-dump';
+    pane.setAttribute('aria-live', 'polite');
+    pane.style.cssText = [
+      'position:fixed','top:0','left:0','right:0','z-index:2147483646',
+      'margin:0','padding:8px 36px 8px 10px','max-height:55vh','overflow:auto',
+      'background:#1a0000','color:#ffb4b4','font:11px/1.35 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace',
+      'white-space:pre-wrap','word-break:break-all','border-bottom:2px solid #ff3838',
+      'pointer-events:auto','box-shadow:0 4px 12px rgba(0,0,0,0.6)','display:none'
+    ].join(';');
+    var close = document.createElement('button');
+    close.textContent = '×';
+    close.setAttribute('aria-label', 'Dismiss V.155 debug dump');
+    close.style.cssText = 'position:absolute;top:4px;right:6px;width:24px;height:24px;border:none;background:#ff3838;color:#fff;font:bold 16px/1 system-ui;border-radius:4px;cursor:pointer';
+    close.addEventListener('click', function () { try { pane.style.display = 'none'; } catch (e) {} });
+    pane.appendChild(close);
+    var content = document.createElement('span');
+    content.id = '_v155-raw-dump-content';
+    pane.appendChild(content);
+    if (document.body) document.body.appendChild(pane);
+    else document.addEventListener('DOMContentLoaded', function () { try { document.body.appendChild(pane); } catch (e) {} });
+    return pane;
+  }
+  var history = [];
+  function append(label, info) {
+    try {
+      var ts = new Date().toISOString().slice(11, 23);
+      var block = '── ' + ts + ' · ' + String(label || '?') + ' ──\n';
+      if (info && typeof info === 'object') {
+        Object.keys(info).forEach(function (k) {
+          var v = info[k];
+          if (v === undefined) v = '(undefined)';
+          else if (v === null) v = '(null)';
+          else if (typeof v === 'object') {
+            try { v = JSON.stringify(v).slice(0, 600); } catch (e) { v = '[unserialisable]'; }
+          } else {
+            v = String(v).slice(0, 800);
+          }
+          block += '  ' + k + ': ' + v + '\n';
+        });
+      } else {
+        block += '  ' + String(info).slice(0, 800) + '\n';
+      }
+      history.push(block);
+      if (history.length > 6) history = history.slice(-6);
+      var p = mount();
+      var c = document.getElementById('_v155-raw-dump-content');
+      if (c) c.textContent = history.join('\n');
+      p.style.display = 'block';
+      try { console.warn('[V.155][dump] ' + label); } catch (e) {}
+    } catch (e) {
+      try { console.error('[V.155][dump] self-failed:', e && e.message); } catch (er) {}
+    }
+  }
+  window._v155Dump = append;
+  window._v155LastSnapKB = null;
+  window._v155LastSnapFrames = null;
+})();
 const AMAZON_TAG = 'savvey-21';
 
 const RETAILERS = {
@@ -11000,6 +11072,19 @@ async function captureFrame() {
     if (window.v118DebugToast) {
       window.v118DebugToast('SNAP ' + _v147KB + 'KB · ' + frames.length + ' frames', _v147KB < 5 ? 'err' : (_v147KB > 500 ? 'err' : 'ok'));
     }
+    // V.155 — always-visible payload size dump. Confirms whether the V.154
+    // strict-800px cap actually fired, regardless of v118DebugToast state.
+    try {
+      window._v155LastSnapKB = _v147KB;
+      window._v155LastSnapFrames = frames.length;
+      if (window._v155Dump) window._v155Dump('SNAP captured', {
+        payload_kb: _v147KB,
+        frames: frames.length,
+        quality: SNAP_QUALITY,
+        first_canvas_w: _firstWidth,
+        v154_cap_status: (_v147KB <= 800 ? 'WITHIN CAP (good)' : 'CAP DEFEATED — payload too large'),
+      });
+    } catch (e) {}
   } catch (e) {}
   // V.151 — Step 3: upload phase. Last user-visible step. The cycler stays
   // pinned here until callNormalize either returns and routes elsewhere
@@ -11438,15 +11523,32 @@ async function callNormalize(body) {
       // message. Server error pages may be HTML or JSON; fall back
       // gracefully so the user sees what really failed.
       let _errBody = '';
+      let _errRawText = '';
       try {
-        const _rt = await r.text();
+        _errRawText = await r.text();
         try {
-          const _ej = JSON.parse(_rt);
-          _errBody = String(_ej.message || _ej.error || _rt).slice(0, 240);
-        } catch { _errBody = String(_rt || '').slice(0, 240); }
+          const _ej = JSON.parse(_errRawText);
+          _errBody = String(_ej.message || _ej.error || _errRawText).slice(0, 240);
+        } catch { _errBody = String(_errRawText || '').slice(0, 240); }
       } catch { _errBody = ''; }
       track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms, err: _errBody.slice(0, 100) });
       clearInterval(phaseTimer);
+      // V.155 — RAW DUMP. ALWAYS fires on every !r.ok, BEFORE any other
+      // routing. Shows the Founder the exact server status, headers, and
+      // raw response body — even if the V.141 timeout-grace or V.154 413
+      // branch fires below. The pane is dismissable, so it doesn't permanently
+      // block the polished UI on healthy fields.
+      try {
+        if (window._v155Dump) window._v155Dump('FETCH NON-OK', {
+          input_type: body.input_type,
+          http_status: r.status,
+          ms: _ms,
+          content_type: r.headers && r.headers.get ? r.headers.get('content-type') : '(no headers api)',
+          response_body_first_800: String(_errRawText || '').slice(0, 800),
+          last_snap_kb: window._v155LastSnapKB,
+          last_snap_frames: window._v155LastSnapFrames,
+        });
+      } catch (e) {}
       if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
       // V.154 — 413 PAYLOAD TOO LARGE branch. MUST fire BEFORE the
       // V.141 timeout-grace route, otherwise a 413 from Vercel's edge
@@ -11772,6 +11874,23 @@ async function callNormalize(body) {
   } catch (err) {
     clearInterval(phaseTimer);
     const _isAbort = err && (err.name === 'AbortError' || String(err).indexOf('aborted') !== -1);
+    // V.155 — RAW DUMP. Force every thrown exception (AbortError, TypeError,
+    // NetworkError, CORS rejections, anything iOS WebKit can spit out) into
+    // the visible debug pane. Founder mandate: NO polished timeout UI when
+    // the underlying cause is unknown. Dump fires BEFORE any showError().
+    try {
+      if (window._v155Dump) window._v155Dump('FETCH THREW', {
+        input_type: body.input_type,
+        ms: Date.now() - t0,
+        is_abort: !!_isAbort,
+        is_client_timeout: !!_timedOut,
+        error_name: (err && err.name) || '(no name)',
+        error_message: (err && err.message) || String(err),
+        error_stack: (err && err.stack) ? String(err.stack).slice(0, 1200) : '(no stack)',
+        last_snap_kb: window._v155LastSnapKB,
+        last_snap_frames: window._v155LastSnapFrames,
+      });
+    } catch (e) {}
     // V.140 — split the abort path. The V.75 silent-swallow rule was correct
     // for "newer fetch replaced this one". The 15s _timedOut abort is a REAL
     // failure mode and the user must see an error screen.
