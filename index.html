@@ -2625,6 +2625,41 @@
   .v5-cam-reticle::before { left: 50%; top: 0; width: 1.5px; height: 100%; transform: translateX(-50%); }
   .v5-cam-reticle::after  { top: 50%; left: 0; height: 1.5px; width: 100%; transform: translateY(-50%); }
   .v5-cam-cutout--barcode .v5-cam-reticle { display: none; }
+  /* V.138 — SCANNER IMMERSION. Slow-pulsing brackets + scanning line. */
+  .v5-cam-corner {
+    transition: opacity 0.3s ease;
+  }
+  .v5-cam-corner::before, .v5-cam-corner::after {
+    box-shadow: 0 0 6px rgba(255,255,255,0.65), 0 0 14px rgba(255,255,255,0.25);
+    animation: v138CamBracketPulse 2.8s ease-in-out infinite;
+  }
+  @keyframes v138CamBracketPulse {
+    0%, 100% { background: rgba(255,255,255,0.95); }
+    50%      { background: #fbbf24; }
+  }
+  /* Scanning line: 1px horizontal sweep, slow */
+  .v138-cam-scanline {
+    position: absolute;
+    left: 8%; right: 8%;
+    height: 2px;
+    top: 50%;
+    background: linear-gradient(90deg, transparent 0%, rgba(251,191,36,0.85) 50%, transparent 100%);
+    box-shadow: 0 0 10px rgba(251,191,36,0.55);
+    pointer-events: none;
+    transform: translateY(-50%);
+    animation: v138CamScanline 3.2s ease-in-out infinite;
+  }
+  @keyframes v138CamScanline {
+    0%, 100% { transform: translateY(-90%); opacity: 0.0; }
+    20%      { opacity: 0.85; }
+    50%      { transform: translateY(-50%); opacity: 0.95; }
+    80%      { opacity: 0.85; }
+  }
+  .v5-cam-cutout--barcode .v138-cam-scanline { display: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .v5-cam-corner::before, .v5-cam-corner::after { animation: none; background: rgba(255,255,255,0.95); }
+    .v138-cam-scanline { animation: none; opacity: 0.4; }
+  }
   /* V.82 — tap-to-focus animated ring */
   .v5-cam-focus-ring {
     position: absolute;
@@ -5456,6 +5491,58 @@
   cursor: pointer; touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
+/* V.138 — PWA install bottom sheet (custom A2HS UI) */
+#v138-install-sheet {
+  position: fixed;
+  left: 12px; right: 12px;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 86px); /* above the V.183 tab bar */
+  z-index: 8500;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.96);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+          backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  box-shadow: 0 18px 38px -10px rgba(0,0,0,0.28), 0 6px 14px -4px rgba(0,0,0,0.14);
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  opacity: 0; transform: translateY(16px) scale(0.98);
+  transition: opacity 280ms cubic-bezier(0.4,0,0.2,1), transform 320ms cubic-bezier(0.34,1.56,0.64,1);
+  pointer-events: none;
+}
+#v138-install-sheet.show {
+  opacity: 1; transform: translateY(0) scale(1); pointer-events: auto;
+}
+.v138-install-icon {
+  flex: 0 0 36px;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 10px;
+  background: rgba(42,107,34,0.10);
+  color: #2a6b22;
+}
+.v138-install-icon svg { width: 22px; height: 22px; }
+.v138-install-body { flex: 1 1 auto; min-width: 0; }
+.v138-install-title { font-size: 15px; font-weight: 800; color: #0a1f0a; letter-spacing: -0.01em; line-height: 1.2; margin-bottom: 2px; }
+.v138-install-sub   { font-size: 12px; font-weight: 500; color: #4a4a4a; line-height: 1.35; }
+.v138-install-cta {
+  appearance: none; border: 0; outline: 0;
+  background: #2a6b22; color: #fff;
+  font-family: inherit; font-weight: 700; font-size: 14px; letter-spacing: 0.01em;
+  padding: 9px 16px; border-radius: 999px;
+  box-shadow: 0 4px 10px -2px rgba(42,107,34,0.45);
+  cursor: pointer; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.v138-install-close {
+  appearance: none; border: 0; outline: 0;
+  background: transparent; color: #6a6a6a;
+  font-size: 22px; line-height: 1; font-weight: 600;
+  padding: 4px 8px; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.v138-install-close:hover { color: #1a1a1a; }
+@media (display-mode: standalone) { #v138-install-sheet { display: none !important; } }
 /* V.137 — Offline toast (non-blocking, sticky until 'online') */
 #v137-offline-toast {
   position: fixed; left: 12px; right: 12px;
@@ -8382,6 +8469,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <span class="v5-cam-corner v5-cam-bl"></span>
     <span class="v5-cam-corner v5-cam-br"></span>
     <span class="v5-cam-reticle" aria-hidden="true"></span>
+    <!-- V.138 — scanning line (Founder mandate for scanner immersion) -->
+    <span class="v138-cam-scanline" aria-hidden="true"></span>
     <span class="v5-cam-focus-ring" id="cam-focus-ring" aria-hidden="true"></span>
   </div>
   </div><!-- /#cam-zoom-layer (V.122) -->
@@ -13448,21 +13537,72 @@ function renderRecents() {
 }
 
 let _installPromptEvt = null;
+// V.138 — PWA install: capture beforeinstallprompt, suppress browser
+// chrome, render a custom bottom sheet on the home screen. The sheet
+// is opt-out (close button) and only re-appears on a fresh page load.
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();
   _installPromptEvt = e;
-  const h = document.getElementById('hint');
-  h.innerHTML = '<a href="#" onclick="event.preventDefault();showInstall();" style="color:var(--green);text-decoration:underline;">Install app</a>';
+  try { v138MountInstallSheet(); } catch (er) {}
 });
-async function showInstall() {
-  if (!_installPromptEvt) return;
-  track('pwa_install_prompted');
-  _installPromptEvt.prompt();
-  const choice = await _installPromptEvt.userChoice;
-  track('pwa_install_choice', { outcome: choice && choice.outcome });
-  _installPromptEvt = null;
-  document.getElementById('hint').textContent = '';
+function v138MountInstallSheet() {
+  // Already dismissed this session? Skip.
+  try { if (sessionStorage.getItem('savvey_install_dismissed') === '1') return; } catch (e) {}
+  // Already installed? (display-mode standalone) Skip.
+  try { if (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) return; } catch (e) {}
+  // Avoid duplicate mounts.
+  if (document.getElementById('v138-install-sheet')) return;
+  const sheet = document.createElement('div');
+  sheet.id = 'v138-install-sheet';
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-labelledby', 'v138-install-title');
+  sheet.innerHTML =
+    '<div class="v138-install-icon" aria-hidden="true">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">' +
+        '<rect x="5" y="2" width="14" height="20" rx="3"/>' +
+        '<line x1="12" y1="18" x2="12.01" y2="18"/>' +
+      '</svg>' +
+    '</div>' +
+    '<div class="v138-install-body">' +
+      '<div class="v138-install-title" id="v138-install-title">Install Savvey</div>' +
+      '<div class="v138-install-sub">Add Savvey to your Home Screen for instant price checks in-store.</div>' +
+    '</div>' +
+    '<button class="v138-install-cta v181-spring" id="v138-install-cta" type="button">Install</button>' +
+    '<button class="v138-install-close" id="v138-install-close" type="button" aria-label="Dismiss">×</button>';
+  document.body.appendChild(sheet);
+  // Microtask to allow CSS transition from initial state.
+  Promise.resolve().then(() => { sheet.classList.add('show'); });
+  document.getElementById('v138-install-cta').addEventListener('click', async (ev) => {
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+    await showInstall();
+  }, true);
+  document.getElementById('v138-install-close').addEventListener('click', (ev) => {
+    try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+    try { sessionStorage.setItem('savvey_install_dismissed', '1'); } catch (e) {}
+    v138DismissInstallSheet();
+  }, true);
 }
+function v138DismissInstallSheet() {
+  const sheet = document.getElementById('v138-install-sheet');
+  if (!sheet) return;
+  sheet.classList.remove('show');
+  setTimeout(() => { try { sheet.remove(); } catch (e) {} }, 280);
+}
+async function showInstall() {
+  if (!_installPromptEvt) { v138DismissInstallSheet(); return; }
+  try { if (typeof track === 'function') track('pwa_install_prompted'); } catch (e) {}
+  try { _installPromptEvt.prompt(); } catch (e) {}
+  let outcome = 'unknown';
+  try {
+    const choice = await _installPromptEvt.userChoice;
+    outcome = choice && choice.outcome || 'unknown';
+  } catch (e) {}
+  try { if (typeof track === 'function') track('pwa_install_choice', { outcome }); } catch (e) {}
+  _installPromptEvt = null;
+  v138DismissInstallSheet();
+}
+window.v138MountInstallSheet = v138MountInstallSheet;
+window.v138DismissInstallSheet = v138DismissInstallSheet;
 window.addEventListener('appinstalled', () => track('pwa_installed'));
 
 (function showIosInstallHintOnce() {
@@ -15841,24 +15981,34 @@ async function _v140KickoffSynthesize(idPayload) {
     row.innerHTML = '';
     if (!recents.length) { row.hidden = true; eyebrow.hidden = true; return; }
     var shown = 0;
-    for (var i = 0; i < recents.length && shown < 6; i++) {
+    // V.138 — cap at 3 (Founder mandate). Older entries stay in
+    // localStorage for future expansion but don't render.
+    for (var i = 0; i < recents.length && shown < 3; i++) {
       var r = recents[i];
-      var label = (typeof r === 'string') ? r : (r && (r.canonical || r.text || r.title || r.query));
+      var label = (typeof r === 'string') ? r : (r && (r.canonical_search_string || r.canonical || r.text || r.title || r.query));
       if (!label || typeof label !== 'string') continue;
       var clean = label.trim();
       if (!clean) continue;
       var chip = document.createElement('button');
       chip.type = 'button';
-      chip.className = 'v174-recent-chip';
-      chip.textContent = clean.length > 32 ? clean.slice(0, 30) + '…' : clean;
+      // V.138 — add .v181-spring for native tap feedback per V.191.
+      chip.className = 'v174-recent-chip v181-spring';
+      chip.textContent = '🕒 ' + (clean.length > 28 ? clean.slice(0, 26) + '…' : clean);
       chip.title = clean;
-      chip.addEventListener('click', (function (q) { return function () {
+      chip.addEventListener('click', (function (q) { return function (ev) {
+        try { ev && ev.preventDefault && ev.preventDefault(); } catch (e) {}
+        try { ev && ev.stopPropagation && ev.stopPropagation(); } catch (e) {}
         try { if (typeof window.v172Haptic === 'function') window.v172Haptic(20); } catch (e) {}
-        var legacy = document.getElementById('text-input');
-        if (legacy) legacy.value = q;
-        if (typeof window.goText === 'function') window.goText();
-        else if (typeof window.callNormalize === 'function') window.callNormalize({ input_type: 'text', text: q });
-      }; })(clean));
+        // V.138 — bypass goText entirely; call callNormalize directly with
+        // the canonical string so we don't race the DOM input read.
+        setTimeout(function () {
+          try {
+            if (typeof window.callNormalize === 'function') {
+              window.callNormalize({ input_type: 'text', text: q });
+            }
+          } catch (e) {}
+        }, 0);
+      }; })(clean), true);
       row.appendChild(chip);
       shown++;
     }
