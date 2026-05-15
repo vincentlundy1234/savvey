@@ -10264,8 +10264,8 @@ try {
 // for MPN OCR; 0.5 is the floor (compression artefacts kill recall in
 // low-light Argos/Currys captures below that). Don't drop below 0.6 without
 // re-testing Vision recall on the eval battery first.
-const SNAP_QUALITY = 0.85;   // V.129c — was 0.6. Higher JPEG quality so Haiku Vision can read fine text on glossy boxes without losing detail to compression artefacts.
-const SNAP_MAX_WIDTH = 1024; // V.129c — max dimension. Haiku Vision internally downsamples above this; sending bigger burns upload time for no gain.
+const SNAP_QUALITY = 0.7;    // V.141 Fast-Snap — was 0.85. Aggressive compression so payload stays under 150KB; Haiku Vision still reads text fine at 0.7.
+const SNAP_MAX_WIDTH = 800;  // V.141 Fast-Snap — was 1024. Vercel timeout hotfix: smaller payload = faster upload + smaller Haiku input = lower 502/504 risk.
 
 // V.129c — IMAGE PREPROCESSOR. The cam-video element is a live stream so
 // no EXIF metadata exists at frame-grab time (the browser already orients
@@ -11233,18 +11233,19 @@ async function callNormalize(body) {
   const _ac = new AbortController();
   _savveyActiveAbort = _ac;
   const _mySeq = ++_savveyFetchSeq;
-  // V.191 — Client-side AbortController tightened from 15s → 10s. The
-  // backend vercel function ceiling is 12s; the client must give up
-  // BEFORE the server does so the UI surfaces a clean timeout instead
-  // of waiting for a (possibly hung) 504. A single _ato_v191 handle
-  // owns the timer; we no longer create-then-immediately-clear an
-  // earlier _ato as the V.140 code did.
+  // V.141 Fast-Snap — client abort budget bumped to match the new
+  // Vercel maxDuration. Image input gets 45s (Vision + SerpAPI worst
+  // case); text/url/barcode stay on the V.191 10s ceiling because they
+  // never need the Vision tokens. Client always gives up BEFORE the
+  // server so we surface a clean 504 instead of a hung connection.
+  var _v141IsImage = body && body.input_type === 'image';
+  var _v141TimeoutMs = _v141IsImage ? 45000 : 10000;
   var _timedOut = false;
   var _ato_v191 = setTimeout(function () {
     _timedOut = true;
-    try { console.warn('[V.191] /api/identify timeout after 10s — aborting.'); } catch (e) {}
+    try { console.warn('[V.141][timeout] /api/identify aborted after ' + _v141TimeoutMs + 'ms (input=' + (body && body.input_type) + ')'); } catch (e) {}
     try { _ac.abort(); } catch (e) {}
-  }, 10000);
+  }, _v141TimeoutMs);
   // Back-compat alias so any older finally{} block still finds the handle.
   var _ato_v140 = _ato_v191;
   try {
@@ -11272,6 +11273,49 @@ async function callNormalize(body) {
       track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms, err: _errBody.slice(0, 100) });
       clearInterval(phaseTimer);
       if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
+      // V.141 Fast-Snap — Timeout grace. 502/504/408/5xx on Snap (image
+      // input) now routes to the V.137 premium empty state with a
+      // 'Try typing the name instead' nudge, not the red error screen.
+      // Text/url/barcode keep the existing error screen (the 12s Haiku
+      // budget rarely trips them; if it does, the red screen surfaces
+      // the actual HTTP code for diagnostics).
+      var _v141IsTimeout = (r.status === 504 || r.status === 408);
+      var _v141IsServerErr = (r.status >= 500);
+      var _v141IsImage = (body && body.input_type === 'image');
+      if ((_v141IsTimeout || _v141IsServerErr) && _v141IsImage) {
+        try {
+          var es = document.getElementById('v137-empty-state');
+          if (es) {
+            var t = es.querySelector('.v137-empty-title');
+            var sb = es.querySelector('.v137-empty-sub');
+            var cta = es.querySelector('#v137-empty-retry');
+            if (t)  t.textContent  = 'Connection timed out.';
+            if (sb) sb.textContent = 'The image took too long to process. Try typing the name instead.';
+            if (cta) cta.textContent = 'Type the name';
+            // Hide the rest of the result-screen blocks so the empty
+            // state owns the viewport.
+            ['v138-product-img','v138-pricing','v138-verdict-card','v138-cta-stack','v138-title','v138-disclosure','v137-share-btn'].forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el) el.style.display = 'none';
+            });
+            es.classList.add('show');
+            // Retry CTA → bounce to type sheet.
+            if (cta && !cta._v141Wired) {
+              cta._v141Wired = true;
+              cta.addEventListener('click', function (ev) {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                try { if (typeof goHome === 'function') goHome(); } catch (e) {}
+                setTimeout(function () {
+                  try { if (typeof window.v172OpenTypeSheet === 'function') window.v172OpenTypeSheet(); } catch (e) {}
+                }, 80);
+              }, true);
+            }
+            try { show('result'); } catch (e) {}
+            try { if (window.savveyTelemetry) window.savveyTelemetry({type:'snap_timeout', http: r.status, ms: _ms, timestamp: Date.now()}); } catch (e) {}
+            return;
+          }
+        } catch (e) { try { console.warn('[V.141] empty state mount failed', e); } catch (er) {} }
+      }
       let title, sub;
       if (r.status === 504 || r.status === 408) {
         title = 'The AI took too long to respond.';
