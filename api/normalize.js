@@ -626,7 +626,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v132-1'; // V.132 — bump invalidates pre-V.132 cache rows that lack the mandated `description` field on alternatives_meta.
+const CACHE_PREFIX = 'sav-v144e-1'; // V.144e — invalidates pre-V.144 cached responses that lack tier.image_url enrichment. // V.132 — bump invalidates pre-V.132 cache rows that lack the mandated `description` field on alternatives_meta.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
