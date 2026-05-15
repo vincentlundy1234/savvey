@@ -8123,8 +8123,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v155-UGLY-TRUTH';
-  var V126_GUARD          = 'savvey_v155_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v156-PROCESS-SAFETY';
+  var V126_GUARD          = 'savvey_v156_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8468,7 +8468,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v155</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v156</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -11027,11 +11027,17 @@ async function captureFrame() {
   // user feels the shutter "land" before the loading screen fires. The
   // captured snap stays on screen with a sweeping scan line + dim.
   showV104Tension(_lastSnapDataUrl);
+  // V.156 — READ DIMENSIONS BEFORE ZEROING. V.151's _v151ZeroCanvas
+  // sets canvas.width = 0 + canvas.height = 0 to release pixel memory.
+  // V.155 then read .width AFTER zeroing, so first_canvas_w was always
+  // logged as 0 — making the debug pane look like a capture failure when
+  // the encode had actually succeeded. Read first, then release.
+  const _firstWidth  = (firstCanvas && firstCanvas.width)  || 0;
+  const _firstHeight = (firstCanvas && firstCanvas.height) || 0;
   // V.151 — release the first canvas backing store now that we have the
   // base64 string + the data URL. The pixel memory can be reclaimed by
   // the browser immediately rather than waiting until captureFrame returns.
   _v151ZeroCanvas(firstCanvas);
-  const _firstWidth = (firstCanvas && firstCanvas.width) || 0;
   firstCanvas = null;
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) {
@@ -11082,7 +11088,9 @@ async function captureFrame() {
         frames: frames.length,
         quality: SNAP_QUALITY,
         first_canvas_w: _firstWidth,
+        first_canvas_h: _firstHeight,
         v154_cap_status: (_v147KB <= 800 ? 'WITHIN CAP (good)' : 'CAP DEFEATED — payload too large'),
+        v156_canvas_check: (_firstWidth > 0 && _firstHeight > 0 ? 'CANVAS OK ' + _firstWidth + 'x' + _firstHeight : 'ZERO CANVAS — capture failed'),
       });
     } catch (e) {}
   } catch (e) {}

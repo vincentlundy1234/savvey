@@ -28,7 +28,38 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v153b-pro-rebalance';
+const VERSION             = 'normalize.js v3.4.5v156-process-safety';
+
+// V.156 — PROCESS-LEVEL SAFETY NET. The V.202 envelope catches anything
+// thrown synchronously OR awaited inside the request handler. But Vercel
+// will return FUNCTION_INVOCATION_FAILED (text/plain "A server error has
+// occurred") if an UNHANDLED PROMISE REJECTION fires anywhere in the
+// process — e.g., from a fire-and-forget Promise that never had a .catch
+// attached, or from a setTimeout callback that throws. These handlers
+// turn those crashes into log lines instead of dead lambdas. Registered
+// at module-load time so they're always live, even for the very first
+// request after a cold start.
+try {
+  if (!globalThis.__v156Safety) {
+    globalThis.__v156Safety = true;
+    process.on('unhandledRejection', (reason, promise) => {
+      try {
+        const r = reason && reason.stack ? String(reason.stack).slice(0, 1200)
+                : reason && reason.message ? String(reason.message).slice(0, 800)
+                : String(reason).slice(0, 800);
+        console.error('[V.156][unhandledRejection] ' + (reason && reason.name ? reason.name + ': ' : '') + r);
+      } catch (e) {}
+    });
+    process.on('uncaughtException', (err) => {
+      try {
+        const r = err && err.stack ? String(err.stack).slice(0, 1200)
+                : err && err.message ? String(err.message).slice(0, 800)
+                : String(err).slice(0, 800);
+        console.error('[V.156][uncaughtException] ' + (err && err.name ? err.name + ': ' : '') + r);
+      } catch (e) {}
+    });
+  }
+} catch (e) {}
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -5892,7 +5923,13 @@ export default async function handler(req, res) {
     // degraded' state (V.146 mandate) from a legitimate no_match (no
     // shopping results). Old 'v202_envelope_caught' value preserved as
     // outcome_reason for backward-compat audits.
-    return res.status(200).json({
+    // V.156 — wrap res.json() itself in try/catch + double-fallback. If
+    // res.status(200).json(...) throws (e.g., response already partially
+    // streamed, headers already sent under the radar of headersSent, or
+    // node http binding rejected the body), fall back to a raw res.end()
+    // with a minimal JSON envelope. If THAT fails too, just res.end().
+    // This is the last line of defence before FUNCTION_INVOCATION_FAILED.
+    const _v156Envelope = {
       outcome: 'error',
       outcome_reason: 'v202_envelope_caught',
       error: 'upstream_exception',
@@ -5906,9 +5943,26 @@ export default async function handler(req, res) {
         envelope: 'v202_caught',
         exception_name: _name,
         exception_message: _msg,
+        exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
         latency_ms: Date.now() - _v202T0,
       },
-    });
+    };
+    try {
+      return res.status(200).json(_v156Envelope);
+    } catch (jsonErr) {
+      try { console.error('[V.156][envelope] res.json() threw — falling back to res.end(). ' + (jsonErr && jsonErr.message)); } catch (e) {}
+      try {
+        if (typeof res.setHeader === 'function') {
+          try { res.setHeader('Content-Type', 'application/json'); } catch (e2) {}
+        }
+        if (typeof res.statusCode === 'number') res.statusCode = 200;
+        return res.end(JSON.stringify(_v156Envelope));
+      } catch (endErr) {
+        try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
+        try { res.end(); } catch (e3) {}
+        return;
+      }
+    }
   }
 }
 : 'upstream_exception',
@@ -5925,5 +5979,81 @@ export default async function handler(req, res) {
         latency_ms: Date.now() - _v202T0,
       },
     });
+  }
+}
+ _msg = err && err.message ? String(err.message).slice(0, 240) : String(err).slice(0, 240);
+    const _name = err && err.name ? String(err.name).slice(0, 40) : 'Error';
+    try {
+      console.error(`[${VERSION}] [V.202][envelope] UNCAUGHT ${_name}: ${_msg}`);
+      if (err && err.stack) console.error(err.stack.toString().slice(0, 1200));
+    } catch (e) {}
+    if (res.headersSent) {
+      try { res.end(); } catch (e2) {}
+      return;
+    }
+    try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+    const _v156Envelope = {
+      outcome: 'error',
+      outcome_reason: 'v202_envelope_caught',
+      error: 'upstream_exception',
+      message: 'System degraded',
+      links: [],
+      pricing: { best_price: null, avg_market: null, price_band: null },
+      identity: null,
+      alternatives_array: [],
+      _meta: {
+        version: VERSION,
+        envelope: 'v202_caught',
+        exception_name: _name,
+        exception_message: _msg,
+        exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
+        latency_ms: Date.now() - _v202T0,
+      },
+    };
+    try {
+      return res.status(200).json(_v156Envelope);
+    } catch (jsonErr) {
+      try { console.error('[V.156][envelope] res.json() threw — falling back to res.end(). ' + (jsonErr && jsonErr.message)); } catch (e) {}
+      try {
+        if (typeof res.setHeader === 'function') {
+          try { res.setHeader('Content-Type', 'application/json'); } catch (e2) {}
+        }
+        if (typeof res.statusCode === 'number') res.statusCode = 200;
+        return res.end(JSON.stringify(_v156Envelope));
+      } catch (endErr) {
+        try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
+        try { res.end(); } catch (e3) {}
+        return;
+      }
+    }
+  }
+}
+ exception_name: _name,
+        exception_message: _msg,
+        exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
+        latency_ms: Date.now() - _v202T0,
+      },
+    };
+    try {
+      return res.status(200).json(_v156Envelope);
+    } catch (jsonErr) {
+      try { console.error('[V.156][envelope] res.json() threw: ' + (jsonErr && jsonErr.message)); } catch (e) {}
+      try {
+        if (typeof res.setHeader === 'function') {
+          try { res.setHeader('Content-Type', 'application/json'); } catch (e2) {}
+        }
+        if (typeof res.statusCode === 'number') res.statusCode = 200;
+        return res.end(JSON.stringify(_v156Envelope));
+      } catch (endErr) {
+        try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
+        try { res.end(); } catch (e3) {}
+        return;
+      }
+    }
+  }
+}
+  return;
+      }
+    }
   }
 }
