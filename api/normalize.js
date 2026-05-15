@@ -113,7 +113,7 @@ const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.
                                           // rather burn searches than serve wrong numbers.
 const KV_TIMEOUT_MS           = 1500;
 const KV_TIMEOUT_SECONDARY_MS = 800; // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
-const VISION_TIMEOUT_MS       = 18000; // V.147 — Vision-only ceiling raised 8.5s -> 18s. Text/URL/barcode Haiku calls keep TIMEOUT_MS=8500. Snap pipeline needs more headroom on complex glossy packaging. // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
+const VISION_TIMEOUT_MS       = 14000; // V.149 — tightened 18s -> 14s. Real-world Vercel 504s show the function gets killed before our 18s timer fires. 14s gives our V.143 envelope time to race ahead of Vercel's hard ceiling and return outcome:'timeout' cleanly. // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
 
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
 // first-party retailers + reputable UK marketplaces. ANY host not on

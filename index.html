@@ -31,6 +31,39 @@
 <meta name="twitter:description" content="Snap, paste, type or scan any product — instant UK price comparison across Amazon, Argos, Currys, John Lewis, and more.">
 <meta name="twitter:image" content="https://savvey.vercel.app/icon-512.png">
 <title>Savvey — shop smart.</title>
+<script>
+// V.149 NUCLEAR CACHE BUST — runs once per device. After the V.139-V.147
+// rapid-fire series, some phones may still hold stale SW caches that
+// shadow the current frontend code. This IIFE unregisters every SW,
+// purges every cache key, then hard-reloads. Gated on a localStorage
+// flag so it only fires ONCE per device, not on every page load.
+(function v149NuclearCacheBust() {
+  try {
+    if (localStorage.getItem('savvey_v149_purged') === '1') return;
+    var purge = async function () {
+      try {
+        if ('serviceWorker' in navigator) {
+          var regs = await navigator.serviceWorker.getRegistrations();
+          for (var r of regs) { try { await r.unregister(); } catch (e) {} }
+        }
+      } catch (e) {}
+      try {
+        if ('caches' in self) {
+          var keys = await caches.keys();
+          await Promise.all(keys.map(function (k) { return caches.delete(k); }));
+        }
+      } catch (e) {}
+      try { localStorage.setItem('savvey_v149_purged', '1'); } catch (e) {}
+      try {
+        console.log('[V.149] Nuclear cache bust complete. Reloading fresh app shell.');
+        // Hard reload bypasses HTTP cache.
+        location.reload();
+      } catch (e) {}
+    };
+    purge();
+  } catch (e) { try { console.warn('[V.149] cache bust failed:', e); } catch (er) {} }
+})();
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
