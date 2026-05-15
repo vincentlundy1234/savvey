@@ -4404,17 +4404,20 @@ function _v138BuildResponse({
       pricing.avg_market = null;
       pricing.price_band = null;
     }
-    // V.128 — STRIP OUTLIERS FROM RESPONSE.LINKS. The V.200 rescue used
-    // to mark is_outlier=true but kept the bad link in the response stack,
-    // which is how the £24.95 Boseuk appeared in the retailer stack
-    // under a £299 Bose SoundLink Max card. Splice them out so the
-    // frontend never sees scam-flagged listings.
+    // V.128 — STRIP OUTLIERS FROM RESPONSE.LINKS. V.136 — also count
+    // the strip so the frontend can surface an 'N outliers removed for
+    // accuracy' transparency footer (Founder mandate).
     if (Array.isArray(links)) {
+      let _v136StripCount = 0;
       for (let _i = links.length - 1; _i >= 0; _i--) {
         if (links[_i] && links[_i].is_outlier === true) {
           try { console.log(`[V.128][strip] removing outlier from response.links → ${links[_i].retailer} £${links[_i].price_gbp}`); } catch (e) {}
           links.splice(_i, 1);
+          _v136StripCount++;
         }
+      }
+      if (_v136StripCount > 0) {
+        try { pricing.__v136_strip_count = _v136StripCount; } catch (e) {}
       }
     }
   }

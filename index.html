@@ -5373,6 +5373,52 @@
 .v140-skel-blurb.short { width: 60%; }
 #v138-category       { min-height: 13px; display: block; }
 #v138-verdict-text   { min-height: 32px; }
+/* V.136 — BEST PRICE hero accent + outlier footer styling. */
+.v136-cta-best-price {
+  position: relative;
+  box-shadow: 0 0 0 2px rgba(42,107,34,0.45), 0 10px 24px -8px rgba(42,107,34,0.35), inset 0 1px 0 rgba(255,255,255,0.55) !important;
+  background: linear-gradient(135deg, rgba(42,107,34,0.96) 0%, rgba(42,107,34,1) 100%) !important;
+}
+.v136-cta-best-price .v136-cta-name { color: #fff !important; font-weight: 800 !important; }
+.v136-cta-best-price .v136-cta-sub { color: rgba(255,255,255,0.85) !important; }
+.v136-cta-best-price .v136-cta-price { color: #fff !important; font-weight: 800 !important; }
+.v136-best-eyebrow {
+  display: inline-block;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #fff8d6;
+  background: rgba(0,0,0,0.18);
+  padding: 2px 7px;
+  border-radius: 999px;
+  margin-bottom: 4px;
+  align-self: flex-start;
+  text-transform: uppercase;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.18);
+}
+#v136-outlier-footer {
+  margin: 12px 4px 6px;
+  padding: 10px 14px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #3a3a3a;
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  text-align: center;
+  letter-spacing: 0.01em;
+  display: none;
+}
+#v136-outlier-footer.show { display: block; }
+#v136-outlier-footer .v136-outlier-dismiss {
+  margin-left: 10px;
+  font-weight: 700;
+  color: #2a6b22;
+  cursor: pointer;
+  user-select: none;
+}
 #v138-verdict-pill   { min-height: 22px; }
 .v136-similar-blurb  { min-height: 24px; }
 .v140-softfail {
@@ -12571,7 +12617,7 @@ function renderResult(displayName, payload) {
         links.forEach(function (lnk, i) {
           if (!lnk || !lnk.url) return;
           var a = document.createElement('a');
-          a.className = 'v136-cta ' + (i === 0 ? 'v136-cta-primary' : 'v136-cta-secondary');
+          a.className = 'v136-cta ' + (i === 0 ? 'v136-cta-primary v136-cta-best-price' : 'v136-cta-secondary');
           a.href = lnk.url;
           a.target = '_blank';
           a.rel = 'noopener nofollow';
@@ -12582,8 +12628,13 @@ function renderResult(displayName, payload) {
           else if (/john\s*lewis/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-jl';
           var initial = (lnk.retailer || '?').charAt(0).toLowerCase();
           var priceStr = lnk.price_str || (lnk.price_gbp != null ? ('£' + Number(lnk.price_gbp).toFixed(2)) : '—');
+          // V.136 — Hero the cheapest. First card gets a 'BEST PRICE' eyebrow
+          // pill INSIDE the body block so the badge sits above the retailer
+          // name without breaking the existing flex layout.
+          var _v136BestEyebrow = (i === 0) ? '<span class="v136-best-eyebrow">★ BEST PRICE</span>' : '';
           a.innerHTML = '<span class="v136-cta-mark ' + markCls + '">' + initial + '</span>'
                      + '<span class="v136-cta-body">'
+                     +   _v136BestEyebrow
                      +   '<span class="v136-cta-name">' + (lnk.retailer || 'Retailer') + '</span>'
                      +   '<span class="v136-cta-sub">' + (lnk.delivery_note || '') + '</span>'
                      + '</span>'
@@ -12592,6 +12643,41 @@ function renderResult(displayName, payload) {
         });
       }
     }
+
+    // --- V.136 OUTLIER TRANSPARENCY FOOTER ----------------------------
+    // When the backend dropped any listing as an outlier (V.128 strip or
+    // V.145 median floor), surface a subtle footer so the user can see the
+    // app is actively defending them against scam prices. Dismissible.
+    try {
+      var _v136OutlierCount =
+        (pric.avg_market && Number(pric.avg_market.outliers_rejected)) ||
+        (pric && Number(pric.__v136_strip_count)) ||
+        (p && p._meta && Number(p._meta.outliers_removed)) || 0;
+      var _v136StackParent = stackEl && stackEl.parentNode;
+      // Strip any previous footer so re-renders don't double-stamp.
+      if (_v136StackParent) {
+        var _v136Prev = _v136StackParent.querySelector('#v136-outlier-footer');
+        if (_v136Prev) _v136Prev.parentNode.removeChild(_v136Prev);
+      }
+      if (_v136OutlierCount > 0 && _v136StackParent) {
+        var _v136Footer = document.createElement('div');
+        _v136Footer.id = 'v136-outlier-footer';
+        _v136Footer.className = 'show';
+        _v136Footer.innerHTML = '🛡 ' + _v136OutlierCount + ' outlier' + (_v136OutlierCount === 1 ? '' : 's') + ' removed for accuracy.'
+                              + '<span class="v136-outlier-dismiss" role="button" tabindex="0">Dismiss</span>';
+        _v136Footer.querySelector('.v136-outlier-dismiss').addEventListener('click', function (e) {
+          try { e.preventDefault(); e.stopPropagation(); } catch (er) {}
+          _v136Footer.style.transition = 'opacity 220ms ease, transform 220ms ease';
+          _v136Footer.style.opacity = '0';
+          _v136Footer.style.transform = 'translateY(-4px)';
+          setTimeout(function () { try { _v136Footer.remove(); } catch (er) {} }, 260);
+        });
+        // Mount AFTER the cta-stack (or near it). insertAdjacentElement on
+        // the stack's parent below it.
+        if (stackEl.nextSibling) _v136StackParent.insertBefore(_v136Footer, stackEl.nextSibling);
+        else _v136StackParent.appendChild(_v136Footer);
+      }
+    } catch (e) { try { console.warn('[V.136 outlier footer]', e); } catch (er) {} }
 
     // --- DISCLOSURE ---------------------------------------------------
     var discEl = document.getElementById('v138-disclosure');
@@ -15123,12 +15209,13 @@ async function _v140KickoffSynthesize(idPayload) {
   // V.173 — Consumer voice for the Loading Theater. Banished: "SKU",
   // "AI Price Floor", "quarantine", "Ranking". Reads like a friendly
   // shopping assistant on a tea break.
+  // V.136 — Founder-mandated cycle, narrates the actual pipeline phases.
   var V171_LOADING_PHRASES = [
-    'Scanning trusted retailers…',
-    'Finding the best deals…',
-    'Checking Amazon, Argos & Currys…',
+    'Identifying product…',
+    'Scanning Amazon & Argos…',
+    'Checking Currys, John Lewis & more…',
+    'Filtering outliers…',
     'Comparing UK prices…',
-    'Spotting the cheapest shop…',
     'Writing Savvey’s verdict…',
   ];
   var _v171LoadingTimer = null;
