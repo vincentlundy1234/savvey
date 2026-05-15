@@ -2702,14 +2702,28 @@ async function _v144FetchTierThumbnail(query) {
     clearTimeout(timer);
     if (r.ok) {
       const j = await r.json();
-      const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
-      for (const item of results) {
-        if (!item) continue;
-        const candidate = (typeof item.thumbnail === 'string' && item.thumbnail.startsWith('http'))
-          ? item.thumbnail
-          : ((typeof item.serpapi_thumbnail === 'string' && item.serpapi_thumbnail.startsWith('http'))
-              ? item.serpapi_thumbnail : null);
-        if (candidate) { thumb = candidate.slice(0, 500); break; }
+      // V.144d — SerpAPI google_shopping returns thumbnails across several
+      // arrays depending on the query class. Branded products (Bose, Dyson,
+      // Apple) often land in 'inline_shopping_results' or 'immersive_products'
+      // not the standard 'shopping_results'. Scan all known arrays in order.
+      const _v144Arrays = [
+        j.shopping_results,
+        j.inline_shopping_results,
+        j.immersive_products,
+        j.featured_results,
+        j.related_products,
+      ].filter(Array.isArray);
+      outer: for (const arr of _v144Arrays) {
+        for (const item of arr) {
+          if (!item) continue;
+          const candidate = (typeof item.thumbnail === 'string' && item.thumbnail.startsWith('http'))
+            ? item.thumbnail
+            : ((typeof item.serpapi_thumbnail === 'string' && item.serpapi_thumbnail.startsWith('http'))
+                ? item.serpapi_thumbnail
+                : ((typeof item.image === 'string' && item.image.startsWith('http'))
+                    ? item.image : null));
+          if (candidate) { thumb = candidate.slice(0, 500); break outer; }
+        }
       }
     }
   } catch (e) {
