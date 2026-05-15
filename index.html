@@ -12792,7 +12792,7 @@ function renderResult(displayName, payload) {
           a.className = 'v136-cta ' + (i === 0 ? 'v136-cta-primary v136-cta-best-price' : 'v136-cta-secondary');
           a.href = lnk.url;
           a.target = '_blank';
-          a.rel = 'noopener nofollow';
+          a.rel = 'noopener noreferrer'; // V.139 — per Founder mandate
           var markCls = 'v136-cta-mark-' + ((lnk.retailer || '').toLowerCase().replace(/[^a-z]/g,'').slice(0,4) || 'rt');
           if (/amazon/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-amzn';
           else if (/currys/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-curr';
@@ -17138,6 +17138,141 @@ async function _v140KickoffSynthesize(idPayload) {
    Mounted at end-of-body so all referenced DOM ids exist by the time the
    IIFE runs. No global namespace pollution beyond window.savveyShareDeal.
    ════════════════════════════════════════════════════════════════════════ */
+// ════════════════════════════════════════════════════════════════════════
+// V.139 — AFFILIATE ROUTING + TELEMETRY BEACONS
+// Centralised outbound handler injects affiliate tags on every retailer
+// click. Scaffolding for Awin partners. Plus silent sendBeacon telemetry
+// on no_match outcomes so we can audit scraper health in production.
+// ════════════════════════════════════════════════════════════════════════
+(function v139Init() {
+  var AMAZON_TAG = 'savvey-21';
+  // Awin publisher ID + program codes — set when partnerships go live.
+  // Keys are normalised lowercase retailer slugs.
+  var AWIN_PROGRAMS = {
+    // 'argos':   { pubId: 'PUBID', mid: 'XXXX' },
+    // 'currys':  { pubId: 'PUBID', mid: 'XXXX' },
+    // 'johnlewis': { pubId: 'PUBID', mid: 'XXXX' },
+  };
+  function _slug(name) {
+    return String(name || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  }
+  function routeOutboundTraffic(url, retailer) {
+    if (!url || typeof url !== 'string') return url;
+    var slug = _slug(retailer);
+    try {
+      var u = new URL(url);
+      var host = u.hostname.toLowerCase();
+      // Amazon — append (or replace) ?tag=savvey-21.
+      if (host.endsWith('amazon.co.uk') || host.endsWith('amazon.com') || host.endsWith('amzn.eu') || host.endsWith('amzn.to')) {
+        u.searchParams.set('tag', AMAZON_TAG);
+        return u.toString();
+      }
+      // eBay UK — placeholder for ePN (eBay Partner Network). No-op for now.
+      if (host.endsWith('ebay.co.uk')) {
+        // TODO: prepend EPN deep-link wrapper when ePN keys are issued.
+        return u.toString();
+      }
+      // Awin merchants — wrap with awin1.com/cread.php?... when configured.
+      var awin = AWIN_PROGRAMS[slug] || AWIN_PROGRAMS[host.split('.')[0]];
+      if (awin && awin.pubId && awin.mid) {
+        return 'https://www.awin1.com/cread.php?awinmid=' + encodeURIComponent(awin.mid)
+             + '&awinaffid=' + encodeURIComponent(awin.pubId)
+             + '&ued=' + encodeURIComponent(u.toString());
+      }
+    } catch (e) {}
+    return url;
+  }
+  window.routeOutboundTraffic = routeOutboundTraffic;
+
+  // Delegated click interceptor on the V.138 retailer stack.
+  // Catches every retailer card tap, rewrites href via routeOutboundTraffic
+  // BEFORE the browser follows the link. rel set to noopener noreferrer
+  // per Founder mandate.
+  document.addEventListener('click', function (ev) {
+    try {
+      var a = ev.target && ev.target.closest && ev.target.closest('#v138-cta-stack a.v136-cta');
+      if (!a) return;
+      var retailer = '';
+      try { retailer = a.querySelector('.v136-cta-name') ? a.querySelector('.v136-cta-name').textContent : ''; } catch (e) {}
+      var original = a.getAttribute('href') || '';
+      var rewritten = routeOutboundTraffic(original, retailer);
+      if (rewritten && rewritten !== original) {
+        a.setAttribute('href', rewritten);
+        try { console.log('[V.139] outbound rewrite: ' + retailer + ' -> ' + rewritten.slice(0,80)); } catch (e) {}
+      }
+      // Always enforce security attributes.
+      a.setAttribute('rel', 'noopener noreferrer');
+      a.setAttribute('target', '_blank');
+      // Telemetry: outbound click.
+      try {
+        if (navigator.sendBeacon) {
+          var payload = JSON.stringify({
+            type: 'outbound_click',
+            retailer: retailer,
+            host: (function(){ try { return new URL(rewritten).hostname; } catch(e){ return null; } })(),
+            ts: Date.now(),
+          });
+          navigator.sendBeacon('/api/telemetry', payload);
+        }
+      } catch (e) {}
+    } catch (e) {}
+  }, true);
+
+  // ════════════════════════════════════════════════════════════════════
+  // V.139 — SILENT ERROR TELEMETRY
+  // Wraps callNormalize so any no_match outcome OR fetch failure fires
+  // a minimal sendBeacon to /api/telemetry. Beacon payload is tiny
+  // (~200 bytes) and ignored by the user — no UI interruption.
+  // ════════════════════════════════════════════════════════════════════
+  function fireTelemetryBeacon(payload) {
+    try {
+      if (!navigator.sendBeacon) return false;
+      var json = JSON.stringify(payload);
+      return navigator.sendBeacon('/api/telemetry', json);
+    } catch (e) {
+      try { console.warn('[V.139] beacon failed', e); } catch (er) {}
+      return false;
+    }
+  }
+  window.savveyTelemetry = fireTelemetryBeacon;
+  if (typeof window.callNormalize === 'function' && !window.__v139BeaconWrapped) {
+    var _v139OrigNormalize = window.callNormalize;
+    window.callNormalize = async function (body) {
+      var ret;
+      var query = body && (body.text || body.url || body.ean) || '';
+      try {
+        ret = await _v139OrigNormalize.apply(this, arguments);
+      } catch (err) {
+        fireTelemetryBeacon({
+          query: String(query).slice(0, 200),
+          input_type: body && body.input_type,
+          error_type: 'fetch_exception',
+          message: String(err && err.message || err).slice(0, 200),
+          timestamp: Date.now(),
+        });
+        throw err;
+      }
+      // Inspect last result for no_match outcome; fire silently.
+      try {
+        var lr = window.lastResult;
+        if (lr && lr.outcome === 'no_match') {
+          fireTelemetryBeacon({
+            query: String(query).slice(0, 200),
+            input_type: body && body.input_type,
+            error_type: 'no_match',
+            outcome_reason: lr.outcome_reason || null,
+            serp_examined: lr._meta && lr._meta.serp_diag && lr._meta.serp_diag.examined,
+            serp_priced:   lr._meta && lr._meta.serp_diag && lr._meta.serp_diag.priced,
+            timestamp: Date.now(),
+          });
+        }
+      } catch (e) {}
+      return ret;
+    };
+    window.__v139BeaconWrapped = true;
+  }
+})();
+
 (function v137Init() {
   // ── Empty state activation hook (wraps renderResult) ────────────────
   function applyEmptyState(payload) {

@@ -7,6 +7,14 @@
 //                    Network-first on navigate so fresh HTML is always tried
 //    /api/*        — Network-Only. Never cache identification calls.
 //
+//  V.139 (15 May 2026): Strategy explicitly aligned to Founder mandate:
+//    - Google Fonts: Stale-While-Revalidate (cache fast, refresh quietly)
+//    - SVG icons + manifest + static shell: cache-first via STATIC_VER
+//    - Navigation: network-first (so deploy ships land immediately)
+//    - /api/normalize, /api/identify, /api/synthesize, /api/telemetry:
+//      strictly network-only — users never see cached prices, and
+//      sendBeacon traffic always egresses to the live endpoint.
+//
 //  V.124 (11 May 2026): AGGRESSIVE CACHE BUSTER + UPDATE TOAST
 //  Panel mandate after iPhone PWA showed V.122+ visuals were not landing
 //  because iOS Safari was serving the old cached shell. Three changes:
@@ -27,7 +35,7 @@
 // v3.4.5o (6 May 2026): STATIC_VER bumped v345n -> v345o for Wave E
 // V.124 (11 May 2026): STATIC_VER bumped v345v123 -> v345v124 + new
 // activate logic above; rolling forward will be self-recovering from now on.
-const STATIC_VER    = 'savvey-static-v345v132-CONTEXT-COPY';
+const STATIC_VER    = 'savvey-static-v345v139-AFFILIATE-TELEMETRY';
 const FONT_VER      = 'savvey-fonts-v2';
 const KEEP          = [STATIC_VER, FONT_VER];
 const STATIC_ASSETS = [
