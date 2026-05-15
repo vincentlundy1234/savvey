@@ -1,16 +1,16 @@
 {
   "functions": {
     "api/normalize.js": {
-      "memory": 256,
-      "maxDuration": 12
+      "memory": 1024,
+      "maxDuration": 60
     },
     "api/identify.js": {
-      "memory": 256,
-      "maxDuration": 12
+      "memory": 1024,
+      "maxDuration": 60
     },
     "api/synthesize.js": {
-      "memory": 256,
-      "maxDuration": 12
+      "memory": 1024,
+      "maxDuration": 30
     },
     "api/health.js": {
       "memory": 128,

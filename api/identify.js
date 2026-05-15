@@ -14,29 +14,76 @@ export const config = {
   api: { bodyParser: false }
 };
 
+// V.158 — Function-level maxDuration export. Belt-and-braces alongside
+// vercel.json. On Vercel Functions this hint is honoured by their build
+// system for the deployed lambda timeout. Without it, V.157's config
+// export may have inadvertently signalled a Next.js-style route and
+// triggered a different default timeout that dropped us to ~12s.
+export const maxDuration = 60;
+
 import handler from './normalize.js';
 
 function _v157ReadRawBody(req) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let chunkCount = 0;
+    const startMs = Date.now();
+    // V.158 — Hard 25s timeout guard. If req.on('data')/req.on('end')
+    // never fire (e.g., Vercel middleware consumed the stream already,
+    // or the socket hung), we resolve with whatever we have so the
+    // outer handler can still attempt JSON.parse and surface a clean
+    // envelope. Better to ship a 'no body' envelope than to hang for
+    // 60s and 504.
+    const hardTimer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { console.warn('[V.158][identify-stream] HARD TIMEOUT after 25s · chunks=' + chunkCount + ' bytes_so_far=' + data.length); } catch (e) {}
+        resolve(data);
+      }
+    }, 25000);
+    let data = '';
+    let bytes = 0;
+    const MAX_BYTES = 6 * 1024 * 1024;
     try {
-      let data = '';
-      let bytes = 0;
-      const MAX_BYTES = 6 * 1024 * 1024;
       req.setEncoding && req.setEncoding('utf8');
       req.on('data', (chunk) => {
+        if (settled) return;
         try {
+          chunkCount++;
           bytes += (typeof chunk === 'string') ? chunk.length : (chunk.byteLength || 0);
           if (bytes > MAX_BYTES) {
+            settled = true;
+            clearTimeout(hardTimer);
             req.destroy && req.destroy();
             return reject(Object.assign(new Error('payload_too_large'), { code: 'PAYLOAD_TOO_LARGE', bytes }));
           }
           data += (typeof chunk === 'string') ? chunk : chunk.toString('utf8');
-        } catch (chunkErr) { reject(chunkErr); }
+        } catch (chunkErr) {
+          if (!settled) { settled = true; clearTimeout(hardTimer); reject(chunkErr); }
+        }
       });
-      req.on('end', () => resolve(data));
-      req.on('error', (e) => reject(e));
-      req.on('aborted', () => reject(new Error('client_aborted')));
-    } catch (outer) { reject(outer); }
+      req.on('end', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        try { console.log('[V.158][identify-stream] END · chunks=' + chunkCount + ' bytes=' + data.length + ' ms=' + (Date.now() - startMs)); } catch (e) {}
+        resolve(data);
+      });
+      req.on('error', (e) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        reject(e);
+      });
+      req.on('aborted', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        reject(new Error('client_aborted'));
+      });
+    } catch (outer) {
+      if (!settled) { settled = true; clearTimeout(hardTimer); reject(outer); }
+    }
   });
 }
 

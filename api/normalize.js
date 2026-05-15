@@ -32,12 +32,18 @@ export const config = {
   api: { bodyParser: false }
 };
 
+// V.158 — Function-level maxDuration export. Belt-and-braces alongside
+// vercel.json's "maxDuration": 60 (raised from 12 in V.158). Field test
+// showed the 12s ceiling killing Vision-branch requests at exactly that
+// mark — the Pro tier 60s setting was never actually wired through.
+export const maxDuration = 60;
+
 import { applySecurityHeaders } from './_shared.js';
 import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v157-raw-body-bypass';
+const VERSION             = 'normalize.js v3.4.5v158-restore-60s';
 
 // V.156 — PROCESS-LEVEL SAFETY NET. The V.202 envelope catches anything
 // thrown synchronously OR awaited inside the request handler. But Vercel
@@ -5913,25 +5919,59 @@ async function _v202InnerHandler(req, res) {
 // pre-step makes the direct path work as well as the identify.js path.
 function _v157ReadRawBodyForNormalize(req) {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let chunkCount = 0;
+    const startMs = Date.now();
+    const hardTimer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        try { console.warn('[V.158][normalize-stream] HARD TIMEOUT after 25s · chunks=' + chunkCount + ' bytes_so_far=' + data.length); } catch (e) {}
+        resolve(data);
+      }
+    }, 25000);
+    let data = '';
+    let bytes = 0;
+    const MAX_BYTES = 6 * 1024 * 1024;
     try {
-      let data = '';
-      let bytes = 0;
-      const MAX_BYTES = 6 * 1024 * 1024;
       req.setEncoding && req.setEncoding('utf8');
       req.on('data', (chunk) => {
+        if (settled) return;
         try {
+          chunkCount++;
           bytes += (typeof chunk === 'string') ? chunk.length : chunk.byteLength || 0;
           if (bytes > MAX_BYTES) {
+            settled = true;
+            clearTimeout(hardTimer);
             req.destroy && req.destroy();
             return reject(Object.assign(new Error('payload_too_large'), { code: 'PAYLOAD_TOO_LARGE', bytes }));
           }
           data += (typeof chunk === 'string') ? chunk : chunk.toString('utf8');
-        } catch (chunkErr) { reject(chunkErr); }
+        } catch (chunkErr) {
+          if (!settled) { settled = true; clearTimeout(hardTimer); reject(chunkErr); }
+        }
       });
-      req.on('end', () => resolve(data));
-      req.on('error', (e) => reject(e));
-      req.on('aborted', () => reject(new Error('client_aborted')));
-    } catch (outer) { reject(outer); }
+      req.on('end', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        try { console.log('[V.158][normalize-stream] END · chunks=' + chunkCount + ' bytes=' + data.length + ' ms=' + (Date.now() - startMs)); } catch (e) {}
+        resolve(data);
+      });
+      req.on('error', (e) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        reject(e);
+      });
+      req.on('aborted', () => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(hardTimer);
+        reject(new Error('client_aborted'));
+      });
+    } catch (outer) {
+      if (!settled) { settled = true; clearTimeout(hardTimer); reject(outer); }
+    }
   });
 }
 
