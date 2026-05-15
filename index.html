@@ -9976,8 +9976,93 @@ try {
 // for MPN OCR; 0.5 is the floor (compression artefacts kill recall in
 // low-light Argos/Currys captures below that). Don't drop below 0.6 without
 // re-testing Vision recall on the eval battery first.
-const SNAP_QUALITY = 0.6;
-const SNAP_MAX_WIDTH = 1024;
+const SNAP_QUALITY = 0.85;   // V.129c — was 0.6. Higher JPEG quality so Haiku Vision can read fine text on glossy boxes without losing detail to compression artefacts.
+const SNAP_MAX_WIDTH = 1024; // V.129c — max dimension. Haiku Vision internally downsamples above this; sending bigger burns upload time for no gain.
+
+// V.129c — IMAGE PREPROCESSOR. The cam-video element is a live stream so
+// no EXIF metadata exists at frame-grab time (the browser already orients
+// it correctly via the deviceorientation pipeline). However a future
+// file-upload door, or any code path that hands us a static blob (e.g.
+// share-target intent), needs an EXIF-aware rotate. This helper accepts
+// either a HTMLCanvasElement (no-op pass-through) or a Blob/File (parse
+// EXIF orientation, rotate to upright, return a canvas). Kept defensive
+// so the live-snap path stays zero-overhead.
+async function _v129ApplyExif(input) {
+  if (input instanceof HTMLCanvasElement) return input; // live-snap path — already upright
+  if (!(input instanceof Blob)) return null;
+  // Parse EXIF orientation from the JPEG APP1 segment. Minimal reader —
+  // we only need the Orientation tag (0x0112), values 1-8.
+  let orientation = 1;
+  try {
+    const buf = await input.slice(0, 65536).arrayBuffer();
+    const view = new DataView(buf);
+    if (view.byteLength >= 4 && view.getUint16(0) === 0xFFD8) {
+      let off = 2;
+      while (off < view.byteLength) {
+        const marker = view.getUint16(off); off += 2;
+        if (marker === 0xFFE1) { // APP1 / EXIF
+          const segLen = view.getUint16(off); off += 2;
+          const exifHeader = view.getUint32(off);
+          if (exifHeader !== 0x45786966) break; // 'Exif'
+          const tiffStart = off + 6;
+          const little = view.getUint16(tiffStart) === 0x4949;
+          const get16 = (o) => view.getUint16(o, little);
+          const get32 = (o) => view.getUint32(o, little);
+          const ifd0 = tiffStart + get32(tiffStart + 4);
+          const entries = get16(ifd0);
+          for (let i = 0; i < entries; i++) {
+            const e = ifd0 + 2 + i * 12;
+            if (get16(e) === 0x0112) { orientation = get16(e + 8); break; }
+          }
+          break;
+        } else if ((marker & 0xFF00) !== 0xFF00) {
+          break;
+        } else {
+          const segLen = view.getUint16(off); off += segLen;
+        }
+      }
+    }
+  } catch (e) { /* malformed EXIF → assume orientation 1 */ }
+  // Decode image and paint into an orientation-corrected canvas.
+  const url = URL.createObjectURL(input);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = reject;
+      i.src = url;
+    });
+    const w = img.naturalWidth, h = img.naturalHeight;
+    const swap = orientation >= 5 && orientation <= 8;
+    const cw = swap ? h : w, ch = swap ? w : h;
+    const c = document.createElement('canvas');
+    c.width = cw; c.height = ch;
+    const ctx = c.getContext('2d');
+    switch (orientation) {
+      case 2: ctx.translate(cw, 0);  ctx.scale(-1, 1); break;
+      case 3: ctx.translate(cw, ch); ctx.rotate(Math.PI); break;
+      case 4: ctx.translate(0, ch);  ctx.scale(1, -1); break;
+      case 5: ctx.rotate(0.5 * Math.PI); ctx.scale(1, -1); break;
+      case 6: ctx.rotate(0.5 * Math.PI); ctx.translate(0, -ch); break;
+      case 7: ctx.rotate(0.5 * Math.PI); ctx.translate(cw, -ch); ctx.scale(-1, 1); break;
+      case 8: ctx.rotate(-0.5 * Math.PI); ctx.translate(-cw, 0); break;
+      default: /* 1: identity */ break;
+    }
+    ctx.drawImage(img, 0, 0);
+    // Resize to V.129c max dimension if necessary.
+    const maxSide = Math.max(cw, ch);
+    if (maxSide > SNAP_MAX_WIDTH) {
+      const scale = SNAP_MAX_WIDTH / maxSide;
+      const rc = document.createElement('canvas');
+      rc.width  = Math.round(cw * scale);
+      rc.height = Math.round(ch * scale);
+      rc.getContext('2d').drawImage(c, 0, 0, rc.width, rc.height);
+      return rc;
+    }
+    return c;
+  } finally { URL.revokeObjectURL(url); }
+}
+window._v129ApplyExif = _v129ApplyExif;
 
 function downscaleImageToBase64(source, sourceWidth, sourceHeight) {
   const sw = sourceWidth || SNAP_MAX_WIDTH;
@@ -10909,6 +10994,47 @@ async function callNormalize(body) {
       track('normalize_stale_dropped', { input_type: body.input_type, ms });
       return;
     }
+    // V.129e — VISION EJECTOR SEAT UX. When the backend returns
+    // outcome:"unclear" for an image input, do NOT route to the error
+    // screen and do NOT route to the result screen with a hallucinated
+    // guess. First miss → retake overlay with a "Move closer & check
+    // lighting" message and a Retake button. Second consecutive miss →
+    // pivot to the barcode scanner with a friendly toast.
+    if (j && j.outcome === 'unclear' && body && body.input_type === 'image') {
+      window._v129UnclearStreak = (window._v129UnclearStreak || 0) + 1;
+      try { console.log('[V.129e] vision unclear, streak=' + window._v129UnclearStreak); } catch (e) {}
+      track('vision_unclear', { streak: window._v129UnclearStreak, ms });
+      if (window._v129UnclearStreak >= 2) {
+        // Pivot to barcode scanner with toast.
+        window._v129UnclearStreak = 0; // reset for next session
+        try {
+          if (typeof showToast === 'function') {
+            showToast("That's a tricky one! Let's try scanning the barcode instead.", 4200);
+          } else if (typeof showError === 'function') {
+            // fall back to a non-intrusive status line if toast helper missing
+            console.log("[V.129e] toast helper missing; falling back to console");
+          }
+        } catch (e) {}
+        setTimeout(function () {
+          try { if (typeof goBarcode === 'function') goBarcode(); else show('barcode'); } catch (e) {}
+        }, 350);
+        return;
+      }
+      // First miss — show retake overlay.
+      try {
+        if (typeof showV129RetakeOverlay === 'function') {
+          showV129RetakeOverlay();
+        } else {
+          // Inline minimal fallback: re-open camera.
+          if (typeof goSnap === 'function') goSnap();
+        }
+      } catch (e) { try { if (typeof goSnap === 'function') goSnap(); } catch (_) {} }
+      return;
+    }
+    // Reset streak on any non-unclear image response.
+    if (body && body.input_type === 'image' && j && j.outcome !== 'unclear') {
+      window._v129UnclearStreak = 0;
+    }
     if (!r.ok || j.error) {
       track('normalize_error', { input_type: body.input_type, status: r.status, error: j.error || r.status, ms });
       // Wave KK — Layer 2 safety block. Friendly redirect, no shaming.
@@ -11027,8 +11153,13 @@ async function callNormalize(body) {
     // V.140 OPTION B — kick off /api/synthesize asynchronously after
     // the identify-leg render. Synthesis only fires when the backend
     // gave us a synthesis_payload AND the user landed on a screen
-    // with text slots to fill (matched or disambig). Soft-fail safe.
-    if (j.synthesis_payload && (j.outcome === 'matched' || j.outcome === 'disambig')) {
+    // with text slots to fill (matched / matched_thin / disambig).
+    // V.130 — matched_thin was previously EXCLUDED, which caused the
+    // n=1-retailer dark-pillar bug (Makita strimmer, Bose Soundlink,
+    // ghd Platinum+ all returned matched_thin and never received a
+    // verdict summary). Single-retailer results deserve the verdict
+    // pillar too — the prompt handles n=1 already.
+    if (j.synthesis_payload && (j.outcome === 'matched' || j.outcome === 'matched_thin' || j.outcome === 'disambig')) {
       try { _v140KickoffSynthesize(j); } catch (e) { /* soft-fail handles it */ }
     }
   } catch (err) {
@@ -11195,6 +11326,132 @@ function showToast(msg, ms) {
   if (_toastTimer) clearTimeout(_toastTimer);
   _toastTimer = setTimeout(() => el.classList.remove('show'), ms || 3200);
 }
+window.showToast = showToast;
+
+// V.129e — RETAKE OVERLAY. Shown after the first vision-unclear outcome.
+// Renders a glass card over whatever screen the user lands on with a
+// "Move closer & check lighting" hint and a Retake CTA that re-opens the
+// camera. Built dynamically so we don't bloat the static DOM. Stylesheet
+// rules are inline because this is exceptional fail-state UX, not a
+// recurring component.
+function showV129RetakeOverlay() {
+  // Remove any prior overlay so we can't stack them on rapid double-tap.
+  var prev = document.getElementById('v129-retake-overlay');
+  if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+  var ov = document.createElement('div');
+  ov.id = 'v129-retake-overlay';
+  ov.setAttribute('role', 'alertdialog');
+  ov.setAttribute('aria-modal', 'true');
+  ov.setAttribute('aria-labelledby', 'v129-retake-title');
+  ov.style.cssText = [
+    'position:fixed','inset:0','z-index:9500',
+    'display:flex','align-items:center','justify-content:center',
+    'padding:24px',
+    'background:rgba(15, 23, 16, 0.55)',
+    '-webkit-backdrop-filter:blur(8px)','backdrop-filter:blur(8px)',
+    'opacity:0','transition:opacity 220ms cubic-bezier(0.4,0,0.2,1)',
+    'touch-action:manipulation',
+  ].join(';');
+
+  var card = document.createElement('div');
+  card.style.cssText = [
+    'max-width:420px','width:100%',
+    'background:rgba(255,255,255,0.96)',
+    '-webkit-backdrop-filter:blur(20px) saturate(160%)','backdrop-filter:blur(20px) saturate(160%)',
+    'border-radius:24px',
+    'padding:28px 24px 22px',
+    'box-shadow:0 24px 48px -12px rgba(0,0,0,0.32), 0 8px 16px -6px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.65)',
+    'text-align:center',
+    'transform:translateY(8px) scale(0.98)','transition:transform 240ms cubic-bezier(0.34,1.56,0.64,1)',
+  ].join(';');
+
+  var emoji = document.createElement('div');
+  emoji.style.cssText = 'font-size:42px;line-height:1;margin-bottom:8px;';
+  emoji.textContent = '🔍';
+
+  var title = document.createElement('div');
+  title.id = 'v129-retake-title';
+  title.style.cssText = 'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:800;font-size:20px;line-height:1.2;color:#0a1f0a;margin:6px 0 6px;letter-spacing:-0.01em;';
+  title.textContent = 'That one was a bit tricky';
+
+  var sub = document.createElement('div');
+  sub.style.cssText = 'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-weight:500;font-size:15px;line-height:1.4;color:#3a3a3a;margin:0 0 22px;max-width:320px;margin-left:auto;margin-right:auto;';
+  sub.textContent = 'Move a little closer, check the lighting, and try the shot again.';
+
+  var btnRow = document.createElement('div');
+  btnRow.style.cssText = 'display:flex;flex-direction:column;gap:10px;';
+
+  var retakeBtn = document.createElement('button');
+  retakeBtn.type = 'button';
+  retakeBtn.style.cssText = [
+    'appearance:none','border:0','outline:0',
+    'background:#2a6b22','color:#fff',
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+    'font-weight:700','font-size:16px','letter-spacing:0.01em',
+    'padding:14px 22px','border-radius:24px',
+    'box-shadow:0 6px 14px -4px rgba(42,107,34,0.5)',
+    'cursor:pointer','touch-action:manipulation',
+    '-webkit-tap-highlight-color:transparent',
+    'transition:transform 150ms cubic-bezier(0.4,0,0.2,1)',
+  ].join(';');
+  retakeBtn.textContent = 'Retake photo';
+  retakeBtn.addEventListener('touchstart', function () { retakeBtn.style.transform = 'scale(0.96)'; }, { passive: true });
+  retakeBtn.addEventListener('touchend',   function () { retakeBtn.style.transform = ''; },        { passive: true });
+  retakeBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeOverlay();
+    try { if (typeof goSnap === 'function') goSnap(); else show('camera'); } catch (err) {}
+  }, true);
+
+  var typeBtn = document.createElement('button');
+  typeBtn.type = 'button';
+  typeBtn.style.cssText = [
+    'appearance:none','border:0','outline:0',
+    'background:transparent','color:#2a6b22',
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+    'font-weight:600','font-size:15px',
+    'padding:10px 18px',
+    'cursor:pointer','touch-action:manipulation',
+    '-webkit-tap-highlight-color:transparent',
+  ].join(';');
+  typeBtn.textContent = 'Type the name instead';
+  typeBtn.addEventListener('click', function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    closeOverlay();
+    try {
+      if (typeof goHome === 'function') goHome();
+      setTimeout(function () { try { if (typeof window.v172OpenTypeSheet === 'function') window.v172OpenTypeSheet(); } catch (er) {} }, 60);
+    } catch (err) {}
+  }, true);
+
+  btnRow.appendChild(retakeBtn);
+  btnRow.appendChild(typeBtn);
+
+  card.appendChild(emoji);
+  card.appendChild(title);
+  card.appendChild(sub);
+  card.appendChild(btnRow);
+  ov.appendChild(card);
+  document.body.appendChild(ov);
+
+  // Spring-in.
+  requestAnimationFrame(function () {
+    ov.style.opacity = '1';
+    card.style.transform = 'translateY(0) scale(1)';
+  });
+
+  function closeOverlay() {
+    ov.style.opacity = '0';
+    card.style.transform = 'translateY(8px) scale(0.98)';
+    setTimeout(function () { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); }, 240);
+  }
+  ov._close = closeOverlay;
+  return ov;
+}
+window.showV129RetakeOverlay = showV129RetakeOverlay;
 // V.78 — renderRetailerOwn: short-circuit empty-state for UK retailer-own
 // brands (Habitat / IKEA / M&S Home / Dunelm / Argos Home / The Range).
 // Hides the standard verdict + Savvey Says + retailer rows on the result

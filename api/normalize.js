@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v128-data-pipeline';
+const VERSION             = 'normalize.js v3.4.5v130-data-extraction';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -96,7 +96,7 @@ const TIMEOUT_MS          = 8000;
 // mid-array → JSON.parse failure → no_match. Headroom prevents the truncation
 // without changing prompts. Cost impact: ~$0.0001-$0.0002 per verbose query, only
 // paid when output is actually verbose; cached prefix dominates input cost.
-const MAX_TOKENS_VISION   = 800; // V.112 (was 380, Wave II)
+const MAX_TOKENS_VISION   = 1200; // V.129a — Chain-of-thought thinking block needs headroom (was 800).
 const MAX_TOKENS_TEXT     = 700; // V.112 (was 320, Wave II)
 const RATE_LIMIT_PER_HOUR = 60;
 const MAX_IMAGE_BYTES     = 4 * 1024 * 1024;
@@ -848,9 +848,49 @@ ${COMMON_SCHEMA_DOC}`;
 
 const VISION_SYSTEM_PROMPT = `You are the UK retail vision engine for Savvey. The user photographed a product. Identify the product and produce a clean search string for Amazon UK.
 
+V.129 CHAIN-OF-THOUGHT (CRITICAL — DO NOT SKIP):
+Before outputting JSON you MUST emit a <thinking>...</thinking> block. Inside
+that block, in three numbered steps:
+  1. ALL readable text on the product/box/shelf, transcribed verbatim
+     (brand wordmarks, model numbers, capacity strings, slogans, MPNs,
+     barcode digits if visible). If no text is readable, write "no text".
+  2. Physical characteristics that disambiguate the product family
+     ("two slots for bread", "single curved spout, button on handle",
+     "rectangular speaker, mesh grille, leather strap", "vacuum upright
+     with translucent bin"). Be concrete; this is what distinguishes a
+     toaster from a kettle, a phone stand from a smart speaker.
+  3. Deduce the exact product from steps 1 + 2. State the brand, model,
+     and one confidence level (high/medium/low) WITH ONE-LINE
+     JUSTIFICATION ("Brand wordmark fully legible AND model number on
+     base plate = high"; "Brand visible, model occluded by hand =
+     medium"; "No brand text, only shape visible = low").
+
+Only after the closing </thinking> tag, output the final JSON object.
+Do not output anything between </thinking> and the opening { of JSON.
+Do not output a partial JSON inside <thinking>.
+
+V.129b CATEGORICAL CONFIDENCE (CRITICAL — DO NOT VIOLATE):
+The "confidence" JSON field is a categorical enum, NEVER a percentage.
+Valid values: "high" | "medium" | "low".
+  - "high":   you can read a specific MPN/model AND the brand, OR a
+              specific product variant is unambiguously identifiable.
+  - "medium": you can read brand + family but not the specific variant
+              (e.g. "Bose headphones, can't tell QC45 vs QC Ultra").
+  - "low":    you can only see brand, or only the category, or the
+              image is too blurry/glossy/dark to read text confidently.
+
+V.129b EJECTOR SEAT (CRITICAL — NO WILD GUESSES):
+If confidence is "low" — i.e. you are NOT confident about the EXACT
+product, or the image is too blurry/glossy/glare-affected/dark/cropped
+to identify, you MUST emit:
+  "outcome": "unclear"
+in the JSON. Do not invent a brand. Do not pick the most likely shape.
+Do not return a generic guess as factual. The frontend handles "unclear"
+gracefully — your job is to be honest about uncertainty.
+
 Look for: 1) MPN/Model on box. 2) Brand + family. 3) Shelf-edge label.
 
-EMPTY PACKAGING IS A VALID INPUT. Empty bottles, finished tubes, used containers, cardboard inners, product remnants — the user is reordering. Identify what's visible from the brand and label, applying normal confidence rules: 'high' if a specific variant is readable, 'medium' if only brand+family is visible, 'low' if only the brand or category is visible (or just generic packaging like a blank cardboard inner). For LOW-confidence brand+category cases, return a generic canonical (e.g. "Toilet Roll", "Toothpaste", "Mouthwash") and populate alternatives_array with 3 popular UK products in that category.
+EMPTY PACKAGING IS A VALID INPUT. Empty bottles, finished tubes, used containers, cardboard inners, product remnants — the user is reordering. Identify what's visible from the brand and label, applying normal confidence rules: 'high' if a specific variant is readable, 'medium' if only brand+family is visible, 'low' if only the brand or category is visible (or just generic packaging like a blank cardboard inner). For LOW-confidence brand+category cases, return a generic canonical (e.g. "Toilet Roll", "Toothpaste", "Mouthwash") and populate alternatives_array with 3 popular UK products in that category. NOTE: empty-packaging brand+category recognition counts as "low" confidence and triggers outcome:"unclear" per V.129b unless the brand + variant are BOTH readable.
 
 CATEGORY examples (these are STRICT — match the right enum):
 - Photo of Listerine bottle -> category="health" (oral-care/mouthwash, NOT generic)
@@ -2104,7 +2144,17 @@ function _v146DetectVariantFamily(canonical) {
 
 function parseAndDefault(rawText) {
   if (!rawText) return null;
-  const cleaned = rawText.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
+  // V.129a — strip the chain-of-thought <thinking>...</thinking> block (and
+  // any stray <thinking>-only fragment) BEFORE we try to find the JSON.
+  // Haiku now emits a thinking block per V.129a, and JSON.parse on the
+  // whole response would fail. The fence-cleanup and curly-extraction
+  // downstream still work because <thinking> is now stripped at source.
+  const _v129Stripped = String(rawText)
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(/<thinking>[\s\S]*$/i, '') // unclosed thinking → drop trailing
+    .replace(/<\/?thinking>/gi, '')      // bare tags → drop
+    .trim();
+  const cleaned = _v129Stripped.replace(/^```(?:json)?/i, '').replace(/```\s*$/, '').trim();
   let parsed;
   try { parsed = JSON.parse(cleaned); }
   catch (e) {
@@ -3550,17 +3600,55 @@ function _v143ParsePrice(raw) {
   if (typeof raw !== 'string') return null;
   let s = raw.trim();
   if (!s) return null;
-  // Strip everything except digits, dots, commas, and minus.
-  // First, extract the first numeric run (handles '£499.99 + £5.99 delivery').
+
+  // V.130 — PRICE EXTRACTOR HARDENING.
+  //   (a) DROP used/refurb listings entirely. SerpAPI occasionally returns
+  //       "Used: £49.99", "Refurbished from £349.00", "Pre-owned £29.99",
+  //       "Open Box £199" inline in the price field. These should never
+  //       become a "best price" — the user wants new-condition retail.
+  //   (b) Strip leading qualifier words ("From", "Now", "Offer:", "Only",
+  //       "Save", "Just", "Starting at") so the numeric run extractor can
+  //       reach the digits.
+  //   (c) Price-range handling ("£49.99 - £59.99"): the first-numeric-run
+  //       regex already captures the lower bound, but we want this to be
+  //       explicit and audited.
+  //   (d) Commas: SerpAPI emits "£1,200" and "£1,200.00" — the European
+  //       comma-decimal branch must not misread "£1,200" as 1.200.
+  const _v130UsedRx = /\b(?:used|refurb(?:ished)?|pre[\s-]?owned|open[\s-]?box|second[\s-]?hand|grade\s*[a-d]|customer\s*return)\b/i;
+  if (_v130UsedRx.test(s)) {
+    // Drop entirely — these are not new-retail prices.
+    return null;
+  }
+  // Strip leading qualifier words so the numeric regex isn't fooled by
+  // adjacent non-numeric tokens. Multiple sequential qualifiers tolerated.
+  s = s.replace(/^\s*(?:from|now|offer:?|only|save|just|starting\s+at|price:?|rrp:?|was)\s+/gi, '').trim();
+  // Also strip any inline "from " / "starting at " between currency and digits
+  // (some SerpAPI shapes embed it: "£ from 49.99")
+  s = s.replace(/\b(?:from|starting\s+at)\s+/gi, '').trim();
+
+  // First, extract the first numeric run (handles '£499.99 + £5.99 delivery',
+  // '£49.99 - £59.99' price ranges → 49.99 as lower bound).
   const m = s.match(/(\d{1,3}(?:[, ]\d{3})*(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)/);
   if (!m) return null;
   let num = m[1];
-  // Normalise European-style 549,99 → 549.99 when there's exactly one comma
-  // and no dot, and the part after the comma is 2 digits or fewer.
-  if (!num.includes('.') && /,\d{1,2}$/.test(num)) {
+
+  // V.130 — Comma-vs-decimal disambiguation. UK retail prices use comma as
+  // thousands separator ("£1,200.00"). European prices use comma as
+  // decimal ("549,99"). Rule:
+  //   - If contains BOTH "." and ",": comma is thousands, dot is decimal.
+  //     → strip commas. ("1,200.00" → "1200.00")
+  //   - If contains ONLY "," followed by exactly 1-2 digits at end: it's
+  //     European decimal. ("549,99" → "549.99")
+  //   - If contains ONLY "," followed by 3 digits or grouped: thousands.
+  //     ("1,200" → "1200")
+  //   - Otherwise commas are thousands separators.
+  if (num.includes('.') && num.includes(',')) {
+    num = num.replace(/,/g, '');
+  } else if (!num.includes('.') && /^\d{1,3},\d{1,2}$/.test(num)) {
+    // European decimal shape: 1-3 leading digits, comma, 1-2 trailing.
     num = num.replace(',', '.');
   } else {
-    // Otherwise commas are thousands separators — strip them.
+    // Thousands-comma path.
     num = num.replace(/[, ]/g, '');
   }
   const n = Number(num);
@@ -4670,6 +4758,48 @@ async function _v202InnerHandler(req, res) {
   }
 
   const parsed = parseAndDefault(rawText);
+  // V.129b — VISION EJECTOR SEAT. When the user snapped a photo AND
+  // Haiku returned low confidence (per the V.129 chain-of-thought
+  // prompt), do NOT pipe a guess through the SerpAPI/synthesize chain.
+  // Short-circuit with outcome:"unclear" so the frontend can show the
+  // V.129e retake overlay (first miss) or pivot to barcode (second miss).
+  // We respect either parsed.outcome === 'unclear' (the strict signal
+  // Haiku is told to emit) OR parsed.confidence === 'low' as a belt-and-
+  // braces fallback in case Haiku skipped the explicit outcome field.
+  if (
+    inputType === 'image' &&
+    parsed &&
+    typeof parsed === 'object' &&
+    (parsed.outcome === 'unclear' || parsed.confidence === 'low')
+  ) {
+    try { console.log(`[${VERSION}] V.129 vision ejector seat fired — outcome:${parsed.outcome || '(none)'} confidence:${parsed.confidence || '(none)'}; returning outcome:"unclear" without SerpAPI/synth.`); } catch (e) {}
+    return res.status(200).json({
+      outcome: 'unclear',
+      outcome_reason: 'vision_low_confidence',
+      canonical_search_string: parsed.canonical_search_string || null,
+      confidence: 'low',
+      identity: {
+        canonical: parsed.canonical_search_string || null,
+        display_title: parsed.canonical_search_string || null,
+        category_eyebrow: null,
+        mpn: parsed.mpn || null,
+        market_status: null,
+        image: null,
+      },
+      pricing: { best_price: null, avg_market: null, price_band: null },
+      verdict: { label: null, pill_text: null, pill_color_class: null, summary: null, rating: null },
+      links: [],
+      tiers: null,
+      disclosure: { affiliate_text: '', data_freshness: '' },
+      _meta: {
+        version: VERSION,
+        input_type: inputType,
+        latency_ms: Date.now() - t0,
+        cache: 'miss',
+        source: 'v129_vision_ejector',
+      },
+    });
+  }
   if (!parsed) {
     // V.78.2 — Haiku said "no match", but if the user typed a UK retailer-own
     // brand (Habitat / IKEA / M&S Home / Dunelm / Argos Home / The Range),
