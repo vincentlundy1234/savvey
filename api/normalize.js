@@ -5370,6 +5370,10 @@ async function _v202InnerHandler(req, res) {
   // product with rating + reviews. Cost: 1 extra Haiku call. Latency: +500-700ms
   // but parallelisable with other calls in the future. Skipped for low-conf or
   // missing-rating to avoid hallucination.
+  // V.133 — `let review_synthesis = null;` declaration was lost in the V.132a
+  // hotfix restore. Without it, every non-short-circuit query threw
+  // ReferenceError → V.202 envelope → outcome:no_match → BROKEN SEARCH.
+  let review_synthesis = null;
   if (verified_amazon_price && verified_amazon_price.rating && verified_amazon_price.reviews && parsed.confidence !== 'low') {
     try {
       review_synthesis = await generateReviewSynthesis(
