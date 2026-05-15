@@ -3144,6 +3144,17 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             const rx = new RegExp('\\b(?:' + n + '(?:st|nd|rd|th)?|Gen(?:eration)?\\s*' + n + '|' + ord + '\\s*Gen(?:eration)?)\\b', 'i');
             if (rx.test(title)) { matched++; continue; }
           }
+          // V.133 — PACK-SIZE EQUIVALENCE. "4 Pack" ≡ "4 X" ≡ "4x" ≡ "Pack of 4"
+          // ≡ "4-pack" ≡ "Box of 4" ≡ "x4". Heinz Baked Beans 4-pack was dropping
+          // 37 listings because the literal 'Pack' word was missing from titles
+          // like '4 X Heinz Baked Beans Beanz 415g'. Treat any number-with-pack-
+          // keyword combo as semantically equivalent.
+          const _packMatch = tok.raw.match(/^(\d+)\s*[-]?\s*(?:pack|pk|count|ct|pcs?)$/i);
+          if (_packMatch) {
+            const n = _packMatch[1];
+            const packRx = new RegExp('(?:\\b' + n + '\\s*(?:pack|pk|count|ct|pcs?|x|×)\\b|\\bpack\\s*of\\s*' + n + '\\b|\\bx\\s*' + n + '\\b|\\bbox\\s*of\\s*' + n + '\\b)', 'i');
+            if (packRx.test(title)) { matched++; continue; }
+          }
         }
         return matched >= minRequired;
       };
