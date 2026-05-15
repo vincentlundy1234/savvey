@@ -5419,6 +5419,70 @@
   cursor: pointer;
   user-select: none;
 }
+/* V.137 — Share this Deal CTA */
+.v137-share-btn {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: calc(100% - 8px);
+  margin: 14px auto 8px;
+  padding: 14px 22px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 700; font-size: 15px; letter-spacing: 0.01em;
+  color: #2a6b22; background: rgba(42,107,34,0.06);
+  border: 1px solid rgba(42,107,34,0.18); border-radius: 16px;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.v137-share-btn svg { width: 18px; height: 18px; }
+.v137-share-btn:hover { background: rgba(42,107,34,0.10); border-color: rgba(42,107,34,0.28); }
+/* V.137 — Premium 'No trusted prices found' empty state */
+#v137-empty-state {
+  display: none;
+  flex-direction: column; align-items: center; justify-content: center;
+  padding: 40px 24px 32px;
+  text-align: center;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+#v137-empty-state.show { display: flex; }
+.v137-empty-icon { font-size: 52px; line-height: 1; margin-bottom: 14px; }
+.v137-empty-title { font-size: 22px; font-weight: 800; color: #0a1f0a; letter-spacing: -0.01em; margin: 0 0 8px; max-width: 320px; }
+.v137-empty-sub   { font-size: 15px; font-weight: 500; color: #3a3a3a; line-height: 1.5; margin: 0 0 26px; max-width: 340px; }
+.v137-empty-cta {
+  appearance: none; border: 0; outline: 0;
+  background: #2a6b22; color: #fff;
+  font-family: inherit; font-weight: 700; font-size: 16px; letter-spacing: 0.01em;
+  padding: 14px 28px; border-radius: 24px;
+  box-shadow: 0 6px 14px -4px rgba(42,107,34,0.5);
+  cursor: pointer; touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+/* V.137 — Offline toast (non-blocking, sticky until 'online') */
+#v137-offline-toast {
+  position: fixed; left: 12px; right: 12px;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  z-index: 9800;
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: rgba(20,30,22,0.94);
+  color: #fff;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px; font-weight: 600;
+  border-radius: 14px;
+  box-shadow: 0 10px 30px -8px rgba(0,0,0,0.35);
+  opacity: 0; transform: translateY(-12px);
+  transition: opacity 220ms cubic-bezier(0.4,0,0.2,1), transform 220ms cubic-bezier(0.4,0,0.2,1);
+  pointer-events: none;
+}
+#v137-offline-toast.show { opacity: 1; transform: translateY(0); pointer-events: auto; }
+#v137-offline-toast .v137-offline-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,0.25);
+  animation: v137-offline-pulse 1.6s ease-in-out infinite;
+}
+@keyframes v137-offline-pulse {
+  0%,100% { box-shadow: 0 0 0 3px rgba(251,191,36,0.25); }
+  50%     { box-shadow: 0 0 0 7px rgba(251,191,36,0.05); }
+}
 #v138-verdict-pill   { min-height: 22px; }
 .v136-similar-blurb  { min-height: 24px; }
 .v140-softfail {
@@ -8865,9 +8929,28 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       </a>
     </div>
 
+    <!-- V.137 — Share this Deal CTA. Canvas card generator below builds
+         a 1080x1920 receipt-style image and routes through Web Share API
+         (navigator.share) when available, with a download fallback. -->
+    <button class="v137-share-btn v181-spring" id="v137-share-btn" type="button" aria-label="Share this deal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
+      </svg>
+      <span>Share this Deal</span>
+    </button>
     <p class="v136-affiliate" id="v138-disclosure">Savvey may earn a small commission via the Amazon link. It never changes the price you pay.</p>
     <p class="v151-serp-diag" id="v151-serp-diag" style="display:none; color:#9aa3a0; font-size:11px; text-align:center; margin-top:6px;">&nbsp;</p>
     <p class="v136-mockup-note" id="v138-mockup-note" style="display:none;">V.138 dynamic</p>
+    <!-- V.137 — Premium empty state for genuinely zero-result searches.
+         Toggled on by renderResult when outcome === 'no_match' AND no
+         amazon_search_fallback is available. -->
+    <div id="v137-empty-state" role="status" aria-live="polite">
+      <div class="v137-empty-icon" aria-hidden="true">🕵️</div>
+      <h3 class="v137-empty-title">No trusted prices found</h3>
+      <p class="v137-empty-sub">We couldn't find a high-confidence match for this item today. The product may be out of stock or off-market.</p>
+      <button class="v137-empty-cta v181-spring" id="v137-empty-retry" type="button">Try Another Search</button>
+    </div>
   </div>
 </div>
 <!-- end #screen-result -->
@@ -16897,6 +16980,273 @@ async function _v140KickoffSynthesize(idPayload) {
   } catch (e) {
     try { console.error('[V.118] debugger init failed:', e); } catch (e2) {}
   }
+})();
+</script>
+<script>
+/* ════════════════════════════════════════════════════════════════════════
+   V.137 — SHARE CARD + EMPTY STATE + OFFLINE TOAST
+   Mounted at end-of-body so all referenced DOM ids exist by the time the
+   IIFE runs. No global namespace pollution beyond window.savveyShareDeal.
+   ════════════════════════════════════════════════════════════════════════ */
+(function v137Init() {
+  // ── Empty state activation hook (wraps renderResult) ────────────────
+  function applyEmptyState(payload) {
+    try {
+      var pric   = payload && payload.pricing || {};
+      var outcm  = payload && payload.outcome;
+      var hasPrice = !!(pric.best_price && pric.best_price.value_gbp);
+      var hasFallback = !!(payload && payload.amazon_search_fallback);
+      var emptyEl = document.getElementById('v137-empty-state');
+      if (!emptyEl) return;
+      // Show empty state ONLY when the API legitimately had nothing AND
+      // no useful fallback to offer. amazon_search_fallback path stays
+      // intact for the 'searched 0 / priced 0' case where we still want
+      // to nudge the user toward Amazon search.
+      var shouldShow = (outcm === 'no_match' && !hasPrice && !hasFallback);
+      // Hide the product card / cta-stack when empty state shows.
+      var productImg = document.getElementById('v138-product-img');
+      var priceCard  = document.getElementById('v138-pricing');
+      var verdictCard= document.getElementById('v138-verdict-card');
+      var stackEl    = document.getElementById('v138-cta-stack');
+      var titleEl    = document.getElementById('v138-title');
+      var disclEl    = document.getElementById('v138-disclosure');
+      var shareBtn   = document.getElementById('v137-share-btn');
+      [productImg, priceCard, verdictCard, stackEl, titleEl, disclEl, shareBtn].forEach(function (el) {
+        if (!el) return;
+        if (shouldShow) el.style.display = 'none';
+        else el.style.display = '';
+      });
+      if (shouldShow) emptyEl.classList.add('show');
+      else emptyEl.classList.remove('show');
+    } catch (e) { try { console.warn('[V.137 empty-state]', e); } catch (er) {} }
+  }
+  // Hook renderResult — wrap, don't replace.
+  if (typeof window.renderResult === 'function' && !window.__v137RenderResultWrapped) {
+    var _v137OrigRender = window.renderResult;
+    window.renderResult = function (displayName, payload) {
+      var ret = _v137OrigRender.apply(this, arguments);
+      try { applyEmptyState(payload); } catch (e) {}
+      return ret;
+    };
+    window.__v137RenderResultWrapped = true;
+  }
+  // Empty state CTA → goHome (Try Another Search).
+  (function wireEmptyRetry() {
+    var btn = document.getElementById('v137-empty-retry');
+    if (!btn) return;
+    btn.addEventListener('click', function (e) {
+      try { e.preventDefault(); e.stopPropagation(); } catch (er) {}
+      try { if (typeof goHome === 'function') goHome(); else if (typeof show === 'function') show('home'); } catch (er) {}
+    }, true);
+  })();
+
+  // ── Share Card canvas generator (memory-safe) ───────────────────────
+  // CRITICAL: after the export, canvas.width=0; canvas.height=0; canvas=null
+  // forces the browser to release the backing-store memory. Repeated
+  // shares across multiple searches no longer accumulate canvas heap.
+  async function generateShareCard(payload) {
+    var W = 1080, H = 1920;
+    var canvas = document.createElement('canvas');
+    canvas.width = W; canvas.height = H;
+    var ctx = canvas.getContext('2d');
+    try {
+      // Background gradient (Savvey green wash)
+      var bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, '#143d10');
+      bg.addColorStop(1, '#2a6b22');
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, W, H);
+
+      // SAVVEY wordmark top
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '800 96px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('SAVVE', W/2 - 70, 200);
+      ctx.fillStyle = '#fbbf24'; // amber Y per V.191 wordmark rule
+      ctx.fillText('Y.', W/2 + 180, 200);
+
+      // Card body (white rounded panel)
+      var cardX = 80, cardY = 320, cardW = W - 160, cardH = 1200;
+      ctx.fillStyle = '#ffffff';
+      ctx.beginPath();
+      var r = 48;
+      ctx.moveTo(cardX + r, cardY);
+      ctx.arcTo(cardX + cardW, cardY, cardX + cardW, cardY + cardH, r);
+      ctx.arcTo(cardX + cardW, cardY + cardH, cardX, cardY + cardH, r);
+      ctx.arcTo(cardX, cardY + cardH, cardX, cardY, r);
+      ctx.arcTo(cardX, cardY, cardX + cardW, cardY, r);
+      ctx.closePath();
+      ctx.fill();
+
+      // 'BEST PRICE FOUND' eyebrow
+      ctx.fillStyle = '#2a6b22';
+      ctx.font = '800 32px system-ui, -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('★ BEST PRICE FOUND', W/2, cardY + 100);
+
+      // Product name (wrap at ~28 chars)
+      var product = (payload && payload.identity && payload.identity.canonical)
+                 || (payload && payload.canonical_search_string) || 'Product';
+      ctx.fillStyle = '#0a1f0a';
+      ctx.font = '800 64px system-ui, -apple-system, sans-serif';
+      var words = String(product).split(/\s+/);
+      var line = '', lines = [], maxW = cardW - 100;
+      for (var i = 0; i < words.length; i++) {
+        var test = line ? line + ' ' + words[i] : words[i];
+        if (ctx.measureText(test).width > maxW && line) { lines.push(line); line = words[i]; }
+        else { line = test; }
+      }
+      if (line) lines.push(line);
+      lines = lines.slice(0, 3);
+      lines.forEach(function (l, ix) { ctx.fillText(l, W/2, cardY + 220 + (ix * 78)); });
+
+      // Best price (big, green)
+      var bestPrice = payload && payload.pricing && payload.pricing.best_price && payload.pricing.best_price.value_gbp;
+      var bestAt    = payload && payload.pricing && payload.pricing.best_price && payload.pricing.best_price.retailer;
+      ctx.fillStyle = '#2a6b22';
+      ctx.font = '800 180px system-ui, -apple-system, sans-serif';
+      ctx.fillText('£' + (bestPrice != null ? Math.round(bestPrice) : '?'), W/2, cardY + 660);
+
+      // Retailer name under price
+      ctx.fillStyle = '#5a5a5a';
+      ctx.font = '600 36px system-ui, -apple-system, sans-serif';
+      ctx.fillText('at ' + (bestAt || 'best UK retailer'), W/2, cardY + 720);
+
+      // Savings line (vs avg market)
+      var avg = payload && payload.pricing && payload.pricing.avg_market && payload.pricing.avg_market.value_gbp;
+      var hi  = payload && payload.pricing && payload.pricing.price_band && payload.pricing.price_band.high;
+      var compareTo = (typeof hi === 'number' && hi > 0) ? hi : avg;
+      if (typeof bestPrice === 'number' && typeof compareTo === 'number' && compareTo > bestPrice) {
+        var savings = Math.round(compareTo - bestPrice);
+        var pct = Math.round((savings / compareTo) * 100);
+        ctx.fillStyle = '#0a1f0a';
+        ctx.font = '700 44px system-ui, -apple-system, sans-serif';
+        ctx.fillText('You save £' + savings + ' (' + pct + '% off)', W/2, cardY + 900);
+        ctx.fillStyle = '#9a9a9a';
+        ctx.font = '500 28px system-ui, -apple-system, sans-serif';
+        ctx.fillText('vs typical UK retail price £' + Math.round(compareTo), W/2, cardY + 950);
+      }
+
+      // Footer URL
+      ctx.fillStyle = '#5a5a5a';
+      ctx.font = '600 32px system-ui, -apple-system, sans-serif';
+      ctx.fillText('savvey.vercel.app', W/2, cardY + cardH - 60);
+
+      // Export to blob.
+      var blob = await new Promise(function (resolve) {
+        try { canvas.toBlob(function (b) { resolve(b); }, 'image/png', 0.92); }
+        catch (e) { resolve(null); }
+      });
+      return blob;
+    } finally {
+      // ── CRITICAL MEMORY DESTRUCTION (V.137 mandate) ───────────────
+      // Force the backing-store to zero so the browser can release the
+      // ~8MB of canvas pixel memory immediately rather than waiting for
+      // the GC pass that may never come in a long-lived SPA session.
+      try { ctx && ctx.clearRect(0, 0, W, H); } catch (e) {}
+      try { canvas.width = 0; canvas.height = 0; } catch (e) {}
+      ctx = null;
+      canvas = null;
+    }
+  }
+
+  async function savveyShareDeal() {
+    try {
+      var payload = window.lastResult || null;
+      if (!payload || !(payload.pricing && payload.pricing.best_price)) {
+        try { if (typeof showToast === 'function') showToast('No deal to share yet — search a product first.'); } catch (e) {}
+        return;
+      }
+      var blob = await generateShareCard(payload);
+      if (!blob) {
+        try { if (typeof showToast === 'function') showToast('Couldn\u2019t build the share card. Try again.'); } catch (e) {}
+        return;
+      }
+      var fileName = 'savvey-deal-' + Date.now() + '.png';
+      var file = new File([blob], fileName, { type: 'image/png' });
+      // Prefer Web Share API with files when supported.
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try {
+          await navigator.share({
+            files: [file],
+            title: 'My Savvey deal',
+            text: 'Found this on Savvey — savvey.vercel.app',
+          });
+          try { if (typeof track === 'function') track('share_card_native', { method: 'navigator.share' }); } catch (e) {}
+          return;
+        } catch (shareErr) {
+          // User cancelled or browser blocked — fall through to download.
+          try { console.log('[V.137 share] navigator.share fell through', shareErr && shareErr.name); } catch (e) {}
+        }
+      }
+      // Fallback: trigger a direct download via anchor.
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url; a.download = fileName; a.style.display = 'none';
+      document.body.appendChild(a); a.click();
+      setTimeout(function () { try { a.remove(); URL.revokeObjectURL(url); } catch (e) {} }, 400);
+      try { if (typeof showToast === 'function') showToast('Deal saved to your photos.'); } catch (e) {}
+      try { if (typeof track === 'function') track('share_card_download', {}); } catch (e) {}
+    } catch (e) {
+      try { console.warn('[V.137 share] error', e); } catch (er) {}
+    }
+  }
+  window.savveyShareDeal = savveyShareDeal;
+
+  // Wire the Share button (single binding via capture-phase listener).
+  (function wireShareBtn() {
+    var btn = document.getElementById('v137-share-btn');
+    if (!btn) return;
+    btn.addEventListener('click', function (e) {
+      try { e.preventDefault(); e.stopPropagation(); } catch (er) {}
+      setTimeout(function () { savveyShareDeal(); }, 0);
+    }, true);
+  })();
+
+  // ── Offline / online toast ──────────────────────────────────────────
+  function buildOfflineToast() {
+    if (document.getElementById('v137-offline-toast')) return;
+    var t = document.createElement('div');
+    t.id = 'v137-offline-toast';
+    t.setAttribute('role', 'status');
+    t.setAttribute('aria-live', 'polite');
+    t.innerHTML = '<span class="v137-offline-dot" aria-hidden="true"></span>'
+                + '<span class="v137-offline-text">No internet connection. Waiting for signal…</span>';
+    document.body.appendChild(t);
+  }
+  function showOfflineToast() {
+    buildOfflineToast();
+    var t = document.getElementById('v137-offline-toast');
+    if (!t) return;
+    t.querySelector('.v137-offline-text').textContent = 'No internet connection. Waiting for signal…';
+    requestAnimationFrame(function () { t.classList.add('show'); });
+  }
+  function showBackOnlineToast() {
+    var t = document.getElementById('v137-offline-toast');
+    if (!t) {
+      // Brief flash even on cold-online — build then auto-dismiss.
+      buildOfflineToast();
+      t = document.getElementById('v137-offline-toast');
+    }
+    if (!t) return;
+    t.querySelector('.v137-offline-text').textContent = 'Back online ✓';
+    t.classList.add('show');
+    setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+  window.addEventListener('offline', function () {
+    try { console.log('[V.137] offline event'); } catch (e) {}
+    showOfflineToast();
+  });
+  window.addEventListener('online', function () {
+    try { console.log('[V.137] online event'); } catch (e) {}
+    showBackOnlineToast();
+  });
+  // Cold-start check — if the page loads offline, show toast immediately.
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+    showOfflineToast();
+  }
+  // Expose for testing.
+  window._v137 = { generateShareCard: generateShareCard, showOfflineToast: showOfflineToast, showBackOnlineToast: showBackOnlineToast };
 })();
 </script>
 </body>
