@@ -23,12 +23,21 @@
 //     warehouse listing found). Frontend gating loosens to render the block
 //     whenever ANY savvey_says field is present, including the verified anchors.
 
+// V.157 — Disable Vercel's auto JSON body-parser. Field evidence on 15 May
+// 2026 showed Vercel's eager parser throwing SyntaxError into their
+// middleware layer BEFORE our V.202 envelope could fire, surfacing as
+// FUNCTION_INVOCATION_FAILED text/plain. By opting out here, the runtime
+// hands us the raw request stream and we parse it inside our own try/catch.
+export const config = {
+  api: { bodyParser: false }
+};
+
 import { applySecurityHeaders } from './_shared.js';
 import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v156-process-safety';
+const VERSION             = 'normalize.js v3.4.5v157-raw-body-bypass';
 
 // V.156 — PROCESS-LEVEL SAFETY NET. The V.202 envelope catches anything
 // thrown synchronously OR awaited inside the request handler. But Vercel
@@ -5896,101 +5905,106 @@ async function _v202InnerHandler(req, res) {
   return res.status(200).json(responseBody);
 }
 
+// V.157 — Raw body reader for direct /api/normalize hits. identify.js
+// already streams + parses the body and assigns req.body before calling
+// handler(req, res); but a direct POST to /api/normalize bypasses that
+// path. Without our own reader, req.body would be undefined here (because
+// V.157 disables Vercel's auto parser via the config export above). This
+// pre-step makes the direct path work as well as the identify.js path.
+function _v157ReadRawBodyForNormalize(req) {
+  return new Promise((resolve, reject) => {
+    try {
+      let data = '';
+      let bytes = 0;
+      const MAX_BYTES = 6 * 1024 * 1024;
+      req.setEncoding && req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        try {
+          bytes += (typeof chunk === 'string') ? chunk.length : chunk.byteLength || 0;
+          if (bytes > MAX_BYTES) {
+            req.destroy && req.destroy();
+            return reject(Object.assign(new Error('payload_too_large'), { code: 'PAYLOAD_TOO_LARGE', bytes }));
+          }
+          data += (typeof chunk === 'string') ? chunk : chunk.toString('utf8');
+        } catch (chunkErr) { reject(chunkErr); }
+      });
+      req.on('end', () => resolve(data));
+      req.on('error', (e) => reject(e));
+      req.on('aborted', () => reject(new Error('client_aborted')));
+    } catch (outer) { reject(outer); }
+  });
+}
+
 // V.202 Fix J — JSON ERROR ENVELOPE. Exported handler wraps the internal
 // implementation in a top-level try/catch. Any thrown exception that the
 // internal handler doesn't catch is converted into a valid JSON response
 // so the frontend NEVER sees a raw Vercel HTML 500/504 error page.
 export default async function handler(req, res) {
   const _v202T0 = Date.now();
+  // V.157 — If req.body wasn't already populated (i.e., direct
+  // /api/normalize call, not via identify.js), stream + parse the raw
+  // body ourselves. Wrapped in try/catch so a malformed payload lands
+  // as a clean 200 JSON envelope instead of escaping to Vercel's
+  // FUNCTION_INVOCATION_FAILED page.
+  if (req.method === 'POST' && (!req.body || typeof req.body !== 'object')) {
+    let _v157Raw = '';
+    try {
+      _v157Raw = await _v157ReadRawBodyForNormalize(req);
+    } catch (streamErr) {
+      try { console.error('[V.157][normalize] raw body stream failed: ' + (streamErr && streamErr.name) + ': ' + (streamErr && streamErr.message)); } catch (e) {}
+      try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+      try {
+        res.statusCode = 200;
+        res.setHeader && res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({
+          outcome: 'error',
+          outcome_reason: 'v157_normalize_stream_failed',
+          error: 'request_body_stream_failed',
+          message: String((streamErr && streamErr.message) || streamErr).slice(0, 240),
+          error_name: String((streamErr && streamErr.name) || 'Error').slice(0, 60),
+          links: [],
+          pricing: { best_price: null, avg_market: null, price_band: null },
+          identity: null,
+          alternatives_array: [],
+          _meta: { envelope: 'v157_normalize_stream' }
+        }));
+      } catch (e) { try { res.end(); } catch (e2) {} return; }
+    }
+    if (_v157Raw && _v157Raw.length > 0) {
+      try {
+        req.body = JSON.parse(_v157Raw);
+      } catch (parseErr) {
+        try { console.error('[V.157][normalize] JSON.parse threw'); } catch (e) {}
+        try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+        try {
+          res.statusCode = 200;
+          res.setHeader && res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify({
+            outcome: 'error',
+            outcome_reason: 'v157_normalize_json_parse_threw',
+            error: 'request_body_parse_failed',
+            message: String((parseErr && parseErr.message) || parseErr).slice(0, 240),
+            error_name: String((parseErr && parseErr.name) || 'Error').slice(0, 60),
+            raw_sample: _v157Raw.slice(0, 200),
+            links: [],
+            pricing: { best_price: null, avg_market: null, price_band: null },
+            identity: null,
+            alternatives_array: [],
+            _meta: { envelope: 'v157_normalize_parse' }
+          }));
+        } catch (e) { try { res.end(); } catch (e2) {} return; }
+      }
+    } else {
+      req.body = {};
+    }
+  }
   try {
     return await _v202InnerHandler(req, res);
   } catch (err) {
     const _msg = err && err.message ? String(err.message).slice(0, 240) : String(err).slice(0, 240);
     const _name = err && err.name ? String(err.name).slice(0, 40) : 'Error';
-    try {
-      console.error(`[${VERSION}] [V.202][envelope] UNCAUGHT ${_name}: ${_msg}`);
-      if (err && err.stack) console.error(err.stack.toString().slice(0, 1200));
-    } catch (e) {}
-    // If headers were already sent (handler wrote a partial response then
-    // threw mid-stream) we can't write a new envelope. Just bail.
-    if (res.headersSent) {
-      try { res.end(); } catch (e2) {}
-      return;
-    }
-    try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
-    // V.146 DEFCON 1 — outcome semantic upgrade. True upstream exceptions
-    // now ship outcome:'error' so the frontend can distinguish a 'system
-    // degraded' state (V.146 mandate) from a legitimate no_match (no
-    // shopping results). Old 'v202_envelope_caught' value preserved as
-    // outcome_reason for backward-compat audits.
-    // V.156 — wrap res.json() itself in try/catch + double-fallback. If
-    // res.status(200).json(...) throws (e.g., response already partially
-    // streamed, headers already sent under the radar of headersSent, or
-    // node http binding rejected the body), fall back to a raw res.end()
-    // with a minimal JSON envelope. If THAT fails too, just res.end().
-    // This is the last line of defence before FUNCTION_INVOCATION_FAILED.
-    const _v156Envelope = {
-      outcome: 'error',
-      outcome_reason: 'v202_envelope_caught',
-      error: 'upstream_exception',
-      message: 'System degraded',
-      links: [],
-      pricing: { best_price: null, avg_market: null, price_band: null },
-      identity: null,
-      alternatives_array: [],
-      _meta: {
-        version: VERSION,
-        envelope: 'v202_caught',
-        exception_name: _name,
-        exception_message: _msg,
-        exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
-        latency_ms: Date.now() - _v202T0,
-      },
-    };
-    try {
-      return res.status(200).json(_v156Envelope);
-    } catch (jsonErr) {
-      try { console.error('[V.156][envelope] res.json() threw — falling back to res.end(). ' + (jsonErr && jsonErr.message)); } catch (e) {}
-      try {
-        if (typeof res.setHeader === 'function') {
-          try { res.setHeader('Content-Type', 'application/json'); } catch (e2) {}
-        }
-        if (typeof res.statusCode === 'number') res.statusCode = 200;
-        return res.end(JSON.stringify(_v156Envelope));
-      } catch (endErr) {
-        try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
-        try { res.end(); } catch (e3) {}
-        return;
-      }
-    }
-  }
-}
-: 'upstream_exception',
-      message: 'System degraded',
-      links: [],
-      pricing: { best_price: null, avg_market: null, price_band: null },
-      identity: null,
-      alternatives_array: [],
-      _meta: {
-        version: VERSION,
-        envelope: 'v202_caught',
-        exception_name: _name,
-        exception_message: _msg,
-        latency_ms: Date.now() - _v202T0,
-      },
-    });
-  }
-}
- _msg = err && err.message ? String(err.message).slice(0, 240) : String(err).slice(0, 240);
-    const _name = err && err.name ? String(err.name).slice(0, 40) : 'Error';
-    try {
-      console.error(`[${VERSION}] [V.202][envelope] UNCAUGHT ${_name}: ${_msg}`);
-      if (err && err.stack) console.error(err.stack.toString().slice(0, 1200));
-    } catch (e) {}
-    if (res.headersSent) {
-      try { res.end(); } catch (e2) {}
-      return;
-    }
+    try { console.error('[V.202][envelope] UNCAUGHT ' + _name + ': ' + _msg); } catch (e) {}
+    if (res.headersSent) { try { res.end(); } catch (e2) {} return; }
     try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
     const _v156Envelope = {
       outcome: 'error',
@@ -6007,32 +6021,8 @@ export default async function handler(req, res) {
         exception_name: _name,
         exception_message: _msg,
         exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
-        latency_ms: Date.now() - _v202T0,
-      },
-    };
-    try {
-      return res.status(200).json(_v156Envelope);
-    } catch (jsonErr) {
-      try { console.error('[V.156][envelope] res.json() threw — falling back to res.end(). ' + (jsonErr && jsonErr.message)); } catch (e) {}
-      try {
-        if (typeof res.setHeader === 'function') {
-          try { res.setHeader('Content-Type', 'application/json'); } catch (e2) {}
-        }
-        if (typeof res.statusCode === 'number') res.statusCode = 200;
-        return res.end(JSON.stringify(_v156Envelope));
-      } catch (endErr) {
-        try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
-        try { res.end(); } catch (e3) {}
-        return;
+        latency_ms: Date.now() - _v202T0
       }
-    }
-  }
-}
- exception_name: _name,
-        exception_message: _msg,
-        exception_stack: (err && err.stack) ? String(err.stack).slice(0, 800) : null,
-        latency_ms: Date.now() - _v202T0,
-      },
     };
     try {
       return res.status(200).json(_v156Envelope);
@@ -6048,11 +6038,6 @@ export default async function handler(req, res) {
         try { console.error('[V.156][envelope] res.end() ALSO threw: ' + (endErr && endErr.message)); } catch (e) {}
         try { res.end(); } catch (e3) {}
         return;
-      }
-    }
-  }
-}
-  return;
       }
     }
   }

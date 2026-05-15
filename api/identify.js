@@ -1,60 +1,118 @@
-// api/identify.js — Savvey V.140 Option B (Split Routing)
+// api/identify.js — Savvey V.157 raw body bypass
 //
-// THIN WRAPPER. Reuses the /api/normalize handler with body.skip_synth=true
-// so the pipeline runs Vision/Text/URL/Barcode → SerpAPI → V.138 schema
-// builder but DOES NOT make the Haiku mega-synth call. Response carries
-// pricing, names, ratings, identity, and a `synthesis_payload` for the
-// frontend to feed into /api/synthesize.
+// V.157 — DISABLE VERCEL'S AUTO BODY-PARSER.
+// Field evidence: 500 FUNCTION_INVOCATION_FAILED text/plain with
+// "SyntaxError: Unexpected tok..." in runtime logs. V.156 process-level
+// handlers never fired; V.202 envelope never fired; V.155 try/catch
+// never fired. Conclusion: Vercel's auto JSON body-parser throws into
+// their middleware layer BEFORE our handler closure executes.
 //
-// Target p95: <6s. Vercel 15s ceiling has plenty of headroom now.
+// Defence: opt out via config export, read raw body ourselves with a
+// wrapped JSON.parse, assign to req.body before calling the inner handler.
+
+export const config = {
+  api: { bodyParser: false }
+};
 
 import handler from './normalize.js';
 
-// V.155 — Wrap req.body access in try/catch. Vercel's Node runtime lazily
-// parses application/json bodies on first access; if the payload is
-// malformed (or if some middleware mutates it into something un-parseable)
-// the access throws SyntaxError synchronously, escaping into the surface
-// Vercel layer and producing a raw 500 BEFORE normalize.js's V.202
-// envelope can convert it to a JSON 200. This wrapper catches that case,
-// hands the request to the normalize handler anyway (with body=undefined),
-// and lets the V.202 envelope take over. Without this, the Founder was
-// seeing 500 SyntaxError from /api/identify with no envelope context.
+function _v157ReadRawBody(req) {
+  return new Promise((resolve, reject) => {
+    try {
+      let data = '';
+      let bytes = 0;
+      const MAX_BYTES = 6 * 1024 * 1024;
+      req.setEncoding && req.setEncoding('utf8');
+      req.on('data', (chunk) => {
+        try {
+          bytes += (typeof chunk === 'string') ? chunk.length : (chunk.byteLength || 0);
+          if (bytes > MAX_BYTES) {
+            req.destroy && req.destroy();
+            return reject(Object.assign(new Error('payload_too_large'), { code: 'PAYLOAD_TOO_LARGE', bytes }));
+          }
+          data += (typeof chunk === 'string') ? chunk : chunk.toString('utf8');
+        } catch (chunkErr) { reject(chunkErr); }
+      });
+      req.on('end', () => resolve(data));
+      req.on('error', (e) => reject(e));
+      req.on('aborted', () => reject(new Error('client_aborted')));
+    } catch (outer) { reject(outer); }
+  });
+}
+
+function _v157EnvelopeFromError(reason, parseErr, rawSample) {
+  return {
+    outcome: 'error',
+    outcome_reason: reason,
+    error: 'request_body_parse_failed',
+    message: String((parseErr && parseErr.message) || parseErr).slice(0, 240),
+    error_name: String((parseErr && parseErr.name) || 'Error').slice(0, 60),
+    raw_sample: String(rawSample || '').slice(0, 200),
+    links: [],
+    pricing: { best_price: null, avg_market: null, price_band: null },
+    identity: null,
+    alternatives_array: [],
+    _meta: { envelope: 'v157_identify_raw_body' }
+  };
+}
+
 export default async function (req, res) {
   try {
-    if (req.method === 'OPTIONS' || req.method === 'POST') {
-      let _v155Body = null;
-      try { _v155Body = req.body; } catch (parseErr) {
-        try { console.error('[V.155][identify] req.body access threw ' + (parseErr && parseErr.name) + ': ' + (parseErr && parseErr.message)); } catch (e) {}
+    if (req.method === 'OPTIONS') {
+      try { res.statusCode = 204; } catch (e) {}
+      try { return res.end(); } catch (e) {}
+      return;
+    }
+    if (req.method !== 'POST') {
+      try {
+        res.statusCode = 405;
+        res.setHeader && res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify({ error: 'Method not allowed', method: req.method }));
+      } catch (e) { try { res.end(); } catch (e2) {} return; }
+    }
+
+    let raw = '';
+    try {
+      raw = await _v157ReadRawBody(req);
+    } catch (streamErr) {
+      try { console.error('[V.157][identify] raw body stream failed: ' + (streamErr && streamErr.name) + ': ' + (streamErr && streamErr.message)); } catch (e) {}
+      try {
+        res.statusCode = 200;
+        res.setHeader && res.setHeader('Content-Type', 'application/json');
+        return res.end(JSON.stringify(_v157EnvelopeFromError('v157_stream_failed', streamErr, '')));
+      } catch (e) { try { res.end(); } catch (e2) {} return; }
+    }
+
+    let parsed = null;
+    if (raw && raw.length > 0) {
+      try {
+        parsed = JSON.parse(raw);
+      } catch (parseErr) {
+        try { console.error('[V.157][identify] JSON.parse threw ' + (parseErr && parseErr.name) + ': ' + (parseErr && parseErr.message) + ' raw_len=' + raw.length + ' first_200="' + raw.slice(0, 200).replace(/\n/g, '\\n') + '"'); } catch (e) {}
         try {
-          return res.status(200).json({
-            outcome: 'error',
-            outcome_reason: 'v155_body_parse_threw',
-            error: 'request_body_parse_failed',
-            message: String((parseErr && parseErr.message) || parseErr).slice(0, 240),
-            error_name: String((parseErr && parseErr.name) || 'Error').slice(0, 60),
-            links: [],
-            pricing: { best_price: null, avg_market: null, price_band: null },
-            identity: null,
-            alternatives_array: [],
-            _meta: { envelope: 'v155_identify_pre_handler' }
-          });
-        } catch (e2) {
-          try { res.status(500).end(); } catch (e3) {}
-          return;
-        }
-      }
-      if (_v155Body && typeof _v155Body === 'object') {
-        req.body = { ..._v155Body, skip_synth: true };
+          res.statusCode = 200;
+          res.setHeader && res.setHeader('Content-Type', 'application/json');
+          return res.end(JSON.stringify(_v157EnvelopeFromError('v157_json_parse_threw', parseErr, raw)));
+        } catch (e) { try { res.end(); } catch (e2) {} return; }
       }
     }
+
+    if (parsed && typeof parsed === 'object') {
+      req.body = Object.assign({}, parsed, { skip_synth: true });
+    } else {
+      req.body = { skip_synth: true };
+    }
+
     return handler(req, res);
   } catch (outerErr) {
-    try { console.error('[V.155][identify] outer wrapper caught ' + (outerErr && outerErr.name) + ': ' + (outerErr && outerErr.message)); } catch (e) {}
+    try { console.error('[V.157][identify] outer wrapper caught ' + (outerErr && outerErr.name) + ': ' + (outerErr && outerErr.message)); } catch (e) {}
     if (res.headersSent) { try { res.end(); } catch (e) {} return; }
     try {
-      return res.status(200).json({
+      res.statusCode = 200;
+      res.setHeader && res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({
         outcome: 'error',
-        outcome_reason: 'v155_identify_outer_caught',
+        outcome_reason: 'v157_identify_outer_caught',
         error: 'identify_wrapper_threw',
         message: String((outerErr && outerErr.message) || outerErr).slice(0, 240),
         error_name: String((outerErr && outerErr.name) || 'Error').slice(0, 60),
@@ -62,10 +120,10 @@ export default async function (req, res) {
         pricing: { best_price: null, avg_market: null, price_band: null },
         identity: null,
         alternatives_array: [],
-        _meta: { envelope: 'v155_identify_outer' }
-      });
+        _meta: { envelope: 'v157_identify_outer' }
+      }));
     } catch (e) {
-      try { res.status(500).end(); } catch (e2) {}
+      try { res.statusCode = 500; res.end(); } catch (e2) {}
     }
   }
 }
