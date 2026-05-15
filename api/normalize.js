@@ -5200,6 +5200,13 @@ async function _v202InnerHandler(req, res) {
   // 2-option flow). Order: canonical, alternative_string, alternatives_array.
   // Deduped (case-insensitive trim), capped at 4.
   const _specificity = assessSpecificity(parsed.canonical_search_string, parsed.mpn, parsed.confidence);
+  // V.131 — stamp specificity onto parsed BEFORE _v138BuildResponse runs.
+  // Without this, _v138BuildResponse reads parsed.specificity as undefined
+  // and the Curator Protocol tier builder never enters brand_curator mode
+  // (is_curator stays false, tag stays null). assessSpecificity already
+  // returns 'brand_only' for bare-brand inputs; we just need to propagate
+  // it down to the tier-builder scope.
+  try { parsed.specificity = _specificity; } catch (e) { /* parsed always obj here */ }
   let disambig_candidates = null;
   let disambig_candidates_meta = null; // Wave KK — parallel array, [{typical_price_gbp, pack_size, tier_label}|null, ...]
   const _shouldDisambig = (parsed.confidence !== 'high') || (_specificity === 'brand_only');
