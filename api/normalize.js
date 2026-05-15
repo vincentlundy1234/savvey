@@ -2664,6 +2664,79 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
   }
   return { pass: missing.length === 0, missing };
 }
+// ════════════════════════════════════════════════════════════════════
+// V.144 — Tier thumbnail fetcher. Lightweight SerpAPI google_shopping
+// call that extracts ONLY the first item's thumbnail URL. Cached under
+// savvey:tier_thumb:v144:<slug> with 24h TTL so repeat searches share
+// the lookup cost. Returns null on any failure path so the V.143
+// frontend placeholder can take over gracefully.
+// ════════════════════════════════════════════════════════════════════
+async function _v144FetchTierThumbnail(query) {
+  if (!query || typeof query !== 'string') return null;
+  const q = query.trim();
+  if (q.length < 2 || q.length > 150) return null;
+  const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 100);
+  const cacheKey = 'savvey:tier_thumb:v144:' + slug;
+  try {
+    const cached = await kvGet(cacheKey);
+    if (cached && typeof cached === 'object') {
+      if (cached.url === null || (typeof cached.url === 'string' && cached.url.length > 0)) {
+        return cached.url || null;
+      }
+    }
+  } catch (e) {}
+  const apiKey = process.env.SERPAPI_KEY;
+  if (!apiKey) return null;
+  const url = new URL('https://serpapi.com/search.json');
+  url.searchParams.set('engine', 'google_shopping');
+  url.searchParams.set('q', q);
+  url.searchParams.set('gl', 'uk');
+  url.searchParams.set('hl', 'en');
+  url.searchParams.set('num', '5'); // small page; we only need first valid thumbnail
+  url.searchParams.set('api_key', apiKey);
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), 2500);
+  let thumb = null;
+  try {
+    const r = await fetch(url.toString(), { signal: ac.signal });
+    clearTimeout(timer);
+    if (r.ok) {
+      const j = await r.json();
+      const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
+      for (const item of results) {
+        if (!item) continue;
+        const candidate = (typeof item.thumbnail === 'string' && item.thumbnail.startsWith('http'))
+          ? item.thumbnail
+          : ((typeof item.serpapi_thumbnail === 'string' && item.serpapi_thumbnail.startsWith('http'))
+              ? item.serpapi_thumbnail : null);
+        if (candidate) { thumb = candidate.slice(0, 500); break; }
+      }
+    }
+  } catch (e) {
+    clearTimeout(timer);
+    try { console.warn(`[V.144] tier thumb fetch failed for "${q.slice(0,40)}": ${e && e.message}`); } catch (er) {}
+  }
+  // Cache the result (even null) for 24h to avoid hammering the same misses.
+  try { await kvSet(cacheKey, { url: thumb || null }, 24 * 60 * 60); } catch (e) {}
+  return thumb;
+}
+// Enrich a tiers array in-place with image_url. Fires up to 3 parallel
+// _v144FetchTierThumbnail calls. Soft-fails: if SerpAPI is unavailable
+// or every call returns null, the tiers come back unchanged and the
+// frontend V.143 placeholder takes over.
+async function _v144EnrichTierImages(tiers) {
+  if (!Array.isArray(tiers) || tiers.length === 0) return;
+  const jobs = tiers.slice(0, 3).map((t, i) => {
+    if (!t || typeof t !== 'object') return Promise.resolve(null);
+    if (t.image_url && typeof t.image_url === 'string') return Promise.resolve(t.image_url);
+    return _v144FetchTierThumbnail(t.name || '').then((url) => {
+      if (url) t.image_url = url;
+      return url || null;
+    }).catch(() => null);
+  });
+  try { await Promise.all(jobs); } catch (e) {}
+}
+
 async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null, _forceFresh = false, _identityFingerprint = null) {
   // V.156 — diag-write on every bail path. Ensures _v153LocalDiag is
   // ALWAYS populated so the response carries telemetry even when SerpAPI
@@ -4929,6 +5002,10 @@ async function _v202InnerHandler(req, res) {
             short_circuit: 'v201_pre_haiku_generic',
           },
         };
+        // V.144 — enrich the V.201 short-circuit tiers with real
+        // SerpAPI thumbnails. Soft-fail keeps the V.143 placeholder
+        // when SerpAPI is unavailable / times out.
+        try { await _v144EnrichTierImages(_v201Response.tiers); } catch (e) {}
         return res.status(200).json(_v201Response);
       }
       rawText = await withCircuit('anthropic',
@@ -5529,6 +5606,7 @@ async function _v202InnerHandler(req, res) {
   const _megaForBuild = (_altsLenFinal >= 2 && _altsLenFinal <= 4)
     ? _megaTiers
     : _megaPillars;
+  // V.144 — placeholder for the _v138 const re-binding (anchor below)
   const _v138 = _v138BuildResponse({
     parsed,
     verified_amazon_price,
@@ -5544,6 +5622,14 @@ async function _v202InnerHandler(req, res) {
                 : (typeof body.url === 'string') ? body.url
                 : null,
   });
+  // V.144 — enrich disambig tiers with real SerpAPI thumbnails. Only
+  // fires when outcome is disambig and tiers exist. Soft-fail keeps
+  // V.143 placeholders alive if SerpAPI is unavailable or times out.
+  try {
+    if (_v138 && _v138.outcome === 'disambig' && Array.isArray(_v138.tiers) && _v138.tiers.length > 0) {
+      await _v144EnrichTierImages(_v138.tiers);
+    }
+  } catch (e) { try { console.warn('[V.144] tier enrich failed:', e && e.message); } catch (er) {} }
 
   const responseBody = {
     ...parsed,
