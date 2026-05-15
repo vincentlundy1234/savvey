@@ -2695,7 +2695,7 @@ async function _v144FetchTierThumbnail(query) {
   url.searchParams.set('num', '5'); // small page; we only need first valid thumbnail
   url.searchParams.set('api_key', apiKey);
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 2500);
+  const timer = setTimeout(() => ac.abort(), 4000); // V.144b — was 2500. SerpAPI cold-start spiked above 2.5s on common queries, leaving popular products thumbnail-less.
   let thumb = null;
   try {
     const r = await fetch(url.toString(), { signal: ac.signal });
@@ -2716,8 +2716,8 @@ async function _v144FetchTierThumbnail(query) {
     clearTimeout(timer);
     try { console.warn(`[V.144] tier thumb fetch failed for "${q.slice(0,40)}": ${e && e.message}`); } catch (er) {}
   }
-  // Cache the result (even null) for 24h to avoid hammering the same misses.
-  try { await kvSet(cacheKey, { url: thumb || null }, 24 * 60 * 60); } catch (e) {}
+  // V.144b — only cache successful hits. Caching nulls was poisoning popular queries when an early SerpAPI cold-start timed out — every subsequent request returned null for 24h. Misses now retry fresh; SerpAPI cost is bounded by repeat-query rate.
+  if (thumb) { try { await kvSet(cacheKey, { url: thumb }, 24 * 60 * 60); } catch (e) {} }
   return thumb;
 }
 // Enrich a tiers array in-place with image_url. Fires up to 3 parallel
