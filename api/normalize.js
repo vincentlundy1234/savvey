@@ -111,7 +111,8 @@ const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.
                                           // intraday, but never older than half a working day.
                                           // SerpAPI Starter quota is fine for this — we'd
                                           // rather burn searches than serve wrong numbers.
-const KV_TIMEOUT_MS       = 1500;
+const KV_TIMEOUT_MS           = 1500;
+const KV_TIMEOUT_SECONDARY_MS = 800; // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
 
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
 // first-party retailers + reputable UK marketplaces. ANY host not on
@@ -607,13 +608,17 @@ async function _getKv() {
     return null;
   }
 }
-async function kvGet(key) {
+async function kvGet(key, timeoutMs) {
   const kv = await _getKv();
   if (!kv) return null;
+  // V.145 A3 — optional per-call timeout. Defaults to KV_TIMEOUT_MS (1500ms)
+  // for the primary response-cache lookup; canonical + thumbnail lookups
+  // pass KV_TIMEOUT_SECONDARY_MS (800ms) to clip tail latency.
+  const _t = (typeof timeoutMs === 'number' && timeoutMs > 0) ? timeoutMs : KV_TIMEOUT_MS;
   try {
     return await Promise.race([
       kv.get(key),
-      new Promise((r) => setTimeout(() => r(null), KV_TIMEOUT_MS)),
+      new Promise((r) => setTimeout(() => r(null), _t)),
     ]);
   } catch { return null; }
 }
@@ -2678,7 +2683,8 @@ async function _v144FetchTierThumbnail(query) {
   const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 100);
   const cacheKey = 'savvey:tier_thumb:v144e:' + slug;
   try {
-    const cached = await kvGet(cacheKey);
+    // V.145 A3 — secondary 800ms cap; thumb cache is non-critical.
+    const cached = await kvGet(cacheKey, KV_TIMEOUT_SECONDARY_MS);
     if (cached && typeof cached === 'object') {
       if (cached.url === null || (typeof cached.url === 'string' && cached.url.length > 0)) {
         return cached.url || null;
@@ -2737,7 +2743,7 @@ async function _v144FetchTierThumbnail(query) {
   }
   // V.144b — only cache successful hits. Caching nulls was poisoning popular queries when an early SerpAPI cold-start timed out — every subsequent request returned null for 24h. Misses now retry fresh; SerpAPI cost is bounded by repeat-query rate.
   try { console.log('[V.144e][tier_thumb] RESULT q="' + q.slice(0,60) + '" -> ' + (thumb ? 'HIT host=' + (new URL(thumb)).hostname : 'NULL')); } catch (e) {}
-  if (thumb) { try { await kvSet(cacheKey, { url: thumb }, 24 * 60 * 60); } catch (e) {} }
+  if (thumb) { try { await kvSet(cacheKey, { url: thumb }, 7 * 24 * 60 * 60); } catch (e) {} } // V.145 B3 — 7-day TTL. Product photos do not change in a week; 7x fewer SerpAPI calls on popular brands.
   return thumb;
 }
 // Enrich a tiers array in-place with image_url. Fires up to 3 parallel
@@ -5207,7 +5213,7 @@ async function _v202InnerHandler(req, res) {
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
   const _canonicalKey = `savvey:canonical:v144:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
-    const canonHit = await kvGet(_canonicalKey);
+    const canonHit = await kvGet(_canonicalKey, KV_TIMEOUT_SECONDARY_MS); // V.145 A3 — clip canonical-cache tail latency at 800ms.
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
       console.log(`[${VERSION}] canonical cache HIT for "${parsed.canonical_search_string}"`);
       // V.144g — enrich tier thumbnails on canonical-cache hits too.
@@ -5217,7 +5223,18 @@ async function _v202InnerHandler(req, res) {
       // back to V.143 placeholders frontend-side.
       try {
         if (canonHit.outcome === 'disambig' && Array.isArray(canonHit.tiers) && canonHit.tiers.length > 0) {
-          await _v144EnrichTierImages(canonHit.tiers);
+          // V.145 A2 — skip re-enrichment when every tier already has image_url.
+          // Saves 1-2s on warm-path canonical hits. The V.144g blanket-enrich
+          // was a one-time cache-poison guard, now unnecessary because every
+          // fresh canonical write already runs the enrichment hook downstream.
+          const _v145AllEnriched = canonHit.tiers.every(function (t) {
+            return t && typeof t.image_url === 'string' && t.image_url.indexOf('http') === 0;
+          });
+          if (!_v145AllEnriched) {
+            await _v144EnrichTierImages(canonHit.tiers);
+          } else {
+            try { console.log('[V.145 A2] canonical_hit skip enrich (all tiers already have image_url)'); } catch (e) {}
+          }
         }
       } catch (e) { try { console.warn('[V.144g] canonical_hit tier enrich failed:', e && e.message); } catch (er) {} }
       kvSet(cKey, canonHit, KV_TTL_SECONDS).catch(() => {});
@@ -5254,14 +5271,27 @@ async function _v202InnerHandler(req, res) {
     const fetchAlt = (parsed.alternative_string && parsed.confidence === 'medium')
       ? fetchVerifiedAmazonPrice(parsed.alternative_string)
       : Promise.resolve(null);
-    const [amazonRes, retailersRes, altAmazonRes] = await Promise.all([
+    // V.145 A1 — Tier-thumb prefetch joins the primary Promise.all.
+    // alternatives_array is available right after parseAndDefault returns;
+    // we fire 3 parallel google_images calls IN PARALLEL with Amazon engine
+    // + google_shopping instead of waiting until after _v138BuildResponse.
+    // Saves 1-2s on cold disambig queries. Results bind onto _v138.tiers
+    // once _v138BuildResponse returns.
+    const _v145AltsForThumbs = (Array.isArray(parsed.alternatives_array) && parsed.alternatives_array.length >= 2 && parsed.alternatives_array.length <= 4)
+      ? parsed.alternatives_array.slice(0, 3) : null;
+    const fetchTierThumbsP = _v145AltsForThumbs
+      ? Promise.all(_v145AltsForThumbs.map(function (name) { return _v144FetchTierThumbnail(name).catch(function () { return null; }); }))
+      : Promise.resolve(null);
+    const [amazonRes, retailersRes, altAmazonRes, tierThumbsRes] = await Promise.all([
       fetchVerifiedAmazonPrice(parsed.canonical_search_string, debugTrace),
       fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey, _v153LocalDiag, false, parsed.identity_fingerprint),
       fetchAlt,
+      fetchTierThumbsP,
     ]);
     verified_amazon_price = amazonRes;
     retailer_deep_links = retailersRes;
     alternative_amazon_price_v69 = altAmazonRes;
+    var _v145PrefetchedTierThumbs = Array.isArray(tierThumbsRes) ? tierThumbsRes : null;
   } else {
     debugTrace.push({step:'handler.skip_serpapi', reason: parsed.confidence === 'low' ? 'low_confidence' : 'no_canonical'});
   }
@@ -5652,14 +5682,26 @@ async function _v202InnerHandler(req, res) {
                 : (typeof body.url === 'string') ? body.url
                 : null,
   });
-  // V.144 — enrich disambig tiers with real SerpAPI thumbnails. Only
-  // fires when outcome is disambig and tiers exist. Soft-fail keeps
-  // V.143 placeholders alive if SerpAPI is unavailable or times out.
+  // V.145 A1 — Bind the prefetched thumbnails onto _v138.tiers.
+  // The fetch fired in parallel with the SerpAPI fan-out above; by the
+  // time we reach here, _v145PrefetchedTierThumbs is either an array of
+  // URLs (or nulls) matching tier order, or null when no alternatives
+  // existed at canonicalise time. Falls back to fresh _v144 enrichment
+  // when the prefetch slot is empty or count-mismatched.
   try {
     if (_v138 && _v138.outcome === 'disambig' && Array.isArray(_v138.tiers) && _v138.tiers.length > 0) {
-      await _v144EnrichTierImages(_v138.tiers);
+      if (typeof _v145PrefetchedTierThumbs !== 'undefined' && Array.isArray(_v145PrefetchedTierThumbs) && _v145PrefetchedTierThumbs.length === _v138.tiers.length) {
+        let _bound = 0;
+        for (let _i = 0; _i < _v138.tiers.length; _i++) {
+          const _url = _v145PrefetchedTierThumbs[_i];
+          if (_url && typeof _url === 'string') { _v138.tiers[_i].image_url = _url; _bound++; }
+        }
+        try { console.log('[V.145 A1] bound prefetched tier thumbs (' + _bound + '/' + _v138.tiers.length + ')'); } catch (e) {}
+      } else {
+        await _v144EnrichTierImages(_v138.tiers);
+      }
     }
-  } catch (e) { try { console.warn('[V.144] tier enrich failed:', e && e.message); } catch (er) {} }
+  } catch (e) { try { console.warn('[V.145 A1] tier bind failed:', e && e.message); } catch (er) {} }
 
   const responseBody = {
     ...parsed,
