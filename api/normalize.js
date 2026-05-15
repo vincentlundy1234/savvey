@@ -616,7 +616,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v131-1'; // V.131 — Curator Protocol: brand-only mode emits tag+description; bump invalidates pre-V.131 cached responses that lack these fields.
+const CACHE_PREFIX = 'sav-v131-2'; // V.131c — bump invalidates Bose entry written under V.131b (pre-specificity-stamp fix) which serialised tiers with is_family_variant=true instead of is_curator=true.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
