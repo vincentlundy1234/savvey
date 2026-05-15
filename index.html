@@ -8123,8 +8123,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v153b-PRO-REBALANCE';
-  var V126_GUARD          = 'savvey_v153b_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v154-PAYLOAD-CAP';
+  var V126_GUARD          = 'savvey_v154_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8468,7 +8468,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v153b</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v154</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -10315,8 +10315,8 @@ try {
 // for MPN OCR; 0.5 is the floor (compression artefacts kill recall in
 // low-light Argos/Currys captures below that). Don't drop below 0.6 without
 // re-testing Vision recall on the eval battery first.
-const SNAP_QUALITY = 0.7;    // V.141 Fast-Snap — was 0.85. Aggressive compression so payload stays under 150KB; Haiku Vision still reads text fine at 0.7.
-const SNAP_MAX_WIDTH = 800;  // V.141 Fast-Snap — was 1024. Vercel timeout hotfix: smaller payload = faster upload + smaller Haiku input = lower 502/504 risk.
+const SNAP_QUALITY = 0.6;    // V.154 — was 0.7. Vercel 4.5MB ingress wall guard. Combined with the V.154 strict-800px backing-store cap below, total 3-frame payload now mathematically bounded at ~600KB worst case.
+const SNAP_MAX_WIDTH = 800;  // V.154 — STRICTLY enforced at backing-store level by _v154CapAndEncode (was being defeated by V.131's DPR multiplication producing 2400×2400 backing-stores on iPhone retina, blowing past 4.5MB Vercel ingress wall as 3 frames × ~1.5MB each).
 
 // V.129c — IMAGE PREPROCESSOR. The cam-video element is a live stream so
 // no EXIF metadata exists at frame-grab time (the browser already orients
@@ -10821,9 +10821,44 @@ async function _v129CropToBrackets(video) {
   } catch (e) {}
   return c;
 }
+// V.154 — STRICT backing-store cap + force JPEG. Re-renders the source
+// canvas (which may be 2400×2400 on retina due to V.131's DPR math) into
+// a NEW canvas whose physical pixel dimensions are mathematically bounded
+// at SNAP_MAX_WIDTH (800px). No DPR multiplication on the destination —
+// the destination IS what gets serialised by toDataURL. JPEG is forced
+// with quality 0.6; no PNG fallback path exists. Aspect ratio preserved.
+function _v154CapAndEncode(srcCanvas) {
+  const srcW = (srcCanvas && srcCanvas.width)  || 0;
+  const srcH = (srcCanvas && srcCanvas.height) || 0;
+  if (srcW < 1 || srcH < 1) return null;
+  const maxSide = Math.max(srcW, srcH);
+  const scale   = maxSide > SNAP_MAX_WIDTH ? (SNAP_MAX_WIDTH / maxSide) : 1;
+  const dstW    = Math.max(1, Math.floor(srcW * scale));
+  const dstH    = Math.max(1, Math.floor(srcH * scale));
+  const dst = document.createElement('canvas');
+  dst.width  = dstW;          // PHYSICAL backing-store pixels — capped strictly at <=800
+  dst.height = dstH;          // PHYSICAL backing-store pixels — capped strictly at <=800
+  const dctx = dst.getContext('2d');
+  // No ctx.scale() — destination canvas has no DPR amplification. The
+  // drawImage call resamples the high-DPR source down to the 800px cap.
+  dctx.drawImage(srcCanvas, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+  // STRICT JPEG. The browser is required to return 'image/jpeg' MIME
+  // when this exact string is passed. If it can't (no spec-mandated
+  // browser exists where this fails for image/jpeg), toDataURL falls
+  // back to PNG silently — we audit by checking the prefix.
+  const dataUrl = dst.toDataURL('image/jpeg', SNAP_QUALITY);
+  // Belt-and-braces: zero the destination canvas to release the pixel
+  // memory immediately (same V.151 OOM guard pattern).
+  try { dst.width = 0; dst.height = 0; } catch (e) {}
+  if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/jpeg') !== 0) {
+    try { console.warn('[V.154] toDataURL did not honour JPEG MIME — got prefix: ' + String(dataUrl).slice(0, 40)); } catch (e) {}
+    return null;
+  }
+  return { dataUrl: dataUrl, base64: dataUrl.split(',')[1], width: dstW, height: dstH };
+}
 function _frameToBase64(canvas) {
-  const dataUrl = canvas.toDataURL('image/jpeg', SNAP_QUALITY);
-  return dataUrl.split(',')[1];
+  const out = _v154CapAndEncode(canvas);
+  return out ? out.base64 : '';
 }
 async function captureFrame() {
   const v = document.getElementById('cam-video');
@@ -10840,6 +10875,22 @@ async function captureFrame() {
   // camera sensor. Pauses the auto-cycler so this message stays pinned
   // until we manually advance it.
   try { if (window._v151LoadingStep) window._v151LoadingStep('Step 1: Reading camera sensor…'); } catch (e) {}
+  // V.154 — THREAD YIELD. The captureFrame call stack from this point
+  // forward is a 200-400ms synchronous canvas/JPEG-encoder bomb on mobile
+  // CPUs. Without yielding, the browser never paints the Step 1 text
+  // before the main thread locks — the user sees the screen jump straight
+  // to Step 3 (because the lambda returned before Steps 1+2 ever made it
+  // to the compositor). Two-stage yield: rAF gives the browser a chance
+  // to commit a frame, the setTimeout(50) gives iOS Safari's render
+  // pipeline enough wall-clock to actually flush that frame to the
+  // screen before the canvas engine starts hogging the JS thread.
+  await new Promise(function (resolve) {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { setTimeout(resolve, 50); });
+    } else {
+      setTimeout(resolve, 50);
+    }
+  });
   const sw = v.videoWidth, sh = v.videoHeight;
   const frames = [];
   // V.151 — explicit memory cleanup helper. iOS Safari can OOM-crash
@@ -10885,6 +10936,16 @@ async function captureFrame() {
   // capture so a slow-mobile-canvas compression doesn't look like a
   // network hang.
   try { if (window._v151LoadingStep) window._v151LoadingStep('Step 2: Compressing image…'); } catch (e) {}
+  // V.154 — Thread yield before the JPEG encoder runs. Same reasoning
+  // as the Step 1 yield: give Safari a paint tick to flush "Step 2"
+  // to the screen before toDataURL hogs the JS thread for 100-300ms.
+  await new Promise(function (resolve) {
+    if (typeof requestAnimationFrame === 'function') {
+      requestAnimationFrame(function () { setTimeout(resolve, 50); });
+    } else {
+      setTimeout(resolve, 50);
+    }
+  });
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
   // V.128 — kick the on-screen debug banner so `crop:` updates immediately
@@ -11387,6 +11448,46 @@ async function callNormalize(body) {
       track('normalize_http_error', { input_type: body.input_type, status: r.status, ms: _ms, err: _errBody.slice(0, 100) });
       clearInterval(phaseTimer);
       if (_mySeq !== _savveyFetchSeq || _ac.signal.aborted) return;
+      // V.154 — 413 PAYLOAD TOO LARGE branch. MUST fire BEFORE the
+      // V.141 timeout-grace route, otherwise a 413 from Vercel's edge
+      // ingress wall would be misclassified as a generic 5xx and the
+      // user would see the wrong copy ("AI took too long" instead of
+      // the actionable "move back" guidance). Vercel returns 413 when
+      // the request body exceeds 4.5MB; with the V.154 strict-800px
+      // cap this should be unreachable, but we belt-and-braces the
+      // branch in case any future regression slips past.
+      if (r.status === 413) {
+        try { console.warn('[V.154][413] payload too large — ' + (body && body.input_type) + ' input, ' + (Date.now() - t0) + 'ms'); } catch (e) {}
+        track('normalize_413_too_large', { input_type: body.input_type, ms: Date.now() - t0 });
+        try {
+          var _v154Es = document.getElementById('v137-empty-state');
+          if (_v154Es) {
+            var _v154T  = _v154Es.querySelector('.v137-empty-title');
+            var _v154Sb = _v154Es.querySelector('.v137-empty-sub');
+            var _v154Cta = _v154Es.querySelector('#v137-empty-retry');
+            if (_v154T)   _v154T.textContent  = 'Image file too large.';
+            if (_v154Sb)  _v154Sb.textContent = 'Try moving back slightly so the box fits inside the brackets, then snap again.';
+            if (_v154Cta) _v154Cta.textContent = 'Try again';
+            ['v138-product-img','v138-pricing','v138-verdict-card','v138-cta-stack','v138-title','v138-disclosure','v137-share-btn'].forEach(function (id) {
+              var el = document.getElementById(id);
+              if (el) el.style.display = 'none';
+            });
+            _v154Es.classList.add('show');
+            if (_v154Cta && !_v154Cta._v154Wired) {
+              _v154Cta._v154Wired = true;
+              _v154Cta.addEventListener('click', function (ev) {
+                try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+                try { if (typeof goHome === 'function') goHome(); } catch (e) {}
+              }, true);
+            }
+            try { show('result'); } catch (e) {}
+            return;
+          }
+        } catch (e) { try { console.warn('[V.154] 413 empty state mount failed', e); } catch (er) {} }
+        // Fallback if v137 empty state DOM is missing for any reason.
+        showError('Image file too large.', 'Try moving back slightly so the box fits inside the brackets, then snap again.');
+        return;
+      }
       // V.141 Fast-Snap — Timeout grace. 502/504/408/5xx on Snap (image
       // input) now routes to the V.137 premium empty state with a
       // 'Try typing the name instead' nudge, not the red error screen.
