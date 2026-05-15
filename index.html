@@ -10836,8 +10836,20 @@ async function captureFrame() {
   }
   // V.104 — haptic + flash feedback on shutter press
   if (window.savveyHaptics) try { window.savveyHaptics.medium(); } catch (e) {}
+  // V.151 — Step 1: visible UI update. Tells the user we're reading the
+  // camera sensor. Pauses the auto-cycler so this message stays pinned
+  // until we manually advance it.
+  try { if (window._v151LoadingStep) window._v151LoadingStep('Step 1: Reading camera sensor…'); } catch (e) {}
   const sw = v.videoWidth, sh = v.videoHeight;
   const frames = [];
+  // V.151 — explicit memory cleanup helper. iOS Safari can OOM-crash
+  // when canvas backing-store stays allocated across all 3 frames at
+  // device-native resolution × DPR. After every frame is read into
+  // base64 we zero out width/height to force the browser to release
+  // the pixel memory immediately rather than waiting for GC.
+  function _v151ZeroCanvas(c) {
+    try { if (c && typeof c.width === 'number') { c.width = 0; c.height = 0; } } catch (e) {}
+  }
   // V.123 — visible-source crop. Replaces _cropCentreSquare (which fed the
   // RAW video frame; on iPhone full-bleed portrait viewfinder + CSS zoom
   // that produced wildly-over-zoomed captures because the raw 1920x1080
@@ -10861,7 +10873,18 @@ async function captureFrame() {
     // Final fallback: return the centre-of-raw crop without size guard
     return _cropCentreSquare(v, v.videoWidth || sw, v.videoHeight || sh);
   }
-  const firstCanvas = await _v141ResilientCrop();
+  let firstCanvas = null;
+  try {
+    firstCanvas = await _v141ResilientCrop();
+  } catch (capErr) {
+    try { if (window._v151LoadingStep) window._v151LoadingStep('Camera read failed — try again.'); } catch (e) {}
+    try { console.warn('[V.151] resilient crop threw:', capErr && capErr.message); } catch (e) {}
+    return;
+  }
+  // V.151 — Step 2: compression phase. Pinned during the multi-frame
+  // capture so a slow-mobile-canvas compression doesn't look like a
+  // network hang.
+  try { if (window._v151LoadingStep) window._v151LoadingStep('Step 2: Compressing image…'); } catch (e) {}
   frames.push(_frameToBase64(firstCanvas));
   _lastSnapDataUrl = firstCanvas.toDataURL('image/jpeg', SNAP_QUALITY);
   // V.128 — kick the on-screen debug banner so `crop:` updates immediately
@@ -10871,19 +10894,33 @@ async function captureFrame() {
   // user feels the shutter "land" before the loading screen fires. The
   // captured snap stays on screen with a sweeping scan line + dim.
   showV104Tension(_lastSnapDataUrl);
+  // V.151 — release the first canvas backing store now that we have the
+  // base64 string + the data URL. The pixel memory can be reclaimed by
+  // the browser immediately rather than waiting until captureFrame returns.
+  _v151ZeroCanvas(firstCanvas);
+  const _firstWidth = (firstCanvas && firstCanvas.width) || 0;
+  firstCanvas = null;
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) {
-    const c2 = (await _v129CropToBrackets(v))
+    let c2 = (await _v129CropToBrackets(v))
             || (await _v123CropVisibleSquare(v))
             || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
-    frames.push(_frameToBase64(c2));
+    if (c2) {
+      frames.push(_frameToBase64(c2));
+      _v151ZeroCanvas(c2);
+      c2 = null;
+    }
   }
   await new Promise(r => setTimeout(r, 120));
   if (v.videoWidth) {
-    const c3 = (await _v129CropToBrackets(v))
+    let c3 = (await _v129CropToBrackets(v))
             || (await _v123CropVisibleSquare(v))
             || _cropCentreSquare(v, v.videoWidth, v.videoHeight);
-    frames.push(_frameToBase64(c3));
+    if (c3) {
+      frames.push(_frameToBase64(c3));
+      _v151ZeroCanvas(c3);
+      c3 = null;
+    }
   }
   // V.135 — Panel-mandated teardown routing fix. Previously this stopped
   // tracks directly, bypassing the FSM. Result: FSM stayed in CAPTURING
@@ -10894,18 +10931,20 @@ async function captureFrame() {
     if (camStream) { try { camStream.getTracks().forEach(t => t.stop()); } catch {} camStream = null; }
   }
   const totalBytes = frames.reduce((s, f) => s + Math.floor(f.length * 0.75), 0);
-  track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });
-  // V.147 — frontend compression audit. Logs the final compressed payload
-  // size to the browser console (visible via remote DevTools / iOS Safari
-  // remote inspector) so we can confirm the phone isn't sending a 0-byte
-  // or oversized blob before the fetch even starts.
+  track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: _firstWidth, frames: frames.length, multi_shot: true });
+  // V.147 — frontend compression audit.
   try {
     var _v147KB = Math.round(totalBytes / 1024);
-    console.log('[V.147][snap] PAYLOAD ' + _v147KB + 'KB · ' + frames.length + ' frames · quality=' + SNAP_QUALITY + ' · first_canvas_w=' + firstCanvas.width);
+    console.log('[V.147][snap] PAYLOAD ' + _v147KB + 'KB · ' + frames.length + ' frames · quality=' + SNAP_QUALITY + ' · first_canvas_w=' + _firstWidth);
     if (window.v118DebugToast) {
       window.v118DebugToast('SNAP ' + _v147KB + 'KB · ' + frames.length + ' frames', _v147KB < 5 ? 'err' : (_v147KB > 500 ? 'err' : 'ok'));
     }
   } catch (e) {}
+  // V.151 — Step 3: upload phase. Last user-visible step. The cycler stays
+  // pinned here until callNormalize either returns and routes elsewhere
+  // (renderResult / renderConfirm / V.137 empty state) or until the
+  // V.151 client abort fires after 60s.
+  try { if (window._v151LoadingStep) window._v151LoadingStep('Step 3: Uploading to AI…'); } catch (e) {}
   await callNormalize({ input_type: 'image', image_base64_frames: frames, media_type: 'image/jpeg' });
 }
 
@@ -11308,8 +11347,13 @@ async function callNormalize(body) {
   // (canonicalise + 4 parallel SerpAPI + tier enrich + mega-synth) can
   // legitimately take up to 25s on a cold cache. 30s gives headroom; client
   // still aborts BEFORE Vercel's 60s wall.
+  // V.151 — image client abort 45s -> 60s. Older phones can take 5-10s
+  // just compressing a 12-48MP photo BEFORE the upload even starts. The
+  // 45s budget was clipping the slowest devices. 60s matches Vercel's
+  // Pro maxDuration ceiling — client still aborts simultaneously with
+  // the server so we never wait indefinitely.
   var _v141IsImage = body && body.input_type === 'image';
-  var _v141TimeoutMs = _v141IsImage ? 45000 : 30000;
+  var _v141TimeoutMs = _v141IsImage ? 60000 : 30000;
   var _timedOut = false;
   var _ato_v191 = setTimeout(function () {
     _timedOut = true;
@@ -15717,6 +15761,26 @@ async function _v140KickoffSynthesize(idPayload) {
   function v171StopLoadingCycle() {
     if (_v171LoadingTimer) { clearInterval(_v171LoadingTimer); _v171LoadingTimer = null; }
   }
+  // V.151 — manual step pinner. Pauses the auto-cycler and writes a
+  // specific step message into the V.171 loading text node. Used by
+  // captureFrame() so the user sees EXACTLY which phase of the Snap
+  // pipeline is currently running (reading sensor / compressing /
+  // uploading) instead of a generic spinner that hides the failure.
+  function _v151LoadingStep(text) {
+    try {
+      v171StopLoadingCycle();
+      var el = document.getElementById('v171-loading-cycle');
+      if (el) {
+        el.style.opacity = '0';
+        setTimeout(function () {
+          el.textContent = String(text || '');
+          el.style.opacity = '1';
+        }, 120);
+      }
+      try { console.log('[V.151][step] ' + text); } catch (e) {}
+    } catch (e) {}
+  }
+  window._v151LoadingStep = _v151LoadingStep;
   // Hook into the existing show() function. Wrap rather than replace so
   // every other call site still works.
   if (typeof window.show === 'function') {
