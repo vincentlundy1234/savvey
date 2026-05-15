@@ -10861,6 +10861,29 @@ function resetUIState() {
   }
 }
 async function callNormalize(body) {
+  // V.134 — RETAILER-KEYWORD SANITIZER. Strip retailer brand names from
+  // the user's typed query BEFORE it hits the backend. SerpAPI was
+  // searching Amazon UK for the literal string "Currys" when the user
+  // typed "Dishwasher Currys", returning bogus listings. Strip the
+  // retailer noise so the scraper sees only the product intent.
+  // Applies to text/url inputs only — image/barcode never carry retailer
+  // tokens.
+  try {
+    if (body && body.input_type === 'text' && typeof body.text === 'string') {
+      var V134_RETAILERS = /\b(?:currys|argos|amazon(?:\.co\.uk)?|ebay(?:\.co\.uk)?|tesco|asda|sainsbury'?s|morrisons|waitrose|john\s*lewis|very(?:\.co\.uk)?|wickes|b\s*&\s*q|homebase|screwfix|toolstation|boots|superdrug|wilko|the\s*range|dunelm|ikea|aldi|lidl|marks\s*(?:and|&)\s*spencer|m\s*&\s*s|next|gameuk|game|smyths|costco|selfridges|harrods|debenhams)\b/gi;
+      var _v134Original = body.text;
+      var _v134Stripped = body.text.replace(V134_RETAILERS, ' ').replace(/\s+/g, ' ').trim();
+      if (_v134Stripped && _v134Stripped !== _v134Original) {
+        try { console.log('[V.134][sanitize] retailer stripped: "' + _v134Original + '" -> "' + _v134Stripped + '"'); } catch (e) {}
+        body.text = _v134Stripped;
+      } else if (!_v134Stripped) {
+        // Edge case — user typed ONLY a retailer name. Don't blank the
+        // query; restore the original so the backend can route to the
+        // brand-curator or no_match path with diagnostic copy.
+        try { console.log('[V.134][sanitize] retailer-only query, original preserved: ' + _v134Original); } catch (e) {}
+      }
+    }
+  } catch (e) { try { console.warn('[V.134][sanitize] failed', e); } catch (er) {} }
   // V.128 — DATA PIPELINE OVERHAUL. First action: wipe the result-screen
   // DOM so a failed image load / failed verdict synth on the new query
   // can never display the previous query's pixels.
@@ -11963,13 +11986,40 @@ function renderConfirm(a, b, payload) {
               }
             });
           } else {
-            // Generic tier — external Amazon-search link as before.
-            var fbUrl = 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(t.name || canon);
-            var target = t.url || fbUrl;
-            cardEl.setAttribute('href', target);
-            cardEl.setAttribute('target', '_blank');
-            cardEl.setAttribute('rel', 'noopener nofollow');
+            // V.134 — Generic tier / brand-curator card. Was an EXTERNAL
+            // Amazon-search anchor — now re-routes INTERNALLY through
+            // callNormalize so the user lands on the Four Pillars for
+            // the tapped product instead of being kicked to amazon.co.uk.
+            // Mirrors the V.148/V.120 family-variant binding exactly.
+            cardEl.removeAttribute('href');
+            cardEl.removeAttribute('target');
+            cardEl.removeAttribute('rel');
+            cardEl.setAttribute('role', 'button');
+            cardEl.setAttribute('tabindex', '0');
+            cardEl.style.pointerEvents = 'auto';
+            cardEl.style.cursor = 'pointer';
+            var _v134Name = t.name || canon || '';
+            var _v134Handler = (function (productName) {
+              return function (ev) {
+                try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (e) {}
+                try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {}
+                try { if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation(); } catch (e) {}
+                try { console.log('[V.134] Tier card tapped (internal re-route):', productName); } catch (e) {}
+                setTimeout(function () {
+                  try { callNormalize({ input_type: 'text', text: productName }); }
+                  catch (err) { try { console.warn('[V.134] tier re-search failed', err); } catch (e) {} }
+                }, 0);
+                return false;
+              };
+            })(_v134Name);
+            if (cardEl._v120Listener) { try { cardEl.removeEventListener('click', cardEl._v120Listener, true); } catch (e) {} }
+            if (cardEl._v134Listener) { try { cardEl.removeEventListener('click', cardEl._v134Listener, true); } catch (e) {} }
+            cardEl._v134Listener = _v134Handler;
             cardEl.onclick = null;
+            cardEl.addEventListener('click', _v134Handler, true);
+            cardEl.addEventListener('keydown', function (e) {
+              if (e && (e.key === 'Enter' || e.key === ' ')) { _v134Handler(e); }
+            });
           }
         }
       });
@@ -11989,10 +12039,30 @@ function renderConfirm(a, b, payload) {
         if (priceEl)   priceEl.textContent   = (m.typical_price_gbp != null) ? ('£' + Number(m.typical_price_gbp).toFixed(2)) : '—';
         if (priceAtEl) priceAtEl.textContent = '';
         if (cardEl) {
-          cardEl.setAttribute('href', 'https://www.amazon.co.uk/s?k=' + encodeURIComponent(name));
-          cardEl.setAttribute('target', '_blank');
-          cardEl.setAttribute('rel', 'noopener nofollow');
+          // V.134 — internal re-route (was external Amazon search).
+          cardEl.removeAttribute('href');
+          cardEl.removeAttribute('target');
+          cardEl.removeAttribute('rel');
+          cardEl.setAttribute('role', 'button');
+          cardEl.setAttribute('tabindex', '0');
+          cardEl.style.pointerEvents = 'auto';
+          cardEl.style.cursor = 'pointer';
+          var _v134LegacyName = name || '';
+          var _v134LegacyHandler = (function (productName) {
+            return function (ev) {
+              try { if (ev && ev.preventDefault) ev.preventDefault(); } catch (e) {}
+              try { if (ev && ev.stopPropagation) ev.stopPropagation(); } catch (e) {}
+              try { if (ev && ev.stopImmediatePropagation) ev.stopImmediatePropagation(); } catch (e) {}
+              setTimeout(function () {
+                try { callNormalize({ input_type: 'text', text: productName }); } catch (er) {}
+              }, 0);
+              return false;
+            };
+          })(_v134LegacyName);
+          if (cardEl._v134LegacyListener) { try { cardEl.removeEventListener('click', cardEl._v134LegacyListener, true); } catch (e) {} }
+          cardEl._v134LegacyListener = _v134LegacyHandler;
           cardEl.onclick = null;
+          cardEl.addEventListener('click', _v134LegacyHandler, true);
         }
       });
     }
