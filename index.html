@@ -12321,7 +12321,7 @@ function renderConfirm(a, b, payload) {
         if (imgWrap) {
           imgWrap.innerHTML = '';
           var thumbUrl = t.image_url || t.image || (t.image && t.image.thumbnail_url) || null;
-          if (thumbUrl && typeof thumbUrl === 'string' && /^https?:///.test(thumbUrl)) {
+          if (thumbUrl && typeof thumbUrl === 'string' && (thumbUrl.indexOf('http://') === 0 || thumbUrl.indexOf('https://') === 0)) {
             var im = document.createElement('img');
             im.src = thumbUrl;
             im.alt = (t.name || '').slice(0, 60);
