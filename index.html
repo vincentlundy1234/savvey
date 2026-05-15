@@ -12304,6 +12304,8 @@ function _v143Placeholder(i, tier) {
 }
 
 function renderConfirm(a, b, payload) {
+  // V.152 — release the V.151 step pin.
+  try { if (window._v151ClearStep) window._v151ClearStep(); } catch (e) {}
   // V.193 — kill skeleton (disambig route lands on #screen-confirm, not result).
   try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
   // V.154 — wire the escape-hatch button on every render so it always
@@ -12887,6 +12889,9 @@ async function disambigPick(idx, label, payload) {
 
 
 function renderResult(displayName, payload) {
+  // V.152 — release the V.151 step pin so the next query's loading
+  // screen can run the auto-cycler again.
+  try { if (window._v151ClearStep) window._v151ClearStep(); } catch (e) {}
   // V.193 — Skeleton dismount. The instant we have real data we kill the
   // shimmer block so the genuine four-pillar DOM paints in.
   try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
@@ -15744,6 +15749,12 @@ async function _v140KickoffSynthesize(idPayload) {
   ];
   var _v171LoadingTimer = null;
   function v171StartLoadingCycle() {
+    // V.152 — respect the V.151 sticky-pin. If captureFrame() pinned a
+    // step ("Step 1/2/3..."), don't restart the auto-cycler over it.
+    if (window._v151StepActive === true) {
+      try { console.log('[V.152] v171StartLoadingCycle suppressed — V.151 step pinned: ' + (window._v151PinnedText || '')); } catch (e) {}
+      return;
+    }
     var el = document.getElementById('v171-loading-cycle');
     if (!el) return;
     var i = 0;
@@ -15768,19 +15779,35 @@ async function _v140KickoffSynthesize(idPayload) {
   // uploading) instead of a generic spinner that hides the failure.
   function _v151LoadingStep(text) {
     try {
+      // V.152 — sticky-pin flag blocks the V.171 auto-cycler from
+      // restarting over our pinned step text. show('loading') invokes
+      // v171StartLoadingCycle which used to clobber Step 1/2/3 within
+      // 900ms. The cycler now short-circuits when _v151StepActive=true.
+      window._v151StepActive = true;
+      window._v151PinnedText = String(text || '');
       v171StopLoadingCycle();
+      // V.152 — update BOTH the V.171 cycler element AND the V.122
+      // static loading copy. Founder reported seeing 'Savvey is
+      // checking the market...' (v122-loading-copy <p> at line 8657)
+      // which was never being replaced.
       var el = document.getElementById('v171-loading-cycle');
       if (el) {
         el.style.opacity = '0';
         setTimeout(function () {
           el.textContent = String(text || '');
           el.style.opacity = '1';
-        }, 120);
+        }, 80);
       }
+      var v122 = document.querySelector('.v122-loading-copy');
+      if (v122) v122.textContent = String(text || '');
       try { console.log('[V.151][step] ' + text); } catch (e) {}
     } catch (e) {}
   }
+  function _v151ClearStep() {
+    try { window._v151StepActive = false; window._v151PinnedText = ''; } catch (e) {}
+  }
   window._v151LoadingStep = _v151LoadingStep;
+  window._v151ClearStep = _v151ClearStep;
   // Hook into the existing show() function. Wrap rather than replace so
   // every other call site still works.
   if (typeof window.show === 'function') {
@@ -17530,8 +17557,13 @@ async function _v140KickoffSynthesize(idPayload) {
       setTimeout(function () { try { b.remove(); } catch (e) {} }, 320);
     }, true);
   }
-  setTimeout(function () { try { v140MountCookieBanner(); } catch (e) {} }, 1400);
+  // V.152 — V.140 cookie banner DISABLED for V1.0 field test. Founder
+  // reported the banner was polluting the DOM during Snap testing.
+  // setTimeout(function () { try { v140MountCookieBanner(); } catch (e) {} }, 1400);
   window.v140MountCookieBanner = v140MountCookieBanner;
+  setTimeout(function () {
+    try { var b = document.getElementById('v140-cookie-banner'); if (b) b.remove(); } catch (e) {}
+  }, 100);
 
   // V.140 — Report Bad Price row
   function v140MountReportRow(payload) {
