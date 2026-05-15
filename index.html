@@ -17219,7 +17219,11 @@ async function _v140KickoffSynthesize(idPayload) {
     var t = document.getElementById('v137-offline-toast');
     if (!t) return;
     t.querySelector('.v137-offline-text').textContent = 'No internet connection. Waiting for signal…';
-    requestAnimationFrame(function () { t.classList.add('show'); });
+    // V.137b — apply .show class on a microtask so the initial CSS state
+    // registers before the transition fires. rAF turned out to be
+    // throttled in some embedded WebViews (Claude in Chrome MCP test
+    // harness, in particular), leaving the toast invisible.
+    Promise.resolve().then(function () { t.classList.add('show'); });
   }
   function showBackOnlineToast() {
     var t = document.getElementById('v137-offline-toast');
