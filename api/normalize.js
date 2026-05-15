@@ -2667,7 +2667,7 @@ function _v163ItemMatchesIdentity(title, requiredTokens) {
 // ════════════════════════════════════════════════════════════════════
 // V.144 — Tier thumbnail fetcher. Lightweight SerpAPI google_shopping
 // call that extracts ONLY the first item's thumbnail URL. Cached under
-// savvey:tier_thumb:v144:<slug> with 24h TTL so repeat searches share
+// savvey:tier_thumb:v144b:<slug> with 24h TTL so repeat searches share
 // the lookup cost. Returns null on any failure path so the V.143
 // frontend placeholder can take over gracefully.
 // ════════════════════════════════════════════════════════════════════
@@ -2676,7 +2676,7 @@ async function _v144FetchTierThumbnail(query) {
   const q = query.trim();
   if (q.length < 2 || q.length > 150) return null;
   const slug = q.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 100);
-  const cacheKey = 'savvey:tier_thumb:v144:' + slug;
+  const cacheKey = 'savvey:tier_thumb:v144b:' + slug;
   try {
     const cached = await kvGet(cacheKey);
     if (cached && typeof cached === 'object') {
