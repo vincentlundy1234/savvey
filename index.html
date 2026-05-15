@@ -8123,8 +8123,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v158-RESTORE-60S';
-  var V126_GUARD          = 'savvey_v158_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v159-HOUSEKEEPING';
+  var V126_GUARD          = 'savvey_v159_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8468,7 +8468,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v158</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v159</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9228,18 +9228,30 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 
 <script>
 // ─────────────────────────────────────────────────────────────────────────
-// V.155 — RAW ERROR DUMP. The Founder demanded the ugly truth. No polished
-// timeout UI. Every fetch failure (whether the server returned 500 or the
-// browser threw client-side) is dumped to this fixed-position <pre> at the
-// top of the viewport, in monospace red text, with error.name, error.message,
-// error.stack (when available) and the most recent SNAP payload size. Also
-// auto-enables the v118DebugToast so [V.147][snap] PAYLOAD ... is visible
-// without the user having to long-press the hidden toggle.
+// V.155 — RAW ERROR DUMP. The Founder demanded the ugly truth during the
+// V.155–V.158 forensic hunt. Now V.159 gates it behind a developer flag:
+// the pane only mounts/renders if localStorage.savvey_debug === '1' OR the
+// URL carries ?debug=1. For normal users, _v155Dump is a no-op so existing
+// call sites are safe but produce no UI. The polished V.144 UI handles
+// error states for production users.
 // ─────────────────────────────────────────────────────────────────────────
 (function _v155Init() {
-  try { localStorage.setItem('savvey_debug', '1'); } catch (e) {}
+  // V.159 — gate predicate. Read once at mount but also each time _v155Dump
+  // fires (so a developer can flip localStorage in-session via the console
+  // without a reload).
+  function _v159DebugEnabled() {
+    try {
+      if (localStorage.getItem('savvey_debug') === '1') return true;
+    } catch (e) {}
+    try {
+      var qs = (typeof location !== 'undefined' && location.search) ? location.search : '';
+      if (qs.indexOf('debug=1') !== -1) return true;
+    } catch (e) {}
+    return false;
+  }
   var pane = null;
   function mount() {
+    if (!_v159DebugEnabled()) return null; // V.159 — silent no-op for prod users
     if (pane && document.body.contains(pane)) return pane;
     pane = document.createElement('pre');
     pane.id = '_v155-raw-dump';
@@ -9266,6 +9278,10 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   }
   var history = [];
   function append(label, info) {
+    // V.159 — gate. If debug isn't enabled, silently no-op. The dump
+    // remains callable from any code path (no ReferenceError risk on
+    // _v155Dump) but emits nothing to the UI for normal users.
+    if (!_v159DebugEnabled()) return;
     try {
       var ts = new Date().toISOString().slice(11, 23);
       var block = '── ' + ts + ' · ' + String(label || '?') + ' ──\n';

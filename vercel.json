@@ -1,7 +1,7 @@
 {
   "functions": {
     "api/normalize.js": {
-      "memory": 1024,
+      "memory": 512,
       "maxDuration": 60
     },
     "api/identify.js": {
