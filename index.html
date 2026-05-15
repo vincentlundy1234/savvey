@@ -5602,6 +5602,24 @@
 .v140-report-issue:hover { color: #1a1a1a; }
 .v140-report-issue.v140-acked { color: #2a6b22; font-weight: 700; cursor: default; pointer-events: none; }
 .v140-report-issue .v140-flag { font-size: 13px; }
+/* V.143 — Visual disambig tier thumbnail */
+.v143-tier-thumb {
+  display: inline-flex;
+  width: 40px; height: 40px;
+  flex: 0 0 40px;
+  border-radius: 8px;
+  object-fit: contain;
+  background: rgba(0,0,0,0.04);
+  align-items: center; justify-content: center;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: 14px; font-weight: 800; letter-spacing: -0.01em;
+  overflow: hidden;
+  position: relative;
+}
+.v143-tier-thumb-placeholder { gap: 1px; }
+.v143-tier-thumb svg { width: 16px; height: 16px; opacity: 0.55; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+.v143-tier-thumb .v143-tier-letter { position: relative; z-index: 1; line-height: 1; }
+img.v143-tier-thumb { padding: 2px; }
 /* V.137 — Offline toast (non-blocking, sticky until 'online') */
 #v137-offline-toast {
   position: fixed; left: 12px; right: 12px;
@@ -11354,6 +11372,38 @@ async function callNormalize(body) {
       track('normalize_stale_dropped', { input_type: body.input_type, ms });
       return;
     }
+    // V.143 — Vision timeout grace. When the backend returns
+    // outcome:'timeout', route directly to the V.137 empty state with
+    // the 'Try typing the name instead' nudge. Bypasses the showError
+    // red screen so the user sees a calm exit path.
+    if (j && j.outcome === 'timeout') {
+      try {
+        var es = document.getElementById('v137-empty-state');
+        if (es) {
+          var t = es.querySelector('.v137-empty-title');
+          var sb = es.querySelector('.v137-empty-sub');
+          var cta = es.querySelector('#v137-empty-retry');
+          if (t)  t.textContent  = 'Connection timed out.';
+          if (sb) sb.textContent = (j.message || 'Vision API is congested.') + ' Try typing the name instead.';
+          if (cta) cta.textContent = 'Type the name';
+          ['v138-product-img','v138-pricing','v138-verdict-card','v138-cta-stack','v138-title','v138-disclosure','v137-share-btn'].forEach(function (id) {
+            var el = document.getElementById(id); if (el) el.style.display = 'none';
+          });
+          es.classList.add('show');
+          if (cta && !cta._v143Wired) {
+            cta._v143Wired = true;
+            cta.addEventListener('click', function (ev) {
+              try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+              try { if (typeof goHome === 'function') goHome(); } catch (e) {}
+              setTimeout(function () { try { if (typeof window.v172OpenTypeSheet === 'function') window.v172OpenTypeSheet(); } catch (e) {} }, 80);
+            }, true);
+          }
+          try { show('result'); } catch (e) {}
+          try { if (window.savveyTelemetry) window.savveyTelemetry({type:'vision_timeout', reason: j.outcome_reason, ms: Date.now() - t0, timestamp: Date.now()}); } catch (e) {}
+          return;
+        }
+      } catch (e) { try { console.warn('[V.143] empty state mount failed', e); } catch (er) {} }
+    }
     // V.129e — VISION EJECTOR SEAT UX. When the backend returns
     // outcome:"unclear" for an image input, do NOT route to the error
     // screen and do NOT route to the result screen with a hallucinated
@@ -12133,6 +12183,30 @@ function _v131cMountBrandGlance(payload) {
 }
 window._v131cMountBrandGlance = _v131cMountBrandGlance;
 
+// V.143 — Tier thumbnail placeholder. Generates a 40x40 SVG with
+// a clean product-search icon tinted per tier index (or per curator
+// tag). Returns a DOM node ready to insert into .v136-similar-img.
+function _v143Placeholder(i, tier) {
+  var colors = [
+    { bg: '#e9f4e6', stroke: '#2a6b22' },  // BUDGET / slot 0
+    { bg: '#eef5ff', stroke: '#1e3a8a' },  // TOP RATED / slot 1
+    { bg: '#fdf1e1', stroke: '#9a4b07' },  // PREMIUM / slot 2
+  ];
+  var c = colors[i % colors.length];
+  var letter = (tier && tier.name) ? String(tier.name).trim().charAt(0).toUpperCase() : '?';
+  var wrap = document.createElement('div');
+  wrap.className = 'v143-tier-thumb v143-tier-thumb-placeholder';
+  wrap.setAttribute('aria-hidden', 'true');
+  wrap.style.background = c.bg;
+  wrap.style.color = c.stroke;
+  wrap.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<circle cx="11" cy="11" r="7"/>' +
+    '<line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+    '</svg>' +
+    '<span class="v143-tier-letter">' + letter + '</span>';
+  return wrap;
+}
+
 function renderConfirm(a, b, payload) {
   // V.193 — kill skeleton (disambig route lands on #screen-confirm, not result).
   try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
@@ -12237,6 +12311,29 @@ function renderConfirm(a, b, payload) {
         if (blurbEl)   blurbEl.textContent   = (_isFamily ? '' : (t.blurb || ''));
         if (priceEl)   priceEl.textContent   = (_isFamily ? '' : (t.price_str || (t.price_gbp != null ? ('£' + Number(t.price_gbp).toFixed(2)) : '—')));
         if (priceAtEl) priceAtEl.textContent = (_isFamily ? '' : (t.retailer ? ('at ' + t.retailer) : ''));
+        // V.143 — Visual disambiguation. Mount a 40x40 thumbnail in
+        // each tier card. Prefer the backend-provided image_url
+        // (future V.144 SerpAPI fetch); fall back to a tier-color
+        // SVG product-search placeholder so the user always sees a
+        // visually distinct marker. Image floats left of the title
+        // via the existing .v136-similar-img wrapper.
+        var imgWrap = cardEl ? cardEl.querySelector('.v136-similar-img') : null;
+        if (imgWrap) {
+          imgWrap.innerHTML = '';
+          var thumbUrl = t.image_url || t.image || (t.image && t.image.thumbnail_url) || null;
+          if (thumbUrl && typeof thumbUrl === 'string' && /^https?:///.test(thumbUrl)) {
+            var im = document.createElement('img');
+            im.src = thumbUrl;
+            im.alt = (t.name || '').slice(0, 60);
+            im.className = 'v143-tier-thumb';
+            im.loading = 'lazy';
+            im.decoding = 'async';
+            im.onerror = function () { try { this.remove(); imgWrap.appendChild(_v143Placeholder(i, t)); } catch (e) {} };
+            imgWrap.appendChild(im);
+          } else {
+            imgWrap.appendChild(_v143Placeholder(i, t));
+          }
+        }
 
         // V.148 — family mode: hide pill + image, internal-loop click.
         if (pillEl) {

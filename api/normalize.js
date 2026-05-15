@@ -87,7 +87,7 @@ function detectRetailerOwn(canonical) {
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
-const TIMEOUT_MS          = 8000;
+const TIMEOUT_MS          = 8500; // V.143 — strict 8.5s ceiling on every Anthropic call. Must abort BEFORE Vercel's 60s wall to surface a clean timeout envelope, not a 502.
 // V.112 (10 May 2026): bumped from 380→800 / 320→700 after diagnosing
 // dishwasher / kettle / garden-storage-box no_match cases. The V.110 confidence
 // engine schema growth (confidence_score + market_status + full alternatives_meta
@@ -4774,10 +4774,43 @@ async function _v202InnerHandler(req, res) {
       } else {
         return res.status(400).json({ error: 'image_base64 or image_base64_frames required' });
       }
-      rawText = await withCircuit('anthropic',
-        () => callHaikuVision(_buildVisionPromptWithHint(VISION_SYSTEM_PROMPT, body && body.category_hint), payload, mediaType),
-        { onOpen: () => null }
-      );
+      // V.143 — Vision-abort envelope. Wrap the call in a per-attempt
+      // try/catch. If the Anthropic Vision response aborts at the
+      // 8.5s ceiling OR throws any network error, short-circuit to a
+      // clean 200 OK with outcome:'timeout' so the frontend can mount
+      // the V.137 empty state. Without this, Vercel could hit its
+      // own wall and return a 502 HTML page that the frontend
+      // surfaces as a hard error.
+      try {
+        rawText = await withCircuit('anthropic',
+          () => callHaikuVision(_buildVisionPromptWithHint(VISION_SYSTEM_PROMPT, body && body.category_hint), payload, mediaType),
+          { onOpen: () => null }
+        );
+      } catch (visionErr) {
+        const _v143Aborted = visionErr && (visionErr.name === 'AbortError' || /aborted|timeout/i.test(String(visionErr.message || visionErr)));
+        try { console.warn(`[V.143][vision_timeout] aborted=${_v143Aborted} message=${visionErr && visionErr.message}`); } catch (e) {}
+        try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+        return res.status(200).json({
+          outcome: 'timeout',
+          outcome_reason: _v143Aborted ? 'vision_aborted' : 'vision_exception',
+          message: 'Vision API is congested.',
+          canonical_search_string: null,
+          identity: { canonical: null, display_title: null, category_eyebrow: null, mpn: null, market_status: null, image: null },
+          pricing: { best_price: null, avg_market: null, price_band: null },
+          verdict: { label: null, pill_text: null, pill_color_class: null, summary: null, rating: null },
+          links: [],
+          tiers: null,
+          disclosure: { affiliate_text: '', data_freshness: '' },
+          _meta: {
+            version: VERSION,
+            input_type: 'image',
+            latency_ms: Date.now() - t0,
+            cache: 'miss',
+            source: 'v143_vision_timeout',
+            exception_message: String(visionErr && visionErr.message || visionErr).slice(0, 200),
+          },
+        });
+      }
     } else if (inputType === 'url') {
       const rawUrl = String(body.url || '').trim();
       if (!rawUrl || !/^https?:\/\//i.test(rawUrl)) return res.status(400).json({ error: 'valid url required' });
