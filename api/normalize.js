@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v123-ai-tagging';
+const VERSION             = 'normalize.js v3.4.5v128-data-pipeline';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -616,7 +616,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v123-1'; // V.123 — Store-exclusive ban + sub-category pivot. Invalidate all V.202 cached generic suggestions.
+const CACHE_PREFIX = 'sav-v128-1'; // V.128 — Data pipeline overhaul: tier-strict prompt, 50% reality anchor, outlier strip. Invalidate V.123 cache.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -912,6 +912,43 @@ pan", "towel", "candle", "notebook", "scissors", "umbrella", "blanket",
   3. NEVER return an empty alternatives_array on a recognisable generic
      noun. An empty array forces the backend into no_match — which is
      a UX dead end and BANNED for these inputs.
+
+V.128 STRICT COMMERCIAL TIERING (CRITICAL — DO NOT VIOLATE):
+The three alternatives_array slots MUST follow strict commercial
+pricing logic. The slot index dictates the tier badge the frontend
+will render — index 0 = BUDGET, index 1 = TOP RATED, index 2 = PREMIUM.
+You MUST honour this ordering by typical UK retail price:
+
+  alternatives_array[0] (BUDGET):    MUST be the cheapest viable
+                                     entry-level brand in the category.
+                                     This is the price-conscious starter
+                                     pick that an average UK shopper
+                                     would buy if money is tight.
+  alternatives_array[1] (TOP RATED): MUST be the mid-range market
+                                     leader — the model that wins
+                                     review aggregators and Reddit
+                                     threads for best balance of price
+                                     and quality. Price sits between
+                                     BUDGET and PREMIUM.
+  alternatives_array[2] (PREMIUM):   MUST be the MOST EXPENSIVE, highest-
+                                     end luxury or pro-grade pick. The
+                                     "no expense spared" choice. It MUST
+                                     cost materially more than the
+                                     TOP RATED entry.
+
+You MUST also populate alternatives_meta[i].typical_price_gbp with a
+realistic UK street price for each entry. The three numbers MUST be
+in STRICTLY ASCENDING order (price[0] < price[1] < price[2]). If your
+price estimates would violate this, REORDER the alternatives_array
+entries until ascending price order is achieved before emitting JSON.
+NEVER place a luxury brand in slot 0, never place an entry-level brand
+in slot 2. Mis-ordered tiers are a CRITICAL trust failure.
+
+Category-stay rule: the three picks MUST stay within the SAME product
+type (all are paint tins, all are wall paint, all are cordless
+strimmers, all are kettles). NEVER mix categories (no wood stain
+suggested when the user asked for wall paint; no pressure washer
+suggested when the user asked for a lawn mower).
 
 V.123 STORE-EXCLUSIVE BAN (CRITICAL — DO NOT VIOLATE):
 When suggesting specific product variants for a generic category, you
@@ -2503,7 +2540,7 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
   const apiKey = process.env.SERPAPI_KEY;
   if (!apiKey) return _v156Bail('no_apikey');
   if (!query || typeof query !== 'string' || query.length < 2) return _v156Bail('empty_query');
-  const ck = `savvey:retailers:v123:${canonicalKey}`;
+  const ck = `savvey:retailers:v128:${canonicalKey}`;
   if (!_forceFresh) {
     // V.194 — Cache-first delivery. The KV lookup is the cheapest possible
     // path; we log it explicitly so the Panel can audit hit-rate per query.
@@ -2935,8 +2972,16 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     //     "Yorkshire Tea 240" against any "Yorkshire Tea" title; nothing
     //     to relax)
     let _v170RelaxedRescuedCount = 0;
-    if (Object.keys(deepLinks).length === 0 && _droppedIdentity > 0 && _v163Required.length >= 2) {
-      try { console.log(`[${VERSION}] V.170 fingerprint relaxation fallback firing for "${query.slice(0,60)}" — strict pass dropped ${_droppedIdentity} identity victims, primary deepLinks empty. Allowing (N-1) of ${_v163Required.length} token matches.`); } catch (e) {}
+    // V.128 — SCRAPER CHOKEHOLD FIX. Trigger relaxation when survivors < 2
+    // (was ===0) AND when only one required token (was >=2). Real-world
+    // case: a single-token fingerprint like ["DUR181Z"] paired with a
+    // 40-result SerpAPI page where merchants append batteries/charger
+    // combos to titles. Previously V.170 only fired with N>=2 required —
+    // so single-SKU strimmers / kettles / chargers couldn't get rescued.
+    // Now we always fire when strict pass left us with < 2 surviving
+    // retailers AND any identity victim was dropped.
+    if (Object.keys(deepLinks).length < 2 && _droppedIdentity > 0 && _v163Required.length >= 1) {
+      try { console.log(`[${VERSION}] V.170/V.128 fingerprint relaxation fallback firing for "${query.slice(0,60)}" — strict pass dropped ${_droppedIdentity} identity victims, only ${Object.keys(deepLinks).length} primary survivor(s). Allowing (N-1) of ${_v163Required.length} token matches (min 1).`); } catch (e) {}
       // Helper: match an item with relaxed (N-1)-of-N rule. Also expands
       // generation-token equivalence so "2nd Gen" matches "2" / "2nd" /
       // "Gen 2" / "Generation 2".
@@ -4083,10 +4128,13 @@ function _v138BuildResponse({
   // ──────────────────────────────────────────────────────────────────
   const _v169Floor = (parsed && typeof parsed.predicted_price_floor_gbp === 'number')
                    ? parsed.predicted_price_floor_gbp : 0;
-  // V.169 — Panel-revised threshold: 30% of AI floor (was 40% earlier draft).
-  // Tighter cliff = stricter accessory-spam protection. Legitimate flash
-  // sales typically don't push below 30% of normal retail floor.
-  const _v169Threshold = _v169Floor > 0 ? Math.round(_v169Floor * 0.30 * 100) / 100 : 0;
+  // V.128 — SCAM FILTER REINFORCED. Panel mandate: any scraped price under
+  // 50% of AI predicted MSRP is dropped entirely. Was 30% — a £24
+  // accessory listing slipped through against a £299 Bose SoundLink Max
+  // (24/299 = 8% — below 30%, so it tripped; but the rescue only
+  // re-elected pricing without removing the £24 link from the response
+  // stack — that's the bug we're closing below in V.128's outlier strip).
+  const _v169Threshold = _v169Floor > 0 ? Math.round(_v169Floor * 0.50 * 100) / 100 : 0;
   const _v169BestPriceGbp = pricing && pricing.best_price && Number(pricing.best_price.value_gbp);
   const _v169IsMatchedish = (outcome === 'matched' || outcome === 'matched_thin');
   if (_v169IsMatchedish && _v169Floor > 0 && _v169BestPriceGbp > 0 && _v169BestPriceGbp < _v169Threshold) {
@@ -4099,13 +4147,15 @@ function _v138BuildResponse({
     // and downgrading to no_match (which discards legitimate co-listed
     // competitors), mark the offending link as an outlier and re-elect
     // best_price from the remaining priced survivors.
+    // V.128 — flag EVERY link below the 50% threshold (not just the
+    // primary) so co-listed bait listings (e.g. £30 + £24 against a
+    // £299 floor) don't just shuffle the throne; both die.
     if (Array.isArray(links)) {
       for (const l of links) {
-        if (l && l.is_primary && Number(l.price_gbp) === _v169BestPriceGbp) {
+        if (l && Number(l.price_gbp) > 0 && Number(l.price_gbp) < _v169Threshold) {
           l.is_primary = false;
           l.is_outlier = true;
-          try { console.log(`[V.200][rescue] flagged ${l.retailer} £${l.price_gbp} as reality-anchor outlier; re-electing best_price from survivors`); } catch (e) {}
-          break;
+          try { console.log(`[V.128][scam-filter] flagged ${l.retailer} £${l.price_gbp} (< 50% of AI floor £${_v169Floor}); will strip from response.links`); } catch (e) {}
         }
       }
       // Re-elect: cheapest non-outlier priced survivor wins.
@@ -4161,6 +4211,19 @@ function _v138BuildResponse({
       pricing.best_price = null;
       pricing.avg_market = null;
       pricing.price_band = null;
+    }
+    // V.128 — STRIP OUTLIERS FROM RESPONSE.LINKS. The V.200 rescue used
+    // to mark is_outlier=true but kept the bad link in the response stack,
+    // which is how the £24.95 Boseuk appeared in the retailer stack
+    // under a £299 Bose SoundLink Max card. Splice them out so the
+    // frontend never sees scam-flagged listings.
+    if (Array.isArray(links)) {
+      for (let _i = links.length - 1; _i >= 0; _i--) {
+        if (links[_i] && links[_i].is_outlier === true) {
+          try { console.log(`[V.128][strip] removing outlier from response.links → ${links[_i].retailer} £${links[_i].price_gbp}`); } catch (e) {}
+          links.splice(_i, 1);
+        }
+      }
     }
   }
 
@@ -4727,7 +4790,7 @@ async function _v202InnerHandler(req, res) {
   // SerpAPI Amazon engine + google_shopping + price_take Haiku call.
   // V.121 — bumped canonical cache key so V.120a soft-match-poisoned payloads
   // (decoy prices that ought to have been null) don't shadow the new strict pipeline.
-  const _canonicalKey = `savvey:canonical:v123:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
+  const _canonicalKey = `savvey:canonical:v128:${String(parsed.canonical_search_string || '').toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 80)}`;
   if (_canonicalKey.length > 22) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {

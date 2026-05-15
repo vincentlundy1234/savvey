@@ -10739,7 +10739,47 @@ function cancelBarcode() {
   goHome();
 }
 
+// V.128 — STATE LEAK FIX. Ghost iPad image / stale verdict / stale link
+// stack persisted across successive searches when the new payload failed
+// to repopulate a node. Every callNormalize() now starts by wiping the
+// three result-screen DOM regions so the old query's data can never
+// bleed into the new render path.
+function resetUIState() {
+  try {
+    var imgWrap = document.getElementById('v138-product-img');
+    if (imgWrap) imgWrap.innerHTML = '';
+    var verdText = document.getElementById('v138-verdict-text');
+    if (verdText) { verdText.innerHTML = ''; verdText.textContent = ''; }
+    var verdPill = document.getElementById('v138-verdict-pill');
+    if (verdPill) { verdPill.textContent = ''; verdPill.className = 'v136-verdict-pill'; verdPill.style.display = 'none'; }
+    var verdRating = document.getElementById('v138-verdict-rating');
+    if (verdRating) { verdRating.textContent = ''; verdRating.style.display = 'none'; }
+    var bpEl = document.getElementById('v138-best-price');
+    if (bpEl) bpEl.innerHTML = '';
+    var bpSubEl = document.getElementById('v138-best-price-sub');
+    if (bpSubEl) bpSubEl.textContent = '';
+    var avgEl = document.getElementById('v138-avg-market');
+    if (avgEl) avgEl.innerHTML = '';
+    var avgSubEl = document.getElementById('v138-avg-market-sub');
+    if (avgSubEl) avgSubEl.textContent = '';
+    var titleEl = document.getElementById('v138-title');
+    if (titleEl) titleEl.textContent = '';
+    var catEl = document.getElementById('v138-category');
+    if (catEl) { catEl.textContent = ''; catEl.style.display = 'none'; }
+    var stackEl = document.getElementById('v138-cta-stack');
+    if (stackEl) stackEl.innerHTML = '';
+    var diagEl = document.getElementById('v151-serp-diag');
+    if (diagEl) { diagEl.textContent = ''; diagEl.style.display = 'none'; }
+    try { console.log('[V.128][resetUIState] cleared product img / verdict / pricing / stack DOM'); } catch (e) {}
+  } catch (err) {
+    try { console.warn('[V.128][resetUIState] error', err); } catch (e) {}
+  }
+}
 async function callNormalize(body) {
+  // V.128 — DATA PIPELINE OVERHAUL. First action: wipe the result-screen
+  // DOM so a failed image load / failed verdict synth on the new query
+  // can never display the previous query's pixels.
+  resetUIState();
   // V.120 — ROUTING FLOW PATCH. Replaces the V.193 optimistic-skeleton
   // route for text/url with a stable loading state. The skeleton flashed
   // briefly on disambig outcomes (e.g. "PS5") because the user was
