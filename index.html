@@ -11256,8 +11256,16 @@ async function callNormalize(body) {
   // case); text/url/barcode stay on the V.191 10s ceiling because they
   // never need the Vision tokens. Client always gives up BEFORE the
   // server so we surface a clean 504 instead of a hung connection.
+  // V.146 DEFCON 1 — text/url/barcode abort bumped 10s -> 30s. Field tests
+  // on 4G shop-floor connections showed text-input queries landing at 8-11s
+  // wire time; with 1-3s mobile round-trip overhead, the 10s ceiling was
+  // tripping client-side aborts on legitimately-completing server responses.
+  // Server-side TIMEOUT_MS is still 8.5s per AI call but the FULL request
+  // (canonicalise + 4 parallel SerpAPI + tier enrich + mega-synth) can
+  // legitimately take up to 25s on a cold cache. 30s gives headroom; client
+  // still aborts BEFORE Vercel's 60s wall.
   var _v141IsImage = body && body.input_type === 'image';
-  var _v141TimeoutMs = _v141IsImage ? 45000 : 10000;
+  var _v141TimeoutMs = _v141IsImage ? 45000 : 30000;
   var _timedOut = false;
   var _ato_v191 = setTimeout(function () {
     _timedOut = true;

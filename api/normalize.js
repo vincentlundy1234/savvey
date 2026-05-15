@@ -5282,15 +5282,26 @@ async function _v202InnerHandler(req, res) {
     const fetchTierThumbsP = _v145AltsForThumbs
       ? Promise.all(_v145AltsForThumbs.map(function (name) { return _v144FetchTierThumbnail(name).catch(function () { return null; }); }))
       : Promise.resolve(null);
-    const [amazonRes, retailersRes, altAmazonRes, tierThumbsRes] = await Promise.all([
+    // V.146 DEFCON 1 — Promise.allSettled replaces Promise.all so a single
+    // sibling rejection (SerpAPI rate limit, Amazon engine 5xx, Anthropic
+    // edge timeout) cannot crash the entire handler. Each settled result
+    // is unwrapped with a soft-fail per slot; the response builder
+    // downstream handles missing fields gracefully.
+    const _v146Settled = await Promise.allSettled([
       fetchVerifiedAmazonPrice(parsed.canonical_search_string, debugTrace),
       fetchGoogleShoppingDeepLinks(parsed.canonical_search_string, canonicalKey, _v153LocalDiag, false, parsed.identity_fingerprint),
       fetchAlt,
       fetchTierThumbsP,
     ]);
-    verified_amazon_price = amazonRes;
-    retailer_deep_links = retailersRes;
-    alternative_amazon_price_v69 = altAmazonRes;
+    function _v146Unwrap(slot, label) {
+      if (slot.status === 'fulfilled') return slot.value;
+      try { console.warn('[V.146][allSettled] ' + label + ' rejected: ' + (slot.reason && (slot.reason.message || slot.reason))); } catch (e) {}
+      return null;
+    }
+    verified_amazon_price       = _v146Unwrap(_v146Settled[0], 'fetchVerifiedAmazonPrice');
+    retailer_deep_links         = _v146Unwrap(_v146Settled[1], 'fetchGoogleShoppingDeepLinks');
+    alternative_amazon_price_v69= _v146Unwrap(_v146Settled[2], 'fetchAlt');
+    const tierThumbsRes         = _v146Unwrap(_v146Settled[3], 'fetchTierThumbsP');
     var _v145PrefetchedTierThumbs = Array.isArray(tierThumbsRes) ? tierThumbsRes : null;
   } else {
     debugTrace.push({step:'handler.skip_serpapi', reason: parsed.confidence === 'low' ? 'low_confidence' : 'no_canonical'});
@@ -5851,11 +5862,16 @@ export default async function handler(req, res) {
       return;
     }
     try { applySecurityHeaders(res, ORIGIN); } catch (e) {}
+    // V.146 DEFCON 1 — outcome semantic upgrade. True upstream exceptions
+    // now ship outcome:'error' so the frontend can distinguish a 'system
+    // degraded' state (V.146 mandate) from a legitimate no_match (no
+    // shopping results). Old 'v202_envelope_caught' value preserved as
+    // outcome_reason for backward-compat audits.
     return res.status(200).json({
-      outcome: 'no_match',
+      outcome: 'error',
       outcome_reason: 'v202_envelope_caught',
       error: 'upstream_exception',
-      message: 'Savvey hit an unexpected hiccup — try again in a moment.',
+      message: 'System degraded',
       links: [],
       pricing: { best_price: null, avg_market: null, price_band: null },
       identity: null,
