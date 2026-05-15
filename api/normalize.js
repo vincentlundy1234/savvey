@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v132-context-and-copy';
+const VERSION             = 'normalize.js v3.4.5v153b-pro-rebalance';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -87,7 +87,8 @@ function detectRetailerOwn(canonical) {
 const ORIGIN              = process.env.ALLOWED_ORIGIN || 'https://savvey.vercel.app';
 const ANTHROPIC_ENDPOINT  = 'https://api.anthropic.com/v1/messages';
 const MODEL               = 'claude-haiku-4-5-20251001';
-const TIMEOUT_MS          = 8500; // V.143 — strict 8.5s ceiling on every Anthropic call. Must abort BEFORE Vercel's 60s wall to surface a clean timeout envelope, not a 502.
+const TIMEOUT_MS          = 20000; // V.153b — Pro tier RE-BALANCE. Was 30s (V.153 first cut overshot — left no headroom for downstream SerpAPI + mega-synth). 20s gives Haiku canonicalise/text calls real headroom while leaving ~38s for fan-out + synth before Vercel's 60s kill.
+const SYNTH_TIMEOUT_MS    = 12000; // V.153b — Pro tier RE-BALANCE. Was hardcoded 4000ms inline. mega-synth needs 8-10s on slow Anthropic nights; 12s gives a hard cap that still races the Vercel ceiling.
 // V.112 (10 May 2026): bumped from 380→800 / 320→700 after diagnosing
 // dishwasher / kettle / garden-storage-box no_match cases. The V.110 confidence
 // engine schema growth (confidence_score + market_status + full alternatives_meta
@@ -113,7 +114,7 @@ const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.
                                           // rather burn searches than serve wrong numbers.
 const KV_TIMEOUT_MS           = 1500;
 const KV_TIMEOUT_SECONDARY_MS = 800; // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
-const VISION_TIMEOUT_MS       = 14000; // V.149 — tightened 18s -> 14s. Real-world Vercel 504s show the function gets killed before our 18s timer fires. 14s gives our V.143 envelope time to race ahead of Vercel's hard ceiling and return outcome:'timeout' cleanly. // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
+const VISION_TIMEOUT_MS       = 30000; // V.153b — Pro tier RE-BALANCE. Was 45s (V.153 first cut overshot — Vision + downstream stacked above 60s on tail-latency nights, causing the 504 cluster at 16:33-16:45 UTC on 15 May 2026). 30s gives Vision enough headroom for glossy packaging (9-15s typical) while leaving 28s for fan-out + mega-synth. Total worst case: 30 + 4 + 12 = 46s, comfortably under the 58s safety margin against Vercel's 60s kill.
 
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
 // first-party retailers + reputable UK marketplaces. ANY host not on
@@ -1778,10 +1779,10 @@ CRITICAL RULES (apply to ALL modes):
   const userMsg = `INPUT:\n${JSON.stringify(input)}\n\nProduce the JSON now.`;
 
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), 4000);
+  const timer = setTimeout(() => ac.abort(), SYNTH_TIMEOUT_MS); // V.153b — was hardcoded 4000ms; now uses the named SYNTH_TIMEOUT_MS constant (12000ms) so mega-synth gets real Pro-tier headroom without overshooting.
   // V.191 — granular Haiku mega-synth timing.
   const _v191HaikuStart = Date.now();
-  console.log(`[V.191][timer] haiku.mega_synth START`);
+  console.log(`[V.191][timer] haiku.mega_synth START timeout_ms=${SYNTH_TIMEOUT_MS}`);
   try {
     if (trace) trace.push({step:'mega_synthesis.start', mode: input.alternatives ? 'tiers' : 'pillars', has_amazon: !!input.amazon, has_alts: !!input.alternatives});
     const r = await fetch(ANTHROPIC_ENDPOINT, {
@@ -5895,6 +5896,22 @@ export default async function handler(req, res) {
       outcome: 'error',
       outcome_reason: 'v202_envelope_caught',
       error: 'upstream_exception',
+      message: 'System degraded',
+      links: [],
+      pricing: { best_price: null, avg_market: null, price_band: null },
+      identity: null,
+      alternatives_array: [],
+      _meta: {
+        version: VERSION,
+        envelope: 'v202_caught',
+        exception_name: _name,
+        exception_message: _msg,
+        latency_ms: Date.now() - _v202T0,
+      },
+    });
+  }
+}
+: 'upstream_exception',
       message: 'System degraded',
       links: [],
       pricing: { best_price: null, avg_market: null, price_band: null },
