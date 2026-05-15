@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v131-curator-protocol';
+const VERSION             = 'normalize.js v3.4.5v132-context-and-copy';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -616,7 +616,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v131-2'; // V.131c — bump invalidates Bose entry written under V.131b (pre-specificity-stamp fix) which serialised tiers with is_family_variant=true instead of is_curator=true.
+const CACHE_PREFIX = 'sav-v132-1'; // V.132 — bump invalidates pre-V.132 cache rows that lack the mandated `description` field on alternatives_meta.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -994,6 +994,38 @@ If the user's input is a bare brand name with no product type
         the brand's flagship outdoor sound system."
   6. Set intent_confidence="low" (top-level field) so the frontend
      suppresses the "Most Likely" badge.
+
+V.132 DESCRIPTION FIELD — MANDATORY ON BOTH BRANCHES (CRITICAL):
+Whether the input triggers V.131 Curator (broad brand) OR V.128 Strict
+Commercial Tiering (category noun), every alternatives_meta[i] entry
+MUST carry a non-empty `description` field. The frontend renders this
+text directly under the product name on every disambig card — leaving
+it null = a blank space where guidance should be.
+
+Description rules (apply to both branches):
+  - 8-14 words. Max 100 characters.
+  - Lead with the WHY this pick fits its slot:
+      Category-tier BUDGET     → "Best cheap [category] option" angle
+      Category-tier TOP RATED  → "Most popular UK reviewer pick" angle
+      Category-tier PREMIUM    → "Heavy-duty / top of the range" angle
+      Brand-curator (any slot) → "What it does, what makes it notable" angle
+  - Plain consumer English. No marketing fluff, no "experience the…",
+    no "redefine your…", no exclamation marks.
+  - One sentence. No internal periods unless the sentence genuinely
+    needs them.
+
+Description examples (category tier):
+  Strimmer BUDGET:    "Reliable electric corded option for small lawns under £80."
+  Strimmer TOP RATED: "Cordless 18V Makita platform — battery swaps with other tools."
+  Strimmer PREMIUM:   "Petrol Stihl power for hedge-thick growth and bigger gardens."
+  Toaster BUDGET:     "Cheap 2-slice option from Argos — single dial, no extras."
+  Toaster TOP RATED:  "Most-bought UK 4-slice with bagel function and crumb tray."
+  Toaster PREMIUM:    "Polished retro Smeg statement piece — built to last."
+
+Description examples (brand curator):
+  Dyson VACUUM:   "Flagship cordless with laser dust detection and 60-min runtime."
+  Bose HEADPHONES:"Industry-leading active noise-cancelling over-ears."
+  Ninja AIR FRYER:"Dual-zone 9.5L — two foods finish at the same time."
 
 V.128 STRICT COMMERCIAL TIERING (CRITICAL — DO NOT VIOLATE):
 The three alternatives_array slots MUST follow strict commercial
@@ -4454,11 +4486,18 @@ function _v138BuildResponse({
     // the _v138BuildResponse logic so the tier metadata stays in sync with
     // the top-level disambig_kind.
     const _V154_BRANDS_INNER = /\b(?:bose|sony|apple|samsung|google|pixel|nest|amazon\s+echo|ring|arlo|jbl|sennheiser|sonos|anker|belkin|mophie|logitech|razer|corsair|beats|marshall|jabra|skullcandy|airpods|ninja|shark|dyson|bosch|tefal|breville|russell\s*hobbs|kitchenaid|smeg|de\s*longhi|delonghi|kenwood|cuisinart|vitamix|nutribullet|magimix|krups|nespresso|tassimo|miele|hoover|vax|sebo|black\s*[&+]?\s*decker|dewalt|makita|milwaukee|stanley|einhell|ryobi|festool|karcher|stihl|husqvarna|playstation|xbox|nintendo|switch|fitbit|garmin|withings|oura|kindle|fire\s+tablet|onepl?us|xiaomi|huawei|motorola|nokia|hp|dell|lenovo|asus|acer|msi|microsoft\s+surface|ghd|babyliss|remington|braun|philips|oral[\s-]?b|colgate|nivea|loreal|l['’]?or[ée]al)\b/i;
-    const _innerCandidates = [
-      (parsed && parsed.canonical_search_string) || '',
-      ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
-    ];
-    const _innerHasBrand = _innerCandidates.some(s => typeof s === 'string' && _V154_BRANDS_INNER.test(s));
+    // V.132 — FAMILY DETECTION TIGHTENED. The previous logic flagged a
+    // disambig as "family" whenever the canonical OR any alternative
+    // contained a brand token. That misfired on category queries —
+    // "Strimmer" returns alternatives like Bosch / Makita / Stihl (3
+    // different brands, all in the brand regex). The check returned
+    // _isFamilyVariant=true, which then suppressed the BUDGET/TOP RATED/
+    // PREMIUM pills and the description text. New rule: family detection
+    // requires the brand token to appear in the CANONICAL string
+    // specifically. Category nouns ("Strimmer", "Lawn Mower", "Toaster")
+    // have no brand in the canonical — they get the generic 3-tier flow.
+    const _v132Canonical = String((parsed && parsed.canonical_search_string) || '');
+    const _innerHasBrand = _V154_BRANDS_INNER.test(_v132Canonical);
     // V.154b — category gate dropped (see _disambigKind block above).
     const _isFamilyVariant = !!(parsed && parsed._v146_family_applied) || _innerHasBrand;
     // V.131 — Curator Protocol detection. When Haiku set specificity='brand_only'
@@ -4548,15 +4587,17 @@ function _v138BuildResponse({
     }
     return false;
   }
+  // V.132 — disambig_kind detection mirrors the tier-builder fix above:
+  // family vs generic is determined by the CANONICAL string alone, NOT
+  // by alternatives. "Strimmer" → alternatives [Bosch / Makita / Stihl]
+  // — those are 3 different brands, not 3 variants of a family. Old
+  // logic flagged this as 'family' (which suppressed BUDGET/TOP/PREMIUM
+  // pills). New logic: brand must appear in canonical → genuine family
+  // variant. Pure-category canonicals route to generic + tier flow.
   const _v154Candidates = [
     (parsed && parsed.canonical_search_string) || '',
-    ...((parsed && Array.isArray(parsed.alternatives_array)) ? parsed.alternatives_array : []),
   ];
   const _v154HasBrand = _v154HasBrandSignal(_v154Candidates);
-  // V.154b — category gate dropped. "Teapot" / "kettle" / "white mug" have
-  // category='home' but are genuinely generic. Brand signal is the only
-  // discriminator now: if any branded keyword appears in canonical or
-  // alternatives, it's a family disambig; otherwise generic.
   // V.131 — Curator Protocol detection at response level. specificity ==='brand_only'
   // takes precedence: bare-brand queries get disambig_kind='brand_curator' so the
   // frontend can switch off BUDGET/TOP/PREMIUM pills and turn on category TAGs +

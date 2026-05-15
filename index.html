@@ -7976,7 +7976,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        door layout below is preserved in the DOM but CSS-hidden when
        <body class="v171"> is active. JS at end of file toggles the class. -->
   <div class="v171-home" role="region" aria-label="Savvey home">
-    <h1 class="v171-tagline v124-hero-tagline">We search so you can save</h1>
+    <h1 class="v171-tagline v124-hero-tagline">Shop Smart. We Search, You Save.</h1>
     <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
       <button class="v171-hero v171-hero-snap" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
@@ -10897,6 +10897,11 @@ async function callNormalize(body) {
             : body.input_type === 'text'    ? 'type'
             : body.input_type === 'barcode' ? 'scan'
             : null;
+  // V.132 — stash the raw input_type for renderConfirm's context-aware
+  // subheader. The response payload's _meta.input_type is also passed
+  // through, but stashing on window gives renderConfirm a guaranteed
+  // signal even for legacy/cached responses that lack _meta.
+  try { window._lastInputType = body.input_type; } catch (e) {}
   // v3.4.3 — flag in-flight fetch so the SW controllerchange-reload defers
   // until the request completes, instead of killing it mid-flight and losing
   // the user's query (Gemini Tech Team flag, HIGH severity).
@@ -11832,12 +11837,25 @@ function renderConfirm(a, b, payload) {
       var _isFamily   = (_disambigKind === 'family');
       var _isCurator  = (_disambigKind === 'brand_curator');
 
-      // Update screen sub-line for family mode.
+      // V.132 — CONTEXT-AWARE SUBHEADER. "Which one do you have?" only
+      // makes sense when the user has a physical product in front of them
+      // (Snap/Barcode). For typed queries, the user is *researching*, not
+      // identifying — so the copy reframes the cards as recommendations,
+      // not a "which is this" identification prompt.
+      var _v132Origin = (payload && payload._meta && payload._meta.input_type)
+                      || (window._lastInputType || null);
+      var _v132IsFromCamera = (_v132Origin === 'image' || _v132Origin === 'barcode');
       var _subEl = document.getElementById('v138-tier-sub');
       if (_subEl) {
-        _subEl.textContent = _isFamily
-          ? 'Which one do you have? Tap to compare prices.'
-          : 'Here are three popular UK alternatives, ranked by price band.';
+        if (_isFamily) {
+          _subEl.textContent = _v132IsFromCamera
+            ? 'Which one do you have? Tap to compare prices.'
+            : 'Here are the top options on the market. Tap to compare prices.';
+        } else if (_isCurator) {
+          _subEl.textContent = 'Browse the brand’s flagship picks across categories.';
+        } else {
+          _subEl.textContent = 'Here are three popular UK alternatives, ranked by price band.';
+        }
       }
       var _headEl = document.getElementById('v138-tier-headline');
       if (_headEl && _isFamily && canon) {
