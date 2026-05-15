@@ -10862,6 +10862,17 @@ async function captureFrame() {
   }
   const totalBytes = frames.reduce((s, f) => s + Math.floor(f.length * 0.75), 0);
   track('snap_captured', { bytes: totalBytes, quality: SNAP_QUALITY, w: firstCanvas.width, frames: frames.length, multi_shot: true });
+  // V.147 — frontend compression audit. Logs the final compressed payload
+  // size to the browser console (visible via remote DevTools / iOS Safari
+  // remote inspector) so we can confirm the phone isn't sending a 0-byte
+  // or oversized blob before the fetch even starts.
+  try {
+    var _v147KB = Math.round(totalBytes / 1024);
+    console.log('[V.147][snap] PAYLOAD ' + _v147KB + 'KB · ' + frames.length + ' frames · quality=' + SNAP_QUALITY + ' · first_canvas_w=' + firstCanvas.width);
+    if (window.v118DebugToast) {
+      window.v118DebugToast('SNAP ' + _v147KB + 'KB · ' + frames.length + ' frames', _v147KB < 5 ? 'err' : (_v147KB > 500 ? 'err' : 'ok'));
+    }
+  } catch (e) {}
   await callNormalize({ input_type: 'image', image_base64_frames: frames, media_type: 'image/jpeg' });
 }
 

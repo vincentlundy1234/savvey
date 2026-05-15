@@ -113,6 +113,7 @@ const CANONICAL_TTL_SECONDS = 21600;      // V.109 — 6 HOURS (was 7 days in V.
                                           // rather burn searches than serve wrong numbers.
 const KV_TIMEOUT_MS           = 1500;
 const KV_TIMEOUT_SECONDARY_MS = 800; // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
+const VISION_TIMEOUT_MS       = 18000; // V.147 — Vision-only ceiling raised 8.5s -> 18s. Text/URL/barcode Haiku calls keep TIMEOUT_MS=8500. Snap pipeline needs more headroom on complex glossy packaging. // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
 
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
 // first-party retailers + reputable UK marketplaces. ANY host not on
@@ -1185,8 +1186,20 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
       ? `These are ${frames.length} quick consecutive snaps of a SINGLE product taken from slightly different angles in the same moment. Identify the specific product (brand AND exact model where any frame reveals it). Use combined evidence across all frames — text or branding visible in any one frame counts. Return JSON only.`
       : 'Identify this product. Return JSON only.',
   });
+  // V.147 — Vision-specific timeout ceiling (18s, vs 8.5s for text calls).
+  // Glossy-box recognition routinely needs 6-10s of Anthropic processing
+  // time; 8.5s was clipping legitimate slow-but-completing requests.
   const ac = new AbortController();
-  const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
+  const timer = setTimeout(() => ac.abort(), VISION_TIMEOUT_MS);
+  // V.147 telemetry — log incoming payload size + fetch start.
+  let _v147PayloadBytes = 0;
+  try {
+    for (const data of frames) {
+      _v147PayloadBytes += (typeof data === 'string') ? Math.floor(data.length * 0.75) : 0;
+    }
+  } catch (e) {}
+  const _v147T0 = Date.now();
+  console.log('[V.147][vision] FETCH START frames=' + frames.length + ' total_bytes=' + _v147PayloadBytes + ' (~' + Math.round(_v147PayloadBytes/1024) + 'KB) timeout_ms=' + VISION_TIMEOUT_MS);
   try {
     const r = await fetch(ANTHROPIC_ENDPOINT, {
       method: 'POST',
@@ -1204,12 +1217,23 @@ async function callHaikuVision(systemPrompt, imageBase64OrFrames, mediaType) {
       }),
       signal: ac.signal,
     });
+    const _v147Ms = Date.now() - _v147T0;
+    console.log('[V.147][vision] FETCH DONE status=' + r.status + ' ms=' + _v147Ms);
     if (!r.ok) {
       const body = await r.text().catch(() => '');
+      // V.147 telemetry — log raw upstream error body before throwing.
+      console.warn('[V.147][vision] UPSTREAM ERROR status=' + r.status + ' body=' + body.slice(0, 200));
       throw new Error(`Anthropic ${r.status}: ${body.slice(0, 200)}`);
     }
     const j = await r.json();
-    return ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    const out = ((j.content || []).filter(b => b && b.type === 'text').map(b => b.text || '').join(' ')).trim();
+    console.log('[V.147][vision] SUCCESS chars=' + out.length + ' first40="' + out.slice(0,40).replace(/\n/g,' ') + '"');
+    return out;
+  } catch (visionFetchErr) {
+    const _v147ErrMs = Date.now() - _v147T0;
+    const _v147IsAbort = visionFetchErr && (visionFetchErr.name === 'AbortError' || /aborted|timeout/i.test(String(visionFetchErr.message || visionFetchErr)));
+    console.warn('[V.147][vision] EXCEPTION abort=' + _v147IsAbort + ' ms=' + _v147ErrMs + ' name=' + (visionFetchErr && visionFetchErr.name) + ' message=' + String(visionFetchErr && visionFetchErr.message || visionFetchErr).slice(0, 200));
+    throw visionFetchErr;
   } finally { clearTimeout(timer); }
 }
 
