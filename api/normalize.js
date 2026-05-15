@@ -626,7 +626,7 @@ async function kvSet(key, value, ttl) {
 // V.52 — bump this prefix to invalidate all KV cache entries (e.g. when a
 // fix changes the response shape or fixes a data bug). Old entries become
 // unreachable; new entries get the new salt.
-const CACHE_PREFIX = 'sav-v144e-1'; // V.144e — invalidates pre-V.144 cached responses that lack tier.image_url enrichment. // V.132 — bump invalidates pre-V.132 cache rows that lack the mandated `description` field on alternatives_meta.
+const CACHE_PREFIX = 'sav-v144g-1'; // V.144g — flush entries polluted by canonical-hit path writing unenriched responses to the response cache. // V.144e — invalidates pre-V.144 cached responses that lack tier.image_url enrichment. // V.132 — bump invalidates pre-V.132 cache rows that lack the mandated `description` field on alternatives_meta.
 
 function cacheKey(inputType, payload) {
   const h = crypto.createHash('sha256');
@@ -5210,6 +5210,16 @@ async function _v202InnerHandler(req, res) {
     const canonHit = await kvGet(_canonicalKey);
     if (canonHit && typeof canonHit === 'object' && canonHit.canonical_search_string) {
       console.log(`[${VERSION}] canonical cache HIT for "${parsed.canonical_search_string}"`);
+      // V.144g — enrich tier thumbnails on canonical-cache hits too.
+      // Without this, every brand-curator query that lands here returns
+      // tiers without image_url because the cached canonical was written
+      // before V.144 added image_url. Soft-fail: missing thumbs fall
+      // back to V.143 placeholders frontend-side.
+      try {
+        if (canonHit.outcome === 'disambig' && Array.isArray(canonHit.tiers) && canonHit.tiers.length > 0) {
+          await _v144EnrichTierImages(canonHit.tiers);
+        }
+      } catch (e) { try { console.warn('[V.144g] canonical_hit tier enrich failed:', e && e.message); } catch (er) {} }
       kvSet(cKey, canonHit, KV_TTL_SECONDS).catch(() => {});
       return res.status(200).json({
         ...canonHit,
