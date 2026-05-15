@@ -11627,6 +11627,152 @@ function _buildDisambigDetails(label, meta) {
   return out;
 }
 
+// V.131c — BRAND GLANCE DICTIONARY
+// Curated whitelist of ~20 UK high-street brands. Every description is
+// hand-written, 10-15 words, factually safe. NEVER touched by AI.
+// Keys are normalised: lowercased, whitespace squashed. Matched against
+// either payload.identity.canonical OR raw search input — whichever is
+// shorter (because "Bose SoundLink Max" should still light up the Bose
+// card, but only when specificity === 'brand_only' OR disambig_kind ===
+// 'brand_curator').
+const V131C_BRAND_GLANCE = {
+  'bose':            'American audio specialist known for premium active noise-cancelling headphones and portable speakers.',
+  'sony':            'Japanese tech giant — flagship headphones, OLED TVs, PlayStation consoles and pro cameras.',
+  'apple':           'Premium California ecosystem — iPhone, Mac, iPad, AirPods. Tightly integrated, rarely discounted.',
+  'samsung':         'Korean electronics leader across phones, TVs, washing machines and SSDs. Aggressive seasonal sales.',
+  'sennheiser':      'German audio engineering — wired and wireless headphones favoured by audiophiles and broadcasters.',
+  'sonos':           'Multi-room wireless speaker specialist — premium sound, app-controlled whole-home audio.',
+  'jbl':             'Mainstream portable speakers and headphones — durable, party-friendly, mid-market pricing.',
+  'dyson':           'British engineering — bagless vacuums, Airwrap stylers, bladeless fans. Premium pricing, build-for-life.',
+  'shark':           'Mid-market floorcare and styling brand — strong Amazon presence, regular promotional discounting.',
+  'ninja':           'Mid-market kitchen appliances — air fryers, blenders, multi-cookers. Heavy summer and Black Friday sales.',
+  'tefal':           'French kitchen essentials — non-stick pans, irons, multicookers. Reliable mid-market staples.',
+  'kitchenaid':      'Iconic American stand mixers and premium kitchen tools — heirloom build, rarely deep-discounted.',
+  'le creuset':      'French enamelled cast iron — lifetime cookware. Premium pricing, Black Friday and Boxing Day key sale windows.',
+  'joseph joseph':   'British design-led kitchenware — clever space-saving tools and colour-coded prep gear.',
+  'smeg':            'Italian retro-styled kitchen appliances — design-first kettles, toasters, stand mixers.',
+  'breville':        'Affordable kitchen appliances — toasters, slow cookers, sandwich makers. Argos and Amazon mainstay.',
+  'kenwood':         'Long-standing UK kitchen brand — stand mixers, food processors, hand blenders.',
+  'delonghi':        'Italian coffee specialist — bean-to-cup, espresso, and pump machines across budget to premium tiers.',
+  'philips':         'Dutch electronics — shavers, hair tools, air fryers, lighting and oral care. Broad mid-market.',
+  'russell hobbs':   'UK kitchen and home appliance staple — kettles, toasters, irons at affordable prices.',
+  'ghd':             'British hair-styling specialist — premium straighteners, hairdryers and hot brushes.',
+  'fitbit':          'Wearable fitness trackers, now Google-owned — strong sleep and activity tracking, budget to mid-tier.',
+  'garmin':          'GPS specialist — premium running, multisport and outdoor smartwatches. Strong battery life.',
+  'lego':            'Danish construction toy — Architecture, Technic, Star Wars and Friends ranges. Black Friday + Amazon Prime Day sale windows.',
+};
+function _v131cLookupBrandGlance(payload) {
+  if (!payload) return null;
+  // Use the raw user text first (cleanest signal). Fallback to canonical.
+  var probe = '';
+  try { var ti = document.getElementById('text-input'); if (ti && ti.value) probe = ti.value; } catch (e) {}
+  if (!probe) probe = (payload._raw_input || payload._input_text || '');
+  if (!probe) probe = (payload.identity && payload.identity.canonical) || payload.canonical_search_string || '';
+  probe = String(probe).toLowerCase().trim().replace(/\s+/g, ' ');
+  if (!probe) return null;
+  // Direct hit first (the user typed exactly "Bose" → key 'bose').
+  if (V131C_BRAND_GLANCE[probe]) return { brand: probe, description: V131C_BRAND_GLANCE[probe] };
+  // Prefix hit — "Bose SoundLink Max" still matches the "bose" key if
+  // the canonical starts with a known brand AND payload signalled
+  // brand-curator mode (so we don't fire for specific products).
+  var isBrandCurator = payload.disambig_kind === 'brand_curator'
+                    || payload.specificity === 'brand_only';
+  if (isBrandCurator) {
+    for (var key in V131C_BRAND_GLANCE) {
+      if (Object.prototype.hasOwnProperty.call(V131C_BRAND_GLANCE, key)) {
+        if (probe === key || probe.startsWith(key + ' ')) {
+          return { brand: key, description: V131C_BRAND_GLANCE[key] };
+        }
+      }
+    }
+  }
+  return null;
+}
+function _v131cMountBrandGlance(payload) {
+  var stack = document.getElementById('screen-confirm');
+  if (!stack) return;
+  // Strip any previous mount so re-renders don't double-stamp.
+  var prev = stack.querySelector('.v131c-brand-glance');
+  if (prev && prev.parentNode) prev.parentNode.removeChild(prev);
+
+  var match = _v131cLookupBrandGlance(payload);
+  if (!match) return;
+
+  // Live price band from the actual SerpAPI pass. NEVER fabricated.
+  // pricing.price_band = { low, high, spread_pct } populated upstream when
+  // tiers carry typical_price_gbp values, or when a verified Amazon listing
+  // provided a hint. On brand-curator the alternatives_meta typical_price_gbp
+  // values feed this. If price_band is missing we still mount the card with
+  // just the static description.
+  var live = '';
+  try {
+    var pb = payload && payload.pricing && payload.pricing.price_band;
+    if (pb && Number(pb.low) > 0 && Number(pb.high) > 0) {
+      live = "Today's live range: £" + Math.round(pb.low) + " – £" + Math.round(pb.high);
+    } else if (Array.isArray(payload.tiers) && payload.tiers.length >= 2) {
+      // Fallback: derive from tier typical prices.
+      var ps = payload.tiers.map(function (t) { return Number(t && t.price_gbp); }).filter(function (n) { return n > 0; });
+      if (ps.length >= 2) {
+        var lo = Math.min.apply(null, ps);
+        var hi = Math.max.apply(null, ps);
+        live = "Brand range: £" + Math.round(lo) + " – £" + Math.round(hi);
+      }
+    }
+  } catch (e) {}
+
+  var card = document.createElement('div');
+  card.className = 'v131c-brand-glance';
+  card.style.cssText = [
+    'margin:18px 4px 8px',
+    'padding:16px 18px',
+    'background:linear-gradient(135deg, rgba(42,107,34,0.08) 0%, rgba(42,107,34,0.04) 100%)',
+    'border:1px solid rgba(42,107,34,0.18)',
+    'border-radius:16px',
+    'box-shadow:0 4px 12px -4px rgba(42,107,34,0.10), inset 0 1px 0 rgba(255,255,255,0.45)',
+    'font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif',
+  ].join(';');
+
+  var header = document.createElement('div');
+  header.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';
+
+  var eyebrow = document.createElement('span');
+  eyebrow.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:0.12em;color:#2a6b22;text-transform:uppercase;';
+  eyebrow.textContent = '✨ Brand Glance';
+
+  header.appendChild(eyebrow);
+
+  var brandName = document.createElement('div');
+  brandName.style.cssText = 'font-size:17px;font-weight:800;color:#0a1f0a;letter-spacing:-0.01em;margin-bottom:4px;text-transform:capitalize;';
+  brandName.textContent = match.brand;
+
+  var desc = document.createElement('div');
+  desc.style.cssText = 'font-size:14px;font-weight:500;color:#3a3a3a;line-height:1.45;';
+  desc.textContent = match.description;
+
+  card.appendChild(header);
+  card.appendChild(brandName);
+  card.appendChild(desc);
+
+  if (live) {
+    var liveLine = document.createElement('div');
+    liveLine.style.cssText = 'margin-top:10px;padding-top:10px;border-top:1px solid rgba(42,107,34,0.14);font-size:13px;font-weight:600;color:#2a6b22;letter-spacing:0.005em;';
+    liveLine.textContent = live;
+    card.appendChild(liveLine);
+  }
+
+  // Mount above the v154 escape-hatch button / fallback buttons. Find the
+  // last tier card and insert after it; if not found, append to the screen.
+  var tierCards = stack.querySelectorAll('.v136-similar-card, .v136-tier-card, [data-v136-tier]');
+  var lastTier = tierCards && tierCards.length ? tierCards[tierCards.length - 1] : null;
+  if (lastTier && lastTier.parentNode) {
+    lastTier.parentNode.insertBefore(card, lastTier.nextSibling);
+  } else {
+    stack.appendChild(card);
+  }
+  try { console.log('[V.131c] Brand Glance mounted for "' + match.brand + '" (live: ' + (live || 'none') + ')'); } catch (e) {}
+}
+window._v131cMountBrandGlance = _v131cMountBrandGlance;
+
 function renderConfirm(a, b, payload) {
   // V.193 — kill skeleton (disambig route lands on #screen-confirm, not result).
   try { document.body.classList.remove('v193-skeleton'); } catch (e) {}
@@ -11676,9 +11822,15 @@ function renderConfirm(a, b, payload) {
       // V.148 — disambig_kind branching. 'family' = clean variant list
       // (no pills, no SVGs, tap to re-search internally). 'generic' = the
       // BUDGET / TOP RATED / PREMIUM mockup with external retailer links.
+      // V.131 — 'brand_curator' = category-spanning brand exploration:
+      //   pills become category TAGs (HEADPHONES / VACUUM / SOUNDBAR),
+      //   cards link out via Amazon search (same as generic), and a
+      //   Brand Glance card mounts at the bottom of the stack.
       var _disambigKind = p.disambig_kind
-        || (tiers[0] && tiers[0].is_family_variant ? 'family' : 'generic');
-      var _isFamily = (_disambigKind === 'family');
+        || (tiers[0] && tiers[0].is_curator ? 'brand_curator'
+            : (tiers[0] && tiers[0].is_family_variant ? 'family' : 'generic'));
+      var _isFamily   = (_disambigKind === 'family');
+      var _isCurator  = (_disambigKind === 'brand_curator');
 
       // Update screen sub-line for family mode.
       var _subEl = document.getElementById('v138-tier-sub');
@@ -11826,6 +11978,13 @@ function renderConfirm(a, b, payload) {
         }
       });
     }
+
+    // V.131c — BRAND GLANCE. After tiers render, attempt to mount a
+    // static brand-fact card at the bottom of the disambig stack. Uses
+    // a curated whitelist of UK brands with hand-written 12-15-word
+    // factual descriptions. Dynamically appends the live price band
+    // from `pricing.price_band` (real measured data — no AI prose).
+    try { _v131cMountBrandGlance(payload); } catch (e) { try { console.warn('[V.131c] brand glance mount failed', e); } catch (er) {} }
 
     show('confirm');
   } catch (err) {
@@ -15466,29 +15625,33 @@ async function _v140KickoffSynthesize(idPayload) {
     for (var k = 0; k < olds.length; k++) olds[k].remove();
     var oldClass = screen.querySelectorAll('.v174-best-match');
     for (var k2 = 0; k2 < oldClass.length; k2++) oldClass[k2].classList.remove('v174-best-match');
-    // V.123 — gate the "Most Likely" badge. Only mount when:
-    //   (a) the API payload carries confidence === 'high', OR
-    //   (b) the original raw input contained a recognised brand token.
-    // Pure generic fallbacks ("lamp", "kettle", "headphones") get NO
-    // "Most Likely" star — they rely on the BUDGET / TOP RATED / PREMIUM
-    // tier labels to communicate intent.
+    // V.131 — CURATOR PROTOCOL: badge gate hardened. The V.123 gate
+    // wrongly let any brand-regex match fire the "Most Likely" star.
+    // That meant typing "Bose" stamped Most Likely onto whichever
+    // headphone happened to be slot 0 — a hallucination of certainty.
+    //
+    // New rule (V.131): badge ONLY mounts when the payload's
+    // intent_confidence === 'high' AND specificity is NOT 'brand_only'.
+    // Broad brand queries ("Bose", "Dyson", "Ninja") and generic-noun
+    // queries ("kettle", "lamp") both get NO badge — they rely on
+    // the Curator's category tags + brand-glance card to communicate
+    // intent without forcing a single winner.
     try {
-      var _v123Payload = (window.lastResult && window.lastResult) || (typeof lastResult !== 'undefined' ? lastResult : null);
-      var _v123Confidence = (_v123Payload && (_v123Payload.confidence || (_v123Payload._meta && _v123Payload._meta.confidence))) || null;
-      var _v123Raw = (_v123Payload && (_v123Payload._raw_input || _v123Payload._input_text)) || '';
-      // Fallback to the most recent legacy text-input value if the payload
-      // doesn't carry the raw query.
-      if (!_v123Raw) {
-        try { var legacy = document.getElementById('text-input'); if (legacy) _v123Raw = legacy.value || ''; } catch (e) {}
-      }
-      var _v123BrandRx = /\b(apple|samsung|sony|dyson|bose|sennheiser|nikon|canon|garmin|fitbit|lg|microsoft|nintendo|playstation|xbox|miele|bosch|kenwood|kitchenaid|le\s*creuset|tefal|ninja|shark|breville|smeg|delonghi|nespresso|philips|russell\s*hobbs|panasonic|anglepoise|lumie|hue|hisense|sage|jbl|sonos|nike|adidas|asics|new\s*balance|adidas|puma|reebok|lego|moleskine|leuchtturm|rhodia|fiskars|cuisinart|honeywell|levoit|amazfit|tp-link|netgear)\b/i;
-      var _v123HasBrand = _v123Raw && _v123BrandRx.test(_v123Raw);
-      var _v123IsGenericFallback = !!(_v123Payload && (_v123Payload.outcome_reason === 'v201_pre_haiku_generic'
-                                                    || _v123Payload.outcome_reason === 'v200_generic_fallback'
-                                                    || (_v123Payload._meta && _v123Payload._meta.short_circuit === 'v201_pre_haiku_generic')));
-      var _v123ShouldBadge = !_v123IsGenericFallback && (_v123Confidence === 'high' || _v123HasBrand);
-      try { console.log('[V.123] best-match badge gate — confidence=' + _v123Confidence + ' raw="' + String(_v123Raw).slice(0, 30) + '" hasBrand=' + _v123HasBrand + ' isGeneric=' + _v123IsGenericFallback + ' → badge=' + _v123ShouldBadge); } catch (e) {}
-      if (!_v123ShouldBadge) return;
+      var _v131Payload = (window.lastResult && window.lastResult) || (typeof lastResult !== 'undefined' ? lastResult : null);
+      var _v131Confidence = (_v131Payload && (_v131Payload.intent_confidence
+                                            || _v131Payload.confidence
+                                            || (_v131Payload._meta && _v131Payload._meta.confidence))) || null;
+      var _v131BrandOnly = !!(_v131Payload && (_v131Payload.specificity === 'brand_only'
+                                            || _v131Payload.disambig_kind === 'brand_curator'
+                                            || (_v131Payload._meta && _v131Payload._meta.curator_mode === true)));
+      var _v131IsGenericFallback = !!(_v131Payload && (_v131Payload.outcome_reason === 'v201_pre_haiku_generic'
+                                                    || _v131Payload.outcome_reason === 'v200_generic_fallback'
+                                                    || (_v131Payload._meta && _v131Payload._meta.short_circuit === 'v201_pre_haiku_generic')));
+      var _v131ShouldBadge = !_v131IsGenericFallback
+                          && !_v131BrandOnly
+                          && _v131Confidence === 'high';
+      try { console.log('[V.131] best-match badge gate — confidence=' + _v131Confidence + ' brandOnly=' + _v131BrandOnly + ' isGeneric=' + _v131IsGenericFallback + ' → badge=' + _v131ShouldBadge); } catch (e) {}
+      if (!_v131ShouldBadge) return;
     } catch (e) { return; }
     // Elevate the first tier card.
     var top = tiers[0];

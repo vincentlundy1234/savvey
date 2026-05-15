@@ -28,7 +28,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v130-data-extraction';
+const VERSION             = 'normalize.js v3.4.5v131-curator-protocol';
 
 // V.78 — Retailer-own brand detector. When canonical leads with a UK retailer
 // that ONLY sells direct (Habitat/IKEA/M&S Home/Dunelm/Argos Home/The Range),
@@ -952,6 +952,48 @@ pan", "towel", "candle", "notebook", "scissors", "umbrella", "blanket",
   3. NEVER return an empty alternatives_array on a recognisable generic
      noun. An empty array forces the backend into no_match — which is
      a UX dead end and BANNED for these inputs.
+
+V.131 CURATOR PROTOCOL — BRAND-ONLY MODE (CRITICAL — DO NOT VIOLATE):
+If the user's input is a bare brand name with no product type
+("Bose", "Ninja", "Dyson", "Shark", "Apple", "Sony", "Samsung",
+"Sennheiser", "Sonos", "Tefal", "KitchenAid", "Le Creuset",
+"Joseph Joseph", "ghd", "Le Creuset", "Smeg", "Breville", "Garmin",
+"Fitbit", "JBL", "Bosch", "Miele", "Russell Hobbs", "Kenwood",
+"Philips", "Logitech", "Anker"), you MUST:
+
+  1. Set confidence="low" AND specificity="brand_only".
+  2. DO NOT emit BUDGET / TOP RATED / PREMIUM pill labels.
+     Tier slots are reused as CATEGORY EXPLORATIONS, not price tiers.
+  3. Populate alternatives_array with EXACTLY 3 flagship products
+     by the brand SPANNING DIFFERENT CATEGORIES. Example:
+       "Bose" → [
+         "Bose QuietComfort Ultra Headphones",
+         "Bose SoundLink Max Portable Speaker",
+         "Bose Smart Soundbar 900"
+       ]
+       "Dyson" → [
+         "Dyson V15 Detect Cordless Vacuum",
+         "Dyson Airwrap Multi-styler",
+         "Dyson Hot+Cool Purifier"
+       ]
+       "Ninja" → [
+         "Ninja Foodi MAX Dual Zone Air Fryer",
+         "Ninja Slushi Frozen Drink Maker",
+         "Ninja Foodi PossibleCooker"
+       ]
+  4. Populate alternatives_meta[i].tag with a SHORT category name
+     in UPPERCASE (≤14 chars). Examples: "HEADPHONES", "PORTABLE",
+     "SOUNDBAR", "VACUUM", "STYLER", "PURIFIER", "AIR FRYER",
+     "BLENDER", "SMARTWATCH". The frontend uses this tag in place
+     of the BUDGET/TOP RATED/PREMIUM pill.
+  5. Populate alternatives_meta[i].description with a punchy
+     12-22 word factual subtitle describing what the product is
+     and what makes it notable. NEVER leave description blank.
+     Example for "Bose SoundLink Max":
+       "Premium portable speaker with deep bass and 20-hour battery —
+        the brand's flagship outdoor sound system."
+  6. Set intent_confidence="low" (top-level field) so the frontend
+     suppresses the "Most Likely" badge.
 
 V.128 STRICT COMMERCIAL TIERING (CRITICAL — DO NOT VIOLATE):
 The three alternatives_array slots MUST follow strict commercial
@@ -2222,14 +2264,23 @@ function parseAndDefault(rawText) {
           ? m.rationale.trim().slice(0, 140) : null;
         const range = (typeof m.est_price_range === 'string' && m.est_price_range.trim())
           ? m.est_price_range.trim().slice(0, 24) : null;
-        if (!price && !pack && !tier && !intent && !rationale && !range) return null;
+        // V.131 — extract description + tag fields for Curator Protocol.
+        // description: 12-22 word factual subtitle (160-char hard cap)
+        // tag: short UPPERCASE category label, ≤14 chars (e.g. HEADPHONES, VACUUM)
+        const description = (typeof m.description === 'string' && m.description.trim())
+          ? m.description.trim().slice(0, 160) : null;
+        const tagRaw = (typeof m.tag === 'string' && m.tag.trim()) ? m.tag.trim() : null;
+        const tag = tagRaw ? tagRaw.toUpperCase().replace(/[^A-Z0-9 &/+-]/g, '').slice(0, 14) : null;
+        if (!price && !pack && !tier && !intent && !rationale && !range && !description && !tag) return null;
         return {
           intent_label: intent,
           rationale: rationale,
           typical_price_gbp: price,
           est_price_range: range,
           pack_size: pack,
-          tier_label: tier
+          tier_label: tier,
+          description: description, // V.131 — punchy 12-22 word product subtitle
+          tag: tag,                 // V.131 — UPPERCASE category tag (HEADPHONES, etc.)
         };
       });
     }
@@ -4410,24 +4461,40 @@ function _v138BuildResponse({
     const _innerHasBrand = _innerCandidates.some(s => typeof s === 'string' && _V154_BRANDS_INNER.test(s));
     // V.154b — category gate dropped (see _disambigKind block above).
     const _isFamilyVariant = !!(parsed && parsed._v146_family_applied) || _innerHasBrand;
+    // V.131 — Curator Protocol detection. When Haiku set specificity='brand_only'
+    // OR every meta carries a description+tag (the curator signature), we're
+    // in brand-curator mode: pills become category TAGs, not BUDGET/TOP/PREM.
+    const _v131CuratorMode = (parsed && parsed.specificity === 'brand_only')
+      || (altsMeta.length >= 2 && altsMeta.every(m => m && typeof m.tag === 'string' && m.tag.length > 0));
     const built = altsArr.slice(0, 3).map((name, i) => {
       const meta = altsMeta[i] || {};
       const blurbFromMega = (mega && mega.tier_blurbs && mega.tier_blurbs[i]) || null;
+      // V.131 — pill text resolution priority:
+      //   1. Curator mode → meta.tag (HEADPHONES / VACUUM / SOUNDBAR)
+      //   2. Family variant → null (no pill, internal-tap card)
+      //   3. Generic disambig → BUDGET / TOP RATED / PREMIUM
+      const _v131PillText = _v131CuratorMode
+        ? (meta.tag || null)
+        : (_isFamilyVariant ? null : tierPillText[i]);
       return {
         tier:        tierKeys[i],
-        pill_text:   _isFamilyVariant ? null : tierPillText[i],
+        pill_text:   _v131PillText,
         name:        name || '',
         retailer:    null,
         price_gbp:   meta.typical_price_gbp || null,
         price_str:   (meta.typical_price_gbp != null) ? `£${Number(meta.typical_price_gbp).toFixed(2)}` : null,
         url:         null,
-        blurb:       blurbFromMega || meta.rationale || null,
+        // V.131 — blurb priority: mega-synth blurb > Haiku description > rationale.
+        // The description field is the V.131 mandate's punchy 12-22-word subtitle.
+        blurb:       blurbFromMega || meta.description || meta.rationale || null,
         blurb_basis: i === 1 ? 'review_count' : (i === 0 ? 'price_anchor' : 'premium_signal'),
         review_count: meta.reviews || null,
         review_stars: meta.rating || null,
         image:       null,
         is_placeholder: false,
         is_family_variant: _isFamilyVariant, // V.148
+        is_curator:  _v131CuratorMode,        // V.131 — flag for frontend
+        tag:         meta.tag || null,         // V.131 — uppercase category tag passthrough
       };
     });
 
@@ -4490,17 +4557,31 @@ function _v138BuildResponse({
   // category='home' but are genuinely generic. Brand signal is the only
   // discriminator now: if any branded keyword appears in canonical or
   // alternatives, it's a family disambig; otherwise generic.
+  // V.131 — Curator Protocol detection at response level. specificity ==='brand_only'
+  // takes precedence: bare-brand queries get disambig_kind='brand_curator' so the
+  // frontend can switch off BUDGET/TOP/PREMIUM pills and turn on category TAGs +
+  // the Brand Glance card.
+  const _v131IsBrandOnly = (parsed && parsed.specificity === 'brand_only');
   const _disambigKind = (outcome === 'disambig')
     ? (
-        (parsed && parsed._v146_family_applied) ? 'family'
+        _v131IsBrandOnly ? 'brand_curator'
+        : (parsed && parsed._v146_family_applied) ? 'family'
         : _v154HasBrand ? 'family'
         : 'generic'
       )
     : null;
+  // V.131 — intent_confidence surfaces Haiku's self-reported confidence
+  // for the frontend badge gate. Distinct from the existing `confidence`
+  // field (which the verdict layer also reads). brand_only is always 'low'.
+  const _v131IntentConfidence = _v131IsBrandOnly
+    ? 'low'
+    : ((parsed && parsed.confidence) || null);
   return {
     outcome,
     outcome_reason,
     disambig_kind: _disambigKind,
+    intent_confidence: _v131IntentConfidence,
+    specificity: (parsed && parsed.specificity) || null,
     identity,
     pricing,
     verdict,

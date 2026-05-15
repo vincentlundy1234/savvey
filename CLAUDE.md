@@ -130,3 +130,34 @@ Price Sanity (Outlier Rejection): Never display cheap accessories as the "Best P
 Deep Price Extraction: When parsing SerpAPI, check all possible price fields (extracted_price, price, price_range.lower, offers[0].price, lowest_price). Do not drop aggregator results just because the primary price string is null.
 
 No Silent Failures: If 0 prices are found, or an exception is thrown, the frontend MUST display a clean message indicating exactly why (e.g., "Searched X listings, none with valid UK prices" or the specific Error string). Never dump the user to a blank screen or the Home screen without an explanation.
+
+SAVVEY — auto-push watcher is set up. Use it as priority. Do not push from bash.
+Repo folder: C:\Users\vince\OneDrive\Desktop\files for live\
+Branch: master (always git push origin master, never plain git push)
+Remote: github.com/vincentlundy1234/savvey
+Live: savvey.vercel.app (Vercel auto-deploys on push, ~30s)
+How the watcher works
+A PowerShell script auto-push-savvey.ps1 is running in the background on Vincent's machine (launched from START-WATCHER.cmd in his Startup folder). It polls the repo folder every ~5 seconds looking for a marker file called .commit-msg.txt. When it sees one, it runs git add -A && git commit -F .commit-msg.txt && git push origin master and deletes the marker. Vercel auto-deploys from the push.
+How you operate it
+
+Edit files in C:\Users\vince\OneDrive\Desktop\files for live\ using Write/Edit tools.
+When the wave is complete, write a file at that same path called .commit-msg.txt containing the commit message (multi-line fine — first line is the title, blank line, then body).
+Stop. Wait ~10 seconds.
+Verify via Cowork bash: cd "/sessions/<session>/mnt/files for live" && git log --oneline -1 — a new commit should appear. The marker file should be gone.
+If you have Vercel MCP, confirm deploy state via list_deployments (project prj_R2POD8WBfkySMOFsEbsusQayIpYc, team team_Mvui06yGYdB6D95Q44WAlZl8).
+
+Rules
+
+One marker per wave. Don't drop multiple .commit-msg.txt files or fragment a wave into micro-commits. Batch all edits, then drop ONE marker.
+Never push from Cowork bash. The sandbox returns 403 from github.com. The watcher is the only push path.
+Never ask Vincent to run git push himself. The whole point is zero-touch deployment.
+Bump versions in the same wave. When changing app code, also bump VERSION in api/normalize.js, STATIC_VER in sw.js, and the footer label Beta · v3.4.5vNNN in index.html — all in the same wave so cache invalidation lines up.
+
+If the watcher is broken (marker file still present after 30 seconds):
+
+Ask Vincent to open Task Manager and confirm powershell.exe is running auto-push-savvey.ps1. If not, ask him to double-click START-WATCHER.cmd from his Desktop.
+Check the watcher console for errors. Common ones: stale .git/index.lock (delete it), expired GitHub credentials (Vincent re-auths via gh auth login), encoding issues in the commit message (avoid Unicode in .commit-msg.txt).
+Worst case, ask Vincent to run from a PowerShell window in the repo folder: git add . ; git commit -m "msg" ; git push origin master.
+
+Priority instruction
+Use this for every wave you ship. Don't propose alternative deploy methods. Don't try gh from bash, don't try git push from bash, don't ask Vincent to handle the push. The pipeline is healthy as of 11 May 2026 and has dispatched dozens of commits cleanly. Trust it.
