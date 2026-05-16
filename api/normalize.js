@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v172-universal-perimeter';
+const VERSION             = 'normalize.js v3.4.5v173-relevance-gate';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -302,6 +302,140 @@ function _v161EnforceDiversity(links, category) {
 }
 
 
+
+// ═════════════════════════════════════════════════════════════════════
+// V.173 — RELEVANCE GATE (16 May 2026 morning)
+// ─────────────────────────────────────────────────────────────────────
+// Founder text-search bug: a 'Hogwarts Legacy' query returned a
+// themed rug + a toy + a DLC ahead of the actual game because every
+// SerpAPI result contained the literal tokens 'hogwarts' and 'legacy'
+// — so V.163 identity enforcement passed them all, and the V.162
+// price-asc sort hoisted the £10 rug to slot 0 (Best Price).
+//
+// V.173 adds three layers BEFORE the price sort:
+//   1. Global merch-noise blacklist (rug / toy / mug / poster / etc.)
+//   2. Category-specific merch (Video Games: + dlc / guidebook / case)
+//   3. Median-of-trusted-top-5 sanity: any survivor priced under 40%
+//      of that median is almost certainly an accessory, not the real
+//      product. Drop or flag.
+// ═════════════════════════════════════════════════════════════════════
+const V173_MERCH_NEG_KEYWORDS = new Set([
+  // Apparel / decor merchandise
+  'rug', 'doormat', 'mat', 'blanket', 'throw', 'cushion', 'pillow',
+  'poster', 'print', 'wall art', 'canvas print', 'sticker', 'stickers',
+  'decal', 'magnet', 'pin badge', 'enamel pin', 'keyring', 'keychain',
+  'tshirt', 't-shirt', 'tee', 'hoodie', 'sweater', 'jumper', 'cap',
+  'beanie', 'scarf', 'socks', 'apron', 'pyjamas', 'pjs',
+  // Drinkware / kitchen merch
+  'mug', 'tumbler', 'water bottle', 'flask', 'coaster', 'lunchbox',
+  'lunch box', 'cookie jar',
+  // Toys / collectibles
+  'plush', 'plushie', 'soft toy', 'figurine', 'figure', 'funko',
+  'pop vinyl', 'pop! vinyl', 'bobblehead', 'keychain', 'bag charm',
+  'replica', 'collectible', 'miniature',
+  // Stationery merch
+  'notebook', 'sketchbook', 'colouring book', 'colouring-book',
+  'calendar', 'bookmark', 'pen set', 'pencil case',
+  // Bags / accessories
+  'tote bag', 'backpack', 'lanyard', 'wallet', 'purse',
+  // Spare parts / installation kits
+  'installation kit', 'install kit', 'spare part', 'replacement part',
+  'fitting kit', 'mounting kit', 'mounting bracket', 'service kit',
+  'repair kit', 'maintenance kit',
+  // Digital content add-ons
+  'dlc', 'season pass', 'expansion pass', 'micro-transaction',
+  'in-game currency', 'gift card', 'membership card', 'voucher',
+  // Guides & companions
+  'official guide', 'strategy guide', 'guidebook', 'companion book',
+  'art book', 'artbook', 'making of',
+  // V.173b — Founder's explicit universal-accessory list (16 May).
+  'accessory', 'accessories', 'spare', 'spares', 'part', 'parts',
+  'refill', 'refills', 'strap', 'straps', 'band', 'wrist band',
+  'wristband', 'cable', 'cables', 'cover', 'covers', 'protective case',
+  'protective cover', 'travel case', 'carry case', 'carrying case',
+  'sample', 'samples', 'tester', 'testers', 'display bottle',
+  'empty bottle', 'dummy', 'replica perfume',
+  'mini bottle', 'travel size', 'travel sized',
+  'replacement', 'replacement filter', 'replacement battery',
+  'replacement bag', 'replacement brush', 'replacement head',
+  'compatible filter', 'aftermarket', 'aftermarket part',
+]);
+const V173_CATEGORY_NEG_KEYWORDS = {
+  // V.162/V.165 'games' adds extras over the global list
+  games: new Set([
+    'dlc', 'gift card', 'cd key', 'steam key', 'redemption code',
+    'companion book', 'official guide', 'art book', 'artbook',
+    'season pass', 'expansion pass', 'soundtrack', 'ost',
+    'phone case', 'mobile case', 'case for', 'protector', 'screen protector',
+  ]),
+  // 'books' adds shelving / annotated edition
+  books: new Set([
+    'study guide', 'companion', 'cliff notes', 'cliffsnotes',
+    'audio book companion',
+  ]),
+  // 'appliances' adds spare-part lures
+  appliances: new Set([
+    'installation kit', 'install kit', 'water filter', 'descaler',
+    'cleaning tablet', 'replacement filter', 'door seal', 'drain hose',
+  ]),
+  // 'pc_components' adds cables/adapters
+  pc_components: new Set([
+    'cable', 'sata cable', 'adapter', 'mounting bracket',
+    'heatsink only', 'thermal paste',
+  ]),
+};
+function _v173NormaliseTitle(s) {
+  if (!s || typeof s !== 'string') return '';
+  return s.toLowerCase()
+          .replace(/[\u2013\u2014\u2212]/g, '-')
+          .replace(/[^a-z0-9\s\-\.]/g, ' ')
+          .replace(/\s+/g, ' ')
+          .trim();
+}
+function _v173TitleContainsAny(normalisedTitle, kwSet) {
+  if (!normalisedTitle || !kwSet || kwSet.size === 0) return false;
+  for (const kw of kwSet) {
+    // Word-boundary match for single-word tokens; substring match for
+    // multi-word phrases (e.g. 'official guide').
+    if (kw.indexOf(' ') === -1) {
+      const rx = new RegExp('\\b' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+      if (rx.test(normalisedTitle)) return kw;
+    } else if (normalisedTitle.indexOf(kw) !== -1) {
+      return kw;
+    }
+  }
+  return null;
+}
+function _v173IsLikelyMerch(title, categoryKey) {
+  const norm = _v173NormaliseTitle(title);
+  if (!norm) return null;
+  // Global merch blacklist always fires.
+  const globalHit = _v173TitleContainsAny(norm, V173_MERCH_NEG_KEYWORDS);
+  if (globalHit) return 'merch:' + globalHit;
+  // Category-specific extras.
+  if (categoryKey && V173_CATEGORY_NEG_KEYWORDS[categoryKey]) {
+    const catHit = _v173TitleContainsAny(norm, V173_CATEGORY_NEG_KEYWORDS[categoryKey]);
+    if (catHit) return 'merch:' + categoryKey + ':' + catHit;
+  }
+  return null;
+}
+// V.173 — Median-of-top-5 price sanity. Returns a Number representing
+// the price floor below which an entry is almost certainly an accessory
+// for the queried product (not the product itself). Caller drops any
+// link whose price falls below this floor.
+function _v173MedianFloor(links, floorPct) {
+  if (!Array.isArray(links) || links.length < 3) return null;
+  const priced = links
+    .filter(l => l && l.price_gbp != null && Number(l.price_gbp) > 0)
+    .map(l => Number(l.price_gbp))
+    .sort((a, b) => a - b);
+  if (priced.length < 3) return null;
+  const top5 = priced.slice(0, 5);
+  const mid = top5.length === 5
+    ? top5[2]
+    : (top5.length === 4 ? (top5[1] + top5[2]) / 2 : top5[Math.floor(top5.length / 2)]);
+  return mid * (floorPct != null ? floorPct : 0.40);
+}
 
 // ═════════════════════════════════════════════════════════════════════
 // V.169 — ABSOLUTE TRUST PERIMETER (15 May 2026 night)
@@ -3623,6 +3757,24 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       // because the real seller identity is in item.source, not in the host.
       const _v201EbayCheck = /\bebay\./i.test(host || '');
       if (!_v201EbayCheck) {
+        // V.173 — RELEVANCE GATE (merch filter). Founder mandate after a
+        // Hogwarts Legacy search returned a themed rug + toy + DLC at
+        // slot 0 because every result contained the canonical tokens.
+        // Drop anything whose title trips V173_MERCH_NEG_KEYWORDS OR
+        // the category-specific extras for the detected category.
+        try {
+          const _v173Cat = (typeof _v162DetectCategoryKey === 'function')
+                           ? _v162DetectCategoryKey(parsed && parsed.category)
+                           : null;
+          const _v173Merch = _v173IsLikelyMerch(item.title, _v173Cat);
+          if (_v173Merch) {
+            if (_droppedSamples.length < 8) {
+              _droppedSamples.push(_v173Merch + ':' + String(item.title || '(no_title)').slice(0, 30));
+            }
+            _droppedRedirector++;
+            continue;
+          }
+        } catch (_v173MerchErr) {}
         // V.201 — ONE GATE admission. Single check, single source of truth.
         const _v201Src = (typeof item.source === 'string' && item.source)
                       || (typeof item.seller_name === 'string' && item.seller_name)
@@ -4848,6 +5000,34 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
   const _v159DroppedOutliers = _v159BeforeCount - _v159LinksFiltered.length;
   if (_v159DroppedOutliers > 0) {
     try { console.log('[V.159] filtered ' + _v159DroppedOutliers + ' outlier/empty links from response (median £' + (_v145Median != null ? _v145Median.toFixed(2) : '?') + ', floor £' + (_v145Floor != null ? _v145Floor.toFixed(2) : '?') + ')'); } catch (e) {}
+  }
+
+  // V.173 — MEDIAN-OF-TOP-5 SANITY DROP. Compute the median price of
+  // the cheapest 5 V.199-trusted survivors. Any survivor priced under
+  // 40% of that median is almost certainly an accessory / spare-part /
+  // companion item rather than the queried product. The V.145 floor
+  // ran at 50% — V.173 tightens to 40% per Founder mandate ('more than
+  // 60% cheaper than the median'). Applied AFTER V.159 outlier delete
+  // so we don't second-guess outliers already filtered upstream.
+  try {
+    const _v173Floor = _v173MedianFloor(_v159LinksFiltered, 0.40);
+    if (_v173Floor != null && Number.isFinite(_v173Floor)) {
+      const _v173Before = _v159LinksFiltered.length;
+      _v159LinksFiltered = _v159LinksFiltered.filter(l => {
+        if (!l || l.price_gbp == null) return true;
+        if (Number(l.price_gbp) < _v173Floor) {
+          try { console.log('[V.173][sanity] drop ' + l.retailer + ' \u00a3' + Number(l.price_gbp).toFixed(2) + ' < floor \u00a3' + _v173Floor.toFixed(2) + ' (likely accessory)'); } catch (e) {}
+          return false;
+        }
+        return true;
+      });
+      const _v173Dropped = _v173Before - _v159LinksFiltered.length;
+      if (_v173Dropped > 0) {
+        try { console.log('[V.173][sanity] removed ' + _v173Dropped + ' likely-accessory entries · floor=\u00a3' + _v173Floor.toFixed(2)); } catch (e) {}
+      }
+    }
+  } catch (_v173SanityErr) {
+    try { console.warn('[V.173][sanity] threw:', _v173SanityErr && _v173SanityErr.message); } catch (e) {}
   }
 
   // V.161 — DIVERSITY-FORCING PASS. Reorder price-sorted survivors so the
