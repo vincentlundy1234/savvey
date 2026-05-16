@@ -8215,8 +8215,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v163-AMAZON-ANCHOR';
-  var V126_GUARD          = 'savvey_v163_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v165-EVERYDAY-NICHE';
+  var V126_GUARD          = 'savvey_v165_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8562,7 +8562,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v163</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v165</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -13304,7 +13304,25 @@ window.RETAILER_DISPLAY_NAMES = window.RETAILER_DISPLAY_NAMES || {
   dwell:                     'Dwell',
   smyths:                    'Smyths Toys',
   smythstoys:                'Smyths Toys',
-  theentertainer:            'The Entertainer'
+  theentertainer:            'The Entertainer',
+  // V.165 — Discount / Value Household + Games + Stationery + Auto expansion
+  bmstores:                  'B&M',
+  bm:                        'B&M',
+  savers:                    'Savers',
+  poundland:                 'Poundland',
+  homebargains:              'Home Bargains',
+  homebargainscom:           'Home Bargains',
+  shopto:                    'ShopTo',
+  shoptonet:                 'ShopTo',
+  thegamecollection:         'The Game Collection',
+  thegamecollectionnet:      'The Game Collection',
+  zatu:                      'Zatu Games',
+  zatucouk:                  'Zatu Games',
+  gsfcarparts:               'GSF Car Parts',
+  ryman:                     'Ryman',
+  rymanonline:               'Ryman',
+  whsmith:                   'WHSmith',
+  staples:                   'Staples'
 };
 function _v160PrettyRetailer(raw) {
   if (!raw) return 'Retailer';

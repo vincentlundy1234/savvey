@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v162-omni-category';
+const VERSION             = 'normalize.js v3.4.5v165-everyday-niche';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -330,8 +330,11 @@ const V162_CATEGORY_CONFIG = {
     primary: new Set(['decathlon.co.uk', 'sportsdirect.com', 'jdsports.co.uk', 'gooutdoors.co.uk', 'cotswoldoutdoor.com', 'halfords.com', 'wiggle.com']),
   },
   auto: {
-    pattern: /\b(car(?!\s*seat\b)|automotive|motor(?!\s*home)|tyre|tire|engine\s*oil|car\s*wax|car\s*polish|wiper|car\s*battery|alloy\s*wheel|brake|brake\s*pad|dashcam|child\s*car\s*seat)\b/i,
-    primary: new Set(['halfords.com', 'eurocarparts.com', 'eurocarparts.co.uk', 'mytyres.co.uk']),
+    // V.165 — Pattern widened: wiper blade, screenwash, bike tube,
+    // antifreeze, jump leads, air freshener, oil filter.
+    pattern: /\b(car(?!\s*seat\b)|automotive|motor(?!\s*home)|tyre|tire|engine\s*oil|car\s*wax|car\s*polish|wiper|wiper\s*blade|screenwash|antifreeze|jump\s*lead|oil\s*filter|air\s*freshener|car\s*battery|alloy\s*wheel|brake|brake\s*pad|dashcam|child\s*car\s*seat|bike\s*tube|inner\s*tube|bike\s*tyre|bike\s*helmet)\b/i,
+    // V.165 — GSF Car Parts added; UK independent auto parts specialist.
+    primary: new Set(['halfords.com', 'eurocarparts.com', 'eurocarparts.co.uk', 'mytyres.co.uk', 'gsfcarparts.com']),
   },
   homeware: {
     pattern: /\b(cushion|lamp|mug|curtain|rug|bedding|duvet|pillow|sofa|throw|towel|sheet|vase|candle|picture\s*frame|wallpaper|tablecloth|bookend|coaster|placemat|doormat)\b/i,
@@ -340,6 +343,29 @@ const V162_CATEGORY_CONFIG = {
   toys: {
     pattern: /\b(toy|toys|lego|action\s*figure|playset|doll|board\s*game|jigsaw\s*puzzle|puzzle|ride\s*on|nerf|playmobil|hot\s*wheels|barbie|paw\s*patrol|peppa\s*pig|hatchimal)\b/i,
     primary: new Set(['smythstoys.com', 'smyths.toys', 'theentertainer.com', 'argos.co.uk']),
+  },
+  // V.165 — Discount & Value Household. The B&M / Wilko / Savers / Range
+  // axis. Catches the everyday corner-shop run that Amazon prime users
+  // still go in-person for: cleaning, batteries, bin liners, stationery,
+  // sponges, washing-up liquid, candles, picture hooks.
+  discount: {
+    pattern: /\b(bleach|sponge|battery|batteries|bin\s*liner|bin\s*bag|cleaning|detergent|washing\s*up|dishcloth|dish\s*soap|toilet\s*roll|kitchen\s*roll|paper\s*towel|tea\s*light|picture\s*hook|drawing\s*pin|cable\s*tie|microfibre\s*cloth|laundry\s*pod|fabric\s*conditioner)\b/i,
+    primary: new Set(['bmstores.co.uk', 'wilko.com', 'savers.co.uk', 'therange.co.uk', 'poundland.co.uk', 'homebargains.co.uk']),
+  },
+  // V.165 — Video Games & Entertainment. Console hardware, accessories,
+  // physical and digital game discs, controllers, board games. GAME +
+  // ShopTo are the two big UK specialists; Game Collection and Zatu are
+  // strong for board games + niche imports.
+  games: {
+    pattern: /\b(ps5|ps4|ps3|playstation|xbox|nintendo\s*switch|switch\s*oled|switch\s*lite|nintendo|dualsense|joycon|joy[-\s]con|joy\s*con|gamepad|video\s*game|gaming|controller|console|cartridge|gamecube|wii)\b/i,
+    primary: new Set(['game.co.uk', 'shopto.net', 'thegamecollection.net', 'zatu.co.uk', 'cex.co.uk']),
+  },
+  // V.165 — Office & Stationery. Ryman and WHSmith own this lane in the
+  // UK. Boots / Tesco / Sainsbury's carry adjacent goods but the
+  // specialist verdict belongs to the stationery shops.
+  stationery: {
+    pattern: /\b(printer\s*ink|ink\s*cartridge|toner|notebook|notepad|stapler|envelope|filing\s*folder|hole\s*punch|sellotape|highlighter|fountain\s*pen|ballpoint|biro|pencil\s*case|art\s*pad|writing\s*pad|diary|planner)\b/i,
+    primary: new Set(['ryman.co.uk', 'whsmith.co.uk', 'staples.co.uk', 'rymanonline.co.uk']),
   },
 };
 function _v162DetectCategoryKey(cat) {
@@ -438,6 +464,22 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'dwell.co.uk',
   // V.162 — Toys specialists (smyths + argos already present).
   'theentertainer.com',
+  // V.165 — Discount & Value Household (the range + wilko already present).
+  'bmstores.co.uk',
+  'savers.co.uk',
+  'poundland.co.uk',
+  'homebargains.co.uk',
+  // V.165 — Video Games & Entertainment (game.co.uk + cex.co.uk already present).
+  'shopto.net',
+  'thegamecollection.net',
+  'zatu.co.uk',
+  // V.165 — Auto / Cycling expansion (halfords + eurocarparts + mytyres already present).
+  'gsfcarparts.com',
+  // V.165 — Office & Stationery.
+  'ryman.co.uk',
+  'rymanonline.co.uk',
+  'whsmith.co.uk',
+  'staples.co.uk',
   'johnlewisfinance.com',
   'johnlewispartnership.co.uk',
   'waitrose.com',
