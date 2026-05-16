@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v186-mvs-circuit-breaker';
+const VERSION             = 'normalize.js v3.4.5v188-brand-alias-map';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -727,11 +727,111 @@ function _v184ExtractBrandFromQuery(canonicalQuery) {
 function _v184HostMatchesBrand(host, brandSlug) {
   if (!brandSlug || !host) return false;
   const segs = _v184HostBaseSlugs(host);
-  // Exact match on any non-TLD segment (aesop.com → ['aesop'] → match;
-  // shop.aesop.com → ['shop','aesop'] → match; aesopskincare.com →
-  // ['aesopskincare'] → no exact 'aesop' segment → no match. We accept
-  // false negatives over false positives for brand-direct claims.)
-  return segs.indexOf(brandSlug) !== -1;
+  // V.188 — expand brand slug to its alias set (transliterations,
+  // parent↔sub-brand bridges, two-word brand bridges).
+  const aliases = _v188ExpandedAliases(brandSlug);
+  // V.188 — hyphen-aware segment parsing: bosch-automotive.com →
+  // hostBaseSlugs is ['bosch-automotive']; split on '-' to expose
+  // ['bosch', 'automotive'] as sub-segments so 'bosch' matches.
+  const allSegments = [];
+  for (const s of segs) {
+    allSegments.push(s);
+    if (s.indexOf('-') !== -1) {
+      const sub = s.split('-').filter(Boolean);
+      for (const sb of sub) allSegments.push(sb);
+    }
+  }
+  for (const alias of aliases) {
+    if (allSegments.indexOf(alias) !== -1) return true;
+  }
+  return false;
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// V.188 — BRAND DOMAIN ALIAS MAP.
+// Founder-approved fix for the V.187 stress-matrix failures
+// (Kärcher / Sony→PlayStation / WD_BLACK→Western Digital / Bosch
+// divisional). The V.184 exact-segment matcher could not bridge:
+//   - International transliterations (karcher ↔ kaercher.com)
+//   - Parent → consumer sub-brand corporate structures
+//     (Sony ↔ playstation.com, Google ↔ nest.com, Amazon ↔ ring.com)
+//   - Two-word legal brand names where the consumer slug omits one
+//     half (WD_BLACK ↔ westerndigital.com)
+//   - Divisional sub-domains with hyphens
+//     (Bosch ↔ bosch-automotive.com)
+//
+// Keys are the CANONICAL brand slug (what _v184BrandSlug normally
+// extracts from the first word of the canonical query). Values are
+// the array of every alias the matcher should accept as the same
+// brand — INCLUDING the canonical key itself so existing pass cases
+// don't regress.
+// ═════════════════════════════════════════════════════════════════════
+const V188_BRAND_DOMAIN_ALIASES = {
+  // ── International transliteration ──
+  karcher:        ['karcher', 'kaercher'],
+  loreal:         ['loreal', 'lorealparis', 'lorealprofessionnel'],
+  nestle:         ['nestle', 'nestleprofessional', 'nestleuk'],
+
+  // ── Parent corporation → consumer sub-brand ──
+  sony:           ['sony', 'playstation', 'playstationstore', 'sonystyle', 'beats'],
+  playstation:    ['playstation', 'sony', 'playstationstore', 'sonystyle'],
+  google:         ['google', 'nest', 'fitbit', 'pixel', 'googlestore', 'store'],
+  nest:           ['nest', 'google'],
+  amazon:         ['amazon', 'kindle', 'ring', 'blink', 'eero'],
+  ring:           ['ring', 'amazon'],
+  apple:          ['apple', 'beats'],
+  beats:          ['beats', 'apple', 'beatsbydre'],
+  meta:           ['meta', 'oculus', 'metaquest'],
+  oculus:         ['oculus', 'meta', 'metaquest'],
+  microsoft:      ['microsoft', 'xbox', 'surface'],
+  xbox:           ['xbox', 'microsoft'],
+
+  // ── Two-word legal brand names & sub-brand bridging ──
+  wd:             ['wd', 'westerndigital', 'wdblack', 'wdred', 'wdgold', 'sandisk'],
+  wdblack:        ['wdblack', 'westerndigital', 'wd'],
+  wdred:          ['wdred', 'westerndigital', 'wd'],
+  westerndigital: ['westerndigital', 'wd', 'wdblack', 'wdred', 'wdgold', 'sandisk'],
+  sandisk:        ['sandisk', 'westerndigital', 'wd'],
+  hp:             ['hp', 'hpe', 'hewlettpackard'],
+  hewlettpackard: ['hewlettpackard', 'hp', 'hpe'],
+  jl:             ['jl', 'johnlewis', 'johnlewisandpartners'],
+  johnlewis:      ['johnlewis', 'johnlewisandpartners', 'jl'],
+
+  // ── Divisional sub-domains (hyphenated) — alias entries explicit
+  //     even though the V.188 matcher also hyphen-splits at runtime ──
+  bosch:          ['bosch', 'boschautomotive', 'boschaftermarket', 'boschhome', 'boschprofessional'],
+
+  // ── Common UK retail mega-brands with multi-domain footprints ──
+  mands:          ['mands', 'marksandspencer', 'mandsbank'],
+  marksandspencer:['marksandspencer', 'mands', 'mandsbank'],
+};
+
+// V.188 — Build the reverse-lookup index ONCE at module-load. Given any
+// alias as a key, return the canonical alias-array. Lets the matcher
+// expand correctly even when the canonical query starts with the
+// sub-brand instead of the parent (e.g. "PlayStation 5 Pro" → slug
+// "playstation" must still pull in sony.com if SerpAPI returns it).
+const V188_ALIAS_INDEX = (function () {
+  const idx = {};
+  for (const key of Object.keys(V188_BRAND_DOMAIN_ALIASES)) {
+    const list = V188_BRAND_DOMAIN_ALIASES[key];
+    if (!Array.isArray(list)) continue;
+    // The canonical key itself maps to the full list.
+    idx[key] = list;
+    // Each alias also maps back to the full list, so reverse lookup works.
+    for (const alias of list) {
+      // First-write-wins so explicit keys above stay authoritative if
+      // they appear here. Don't overwrite an existing canonical entry.
+      if (!idx[alias]) idx[alias] = list;
+    }
+  }
+  return idx;
+})();
+
+function _v188ExpandedAliases(slug) {
+  if (!slug) return [];
+  if (V188_ALIAS_INDEX[slug]) return V188_ALIAS_INDEX[slug];
+  return [slug]; // no alias known — fall back to the raw slug
 }
 
 function _v178TitleContradictsIntent(title, intent) {
