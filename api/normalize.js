@@ -43,7 +43,21 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v158-restore-60s';
+const VERSION             = 'normalize.js v3.4.5v161-trust-diversity';
+
+// V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
+// 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
+//    undici keeps connections alive per-origin BY DEFAULT
+//    (keepAliveTimeout=4s, keepAliveMaxTimeout=600s). Adding
+//    'Connection: keep-alive' headers is a no-op. No code change.
+// 2. PROMISE FAIL-FAST — V.146 migrated to Promise.allSettled with
+//    _v146Unwrap swallowing rejections. A slow retailer cannot drag
+//    the 4-second SerpAPI budget. GOOGLE_SHOPPING_TIMEOUT_MS=3500
+//    caps each sibling. Correctly fail-fast.
+// 3. JPEG QUALITY — Decision: stay at SNAP_QUALITY=0.6. Dropping to
+//    0.5 saves ~25KB on a 3-frame snap (10-30ms on 4G) but our V.147
+//    evals show Vision OCR confidence degrades on small packaging
+//    text below 0.6. The 25KB saving is not worth the misread risk.
 
 // V.156 — PROCESS-LEVEL SAFETY NET. The V.202 envelope catches anything
 // thrown synchronously OR awaited inside the request handler. But Vercel
@@ -162,6 +176,105 @@ const KV_TIMEOUT_MS           = 1500;
 const KV_TIMEOUT_SECONDARY_MS = 800; // V.145 A3 — tighter cap for canonical + thumbnail cache lookups so slow Upstash days do not stall the hot path. Primary response cache stays at 1500ms.
 const VISION_TIMEOUT_MS       = 30000; // V.153b — Pro tier RE-BALANCE. Was 45s (V.153 first cut overshot — Vision + downstream stacked above 60s on tail-latency nights, causing the 504 cluster at 16:33-16:45 UTC on 15 May 2026). 30s gives Vision enough headroom for glossy packaging (9-15s typical) while leaving 28s for fan-out + mega-synth. Total worst case: 30 + 4 + 12 = 46s, comfortably under the 58s safety margin against Vercel's 60s kill.
 
+
+// V.161 TRUST & DIVERSITY FILTER. Three tiers evaluated in priority order:
+//   1. V161_SPAMMY_HOSTS — strict drop (onbuy / aliexpress / wish / temu /
+//      shein / ebay). eBay bypassed when inputType === 'barcode'.
+//   2. V161_HIGH_STREET_HOSTS — preferential ranking when category is FMCG.
+//   3. V161_SUPERMARKET_HOSTS — distinct bucket for the diversity ranker.
+const V161_SPAMMY_HOSTS = new Set([
+  'onbuy.com', 'onbuy.co.uk',
+  'aliexpress.com', 'aliexpress.co.uk', 'aliexpress.us',
+  'wish.com', 'temu.com', 'shein.com',
+  'ebay.co.uk', 'ebay.com',
+]);
+const V161_SPAMMY_SLUGS = new Set([
+  'onbuy', 'onbuycom',
+  'aliexpress', 'aliexpresscom', 'aliexpressuk',
+  'wish', 'wishcom', 'temu', 'temucom', 'shein', 'sheincom',
+  'ebay', 'ebaycouk', 'ebaycom', 'ebayuk',
+]);
+const V161_HIGH_STREET_HOSTS = new Set([
+  'boots.com', 'boots-uk.com', 'superdrug.com',
+  'marksandspencer.com', 'marks-and-spencer.com',
+  'lloydspharmacy.com', 'savers.co.uk',
+]);
+const V161_SUPERMARKET_HOSTS = new Set([
+  'tesco.com', 'sainsburys.co.uk', 'sainsburys.com',
+  'asda.com', 'morrisons.com', 'waitrose.com',
+  'iceland.co.uk', 'ocado.com', 'aldi.co.uk', 'lidl.co.uk',
+]);
+const V161_AMAZON_HOSTS = new Set(['amazon.co.uk', 'amazon.com']);
+function _v161NormalizeHost(host) {
+  if (!host || typeof host !== 'string') return '';
+  return host.replace(/^www\./i, '').toLowerCase().trim();
+}
+function _v161IsSpammyHost(host, inputType) {
+  const h = _v161NormalizeHost(host);
+  if (!h) return false;
+  if (inputType === 'barcode' && (h === 'ebay.co.uk' || h === 'ebay.com' || h.endsWith('.ebay.co.uk') || h.endsWith('.ebay.com'))) return false;
+  if (V161_SPAMMY_HOSTS.has(h)) return true;
+  for (const spam of V161_SPAMMY_HOSTS) {
+    if (h.endsWith('.' + spam)) {
+      if (inputType === 'barcode' && (spam === 'ebay.co.uk' || spam === 'ebay.com')) return false;
+      return true;
+    }
+  }
+  return false;
+}
+function _v161IsSpammySlug(slug, inputType) {
+  if (!slug) return false;
+  const s = String(slug).toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!s) return false;
+  if (inputType === 'barcode' && (s === 'ebay' || s === 'ebayuk' || s === 'ebaycouk' || s === 'ebaycom')) return false;
+  return V161_SPAMMY_SLUGS.has(s);
+}
+function _v161BucketForHost(host) {
+  const h = _v161NormalizeHost(host);
+  if (!h) return 'other';
+  if (V161_AMAZON_HOSTS.has(h)) return 'amazon';
+  for (const a of V161_AMAZON_HOSTS) if (h.endsWith('.' + a)) return 'amazon';
+  if (V161_HIGH_STREET_HOSTS.has(h)) return 'highstreet';
+  for (const a of V161_HIGH_STREET_HOSTS) if (h.endsWith('.' + a)) return 'highstreet';
+  if (V161_SUPERMARKET_HOSTS.has(h)) return 'supermarket';
+  for (const a of V161_SUPERMARKET_HOSTS) if (h.endsWith('.' + a)) return 'supermarket';
+  return 'other';
+}
+function _v161IsFmcgCategory(cat) {
+  if (!cat || typeof cat !== 'string') return false;
+  const c = cat.toLowerCase();
+  return /\b(health|beauty|grocery|groceries|food|drink|toiletr|cosmetic|skincare|haircare|deodor|toothpaste|shampoo|shower\s*gel)\b/.test(c);
+}
+function _v161EnforceDiversity(links, category) {
+  if (!Array.isArray(links) || links.length < 3) return links;
+  const isFmcg = _v161IsFmcgCategory(category);
+  const byBucket = { amazon: [], highstreet: [], supermarket: [], other: [] };
+  for (const l of links) {
+    if (!l || !l.url) continue;
+    let host = '';
+    try { host = new URL(l.url).hostname; } catch (e) {}
+    const bucket = _v161BucketForHost(host);
+    byBucket[bucket].push(l);
+  }
+  const distinctBuckets = Object.keys(byBucket).filter(k => byBucket[k].length > 0).length;
+  if (distinctBuckets < 2) return links;
+  const slotOrder = isFmcg
+    ? ['supermarket', 'highstreet', 'amazon', 'other']
+    : ['amazon', 'highstreet', 'supermarket', 'other'];
+  const picked = [];
+  const seen = new Set();
+  for (const bucket of slotOrder) {
+    const best = byBucket[bucket][0];
+    if (best && !seen.has(best.url)) { picked.push(best); seen.add(best.url); }
+  }
+  for (const l of links) {
+    if (!l || !l.url) continue;
+    if (seen.has(l.url)) continue;
+    picked.push(l); seen.add(l.url);
+  }
+  return picked;
+}
+
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
 // first-party retailers + reputable UK marketplaces. ANY host not on
 // this list (or its subdomain set) is dropped before Best Price.
@@ -229,7 +342,9 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'lecreuset.com',
   'lecol.cc',
   // Reputable UK marketplaces & specialists
-  'onbuy.com',
+  // V.161 — 'onbuy.com' moved to V161_SPAMMY_HOSTS. Founder mandate after
+  // audit found OnBuy listings undercutting legitimate retailers with
+  // stale/grey-market stock. The blacklist fires before this allow-list.
   'ebuyer.com',
   'box.co.uk',
   'scan.co.uk',
@@ -316,9 +431,13 @@ function _v199GetCategoryFloor(category) {
   }
   return 5;
 }
-function _v199IsTrustedHost(host) {
+function _v199IsTrustedHost(host, inputType) {
   if (!host || typeof host !== 'string') return false;
   const h = host.replace(/^www\./, '').toLowerCase();
+  // V.161 — STRICT BLACKLIST FIRST. onbuy / aliexpress / wish / temu /
+  // shein / ebay (unless barcode) get nuked before allow-list can grant
+  // them passage. The blacklist always wins.
+  if (_v161IsSpammyHost(h, inputType)) return false;
   if (V199_UK_TRUSTED_HOSTS.has(h)) return true;
   // Allow subdomains of trusted hosts (shop.argos.co.uk, m.amazon.co.uk).
   for (const trusted of V199_UK_TRUSTED_HOSTS) {
@@ -4261,7 +4380,26 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
     try { console.log('[V.159] filtered ' + _v159DroppedOutliers + ' outlier/empty links from response (median £' + (_v145Median != null ? _v145Median.toFixed(2) : '?') + ', floor £' + (_v145Floor != null ? _v145Floor.toFixed(2) : '?') + ')'); } catch (e) {}
   }
 
-  return { pricing: { best_price, avg_market, price_band }, links: _v159LinksFiltered };
+  // V.161 — DIVERSITY-FORCING PASS. Reorder price-sorted survivors so the
+  // top of the stack carries one entry per retailer bucket (Amazon /
+  // High-Street / Supermarket / Other). For FMCG categories supermarket is
+  // prioritised first so shoppers see Tesco/Sainsbury's alongside Amazon.
+  let _v161FinalLinks = _v159LinksFiltered;
+  try {
+    const _v161Before = _v159LinksFiltered.length;
+    _v161FinalLinks = _v161EnforceDiversity(_v159LinksFiltered, category);
+    if (_v161Before >= 3 && _v161FinalLinks !== _v159LinksFiltered) {
+      const _v161Buckets = _v161FinalLinks.slice(0, 4).map(l => {
+        try { return _v161BucketForHost(new URL(l.url).hostname); } catch (e) { return 'other'; }
+      });
+      try { console.log('[V.161] diversity-forcing applied · top4_buckets=' + _v161Buckets.join(',') + ' · category="' + (category || '').slice(0,40) + '" · fmcg=' + _v161IsFmcgCategory(category)); } catch (e) {}
+    }
+  } catch (_v161Err) {
+    try { console.warn('[V.161] diversity pass threw — falling back to V.159 order:', _v161Err && _v161Err.message); } catch (e) {}
+    _v161FinalLinks = _v159LinksFiltered;
+  }
+
+  return { pricing: { best_price, avg_market, price_band }, links: _v161FinalLinks };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
