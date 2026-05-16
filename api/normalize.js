@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v168-true-failsafe';
+const VERSION             = 'normalize.js v3.4.5v169-absolute-trust';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -301,6 +301,174 @@ function _v161EnforceDiversity(links, category) {
   return picked;
 }
 
+
+
+// ═════════════════════════════════════════════════════════════════════
+// V.169 — ABSOLUTE TRUST PERIMETER (15 May 2026 night)
+// ─────────────────────────────────────────────────────────────────────
+// Founder rejection of V.168 failsafe: a PS5 Pro scan returned Amazon
+// + Currys + Very + "Fashionworld". Fashionworld is a real UK catalogue
+// brand but not a recognised consumer-trust staple. V.168's "non-spammy
+// fallback" rule was too permissive — any host that wasn't on the
+// V.161 blacklist could slip in.
+//
+// V.169 inverts the logic: the failsafe is now whitelist-only. The
+// relaxed-pool merge step consults V169_GLOBAL_TRUST_LIST and rejects
+// anything not present. No exceptions. No "looks legit". The user's
+// trust in shipping + returns is the whole product value — Fashionworld
+// undermines it instantly.
+//
+// The list is a flat Set of normalised slugs (lowercase, alphanumeric
+// only). Hosts are normalised the same way at check time. Add ENTIRE
+// retailers, not individual TLDs: 'amazon' covers amazon.co.uk and
+// amazon.com; 'johnlewis' covers johnlewis.com and johnlewispartnership.
+// ═════════════════════════════════════════════════════════════════════
+const V169_GLOBAL_TRUST_LIST = new Set([
+  // Tier-1 universal UK staples (Founder mandate)
+  'amazon', 'amazoncouk', 'amazoncom',
+  'argos', 'argoscouk',
+  'currys', 'curryscouk',
+  'very', 'verycouk',
+  'johnlewis', 'johnlewiscom', 'johnlewispartnership',
+  'boots', 'bootscom',
+  'tesco', 'tescocom',
+  'asda', 'asdacom',
+  'sainsburys', 'sainsburyscouk',
+  'morrisons', 'morrisonscom',
+  'waitrose', 'waitrosecom',
+  'marksandspencer', 'marksspencer', 'mands',
+  // Tech / appliances
+  'ao', 'aocom',
+  'appliancesdirect', 'appliancesdirectcouk',
+  'johnlewisfinance',
+  'sky', 'skycom',
+  'ee', 'eecouk',
+  'three', 'threecouk',
+  'o2', 'o2couk',
+  'vodafone', 'vodafonecouk',
+  // Toys / games / kids
+  'smythstoys', 'smyths',
+  'theentertainer',
+  'game', 'gamecouk', 'gameuk',
+  'shopto',
+  'thegamecollection',
+  'zatu', 'zatucouk',
+  'cex', 'cexcouk',
+  'lego', 'legocom',
+  // DIY / garden / hardware
+  'screwfix',
+  'toolstation',
+  'wickes', 'wickescouk',
+  'homebase', 'homebasecouk',
+  'bandq', 'b-and-q', 'bq', 'diy',
+  'dobbies',
+  'therange',
+  // Sports / outdoors / cycling
+  'decathlon',
+  'sportsdirect',
+  'jdsports', 'jdsportscouk',
+  'gooutdoors',
+  'cotswoldoutdoor',
+  'wiggle',
+  'halfords',
+  // Auto specialists
+  'eurocarparts',
+  'gsfcarparts',
+  'mytyres',
+  // Pets
+  'petsathome',
+  'jollyes',
+  'zooplus',
+  'fish4dogs',
+  // Baby
+  'jojomamanbebe',
+  'mamasandpapas',
+  'mothercare',
+  'kiddieskingdom',
+  // Health / beauty / fragrance
+  'superdrug',
+  'lookfantastic',
+  'sephora',
+  'cultbeauty',
+  'spacenk',
+  'hollandandbarrett',
+  'myprotein',
+  'bulk',
+  'savers',
+  // Discount household
+  'wilko',
+  'bmstores', 'bm',
+  'poundland',
+  'homebargains',
+  // Homeware
+  'dunelm',
+  'ikea',
+  'habitat',
+  'dwell',
+  // Office / stationery / books
+  'ryman', 'rymanonline',
+  'whsmith',
+  'staples',
+  'waterstones',
+  'blackwells',
+  'foyles',
+  'wordery',
+  // Alcohol
+  'majestic',
+  'thewhiskyexchange', 'whiskyexchange',
+  'drinksupermarket',
+  'masterofmalt',
+  'thedrinkshop',
+  // PC components / specialist tech
+  'scan', 'scancouk',
+  'overclockers',
+  'awdit',
+  'cclonline',
+  'novatech',
+  'ebuyer',
+  'box', 'boxcouk',
+  'richersounds',
+  // Crafts / hobbies
+  'hobbycraft',
+  'theworks',
+  'cassart',
+  // Instruments
+  'gear4music',
+  'andertons',
+  'pmtonline',
+  'gak',
+  // Furniture / large-item retail
+  'wayfair',
+  'lakeland',
+  'next', 'nextcouk',
+  // Brand-direct (premium)
+  'apple', 'shopapple',
+  'samsung', 'samsungcom',
+  'dyson', 'dysoncouk',
+  'bose', 'bosecouk',
+  'sony', 'sonycouk',
+  'lg', 'lgcom',
+  'shark', 'sharkclean',
+  'ninjakitchen',
+  'lecreuset',
+  'ao', 'aodeals',
+]);
+function _v169IsGloballyTrusted(host) {
+  if (!host || typeof host !== 'string') return false;
+  const h = host.replace(/^www\./i, '').toLowerCase().trim();
+  if (!h) return false;
+  // Strategy 1: exact match on the slug (lowercase alphanumeric only).
+  const slug = h.replace(/[^a-z0-9]/g, '');
+  if (V169_GLOBAL_TRUST_LIST.has(slug)) return true;
+  // Strategy 2: match on the bare host (e.g. 'argos.co.uk' → 'argos').
+  const bareSlug = (h.split('.')[0] || '').replace(/[^a-z0-9]/g, '');
+  if (bareSlug && V169_GLOBAL_TRUST_LIST.has(bareSlug)) return true;
+  // Strategy 3: match the full host slug by stripping TLD pieces.
+  // 'b-and-q.co.uk' → 'bandq' which is in the list.
+  const noTld = h.replace(/\.(co\.uk|com|net|org|uk)$/i, '').replace(/[^a-z0-9]/g, '');
+  if (noTld && V169_GLOBAL_TRUST_LIST.has(noTld)) return true;
+  return false;
+}
 
 // ═════════════════════════════════════════════════════════════════════
 // V.162 — OMNI-CATEGORY CURATION MATRIX (15 May 2026 evening)
@@ -4718,6 +4886,17 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
             const _v168Entry = _v168Pool[_v168i];
             if (!_v168Entry || !_v168Entry.url) continue;
             if (_v168Seen.has(_v168Entry.url)) continue;
+            // V.169 — ABSOLUTE TRUST PERIMETER. The relaxed pool may
+            // contain any non-spammy retailer, but the failsafe now
+            // INJECTS ONLY entries on the V169_GLOBAL_TRUST_LIST. A
+            // Fashionworld / random catalogue brand result is captured
+            // for diagnostic purposes but never reaches the user.
+            let _v169Host = '';
+            try { _v169Host = new URL(_v168Entry.url).hostname; } catch (e) {}
+            if (!_v169IsGloballyTrusted(_v169Host)) {
+              try { console.log('[V.169] failsafe blocked untrusted host: ' + _v169Host + ' (not on V169_GLOBAL_TRUST_LIST)'); } catch (e) {}
+              continue;
+            }
             // Same V.159 outlier-floor sanity check: skip if price is
             // implausibly below the V.145 median floor (when set).
             if (_v145Floor != null && Number(_v168Entry.price_gbp) < Number(_v145Floor)) continue;
