@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v180-variant-guard';
+const VERSION             = 'normalize.js v3.4.5v184-killswitch-dualanchor';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -664,6 +664,74 @@ function _v180TitleContradictsTyreDims(title, intentDims) {
   }
   return 'tyre_dim_mismatch:title=' + titleDims.width + '/' + titleDims.profile + 'R' + titleDims.rim
        + '_vs_intent=' + intentDims.width + '/' + intentDims.profile + 'R' + intentDims.rim;
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// V.184 (architectural name "V.181") — DUAL-ANCHOR + ABSOLUTE KILL-SWITCH
+// Founder Aesop field test on 16 May 2026 exposed two failures:
+//   (a) V.172/V.174 yielded a thin 2-link stack for Aesop Soap
+//   (b) OnBuy polluted results despite V.169 trust list bans
+//
+// Two architectural responses:
+//   (1) ABSOLUTE KILL-SWITCH: substring match on result.link.toLowerCase().
+//       Fires BEFORE V.163 identity, BEFORE V.201 admit, BEFORE V.168
+//       relaxed-pool capture. No exceptions. No fallback bypass.
+//   (2) BRAND DIRECT ANCHOR: extract brand slug from canonical query,
+//       match any host with that slug as a segment (e.g. aesop.com,
+//       aesop.co.uk, shop.dyson.com). Pin the brand-direct entry to the
+//       top of _v161FinalLinks alongside Amazon. Surface brand_direct_*
+//       fields in the response so the synth prompt can weigh market
+//       prices against the official-store price.
+// ═════════════════════════════════════════════════════════════════════
+const V184_ABSOLUTE_KILL_HOSTS = ['onbuy', 'simplybe', 'aliexpress', 'temu', 'shein'];
+function _v184IsKilled(linkOrHost) {
+  if (!linkOrHost || typeof linkOrHost !== 'string') return null;
+  const lc = linkOrHost.toLowerCase();
+  for (const k of V184_ABSOLUTE_KILL_HOSTS) {
+    if (lc.indexOf(k) !== -1) return k;
+  }
+  return null;
+}
+
+const V184_COMMON_TLDS = new Set(['com','co','uk','net','org','io','shop','store','app','de','fr','it','es','eu','us','ca','au','nz','ie','tv']);
+function _v184HostBaseSlugs(host) {
+  // Strip www. then split. Remove trailing TLD-ish segments.
+  if (!host || typeof host !== 'string') return [];
+  let h = host.replace(/^www\./i, '').toLowerCase();
+  const parts = h.split('.').filter(Boolean);
+  // Pop trailing TLD segments (handle .co.uk / .com.au)
+  while (parts.length > 1 && V184_COMMON_TLDS.has(parts[parts.length - 1])) {
+    parts.pop();
+  }
+  return parts;
+}
+function _v184BrandSlug(rawBrand) {
+  if (!rawBrand || typeof rawBrand !== 'string') return null;
+  // Lowercase, strip non-alphanumeric. "L'Oréal" → "loreal" (basic).
+  // Drop diacritics first.
+  const norm = rawBrand
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+  if (norm.length < 3) return null; // too short to safely match
+  return norm;
+}
+function _v184ExtractBrandFromQuery(canonicalQuery) {
+  if (!canonicalQuery || typeof canonicalQuery !== 'string') return null;
+  // First word of canonical_search_string is typically the brand
+  // (Haiku canonical strings are formatted "Brand Product Model").
+  const first = canonicalQuery.trim().split(/\s+/)[0];
+  return _v184BrandSlug(first);
+}
+function _v184HostMatchesBrand(host, brandSlug) {
+  if (!brandSlug || !host) return false;
+  const segs = _v184HostBaseSlugs(host);
+  // Exact match on any non-TLD segment (aesop.com → ['aesop'] → match;
+  // shop.aesop.com → ['shop','aesop'] → match; aesopskincare.com →
+  // ['aesopskincare'] → no exact 'aesop' segment → no match. We accept
+  // false negatives over false positives for brand-direct claims.)
+  return segs.indexOf(brandSlug) !== -1;
 }
 
 function _v178TitleContradictsIntent(title, intent) {
@@ -4014,6 +4082,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     // derived from host (game.co.uk → 'Game').
     for (const item of results) {
       _examined++;
+      // V.184 — ABSOLUTE KILL-SWITCH. Substring check on both link AND
+      // product_link AND any source/seller/merchant.name. Fires before
+      // EVERY other rule. No allowlist bypass, no V.168 relaxed-pool
+      // rescue, no V.169 admission. The five hosts in V184_ABSOLUTE_
+      // KILL_HOSTS (onbuy, simplybe, aliexpress, temu, shein) are dead.
+      try {
+        const _v184Probe = [
+          typeof item.link === 'string' ? item.link : '',
+          typeof item.product_link === 'string' ? item.product_link : '',
+          typeof item.source === 'string' ? item.source : '',
+          typeof item.seller_name === 'string' ? item.seller_name : '',
+          (item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '',
+        ].join(' ');
+        const _v184Hit = _v184IsKilled(_v184Probe);
+        if (_v184Hit) {
+          if (_droppedSamples.length < 8) {
+            _droppedSamples.push('v184:kill:' + _v184Hit + ':' + String(item.title || '').slice(0, 24));
+          }
+          _droppedRedirector++;
+          continue;
+        }
+      } catch (_v184KillErr) {}
       // V.164 — CONDITION FILTER (EXPANDED FIELD PERIMETER).
       // V.161 only checked condition / title / stock_state. The Cash
       // Generator HP ProBook leak proved that's not enough — SerpAPI
@@ -4492,6 +4582,19 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
       // Otherwise relaxed-match the title and run the same URL + price
       // extraction the strict pass would have run.
       for (const item of results) {
+        // V.184 — ABSOLUTE KILL-SWITCH in the relaxed-pool path too.
+        // Without this, an OnBuy listing rejected from strict pass would
+        // get a second chance in the V.170 N-1 relaxation. No mercy.
+        try {
+          const _v184ProbeR = [
+            typeof item.link === 'string' ? item.link : '',
+            typeof item.product_link === 'string' ? item.product_link : '',
+            typeof item.source === 'string' ? item.source : '',
+            typeof item.seller_name === 'string' ? item.seller_name : '',
+            (item.merchant && typeof item.merchant.name === 'string') ? item.merchant.name : '',
+          ].join(' ');
+          if (_v184IsKilled(_v184ProbeR)) continue;
+        } catch (_v184RErr) {}
         // Skip if already passed strict (V.163 wouldn't have dropped it).
         const _strict = _v163ItemMatchesIdentity(item.title, _v163Required);
         if (_strict.pass) continue;
@@ -5564,7 +5667,106 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
     _v161FinalLinks = _v159LinksFiltered;
   }
 
-  return { pricing: { best_price, avg_market, price_band }, links: _v161FinalLinks };
+  // V.184 — DUAL-ANCHOR BRAND-DIRECT PINNING.
+  // Extract brand slug from canonical search string (first word, normalised).
+  // Scan _v161FinalLinks AND retailer_deep_links AND the V.168 relaxed pool
+  // for any host whose non-TLD segments include the brand slug. Pin the
+  // cheapest such entry to slot 0 of _v161FinalLinks (or slot 1 if an
+  // Amazon anchor is already at slot 0 — Amazon keeps its primary slot,
+  // brand-direct sits next to it). Tag with is_brand_direct so the frontend
+  // can render the "Brand Direct" pill. Surface brand_direct_* on the
+  // return so synth.js can weigh it against the market median.
+  let _v184BrandDirect = null;
+  try {
+    const _v184BrandSlug = _v184ExtractBrandFromQuery(canonical);
+    if (_v184BrandSlug) {
+      // Pool of candidates to scan, in priority order.
+      const _v184Candidates = [];
+      // 1. Already-surviving links.
+      _v161FinalLinks.forEach(function (l) { if (l && l.url) _v184Candidates.push(l); });
+      // 2. retailer_deep_links not yet promoted (relaxed pool excluded).
+      if (retailer_deep_links && typeof retailer_deep_links === 'object') {
+        for (const k of Object.keys(retailer_deep_links)) {
+          if (k.indexOf('__') === 0) continue; // skip private __v168_relaxed_pool / __v153_amazon_extras
+          const r = retailer_deep_links[k];
+          if (!r || !r.url) continue;
+          _v184Candidates.push({
+            url: r.url,
+            retailer: r.name || k,
+            price_gbp: Number(r.price_gbp || r.price || 0),
+            price_str: r.price_str || ('£' + Number(r.price_gbp || r.price || 0).toFixed(2)),
+            thumbnail: r.thumbnail || null,
+            delivery_note: r.delivery_note || '',
+            is_outlier: false,
+            is_primary: false,
+          });
+        }
+      }
+      // 3. V.168 relaxed pool — brand-direct domains often fall outside the
+      //    V.169 trust list (Aesop UK isn't a high-street chain), so this is
+      //    where they typically end up. Promote them when brand matches.
+      if (retailer_deep_links && Array.isArray(retailer_deep_links.__v168_relaxed_pool)) {
+        retailer_deep_links.__v168_relaxed_pool.forEach(function (r) {
+          if (!r || !r.url) return;
+          _v184Candidates.push({
+            url: r.url,
+            retailer: r.name || r.host || 'Brand',
+            price_gbp: Number(r.price_gbp),
+            price_str: '£' + Number(r.price_gbp).toFixed(2),
+            thumbnail: r.thumbnail || null,
+            delivery_note: '',
+            is_outlier: false,
+            is_primary: false,
+            _v168_relaxed: true,
+          });
+        });
+      }
+      // Find the cheapest entry whose host matches the brand slug.
+      let _v184Best = null;
+      for (const cand of _v184Candidates) {
+        let _v184Host = '';
+        try { _v184Host = new URL(cand.url).hostname; } catch (e) { continue; }
+        if (!_v184HostMatchesBrand(_v184Host, _v184BrandSlug)) continue;
+        if (cand.price_gbp == null || !Number.isFinite(cand.price_gbp) || cand.price_gbp <= 0) continue;
+        if (_v184Best == null || cand.price_gbp < _v184Best.price_gbp) {
+          _v184Best = Object.assign({}, cand, { _v184HostUsed: _v184Host });
+        }
+      }
+      if (_v184Best) {
+        // Build the pinned entry with the brand-direct flag.
+        const _v184Pinned = Object.assign({}, _v184Best, {
+          is_brand_direct: true,
+          retailer:        _v184Best.retailer + ' (Official)',
+        });
+        delete _v184Pinned._v184HostUsed;
+        // De-dupe by URL: remove any existing copy from _v161FinalLinks.
+        _v161FinalLinks = _v161FinalLinks.filter(function (l) {
+          return !l || !l.url || l.url !== _v184Best.url;
+        });
+        // Decide insertion slot: alongside Amazon anchor if present.
+        const _v184FirstIsAmazon = _v161FinalLinks[0]
+          && /amazon\./i.test(String(_v161FinalLinks[0].url || ''));
+        const _v184InsertAt = _v184FirstIsAmazon ? 1 : 0;
+        _v161FinalLinks.splice(_v184InsertAt, 0, _v184Pinned);
+        _v184BrandDirect = {
+          brand_slug:  _v184BrandSlug,
+          host:        _v184Best._v184HostUsed,
+          url:         _v184Pinned.url,
+          price_gbp:   _v184Pinned.price_gbp,
+          price_str:   _v184Pinned.price_str,
+          retailer:    _v184Pinned.retailer,
+          slot:        _v184InsertAt,
+        };
+        try { console.log('[V.184][brand_direct] brand="' + _v184BrandSlug + '" host=' + _v184Best._v184HostUsed + ' price=£' + _v184Pinned.price_gbp.toFixed(2) + ' pinned_at_slot=' + _v184InsertAt + ' alongside_amazon=' + _v184FirstIsAmazon); } catch (e) {}
+      } else {
+        try { console.log('[V.184][brand_direct] brand="' + _v184BrandSlug + '" no host matched (' + _v184Candidates.length + ' candidates examined)'); } catch (e) {}
+      }
+    }
+  } catch (_v184Err) {
+    try { console.warn('[V.184][brand_direct] threw:', _v184Err && _v184Err.message); } catch (e) {}
+  }
+
+  return { pricing: { best_price, avg_market, price_band }, links: _v161FinalLinks, brand_direct: _v184BrandDirect };
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -5586,7 +5788,7 @@ function _v138BuildResponse({
   rawInputText, // V.175 — raw user text so the bare-brand gate inspects
                 //         the ORIGINAL query, not Haiku's resolved canonical
 }) {
-  const { pricing, links } = _v138BuildPricingAndLinks({
+  const { pricing, links, brand_direct } = _v138BuildPricingAndLinks({
     verified_amazon_price,
     retailer_deep_links,
     category: (parsed && parsed.category) || null,            // V.199 — thread category for absolute floor
@@ -6124,6 +6326,7 @@ function _v138BuildResponse({
     pricing,
     verdict,
     links: links.length > 0 ? links : null,
+    brand_direct: brand_direct || null,  // V.184 — Dual-Anchor: official-store price for synth + UI
     tiers,
     disclosure,
     schema_version: 1,
@@ -7108,6 +7311,7 @@ async function _v202InnerHandler(req, res) {
     pricing:         _v138.pricing,
     verdict:         _v138.verdict,
     links:           _v138.links,
+    brand_direct:    _v138.brand_direct, // V.184 — official-store anchor for UI + synth verdict
     tiers:           _v138.tiers,
     disclosure:      _v138.disclosure,
     schema_version:  _v138.schema_version,
