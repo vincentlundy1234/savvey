@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v174-platform-enforcement';
+const VERSION             = 'normalize.js v3.4.5v176-dynamic-floor';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -460,6 +460,51 @@ function _v174FloorPctForCategory(categoryKey) {
   if (categoryKey && V174_HIGH_VALUE_CATS.has(categoryKey)) return 0.70;
   return 0.50;
 }
+// ═════════════════════════════════════════════════════════════════════
+// V.176 — DYNAMIC PRICE FLOOR (absolute-math override).
+// Founder audit of V.174 caught the category-regex blindspot: a £419
+// Garmin Forerunner and a £349 Oral-B iO9 were both leaking through the
+// weak 0.50 commodity floor because their string-matches didn't trip
+// `appliances` / `pc_components` / `games`. An £180 accessory could have
+// snuck in. V.176 ships absolute thresholds so the floor is determined
+// by price, not by category strings:
+//   median >= £100  →  0.70 floor   (high-value)
+//   median 50-99.99 →  0.60 floor   (mid-tier)
+//   median <  £50   →  0.50 floor   (commodity)
+// The V.174 category logic is preserved as a SECONDARY safety net — if
+// it returns a HIGHER floor than the price-based rule, we take the max.
+// (E.g. a £45 game would be 0.50 by price but 0.70 by category — the
+// 0.70 wins. A £420 game is 0.70 either way.)
+// ═════════════════════════════════════════════════════════════════════
+function _v176FloorPctForMedian(median) {
+  if (median == null || !Number.isFinite(median) || median <= 0) return 0.50;
+  if (median >= 100) return 0.70;
+  if (median >= 50)  return 0.60;
+  return 0.50;
+}
+function _v176ComputeTop5Median(links) {
+  if (!Array.isArray(links) || links.length < 3) return null;
+  const priced = links
+    .filter(l => l && l.price_gbp != null && Number(l.price_gbp) > 0)
+    .map(l => Number(l.price_gbp))
+    .sort((a, b) => a - b);
+  if (priced.length < 3) return null;
+  const top5 = priced.slice(0, 5);
+  return top5.length === 5
+    ? top5[2]
+    : (top5.length === 4 ? (top5[1] + top5[2]) / 2 : top5[Math.floor(top5.length / 2)]);
+}
+function _v176ResolveFloor(links, categoryKey) {
+  const median = _v176ComputeTop5Median(links);
+  if (median == null) return { median: null, floorPct: null, floor: null, source: 'no_median' };
+  const pricePct = _v176FloorPctForMedian(median);
+  const catPct   = (typeof _v174FloorPctForCategory === 'function')
+                   ? _v174FloorPctForCategory(categoryKey)
+                   : 0.50;
+  const finalPct = Math.max(pricePct, catPct);
+  const source   = (finalPct === pricePct && pricePct >= catPct) ? 'price_band' : 'category';
+  return { median, floorPct: finalPct, floor: median * finalPct, source, pricePct, catPct };
+}
 const V174_PLATFORM_TOKENS = {
   ps5:      [/\bps\s*5\b/i, /\bplaystation\s*5\b/i, /\bps5\b/i],
   ps4:      [/\bps\s*4\b/i, /\bplaystation\s*4\b/i, /\bps4\b/i],
@@ -787,7 +832,12 @@ const V162_CATEGORY_CONFIG = {
   // Amazon because no appliance specialists were prioritised. Currys
   // and AO dominate this lane in the UK.
   appliances: {
-    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance)\b/i,
+    // V.176 — Smart-home tokens added: philips hue / smart bulb / smart home
+    // / ring doorbell / nest. Founder field test caught these falling through
+    // every category pattern (no specialist match) and defaulting to the
+    // weak 0.50 floor. They belong in appliances/electronics where Currys +
+    // AO are the UK primaries.
+    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance|philips\s*hue|hue\s*bulb|hue\s*bridge|smart\s*bulb|smart\s*plug|smart\s*home|ring\s*doorbell|ring\s*camera|ring\s*chime|nest\s*thermostat|nest\s*cam|nest\s*hub|nest\s*doorbell|nest\s*audio|nest\s*mini|nest\s*learning|echo\s*dot|echo\s*show|amazon\s*echo|google\s*home)\b/i,
     primary: new Set(['currys.co.uk', 'ao.com', 'appliancesdirect.co.uk', 'argos.co.uk', 'johnlewis.com', 'marksandelectrical.co.uk']),
   },
   // V.164 — APPAREL DEFERRED. Clothing/fashion requires per-size +
@@ -5108,16 +5158,25 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
   // 60% cheaper than the median'). Applied AFTER V.159 outlier delete
   // so we don't second-guess outliers already filtered upstream.
   try {
-    // V.174 — Category-aware floor: high-value cats get 0.70.
+    // V.176 — Dynamic price floor (absolute median-price thresholds).
+    // median>=£100 → 0.70 · £50-£99.99 → 0.60 · <£50 → 0.50.
+    // V.174 category floor preserved as secondary safety net (max wins).
     const _v174CatKey = (typeof _v162DetectCategoryKey === 'function') ? _v162DetectCategoryKey(category) : null;
-    const _v174FloorPct = (typeof _v174FloorPctForCategory === 'function') ? _v174FloorPctForCategory(_v174CatKey) : 0.50;
-    const _v173Floor = _v173MedianFloor(_v159LinksFiltered, _v174FloorPct);
+    const _v176 = (typeof _v176ResolveFloor === 'function')
+                  ? _v176ResolveFloor(_v159LinksFiltered, _v174CatKey)
+                  : null;
+    const _v173Floor = (_v176 && _v176.floor != null && Number.isFinite(_v176.floor)) ? _v176.floor : null;
+    if (_v173Floor != null) {
+      try {
+        console.log('[V.176][dynamic_floor] median=£' + _v176.median.toFixed(2) + ' price_pct=' + _v176.pricePct + ' cat_pct=' + _v176.catPct + ' final_pct=' + _v176.floorPct + ' floor=£' + _v173Floor.toFixed(2) + ' source=' + _v176.source + ' cat=' + (_v174CatKey || 'uncategorised'));
+      } catch (e) {}
+    }
     if (_v173Floor != null && Number.isFinite(_v173Floor)) {
       const _v173Before = _v159LinksFiltered.length;
       _v159LinksFiltered = _v159LinksFiltered.filter(l => {
         if (!l || l.price_gbp == null) return true;
         if (Number(l.price_gbp) < _v173Floor) {
-          try { console.log('[V.173][sanity] drop ' + l.retailer + ' \u00a3' + Number(l.price_gbp).toFixed(2) + ' < floor \u00a3' + _v173Floor.toFixed(2) + ' (likely accessory)'); } catch (e) {}
+          try { console.log('[V.176][sanity] drop ' + l.retailer + ' \u00a3' + Number(l.price_gbp).toFixed(2) + ' < floor \u00a3' + _v173Floor.toFixed(2) + ' (likely accessory \u00b7 ' + (_v176 && _v176.source ? _v176.source : 'unknown') + ')'); } catch (e) {}
           return false;
         }
         return true;
