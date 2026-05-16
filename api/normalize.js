@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v185-hero-ui-and-synth';
+const VERSION             = 'normalize.js v3.4.5v186-mvs-circuit-breaker';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -5989,9 +5989,20 @@ function _v138BuildResponse({
     if (_v168PricedLinks === 0) {
       outcome = 'not_found';
       outcome_reason = 'matched_no_links_post_filter';
-    } else if (_v168PricedLinks <= 2) {
+    } else if (_v168PricedLinks === 1) {
+      // V.186 — MVS CIRCUIT BREAKER. A single-link stack is a dead
+      // product per Founder mandate. Even Amazon-alone, even brand-
+      // direct-alone, is below the Minimum Viable Stack of TWO
+      // distinct price anchors. Route to 'needs_specificity' so the
+      // frontend renders the ambiguity-fallback UI instead of the
+      // standard four-pillar screen.
+      outcome = 'needs_specificity';
+      outcome_reason = 'mvs_failed_single_link';
+    } else if (_v168PricedLinks === 2) {
+      // 2 anchors = MVS satisfied. Keep matched_thin so the frontend's
+      // scarcity-acknowledgment treatment still fires.
       outcome = 'matched_thin';
-      outcome_reason = 'matched_thin_' + _v168PricedLinks + '_link' + (_v168PricedLinks === 1 ? '' : 's');
+      outcome_reason = 'matched_thin_2_links';
     }
     // links.length >= 3 → outcome stays 'matched' (the original).
   }
@@ -6411,6 +6422,25 @@ function _v138BuildResponse({
     verdict,
     links: links.length > 0 ? links : null,
     brand_direct: brand_direct || null,  // V.184 — Dual-Anchor: official-store price for synth + UI
+    // V.186 — MVS specificity message. Surfaces only when outcome is
+    // 'needs_specificity' so the frontend can render the ambiguity-
+    // fallback UI with the actual user query interpolated. Includes
+    // the canonical the engine resolved AND the raw text the user
+    // typed, so the UI can show the most legible label.
+    specificity_message: (outcome === 'needs_specificity') ? {
+      user_query:     (typeof rawInputText === 'string' && rawInputText.trim())
+                      ? rawInputText.trim().slice(0, 80)
+                      : ((parsed && parsed.canonical_search_string) ? parsed.canonical_search_string.slice(0, 80) : ''),
+      canonical:      (parsed && parsed.canonical_search_string) || null,
+      headline:       'Too many variations',
+      body:           "We found too many size/model variations for \"" +
+                      (((typeof rawInputText === 'string' && rawInputText.trim())
+                        ? rawInputText.trim()
+                        : ((parsed && parsed.canonical_search_string) || 'this product')).slice(0, 60)) +
+                      "\". To guarantee you get the exact lowest price, please scan the barcode or add the specific size/model.",
+      cta_primary:    { label: 'Scan barcode', action: 'open_barcode' },
+      cta_secondary:  { label: 'Refine search', action: 'focus_search' },
+    } : null,
     tiers,
     disclosure,
     schema_version: 1,
@@ -7028,6 +7058,29 @@ async function _v202InnerHandler(req, res) {
             name:  l.retailer || l.retailer_key || 'Retailer',
             price: l.price_gbp,
           }));
+        // V.186 — MVS PRE-CHECK. Before paying the Haiku synth cost,
+        // estimate whether the final stack will clear the Minimum
+        // Viable Stack threshold of >=2 priced anchors. The estimate
+        // counts distinct surviving entries in retailer_deep_links
+        // (plus the verified Amazon anchor if present). When the
+        // estimate is < 2, skip synth entirely — the frontend will
+        // render the 'needs_specificity' fallback UI, not a verdict.
+        let _v186SkipSynth = false;
+        try {
+          let _v186Count = 0;
+          if (verified_amazon_price && Number(verified_amazon_price.price) > 0) _v186Count++;
+          if (retailer_deep_links && typeof retailer_deep_links === 'object') {
+            for (const _v186K of Object.keys(retailer_deep_links)) {
+              if (_v186K.indexOf('__') === 0) continue; // skip private buckets
+              const _v186R = retailer_deep_links[_v186K];
+              if (_v186R && _v186R.url && Number(_v186R.price_gbp || _v186R.price || 0) > 0) _v186Count++;
+            }
+          }
+          if (_v186Count < 2) {
+            _v186SkipSynth = true;
+            try { console.log('[V.186][mvs_pre_check] skipping synth — estimated stack size=' + _v186Count + ' (< 2 anchors)'); } catch (e) {}
+          }
+        } catch (_v186McErr) {}
         // V.185 — Compute brand_direct inline so the synth can cite the
         // official-store price even though _v138BuildPricingAndLinks
         // hasn't run yet. Scan retailer_deep_links (incl. relaxed pool)
@@ -7078,7 +7131,7 @@ async function _v202InnerHandler(req, res) {
             }
           }
         } catch (_v185BdErr) {}
-        const ai = await callHaikuMegaSynthesis({
+        const ai = _v186SkipSynth ? { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null } : await callHaikuMegaSynthesis({
           canonical:     parsed.canonical_search_string,
           category:      parsed.category,
           market_status: parsed.market_status,
@@ -7448,6 +7501,7 @@ async function _v202InnerHandler(req, res) {
     verdict:         _v138.verdict,
     links:           _v138.links,
     brand_direct:    _v138.brand_direct, // V.184 — official-store anchor for UI + synth verdict
+    specificity_message: _v138.specificity_message, // V.186 — MVS circuit-breaker UI payload
     tiers:           _v138.tiers,
     disclosure:      _v138.disclosure,
     schema_version:  _v138.schema_version,
