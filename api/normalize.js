@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v178-unit-volume-guard';
+const VERSION             = 'normalize.js v3.4.5v180-variant-guard';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -574,15 +574,110 @@ function _v178ExtractIntentUnits(canonicalQuery) {
     weightG:   _v178NormaliseWeightToG(vol),
   };
 }
+// ═════════════════════════════════════════════════════════════════════
+// V.180 — STORAGE VARIANT GUARD (electronics + mobile + pc_components).
+// The Meta Quest 3 chaos-sweep finding: a user searching "Meta Quest 3
+// 128GB" was at risk of seeing the 512GB SKU in the stack because both
+// are above V.176 floor (£479 vs £619). V.178 only catches fmcg/alcohol
+// pack/volume contradictions. V.180 adds a parallel guard for STORAGE
+// tokens (64GB / 128GB / 256GB / 512GB / 1TB / 2TB).
+//
+// Rule: if intent carries a storage token, drop any title that carries
+// a DIFFERENT storage token. Titles with NO storage token are passed
+// through (we can't be sure either way; the merchant's PDP must clarify).
+// ═════════════════════════════════════════════════════════════════════
+const V180_STORAGE_GUARD_CATS = new Set(['electronics', 'mobile', 'pc_components']);
+function _v180NormaliseStorage(raw) {
+  // Convert any matched storage string to a canonical GB integer for compare.
+  // "1TB" → 1000, "2TB" → 2000, "512GB" → 512, "1.5TB" → 1500.
+  if (!raw || typeof raw !== 'string') return null;
+  const m = raw.match(/(\d+(?:\.\d+)?)\s*(gb|tb)/i);
+  if (!m) return null;
+  const n = parseFloat(m[1]);
+  const u = m[2].toLowerCase();
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return u === 'tb' ? Math.round(n * 1000) : Math.round(n);
+}
+function _v180ExtractStorageTokens(s) {
+  if (!s || typeof s !== 'string') return [];
+  // Match common storage capacities. Includes ½/decimal TB (1.5TB).
+  const rx = /\b(\d+(?:\.\d+)?)\s*(gb|tb)\b/ig;
+  const seen = new Set();
+  const out  = [];
+  let m;
+  while ((m = rx.exec(s)) !== null) {
+    const gb = _v180NormaliseStorage(m[0]);
+    // Sanity filter: drop ridiculous matches (e.g. "0.5GB" is RAM, not
+    // storage). Real consumer storage range is 8GB – 8TB.
+    if (gb != null && gb >= 8 && gb <= 8000 && !seen.has(gb)) {
+      seen.add(gb);
+      out.push(gb);
+    }
+  }
+  return out;
+}
+function _v180TitleContradictsStorage(title, intentStorageGB) {
+  if (!title || intentStorageGB == null) return null;
+  const titleStorages = _v180ExtractStorageTokens(title);
+  if (titleStorages.length === 0) return null; // no storage in title, pass
+  // If ANY storage token in the title matches intent, pass.
+  if (titleStorages.indexOf(intentStorageGB) !== -1) return null;
+  // No match — every token in the title is a DIFFERENT capacity. Drop.
+  return 'storage_mismatch:title=' + titleStorages.join('/') + 'gb_vs_intent=' + intentStorageGB + 'gb';
+}
+function _v180ExtractIntentStorage(canonicalQuery) {
+  const tokens = _v180ExtractStorageTokens(canonicalQuery);
+  // Use the LARGEST detected token as intent. Real product names rarely
+  // carry two storage capacities; if they do, the higher is the SKU
+  // capacity (e.g. "PNY 1TB SSD with 8GB cache" → 1TB is the SKU).
+  if (tokens.length === 0) return null;
+  return Math.max.apply(null, tokens);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// V.180 — TYRE DIMENSION GUARD (auto category).
+// Michelin Pilot Sport 4 S in 225/40 R18 must not have 225/45 R17 or
+// 235/40 R18 in the stack — different tyre size = different SKU,
+// different car fitment, materially different price. The £170 wrong-
+// size tyre would have cleared V.176 floor (≥£100 → 0.70 × £220 = £154).
+// V.180 enforces tyre dimensions as a hard required-token constraint
+// at the relevance layer.
+//
+// Tyre dimension format examples:
+//   225/40 R18, 225/40R18, 225/40-18, 225 40 R18 — all canonical
+// ═════════════════════════════════════════════════════════════════════
+function _v180ExtractTyreDimensions(s) {
+  if (!s || typeof s !== 'string') return null;
+  // Match: 3-digit width, slash, 2-digit profile, optional R, 1-2 digit rim
+  const m = s.match(/\b(\d{3})\s*[\/\\]\s*(\d{2})\s*[-\s]?\s*[rR]?\s*(\d{2})\b/);
+  if (!m) return null;
+  return { width: parseInt(m[1], 10), profile: parseInt(m[2], 10), rim: parseInt(m[3], 10) };
+}
+function _v180TitleContradictsTyreDims(title, intentDims) {
+  if (!title || !intentDims) return null;
+  const titleDims = _v180ExtractTyreDimensions(title);
+  if (!titleDims) return null; // no dimensions in title, pass (PDP will clarify)
+  if (titleDims.width === intentDims.width
+      && titleDims.profile === intentDims.profile
+      && titleDims.rim === intentDims.rim) {
+    return null; // perfect match
+  }
+  return 'tyre_dim_mismatch:title=' + titleDims.width + '/' + titleDims.profile + 'R' + titleDims.rim
+       + '_vs_intent=' + intentDims.width + '/' + intentDims.profile + 'R' + intentDims.rim;
+}
+
 function _v178TitleContradictsIntent(title, intent) {
   if (!title || !intent) return null;
   // ── PACK CONTRADICTION ──
   // Only enforce when intent asks for a multipack (pack >= 6) OR explicitly
   // for a single. A 2-pack vs 4-pack tolerance is too tight for SerpAPI noise.
+  // V.180 — Rule tightened from `titlePack < intent.pack * 0.5` to
+  // `titlePack <= intent.pack * 0.75`. This kills the 12-of-24 edge case
+  // (12 was equal to 0.5×24, so the strict-less-than rule let it pass).
+  // 24×0.75 = 18, so any pack of 18 or fewer now drops against a 24-intent.
   if (intent.pack && intent.pack >= 6) {
     const titlePack = _v178ExtractPackCount(title);
-    if (titlePack != null && titlePack < intent.pack * 0.5) {
-      // Title's pack-count is less than half what the user asked for — DROP.
+    if (titlePack != null && titlePack <= intent.pack * 0.75) {
       return 'pack_mismatch:title=' + titlePack + '_vs_intent=' + intent.pack;
     }
     if (/\b(?:single|individual)\b/i.test(title)) {
@@ -879,6 +974,21 @@ const V162_CATEGORY_CONFIG = {
     pattern: /\b(cushion|lamp|mug|curtain|rug|bedding|duvet|pillow|sofa|throw|towel|sheet|vase|candle|picture\s*frame|wallpaper|tablecloth|bookend|coaster|placemat|doormat)\b/i,
     primary: new Set(['dunelm.com', 'ikea.com', 'habitat.co.uk', 'johnlewis.com', 'therange.co.uk', 'dwell.co.uk']),
   },
+  // V.180 — MOBILE PHONES. Smartphones with storage variants are a
+  // V.180 storage-guard primary target. Pixel/iPhone/Samsung Galaxy
+  // storage SKUs (128/256/512/1TB) must not cross-contaminate.
+  mobile: {
+    pattern: /\b(iphone|ipad|samsung\s*galaxy|galaxy\s*s\d{1,2}|galaxy\s*note|pixel\s*\d|google\s*pixel|oneplus|xiaomi|redmi|huawei\s*p\d{1,2}|sony\s*xperia|nothing\s*phone|smartphone|mobile\s*phone)\b/i,
+    primary: new Set(['apple.com', 'samsung.com', 'currys.co.uk', 'argos.co.uk', 'johnlewis.com', 'ee.co.uk', 'three.co.uk', 'o2.co.uk', 'vodafone.co.uk', 'carphonewarehouse.com']),
+  },
+  // V.180 — ELECTRONICS (consumer tech that isn't appliance / PC parts /
+  // games / mobile). Laptops, tablets, headphones, cameras, smartwatches,
+  // VR headsets, e-readers. All vulnerable to storage-size variant
+  // pollution (Meta Quest 128GB vs 512GB, iPad 64GB vs 256GB, etc.).
+  electronics: {
+    pattern: /\b(laptop|macbook|chromebook|notebook\s*pc|tablet|kindle|e[-\s]?reader|headphone|earbuds|airpods|earphones|smartwatch|apple\s*watch|garmin|fitbit|meta\s*quest|oculus|vr\s*headset|playstation\s*vr|psvr|gopro|action\s*camera|drone|dji|mirrorless\s*camera|dslr|camera\s*body|lens|monitor|gaming\s*monitor|portable\s*ssd|external\s*ssd|external\s*hard\s*drive|portable\s*hard\s*drive)\b/i,
+    primary: new Set(['currys.co.uk', 'johnlewis.com', 'argos.co.uk', 'amazon.co.uk', 'apple.com', 'wexphotovideo.com', 'parkcameras.com', 'jessops.com', 'ao.com', 'richersounds.com']),
+  },
   toys: {
     pattern: /\b(toy|toys|lego|action\s*figure|playset|doll|board\s*game|jigsaw\s*puzzle|puzzle|ride\s*on|nerf|playmobil|hot\s*wheels|barbie|paw\s*patrol|peppa\s*pig|hatchimal)\b/i,
     primary: new Set(['smythstoys.com', 'smyths.toys', 'theentertainer.com', 'argos.co.uk']),
@@ -950,7 +1060,10 @@ const V162_CATEGORY_CONFIG = {
     // every category pattern (no specialist match) and defaulting to the
     // weak 0.50 floor. They belong in appliances/electronics where Currys +
     // AO are the UK primaries.
-    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance|de[-\s]?humidifier|dehumidifier|humidifier|air\s*purifier|air\s*con|portable\s*ac|portable\s*aircon|portable\s*air\s*conditioner|philips\s*hue|hue\s*bulb|hue\s*bridge|smart\s*bulb|smart\s*plug|smart\s*home|ring\s*doorbell|ring\s*camera|ring\s*chime|nest\s*thermostat|nest\s*cam|nest\s*hub|nest\s*doorbell|nest\s*audio|nest\s*mini|nest\s*learning|echo\s*dot|echo\s*show|amazon\s*echo|google\s*home)\b/i,
+    // V.180 — Hair-styling tokens added: hair dryer / hairdryer / airwrap /
+    // straightener / curling iron. Dyson Supersonic was being saved only by
+    // V.176 price-band; now it gets the V.174 cat-floor as belt-and-braces.
+    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance|de[-\s]?humidifier|dehumidifier|humidifier|air\s*purifier|air\s*con|portable\s*ac|portable\s*aircon|portable\s*air\s*conditioner|hair\s*dryer|hairdryer|airwrap|straightener|curling\s*iron|curling\s*wand|hair\s*styler|philips\s*hue|hue\s*bulb|hue\s*bridge|smart\s*bulb|smart\s*plug|smart\s*home|ring\s*doorbell|ring\s*camera|ring\s*chime|nest\s*thermostat|nest\s*cam|nest\s*hub|nest\s*doorbell|nest\s*audio|nest\s*mini|nest\s*learning|echo\s*dot|echo\s*show|amazon\s*echo|google\s*home)\b/i,
     primary: new Set(['currys.co.uk', 'ao.com', 'appliancesdirect.co.uk', 'argos.co.uk', 'johnlewis.com', 'marksandelectrical.co.uk']),
   },
   // V.164 — APPAREL DEFERRED. Clothing/fashion requires per-size +
@@ -4058,6 +4171,44 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             }
           }
         } catch (_v178Err) {}
+        // V.180 — STORAGE VARIANT GUARD (electronics + mobile + pc_components).
+        // If the user's canonical query carries a storage capacity (e.g.
+        // "128GB" / "1TB"), drop any title that carries a DIFFERENT
+        // capacity. Titles without a storage token pass through.
+        try {
+          if (typeof V180_STORAGE_GUARD_CATS !== 'undefined'
+              && V180_STORAGE_GUARD_CATS.has(_v173Cat)) {
+            const _v180Storage = _v180ExtractIntentStorage(parsed && parsed.canonical_search_string);
+            if (_v180Storage != null) {
+              const _v180Bad = _v180TitleContradictsStorage(item.title, _v180Storage);
+              if (_v180Bad) {
+                if (_droppedSamples.length < 8) {
+                  _droppedSamples.push('v180:' + _v180Bad + ':' + String(item.title || '').slice(0, 26));
+                }
+                _droppedRedirector++;
+                continue;
+              }
+            }
+          }
+        } catch (_v180sErr) {}
+        // V.180 — TYRE DIMENSION GUARD (auto category).
+        // If the canonical query contains tyre dimensions (225/40 R18),
+        // drop any title whose dimensions don't match exactly.
+        try {
+          if (_v173Cat === 'auto') {
+            const _v180TyreIntent = _v180ExtractTyreDimensions(parsed && parsed.canonical_search_string);
+            if (_v180TyreIntent) {
+              const _v180TyreBad = _v180TitleContradictsTyreDims(item.title, _v180TyreIntent);
+              if (_v180TyreBad) {
+                if (_droppedSamples.length < 8) {
+                  _droppedSamples.push('v180t:' + _v180TyreBad + ':' + String(item.title || '').slice(0, 22));
+                }
+                _droppedRedirector++;
+                continue;
+              }
+            }
+          }
+        } catch (_v180tErr) {}
         // V.201 — ONE GATE admission. Single check, single source of truth.
         const _v201Src = (typeof item.source === 'string' && item.source)
                       || (typeof item.seller_name === 'string' && item.seller_name)
