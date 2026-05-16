@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v188-brand-alias-map';
+const VERSION             = 'normalize.js v3.4.5v189-preflight-polish';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -705,6 +705,15 @@ function _v184HostBaseSlugs(host) {
   }
   return parts;
 }
+// V.189 — SHORT-BRAND SAFELIST. The V.184 min-length-3 floor on
+// _v184BrandSlug exists to block generic 2-letter false positives
+// ("of", "in", "to"). But it ALSO killed legitimate 2-letter
+// publisher/manufacturer brands the QA matrix exposed: EA Sports,
+// HP, LG, BT, JL (John Lewis), WD (Western Digital), MG, VW, GE, EE.
+// V.189 lifts the floor surgically: 2-character slugs are accepted
+// only when they EXACTLY equal a known publisher in this safelist.
+// Anything else still falls under the length-3 rule.
+const V189_SHORT_BRAND_SAFELIST = new Set(['ea', 'hp', 'lg', 'bt', 'jl', 'wd', 'mg', 'vw', 'ge', 'ee']);
 function _v184BrandSlug(rawBrand) {
   if (!rawBrand || typeof rawBrand !== 'string') return null;
   // Lowercase, strip non-alphanumeric. "L'Oréal" → "loreal" (basic).
@@ -714,7 +723,15 @@ function _v184BrandSlug(rawBrand) {
     .replace(/[̀-ͯ]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
-  if (norm.length < 3) return null; // too short to safely match
+  if (norm.length === 0) return null;
+  // V.189 — length-2 slugs MUST be in the publisher safelist or we
+  // drop them. Single chars never pass (no meaningful 1-char brand).
+  if (norm.length === 1) return null;
+  if (norm.length === 2) {
+    if (V189_SHORT_BRAND_SAFELIST.has(norm)) return norm;
+    return null;
+  }
+  // length >= 3 — accept as before.
   return norm;
 }
 function _v184ExtractBrandFromQuery(canonicalQuery) {
@@ -775,7 +792,12 @@ const V188_BRAND_DOMAIN_ALIASES = {
   // ── Parent corporation → consumer sub-brand ──
   sony:           ['sony', 'playstation', 'playstationstore', 'sonystyle', 'beats'],
   playstation:    ['playstation', 'sony', 'playstationstore', 'sonystyle'],
-  google:         ['google', 'nest', 'fitbit', 'pixel', 'googlestore', 'store'],
+  // V.189 — bare 'store' REMOVED. The QA matrix exposed that 'store'
+  // matches any 'store.*' subdomain segment (e.g. store.apple.com,
+  // store.dyson.com) and would false-positive a "Fitbit (Official)"
+  // pin on an Apple-store URL. 'googlestore' is specific enough to
+  // stay — it only matches exact 'googlestore' segments.
+  google:         ['google', 'nest', 'fitbit', 'pixel', 'googlestore'],
   nest:           ['nest', 'google'],
   amazon:         ['amazon', 'kindle', 'ring', 'blink', 'eero'],
   ring:           ['ring', 'amazon'],
