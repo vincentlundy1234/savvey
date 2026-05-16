@@ -5447,6 +5447,48 @@
 .v140-skel-blurb.short { width: 60%; }
 #v138-category       { min-height: 13px; display: block; }
 #v138-verdict-text   { min-height: 32px; }
+/* ─── V.160 PREMIUM POLISH ────────────────────────────────────────────
+   Five UX fixes shipped after the live audit on 15 May 2026:
+     1. Verdict text wraps freely — no ellipsis truncation on critical AI copy.
+     2. Camera hint is anchored inside the Snap card as a real subtitle.
+     3. Recents pills get a per-pill min/max width range so labels breathe.
+     4. The duplicate '★ BEST PRICE' eyebrow inside green retailer cards
+        is hidden (the JS no longer renders it, but the CSS class is
+        purged here for any legacy cached DOM).
+     5. Tighter padding above the bottom tab bar so the Install sheet
+        no longer feels like it is squatting on top of the nav.
+   ───────────────────────────────────────────────────────────────────── */
+.v136-verdict-text,
+#v138-verdict-text,
+body.v171 #v171-savveys-verdict .v171-vh-summary,
+body.v172 #v171-savveys-verdict .v171-vh-summary,
+body.v176 #v171-savveys-verdict .v171-vh-summary {
+  white-space: normal !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  -webkit-line-clamp: unset !important;
+  -webkit-box-orient: unset !important;
+  display: block !important;
+  max-height: none !important;
+}
+.v160-snap-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(20, 32, 26, 0.55);
+  letter-spacing: 0.005em;
+}
+@media (prefers-color-scheme: dark) {
+  .v160-snap-hint { color: rgba(255, 255, 255, 0.55); }
+}
+.v171-hero-snap { padding-bottom: 18px; }
+.recent-chip {
+  min-width: 96px;
+  max-width: 220px !important;
+  padding: 8px 16px !important;
+}
+.v136-best-eyebrow { display: none !important; }
 /* V.136 — BEST PRICE hero accent + outlier footer styling. */
 .v136-cta-best-price {
   position: relative;
@@ -8123,8 +8165,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v159-HOUSEKEEPING';
-  var V126_GUARD          = 'savvey_v159_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v160-PREMIUM-POLISH';
+  var V126_GUARD          = 'savvey_v160_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8301,13 +8343,15 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
         </div>
         <div class="v171-hero-title">Snap to Save</div>
         <div class="v171-hero-sub">Point Your Camera, we'll find it.</div>
+        <!-- V.160 — Camera access subtitle, anchored inside the card. -->
+        <div class="v160-snap-hint">Camera access required on first tap</div>
       </button>
-      <!-- V.174 — "Camera access required" microcopy under Snap card.
-           Closes the most common first-launch confusion path where iOS
-           shows the system permission prompt and users think the button
-           is broken. Sits inline between the two heroes so the layout
-           visually anchors to the Snap card on portrait phones. -->
-      <div class="v174-cam-microcopy" id="v174-cam-microcopy" aria-hidden="true">Camera access required on first tap</div>
+      <!-- V.160 — Camera microcopy moved INSIDE the Snap button as a
+           proper subtitle. Was an orphan floating between the two heroes
+           which read as broken layout. Now visually anchored to the card
+           it explains. Hidden orphan div kept (display:none) so any
+           legacy CSS targeting #v174-cam-microcopy doesn't NPE. -->
+      <div class="v174-cam-microcopy" id="v174-cam-microcopy" style="display:none" aria-hidden="true">Camera access required on first tap</div>
       <button class="v171-hero v171-hero-type v181-spring" type="button" onclick="v172OpenTypeSheet()" aria-label="Type a product name">
         <div class="v171-hero-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -8468,7 +8512,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v159</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v160</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -13132,7 +13176,79 @@ async function disambigPick(idx, label, payload) {
 
 
 
+// V.160 — Retailer display-name dictionary. Maps the lowercased,
+// alphanumeric-only canonical key (what the backend stores) to a
+// premium-cased display string. Scalable: add keys as new partners
+// ship without touching renderResult. Unknown keys fall back to the
+// V.160 prettifier (title-case the canonical key after splitting
+// runs of alpha + breaking on '.' boundaries).
+window.RETAILER_DISPLAY_NAMES = window.RETAILER_DISPLAY_NAMES || {
+  amazon:                    'Amazon UK',
+  amazonuk:                  'Amazon UK',
+  amazoncouk:                'Amazon UK',
+  argos:                     'Argos',
+  currys:                    'Currys',
+  johnlewis:                 'John Lewis & Partners',
+  johnlewisandpartners:      'John Lewis & Partners',
+  jl:                        'John Lewis & Partners',
+  ebay:                      'eBay UK',
+  ebayuk:                    'eBay UK',
+  ebaycouk:                  'eBay UK',
+  tesco:                     'Tesco',
+  asda:                      'Asda',
+  sainsburys:                "Sainsbury's",
+  morrisons:                 'Morrisons',
+  waitrose:                  'Waitrose',
+  boots:                     'Boots',
+  superdrug:                 'Superdrug',
+  wickes:                    'Wickes',
+  bandq:                     'B&Q',
+  homebase:                  'Homebase',
+  screwfix:                  'Screwfix',
+  toolstation:               'Toolstation',
+  very:                      'Very',
+  ao:                        'AO.com',
+  aocom:                     'AO.com',
+  marksandspencer:           'Marks & Spencer',
+  mands:                     'Marks & Spencer',
+  next:                      'Next',
+  game:                       'GAME',
+  gameuk:                    'GAME',
+  smyths:                    'Smyths Toys',
+  ikea:                      'IKEA',
+  dunelm:                    'Dunelm',
+  therange:                  'The Range',
+  habitat:                   'Habitat',
+  costco:                    'Costco',
+  onbuy:                     'OnBuy',
+  onbuycom:                  'OnBuy',
+  cex:                       'CEX',
+  cexcouk:                   'CEX',
+  selfridges:                'Selfridges',
+  harrods:                   'Harrods',
+  debenhams:                 'Debenhams'
+};
+function _v160PrettyRetailer(raw) {
+  if (!raw) return 'Retailer';
+  var s = String(raw).trim();
+  if (!s) return 'Retailer';
+  // 1. Try the dictionary on a normalised key.
+  var key = s.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (window.RETAILER_DISPLAY_NAMES[key]) return window.RETAILER_DISPLAY_NAMES[key];
+  // 2. If the backend already sent a well-cased string with spaces or
+  // punctuation, trust it (e.g., "John Lewis & Partners").
+  if (/[A-Z]/.test(s) && /[\s&.]/.test(s)) return s;
+  // 3. Fallback: title-case the alphanumeric tokens.
+  return s.replace(/\b([a-z])/g, function (_, c) { return c.toUpperCase(); });
+}
+window._v160PrettyRetailer = _v160PrettyRetailer;
+
 function renderResult(displayName, payload) {
+  // V.160 — Auto-dismiss the install sheet after the first successful
+  // result render. The banner has served its purpose; let the user
+  // focus on the verdict + retailer stack without a CTA squatting at
+  // the bottom of the viewport.
+  try { if (typeof window.v138DismissInstallSheet === 'function') window.v138DismissInstallSheet(); } catch (e) {}
   // V.152 — release the V.151 step pin so the next query's loading
   // screen can run the auto-cycler again.
   try { if (window._v151ClearStep) window._v151ClearStep(); } catch (e) {}
@@ -13348,16 +13464,23 @@ function renderResult(displayName, payload) {
           else if (/currys/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-curr';
           else if (/argos/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-argo';
           else if (/john\s*lewis/i.test(lnk.retailer || '')) markCls = 'v136-cta-mark-jl';
-          var initial = (lnk.retailer || '?').charAt(0).toLowerCase();
+          // V.160 — Use the retailer dictionary for premium display names.
+          // Replaces raw canonical strings like 'johnlewisandpartners' /
+          // 'onbuycom' with 'John Lewis & Partners' / 'OnBuy'.
+          var prettyName = (typeof window._v160PrettyRetailer === 'function')
+                         ? window._v160PrettyRetailer(lnk.retailer)
+                         : (lnk.retailer || 'Retailer');
+          var initial = String(prettyName).charAt(0).toLowerCase();
           var priceStr = lnk.price_str || (lnk.price_gbp != null ? ('£' + Number(lnk.price_gbp).toFixed(2)) : '—');
-          // V.136 — Hero the cheapest. First card gets a 'BEST PRICE' eyebrow
-          // pill INSIDE the body block so the badge sits above the retailer
-          // name without breaking the existing flex layout.
-          var _v136BestEyebrow = (i === 0) ? '<span class="v136-best-eyebrow">★ BEST PRICE</span>' : '';
+          // V.160 — REMOVED the in-card '★ BEST PRICE' eyebrow.
+          // The section header above the retailer stack + the green-card
+          // styling on the primary already communicate the best-price
+          // status. The eyebrow duplicated that signal and added visual
+          // noise on the most important card. The green hero card now
+          // speaks for itself.
           a.innerHTML = '<span class="v136-cta-mark ' + markCls + '">' + initial + '</span>'
                      + '<span class="v136-cta-body">'
-                     +   _v136BestEyebrow
-                     +   '<span class="v136-cta-name">' + (lnk.retailer || 'Retailer') + '</span>'
+                     +   '<span class="v136-cta-name">' + prettyName + '</span>'
                      +   '<span class="v136-cta-sub">' + (lnk.delivery_note || '') + '</span>'
                      + '</span>'
                      + '<span class="v136-cta-price">' + priceStr + '</span>';
@@ -17560,12 +17683,39 @@ async function _v140KickoffSynthesize(idPayload) {
 // ═══════════════════════════════════════════════════════════════════════
 (function v118Debugger() {
   try {
-    var DEFAULT_ON = false; // V.135 — hide debug toast for clean UI. Long-press top edge or set localStorage.savvey_debug=1 to re-enable.
+    // V.160 — One-shot migration: V.155 era force-set localStorage.savvey_debug='1'
+    // unconditionally on every page load. V.159 removed the force-set but the
+    // stored '1' value persists on every device that visited during the V.155
+    // window. This migration clears that legacy flag exactly once, then sets
+    // a guard so subsequent loads don't re-clear (in case a developer
+    // intentionally sets the flag).
+    try {
+      if (!localStorage.getItem('savvey_v160_legacy_debug_cleared')) {
+        if (localStorage.getItem('savvey_debug') === '1') {
+          localStorage.removeItem('savvey_debug');
+        }
+        localStorage.setItem('savvey_v160_legacy_debug_cleared', '1');
+      }
+    } catch (e) {}
+
+    // V.160 — Gate predicate aligned with _v159DebugEnabled used by the
+    // V.155 pane. SINGLE source of truth: ?debug=1 in URL OR explicitly
+    // set localStorage.savvey_debug='1' AFTER the legacy migration above.
     var stored;
     try { stored = localStorage.getItem('savvey_debug'); } catch (e) {}
     var urlForce = /[?&]debug=1\b/.test(location.search);
     var urlHide  = /[?&]debug=0\b/.test(location.search);
-    var enabled = urlForce ? true : urlHide ? false : (stored === '0' ? false : (stored === '1' ? true : DEFAULT_ON));
+    var enabled = urlForce ? true : urlHide ? false : (stored === '1');
+
+    // V.160 — HARD GATE. If debug isn't on, never mount the DOM. Replace
+    // window.v118DebugToast with a no-op so the dozens of existing call
+    // sites (BARCODE / SNAP / VARIANT / SCROLL RECOVERY) silently do
+    // nothing. Same pattern as the V.159 _v155Dump gate.
+    if (!enabled) {
+      window.v118DebugToast = function () {};
+      window.v118DebugToggle = function () {};
+      return;
+    }
 
     // Build the toast element.
     var toast = document.createElement('div');
