@@ -5725,6 +5725,130 @@ button.v172-type-submit {
   }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   V.172 iOS VIEWPORT + NAV LOCK + STABILISATION
+   (16 May 2026 — Founder rejection of bottom-nav float + verdict shift)
+   1. Bottom nav locked with env(safe-area-inset-bottom) padding.
+   2. Main containers use min-height:100dvh (dynamic viewport height)
+      so the URL bar collapse / keyboard open don't reflow the layout.
+   3. Content wrapper bottom padding clears the locked nav bar.
+   4. Home sub-headline centered to match the hero h1.
+   5. Loading skeleton + spinner forced onto GPU layers
+      (transform:translateZ(0) + backface-visibility:hidden).
+   6. Verdict text uses animation-fill-mode:forwards so the slide-in
+      end-state is permanent and the container height doesn't recalc.
+   7. Search overlay gets z-index higher than the nav bar.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* 1. BOTTOM NAV — locked to absolute bottom with safe-area inset. */
+#v183-tab-bar {
+  position: fixed !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  z-index: 8000 !important;
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 6px) !important;
+  padding-top: 6px !important;
+  /* GPU compositing — prevents the iOS Safari "detach mid-scroll" bug */
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform;
+}
+
+/* 2. VIEWPORT HEIGHT — dvh prevents URL bar collapse jumping the UI. */
+html, body {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+}
+#app, .container, .savvey-app,
+#screen-home, #screen-result, #screen-confirm, #screen-error, #screen-loading {
+  min-height: 100dvh !important;
+}
+
+/* 3. CONTENT WRAPPER CLEARANCE — nothing hides under the locked nav. */
+#screen-home, #screen-result, #screen-confirm, #screen-error {
+  padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px)) !important;
+}
+
+/* 4. HOME SUB-HEADLINE CENTERED — must match the hero h1 above. */
+.v171-tagline + p,
+.v124-hero-tagline + p,
+.v167-hero + p,
+.v171-hero-sub-headline,
+#v124-hero-subhead,
+.savvey-home-subhead {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  max-width: 320px;
+}
+/* Defensive: any direct child <p> inside the home hero block */
+#screen-home > p,
+#screen-home .v171-hero-block p,
+.v167-hero ~ p {
+  text-align: center !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+/* 5. LOADING SCREEN GPU LAYER FLICKER FIX. */
+#screen-loading,
+#screen-loading * {
+  transition-property: opacity, transform !important;
+}
+#screen-loading .v124-savvey-logo,
+#screen-loading .savvey-wordmark,
+#screen-loading [data-loading-pulse],
+#screen-loading .v168-skel-card,
+#screen-loading .v168-skel-box,
+.v168-skel-screen,
+.v168-skel-screen *,
+.v140-skel {
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  will-change: transform, opacity, background-position;
+}
+
+/* 6. VERDICT TEXT LOCK — animation-fill-mode:forwards prevents the
+   container from recalculating height after the slide-in. */
+.v136-verdict-text,
+#v138-verdict-text,
+body.v171 #v171-savveys-verdict .v171-vh-summary,
+body.v172 #v171-savveys-verdict .v171-vh-summary,
+body.v176 #v171-savveys-verdict .v171-vh-summary {
+  animation-fill-mode: forwards !important;
+  -webkit-animation-fill-mode: forwards !important;
+  /* Pin the end-state geometry so the box doesn't reflow after fade-in. */
+  contain: layout style;
+  min-height: 1.45em;
+}
+
+/* 7. SEARCH OVERLAY Z-INDEX — must clear the nav bar. */
+.v172-type-sheet,
+#v172-type-sheet,
+.v172-type-overlay,
+body.v172-type-open .v172-type-sheet,
+body.v185-type-focus .v172-type-sheet {
+  z-index: 9000 !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+          backdrop-filter: blur(20px) saturate(160%);
+}
+body.v172-type-open #v183-tab-bar,
+body.v185-type-focus #v183-tab-bar {
+  /* Push the nav off-screen while the type sheet owns the viewport */
+  transform: translateY(120%) !important;
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+@media (prefers-color-scheme: dark) {
+  .v172-type-sheet,
+  #v172-type-sheet { background: rgba(20, 32, 26, 0.96) !important; }
+}
+
 /* ─── V.163 AMAZON ANCHOR ─────────────────────────────────────────────
    Founder UX insight: Amazon is the universal mental anchor. Even when
    a specialty store wins Best Price (slot 0), the user looks for the
@@ -8493,8 +8617,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v169-ABSOLUTE-TRUST';
-  var V126_GUARD          = 'savvey_v169_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v172-UNIVERSAL-PERIMETER';
+  var V126_GUARD          = 'savvey_v172_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8840,7 +8964,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v169</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v172</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>

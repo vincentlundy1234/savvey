@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v169-absolute-trust';
+const VERSION             = 'normalize.js v3.4.5v172-universal-perimeter';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -774,11 +774,12 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'cookersandovens.co.uk',
   'electrical-superstore.co.uk',
   'marksandelectrical.co.uk',
-  'fashionworld.co.uk',
-  'lookagain.co.uk',
-  'jdwilliams.co.uk',
-  'simplybe.co.uk',
-  'studio.co.uk',
+  // V.172 — APPAREL CATALOGUES REMOVED. Founder mandate after Simplybe
+  // appeared on a Hogwarts Legacy text search. These hosts are real
+  // retailers but the V.169 trust perimeter excludes apparel/fashion
+  // catalogue brands by policy. They sit in neither V.199 nor V.169.
+  // 'fashionworld.co.uk', 'lookagain.co.uk', 'jdwilliams.co.uk',
+  // 'simplybe.co.uk', 'studio.co.uk',
   'boots-uk.com',
   'superdrug.com',
   // Books / media specialists
@@ -3628,6 +3629,16 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
                       || (item.merchant && item.merchant.name)
                       || '';
         const _v201Verdict = _v201Admit(host, _v201Src);
+        // V.172 — UNIVERSAL V.169 PERIMETER. V.201 admits .co.uk hosts
+        // automatically via TLD lock, which let Simplybe + similar
+        // apparel/fashion catalogue brands through the text-search path.
+        // V.169 was previously only checked at the V.168 failsafe merge.
+        // V.172 hoists the check to the admit-verdict layer so EVERY
+        // path (text / vision / barcode) gets the same strict perimeter.
+        if (_v201Verdict.admit && !_v169IsGloballyTrusted(host)) {
+          _v201Verdict.admit = false;
+          _v201Verdict.reason = 'v172_not_on_v169_trust_list:' + host;
+        }
         if (!_v201Verdict.admit) {
           if (_droppedSamples.length < 8) {
             _droppedSamples.push(_v201Verdict.reason);
