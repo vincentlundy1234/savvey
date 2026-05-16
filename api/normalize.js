@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v176-dynamic-floor';
+const VERSION             = 'normalize.js v3.4.5v178-unit-volume-guard';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -505,6 +505,119 @@ function _v176ResolveFloor(links, categoryKey) {
   const source   = (finalPct === pricePct && pricePct >= catPct) ? 'price_band' : 'category';
   return { median, floorPct: finalPct, floor: median * finalPct, source, pricePct, catPct };
 }
+
+// ═════════════════════════════════════════════════════════════════════
+// V.178 — UNIT & VOLUME GUARD (fmcg + alcohol).
+// Founder rejected the "Grocery Veto" — alcohol/FMCG are first-class
+// categories. The Guinness 24-pack test failed because an £18 4-pack of
+// Guinness (correct product, wrong volume) cleared the £13 floor of a
+// £26 24-pack. Math couldn't save it because the £18 IS legitimate
+// pricing for a 4-pack — it's the unit count that's contradictory.
+//
+// V.178 extracts pack-count and volume from the user's canonical query
+// and DROPS any SerpAPI title that explicitly carries a contradictory
+// pack-count or volume. Applies only to fmcg + alcohol (technology
+// queries don't need it — they're not multipack products).
+// ═════════════════════════════════════════════════════════════════════
+function _v178ExtractPackCount(s) {
+  if (!s || typeof s !== 'string') return null;
+  const patterns = [
+    /\b(?:case|pack|box|set|crate|carton|tray)\s*of\s*(\d{1,3})\b/i,
+    /\b(\d{1,3})\s*[-]?\s*(?:pack|pk|count|ct|pcs?)\b/i,
+    /\b(\d{1,3})\s*[xX×]\b/i,
+    /\b[xX×]\s*(\d{1,3})\b/i,
+    /\bpack\s*[-]?\s*(\d{1,3})\b/i,
+  ];
+  for (const rx of patterns) {
+    const m = s.match(rx);
+    if (m) {
+      const n = parseInt(m[1], 10);
+      if (n >= 1 && n <= 200) return n;
+    }
+  }
+  if (/\b(?:single|individual|1\s*unit|one\s*unit)\b/i.test(s)) return 1;
+  return null;
+}
+function _v178ExtractVolume(s) {
+  if (!s || typeof s !== 'string') return null;
+  // Try volume / weight: 440ml, 75cl, 1L, 1.5L, 800g, 1kg
+  const m = s.match(/\b(\d+(?:\.\d+)?)\s*(ml|cl|l|g|kg)\b/i);
+  if (m) {
+    return { value: parseFloat(m[1]), unit: m[2].toLowerCase() };
+  }
+  return null;
+}
+function _v178NormaliseVolumeToMl(vol) {
+  if (!vol) return null;
+  const u = vol.unit;
+  if (u === 'ml') return vol.value;
+  if (u === 'cl') return vol.value * 10;
+  if (u === 'l')  return vol.value * 1000;
+  return null; // grams / kg not converted to ml — same-unit comparison only
+}
+function _v178NormaliseWeightToG(vol) {
+  if (!vol) return null;
+  const u = vol.unit;
+  if (u === 'g')  return vol.value;
+  if (u === 'kg') return vol.value * 1000;
+  return null;
+}
+function _v178ExtractIntentUnits(canonicalQuery) {
+  if (!canonicalQuery || typeof canonicalQuery !== 'string') return null;
+  const pack = _v178ExtractPackCount(canonicalQuery);
+  const vol  = _v178ExtractVolume(canonicalQuery);
+  if (pack == null && vol == null) return null;
+  return {
+    pack,
+    volume:    vol,
+    volumeMl:  _v178NormaliseVolumeToMl(vol),
+    weightG:   _v178NormaliseWeightToG(vol),
+  };
+}
+function _v178TitleContradictsIntent(title, intent) {
+  if (!title || !intent) return null;
+  // ── PACK CONTRADICTION ──
+  // Only enforce when intent asks for a multipack (pack >= 6) OR explicitly
+  // for a single. A 2-pack vs 4-pack tolerance is too tight for SerpAPI noise.
+  if (intent.pack && intent.pack >= 6) {
+    const titlePack = _v178ExtractPackCount(title);
+    if (titlePack != null && titlePack < intent.pack * 0.5) {
+      // Title's pack-count is less than half what the user asked for — DROP.
+      return 'pack_mismatch:title=' + titlePack + '_vs_intent=' + intent.pack;
+    }
+    if (/\b(?:single|individual)\b/i.test(title)) {
+      return 'pack_mismatch:title=single_vs_intent=' + intent.pack;
+    }
+  } else if (intent.pack === 1) {
+    // User explicitly asked for a single. Any pack >= 2 in title contradicts.
+    const titlePack = _v178ExtractPackCount(title);
+    if (titlePack != null && titlePack >= 2) {
+      return 'pack_mismatch:title=' + titlePack + '_vs_intent=single';
+    }
+  }
+  // ── VOLUME CONTRADICTION ──
+  if (intent.volumeMl != null) {
+    const titleVol = _v178ExtractVolume(title);
+    const titleMl  = _v178NormaliseVolumeToMl(titleVol);
+    if (titleMl != null) {
+      const drift = Math.abs(titleMl - intent.volumeMl) / intent.volumeMl;
+      if (drift > 0.10) {
+        return 'volume_mismatch:title=' + titleMl + 'ml_vs_intent=' + intent.volumeMl + 'ml';
+      }
+    }
+  }
+  if (intent.weightG != null) {
+    const titleVol = _v178ExtractVolume(title);
+    const titleG   = _v178NormaliseWeightToG(titleVol);
+    if (titleG != null) {
+      const drift = Math.abs(titleG - intent.weightG) / intent.weightG;
+      if (drift > 0.10) {
+        return 'weight_mismatch:title=' + titleG + 'g_vs_intent=' + intent.weightG + 'g';
+      }
+    }
+  }
+  return null;
+}
 const V174_PLATFORM_TOKENS = {
   ps5:      [/\bps\s*5\b/i, /\bplaystation\s*5\b/i, /\bps5\b/i],
   ps4:      [/\bps\s*4\b/i, /\bplaystation\s*4\b/i, /\bps4\b/i],
@@ -837,7 +950,7 @@ const V162_CATEGORY_CONFIG = {
     // every category pattern (no specialist match) and defaulting to the
     // weak 0.50 floor. They belong in appliances/electronics where Currys +
     // AO are the UK primaries.
-    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance|philips\s*hue|hue\s*bulb|hue\s*bridge|smart\s*bulb|smart\s*plug|smart\s*home|ring\s*doorbell|ring\s*camera|ring\s*chime|nest\s*thermostat|nest\s*cam|nest\s*hub|nest\s*doorbell|nest\s*audio|nest\s*mini|nest\s*learning|echo\s*dot|echo\s*show|amazon\s*echo|google\s*home)\b/i,
+    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance|de[-\s]?humidifier|dehumidifier|humidifier|air\s*purifier|air\s*con|portable\s*ac|portable\s*aircon|portable\s*air\s*conditioner|philips\s*hue|hue\s*bulb|hue\s*bridge|smart\s*bulb|smart\s*plug|smart\s*home|ring\s*doorbell|ring\s*camera|ring\s*chime|nest\s*thermostat|nest\s*cam|nest\s*hub|nest\s*doorbell|nest\s*audio|nest\s*mini|nest\s*learning|echo\s*dot|echo\s*show|amazon\s*echo|google\s*home)\b/i,
     primary: new Set(['currys.co.uk', 'ao.com', 'appliancesdirect.co.uk', 'argos.co.uk', 'johnlewis.com', 'marksandelectrical.co.uk']),
   },
   // V.164 — APPAREL DEFERRED. Clothing/fashion requires per-size +
@@ -3923,6 +4036,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             }
           }
         } catch (_v174Err) {}
+        // V.178 — UNIT & VOLUME GUARD (fmcg + alcohol only).
+        // If the user's canonical query carries a multipack (>=6) or
+        // explicit volume token, drop any SerpAPI title that contradicts
+        // it. Beats the price floor — wrong volume is wrong product even
+        // when the price is technically legitimate.
+        try {
+          if (_v173Cat === 'fmcg' || _v173Cat === 'alcohol') {
+            const _v178Intent = (typeof _v178ExtractIntentUnits === 'function')
+                                ? _v178ExtractIntentUnits(parsed && parsed.canonical_search_string)
+                                : null;
+            if (_v178Intent) {
+              const _v178Bad = _v178TitleContradictsIntent(item.title, _v178Intent);
+              if (_v178Bad) {
+                if (_droppedSamples.length < 8) {
+                  _droppedSamples.push('v178:' + _v178Bad + ':' + String(item.title || '').slice(0, 26));
+                }
+                _droppedRedirector++;
+                continue;
+              }
+            }
+          }
+        } catch (_v178Err) {}
         // V.201 — ONE GATE admission. Single check, single source of truth.
         const _v201Src = (typeof item.source === 'string' && item.source)
                       || (typeof item.seller_name === 'string' && item.seller_name)
