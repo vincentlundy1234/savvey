@@ -5447,6 +5447,56 @@
 .v140-skel-blurb.short { width: 60%; }
 #v138-category       { min-height: 13px; display: block; }
 #v138-verdict-text   { min-height: 32px; }
+/* ─── V.163 AMAZON ANCHOR ─────────────────────────────────────────────
+   Founder UX insight: Amazon is the universal mental anchor. Even when
+   a specialty store wins Best Price (slot 0), the user looks for the
+   Amazon row to compare. V.163 ships three rules:
+     1. .v163-amazon-anchor pill — subtle grey 'Amazon Price' badge
+        injected into the body of any Amazon row that is NOT slot 0.
+     2. .v163-amazon-row — subtle left-border emphasis so the Amazon
+        row is visually distinct in the secondary stack without
+        screaming for attention.
+     3. [data-v163-amazon="true"] — display:flex !important override
+        that defeats any inherited .v171-hidden / .v174-hidden /
+        future-truncation rule. Amazon NEVER buries.
+   ───────────────────────────────────────────────────────────────────── */
+.v163-amazon-anchor {
+  display: inline-block;
+  margin: 2px 0 4px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #555f5a;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 999px;
+  line-height: 1.4;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+@media (prefers-color-scheme: dark) {
+  .v163-amazon-anchor { color: #c7cfca; background: rgba(255, 255, 255, 0.08); }
+}
+.v163-amazon-row {
+  border-left: 3px solid rgba(255, 153, 0, 0.55) !important;
+  padding-left: 13px !important;
+}
+.v163-amazon-row .v136-cta-mark-amzn {
+  box-shadow: 0 0 0 2px rgba(255, 153, 0, 0.18);
+}
+/* V.163 — NEVER BURY. Override every known truncation/hide rule for
+   any retailer card carrying data-v163-amazon="true". */
+.v136-cta[data-v163-amazon="true"],
+.v136-cta-secondary[data-v163-amazon="true"],
+body.v171.v171-stack-truncated .v136-cta-secondary[data-v163-amazon="true"],
+body.v171.v171-stack-truncated .v136-cta-secondary[data-v163-amazon="true"].v171-hidden,
+body.v174 .v136-cta-secondary[data-v163-amazon="true"].v171-hidden {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
 /* ─── V.160 PREMIUM POLISH ────────────────────────────────────────────
    Five UX fixes shipped after the live audit on 15 May 2026:
      1. Verdict text wraps freely — no ellipsis truncation on critical AI copy.
@@ -8165,8 +8215,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v162-OMNI-CATEGORY';
-  var V126_GUARD          = 'savvey_v162_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v163-AMAZON-ANCHOR';
+  var V126_GUARD          = 'savvey_v163_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8512,7 +8562,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v162</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v163</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -13501,14 +13551,34 @@ function renderResult(displayName, payload) {
           var initial = String(prettyName).charAt(0).toLowerCase();
           var priceStr = lnk.price_str || (lnk.price_gbp != null ? ('£' + Number(lnk.price_gbp).toFixed(2)) : '—');
           // V.160 — REMOVED the in-card '★ BEST PRICE' eyebrow.
-          // The section header above the retailer stack + the green-card
-          // styling on the primary already communicate the best-price
-          // status. The eyebrow duplicated that signal and added visual
-          // noise on the most important card. The green hero card now
-          // speaks for itself.
+          // The green hero card speaks for itself.
+          // V.163 — AMAZON ANCHOR. Detect Amazon by host OR display name.
+          // When Amazon is in the stack but NOT slot 0 (not the green
+          // best-price winner), add a subtle 'Amazon Price' grey pill so
+          // the user's mental anchor is always visually distinct from a
+          // generic filler row. Slot 0 Amazon already wears the green
+          // hero treatment so no extra badge is needed there.
+          var _v163IsAmazon = false;
+          try {
+            var _v163Host = lnk.url ? (new URL(lnk.url)).hostname.toLowerCase() : '';
+            _v163IsAmazon = /(^|\.)amazon\.(co\.uk|com)$/i.test(_v163Host)
+                         || /\bamazon\b/i.test(prettyName)
+                         || markCls === 'v136-cta-mark-amzn';
+          } catch (e) {}
+          var _v163AnchorBadge = (_v163IsAmazon && i > 0)
+            ? '<span class="v163-amazon-anchor" aria-label="Amazon reference price">Amazon Price</span>'
+            : '';
+          // V.163 — data-v163-amazon attribute lets the V.171 stack
+          // truncation skip Amazon rows AND lets CSS apply the row
+          // emphasis without re-scanning innerHTML.
+          if (_v163IsAmazon) {
+            a.setAttribute('data-v163-amazon', 'true');
+            if (i > 0) a.classList.add('v163-amazon-row');
+          }
           a.innerHTML = '<span class="v136-cta-mark ' + markCls + '">' + initial + '</span>'
                      + '<span class="v136-cta-body">'
                      +   '<span class="v136-cta-name">' + prettyName + '</span>'
+                     +   _v163AnchorBadge
                      +   '<span class="v136-cta-sub">' + (lnk.delivery_note || '') + '</span>'
                      + '</span>'
                      + '<span class="v136-cta-price">' + priceStr + '</span>';
@@ -16266,6 +16336,11 @@ async function _v140KickoffSynthesize(idPayload) {
     }
     var hiddenCount = 0;
     for (var i = 4; i < rows.length; i++) {  // Keep primary + first 4 secondary
+      // V.163 — NEVER BURY THE ANCHOR. Amazon rows skip truncation even
+      // when they sit past index 4. The user's mental anchor must always
+      // remain visible in the primary stack — no 'Show all X prices'
+      // toggle is allowed to hide it.
+      if (rows[i].getAttribute('data-v163-amazon') === 'true') continue;
       rows[i].classList.add('v171-hidden');
       hiddenCount++;
     }
