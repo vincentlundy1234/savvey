@@ -8215,8 +8215,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v165-EVERYDAY-NICHE';
-  var V126_GUARD          = 'savvey_v165_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v164-MEGA-SWEEP';
+  var V126_GUARD          = 'savvey_v164_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8562,7 +8562,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v165</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v164</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -13322,7 +13322,46 @@ window.RETAILER_DISPLAY_NAMES = window.RETAILER_DISPLAY_NAMES || {
   ryman:                     'Ryman',
   rymanonline:               'Ryman',
   whsmith:                   'WHSmith',
-  staples:                   'Staples'
+  staples:                   'Staples',
+  // V.164 MEGA-SWEEP — Books / Alcohol / PC / Beauty / Nutrition / Crafts / Instruments
+  waterstones:               'Waterstones',
+  waterstonescom:            'Waterstones',
+  blackwells:                "Blackwell's",
+  blackwellscouk:            "Blackwell's",
+  foyles:                    'Foyles',
+  wordery:                   'Wordery',
+  majestic:                  'Majestic Wine',
+  majesticcouk:              'Majestic Wine',
+  thewhiskyexchange:         'The Whisky Exchange',
+  whiskyexchange:            'The Whisky Exchange',
+  drinksupermarket:          'DrinkSupermarket',
+  masterofmalt:              'Master of Malt',
+  thedrinkshop:              'The Drink Shop',
+  scan:                      'Scan',
+  scancouk:                  'Scan',
+  overclockers:              'Overclockers UK',
+  overclockerscouk:          'Overclockers UK',
+  awdit:                     'AWD-IT',
+  cclonline:                 'CCL Online',
+  novatech:                  'Novatech',
+  lookfantastic:             'LookFantastic',
+  sephora:                   'Sephora UK',
+  sephoracouk:               'Sephora UK',
+  cultbeauty:                'Cult Beauty',
+  spacenk:                   'Space NK',
+  spacenkcom:                'Space NK',
+  hollandandbarrett:         'Holland & Barrett',
+  myprotein:                 'Myprotein',
+  bulk:                      'Bulk',
+  bulkcom:                   'Bulk',
+  thenutrishop:              'NutriShop',
+  hobbycraft:                'Hobbycraft',
+  theworks:                  'The Works',
+  cassart:                   'Cass Art',
+  gear4music:                'Gear4music',
+  andertons:                 'Andertons Music Co.',
+  pmtonline:                 'PMT Music',
+  gak:                       'GAK'
 };
 function _v160PrettyRetailer(raw) {
   if (!raw) return 'Retailer';

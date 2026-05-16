@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v165-everyday-niche';
+const VERSION             = 'normalize.js v3.4.5v164-mega-sweep';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -187,12 +187,18 @@ const V161_SPAMMY_HOSTS = new Set([
   'aliexpress.com', 'aliexpress.co.uk', 'aliexpress.us',
   'wish.com', 'temu.com', 'shein.com',
   'ebay.co.uk', 'ebay.com',
+  // V.164 — Alcohol safety. Vivino is an informational/social wine
+  // catalog, not a UK retailer. Filtering ensures spirit/wine scans
+  // never surface a non-purchasable result. masterofmalt.com IS a
+  // legitimate UK whisky specialist and is NOT blocked.
+  'vivino.com',
 ]);
 const V161_SPAMMY_SLUGS = new Set([
   'onbuy', 'onbuycom',
   'aliexpress', 'aliexpresscom', 'aliexpressuk',
   'wish', 'wishcom', 'temu', 'temucom', 'shein', 'sheincom',
   'ebay', 'ebaycouk', 'ebaycom', 'ebayuk',
+  'vivino', 'vivinocom',
 ]);
 const V161_HIGH_STREET_HOSTS = new Set([
   'boots.com', 'boots-uk.com', 'superdrug.com',
@@ -367,6 +373,44 @@ const V162_CATEGORY_CONFIG = {
     pattern: /\b(printer\s*ink|ink\s*cartridge|toner|notebook|notepad|stapler|envelope|filing\s*folder|hole\s*punch|sellotape|highlighter|fountain\s*pen|ballpoint|biro|pencil\s*case|art\s*pad|writing\s*pad|diary|planner)\b/i,
     primary: new Set(['ryman.co.uk', 'whsmith.co.uk', 'staples.co.uk', 'rymanonline.co.uk']),
   },
+  // ═════════════════════════════════════════════════════════════════
+  // V.164 MEGA-SWEEP — 7 new specialty buckets covering the rest of
+  // the UK retail market. Apparel/Fashion is EXPLICITLY out of scope:
+  // it requires per-size + per-colour variant logic that the V.138
+  // four-pillar pipeline cannot resolve cleanly. Deferred to V2.0.
+  // ═════════════════════════════════════════════════════════════════
+  books: {
+    pattern: /\b(book|paperback|hardback|hardcover|novel|fiction|non[-\s]?fiction|biography|autobiography|memoir|audiobook|ebook|kindle\s*edition|cookbook|textbook|isbn)\b/i,
+    primary: new Set(['waterstones.com', 'whsmith.co.uk', 'blackwells.co.uk', 'foyles.co.uk', 'wordery.com']),
+  },
+  alcohol: {
+    pattern: /\b(whisky|whiskey|wine|red\s*wine|white\s*wine|rose\s*wine|gin|vodka|rum|bourbon|tequila|brandy|cognac|champagne|prosecco|cava|spirits|liqueur|ale|lager|craft\s*beer|ipa\s*beer|stout|cider|port\s*wine|sherry|vermouth|aperol|absinthe)\b/i,
+    primary: new Set(['majestic.co.uk', 'thewhiskyexchange.com', 'drinksupermarket.com', 'masterofmalt.com', 'thedrinkshop.com']),
+  },
+  pc_components: {
+    pattern: /\b(graphics\s*card|gpu|rtx\s*\d|gtx\s*\d|radeon|nvidia|cpu|processor|ryzen|core\s*i[3579]|motherboard|mainboard|ram|ddr[45]|ssd|nvme|m\.2|psu|power\s*supply|pc\s*case|chassis|cooling|liquid\s*cooler|cpu\s*cooler|gaming\s*pc|prebuilt\s*pc)\b/i,
+    primary: new Set(['scan.co.uk', 'overclockers.co.uk', 'awd-it.co.uk', 'cclonline.com', 'novatech.co.uk']),
+  },
+  beauty: {
+    pattern: /\b(perfume|fragrance|eau\s*de\s*toilette|eau\s*de\s*parfum|cologne|serum|moisturi[sz]er|night\s*cream|day\s*cream|lipstick|mascara|foundation\s*makeup|concealer|eyeshadow|retinol|hyaluronic|niacinamide|vitamin\s*c\s*serum|sunscreen|spf\s*\d|primer|exfoliant)\b/i,
+    primary: new Set(['lookfantastic.com', 'sephora.co.uk', 'cultbeauty.co.uk', 'spacenk.com', 'boots.com']),
+  },
+  sports_nutrition: {
+    pattern: /\b(whey\s*protein|protein\s*powder|protein\s*shake|protein\s*bar|vitamin|supplement|multivitamin|omega[-\s]?3|fish\s*oil|creatine|bcaa|amino\s*acid|pre[-\s]workout|post[-\s]workout|magnesium|zinc\s*supplement|vitamin\s*d|electrolyte)\b/i,
+    primary: new Set(['hollandandbarrett.com', 'myprotein.com', 'bulk.com', 'thenutrishop.co.uk']),
+  },
+  crafts: {
+    pattern: /\b(craft|crafting|knitting|crochet|yarn|wool\s*yarn|acrylic\s*paint|watercolour|sketch\s*pad|easel|glue\s*gun|hot\s*glue|model\s*kit|airfix|cricut|scrapbook|origami|cross\s*stitch|embroidery|sewing\s*kit)\b/i,
+    primary: new Set(['hobbycraft.co.uk', 'theworks.co.uk', 'cassart.co.uk']),
+  },
+  instruments: {
+    pattern: /\b(guitar|electric\s*guitar|acoustic\s*guitar|bass\s*guitar|drum\s*kit|drumset|midi\s*keyboard|electric\s*piano|digital\s*piano|synth(?:esi[sz]er)?|microphone|condenser\s*mic|dynamic\s*mic|audio\s*interface|guitar\s*amp|bass\s*amp|effects\s*pedal|ukulele|violin|cello)\b/i,
+    primary: new Set(['gear4music.com', 'andertons.co.uk', 'pmtonline.co.uk', 'gak.co.uk']),
+  },
+  // V.164 — APPAREL DEFERRED. Clothing/fashion requires per-size +
+  // per-colour variant logic that the V.138 four-pillar pipeline
+  // cannot resolve. A scan of 'Nike Air Max 90 Size 9 UK White' returns
+  // wildly different SKUs across retailers. Out of scope for V1.0.
 };
 function _v162DetectCategoryKey(cat) {
   if (!cat || typeof cat !== 'string') return null;
@@ -480,6 +524,37 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'rymanonline.co.uk',
   'whsmith.co.uk',
   'staples.co.uk',
+  // V.164 MEGA-SWEEP — Books & Media (waterstones + whsmith already present).
+  'blackwells.co.uk',
+  'foyles.co.uk',
+  // V.164 — Alcohol & Spirits.
+  'majestic.co.uk',
+  'thewhiskyexchange.com',
+  'drinksupermarket.com',
+  'masterofmalt.com',
+  'thedrinkshop.com',
+  // V.164 — PC Components (scan + overclockers + cclonline + novatech
+  // already present from the original V.199 specialist tier).
+  'awd-it.co.uk',
+  // V.164 — Premium Beauty & Fragrance (boots already present).
+  'lookfantastic.com',
+  'sephora.co.uk',
+  'cultbeauty.co.uk',
+  'spacenk.com',
+  // V.164 — Sports Nutrition & Health.
+  'hollandandbarrett.com',
+  'myprotein.com',
+  'bulk.com',
+  'thenutrishop.co.uk',
+  // V.164 — Crafts & Hobbies.
+  'hobbycraft.co.uk',
+  'theworks.co.uk',
+  'cassart.co.uk',
+  // V.164 — Pro Audio & Instruments.
+  'gear4music.com',
+  'andertons.co.uk',
+  'pmtonline.co.uk',
+  'gak.co.uk',
   'johnlewisfinance.com',
   'johnlewispartnership.co.uk',
   'waitrose.com',
