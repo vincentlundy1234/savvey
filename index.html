@@ -158,6 +158,18 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+  /* V.183 — Founder iOS field-audit fix. Without an explicit html
+     background, the safe-area zone below body renders as the browser
+     default (white) on iOS Safari, producing the letterbox strip seen
+     under the nav bar in the V.182 screenshot. Stapling html to black
+     means: on the camera screen the camera feed extends into the home-
+     indicator zone with no white peek-through; on non-camera screens
+     the body's beige gradient still wins via cascade. */
+  html { background-color: #000 !important; }
+  /* Camera screen specifically: force body to black too so the camera
+     feed never gets a beige halo at the bottom edge. */
+  body:has(#screen-camera.active) { background: #000 !important; }
+  body:has(#screen-barcode.active) { background: #000 !important; }
 
   /* === V.99 SKELETON LOADER (additive, available for future adoption) ===
      Single shimmer animation across all blocks, 1.4s cycle, 8% lift.
@@ -616,19 +628,18 @@
      that wasn't reliably taking its 44px width on iOS Safari, pushing the
      shutter rightward. Grid forces left-aux + centered-shutter + right-aux
      regardless of the right spacer's rendering state. */
-  /* V.182 — SHUTTER CLEARANCE. Founder field test: the V.181 edge-to-edge
-     viewport let the fixed .bottom-nav (~88px on notched devices: 56px
-     min-height + 6px×2 padding + safe-area-inset-bottom) cover the camera
-     shutter on some iOS Safari builds where `body:has(#screen-camera.active)
-     .v5-bottom-nav { display:none }` doesn't fire reliably. Lift the
-     bottom-row to clear the nav zone with a 20px breathing-room buffer.
-     Nav-bar (88) + breathe (20) = 108px lift. Safe-area-inset added on
-     top so the shutter still feels grounded above the iOS home indicator.
-     z-index bumped 10 → 50 so the shutter row sits above any chrome that
-     fails to hide. */
+  /* V.183 — SHUTTER CLEARANCE (recalibrated). V.182 added `env(safe-area-
+     inset-bottom)` on top of a 108px lift, but `.bottom-nav` already
+     absorbs the safe-area inset INSIDE its own padding — so V.182 double-
+     counted, pushing the shutter ~30px too high (the screenshot showed
+     it floating halfway up). V.183 takes the safe-area out of the
+     equation here: nav nominal height = 88px (per .screen padding-
+     bottom convention); +12px breathing room = bottom: 100px. Tight
+     above the nav, no double-count, lands at a natural Camera-app
+     elevation. z-index:50 retained so transitions can't swallow it. */
   .v5-cam-screen .v5-cam-bottom-row {
     position: absolute !important;
-    bottom: calc(108px + env(safe-area-inset-bottom, 0px)) !important;
+    bottom: 100px !important;
     left: 0 !important;
     right: 0 !important;
     padding: 16px 24px 16px !important;
@@ -692,13 +703,13 @@
   }
   .v5-cam-screen .v5-cam-shutter:active { transform: scale(0.94) !important; }
   .v5-cam-screen .v5-cam-shutter:active::after { transform: scale(0.86); }
-  /* iOS zoom-tier pill rail — sits ~120px above shutter.
-     V.182: shutter row lifted by 108px + safe-area, so the zoom rail
-     rides up with it. New offset = 124 (original gap) + 108 (V.182 lift)
-     + safe-area = 232px + safe-area. */
+  /* iOS zoom-tier pill rail — sits ~120px above the shutter row.
+     V.183: shutter row now at bottom:100px (no safe-area double-count),
+     so the rail lands at 100 + 124 = 224px above viewport bottom.
+     No safe-area-inset here either (the nav already absorbs it). */
   .v105-zoom-tiers {
     position: absolute;
-    bottom: calc(232px + env(safe-area-inset-bottom, 0px));
+    bottom: 224px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -8647,8 +8658,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v182-SHUTTER-CLEARANCE';
-  var V126_GUARD          = 'savvey_v182_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v183-IOS-LAYOUT-LOCK';
+  var V126_GUARD          = 'savvey_v183_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8994,7 +9005,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v182</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v183</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
