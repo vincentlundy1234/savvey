@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v164-mega-sweep';
+const VERSION             = 'normalize.js v3.4.5v167-polish-pipeline';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -406,6 +406,14 @@ const V162_CATEGORY_CONFIG = {
   instruments: {
     pattern: /\b(guitar|electric\s*guitar|acoustic\s*guitar|bass\s*guitar|drum\s*kit|drumset|midi\s*keyboard|electric\s*piano|digital\s*piano|synth(?:esi[sz]er)?|microphone|condenser\s*mic|dynamic\s*mic|audio\s*interface|guitar\s*amp|bass\s*amp|effects\s*pedal|ukulele|violin|cello)\b/i,
     primary: new Set(['gear4music.com', 'andertons.co.uk', 'pmtonline.co.uk', 'gak.co.uk']),
+  },
+  // V.167 — APPLIANCES (white goods + kitchen + small electricals).
+  // Founder field test caught a Bosch dishwasher scan returning only
+  // Amazon because no appliance specialists were prioritised. Currys
+  // and AO dominate this lane in the UK.
+  appliances: {
+    pattern: /\b(dishwasher|washing\s*machine|tumble\s*dryer|washer[-\s]?dryer|fridge|freezer|fridge[-\s]?freezer|oven|cooker|hob|microwave|extractor\s*hood|kettle|toaster|coffee\s*machine|espresso\s*machine|vacuum\s*cleaner|cordless\s*vacuum|robot\s*vacuum|air\s*fryer|food\s*processor|blender|stand\s*mixer|iron(?:ing)?|tv|smart\s*tv|soundbar|appliance)\b/i,
+    primary: new Set(['currys.co.uk', 'ao.com', 'appliancesdirect.co.uk', 'argos.co.uk', 'johnlewis.com', 'marksandelectrical.co.uk']),
   },
   // V.164 — APPAREL DEFERRED. Clothing/fashion requires per-size +
   // per-colour variant logic that the V.138 four-pillar pipeline
@@ -4629,6 +4637,22 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
         try { return _v161BucketForHost(new URL(l.url).hostname); } catch (e) { return 'other'; }
       });
       try { console.log('[V.161] diversity-forcing applied · top4_buckets=' + _v161Buckets.join(',') + ' · category="' + (category || '').slice(0,40) + '" · fmcg=' + _v161IsFmcgCategory(category)); } catch (e) {}
+    }
+    // V.167 — FAILSAFE TELEMETRY. When the strict V.199 allow-list +
+    // V.161 spammy filter leaves us with ≤1 link, surface it loudly so
+    // the team can audit which categories are starved. The actual
+    // relaxation (loosening the allow-list to top-2 organic results)
+    // will be V.168; logging today gives us the queryable evidence to
+    // identify the worst-affected scans.
+    if (_v161FinalLinks.length <= 1) {
+      try {
+        const _v167Host = (_v161FinalLinks[0] && _v161FinalLinks[0].url)
+          ? (new URL(_v161FinalLinks[0].url)).hostname : '(none)';
+        console.warn('[V.167][FAILSAFE] thin-stack · final_count=' + _v161FinalLinks.length +
+                     ' · only_host=' + _v167Host +
+                     ' · category="' + (category || '').slice(0,40) + '"' +
+                     ' · canonical="' + (canonical || '').slice(0,60) + '"');
+      } catch (e) {}
     }
   } catch (_v161Err) {
     try { console.warn('[V.161] diversity pass threw — falling back to V.159 order:', _v161Err && _v161Err.message); } catch (e) {}

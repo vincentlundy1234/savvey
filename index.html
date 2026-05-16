@@ -5447,6 +5447,143 @@
 .v140-skel-blurb.short { width: 60%; }
 #v138-category       { min-height: 13px; display: block; }
 #v138-verdict-text   { min-height: 32px; }
+/* ═══════════════════════════════════════════════════════════════════
+   V.167 POLISH WAVE — Founder field-test fixes (8 items)
+   1. .v167-hero — smaller, two-line home h1
+   2. .v172-type-input — inset shadow + focus ring
+   3. #v172-type-submit — richer green, gradient, scale tap
+   4. #v183-tab-bar — locked z-index, never disappears
+   5. .v183-tab inactive — less faded, more readable
+   6. .v183-tab:active — scale 0.95 spring
+   7. .v140-skel — softer shimmer (0.8 -> 1, not 0.4 -> 1)
+   8. #screen-loading — GPU-only animation + Savvey logo pulse
+   ═══════════════════════════════════════════════════════════════════ */
+.v167-hero {
+  font-size: 32px !important;
+  line-height: 1.08 !important;
+  letter-spacing: -0.025em !important;
+  font-weight: 800 !important;
+  text-align: center;
+  margin: 8px 16px 16px !important;
+  color: var(--green-deep, #143d10);
+}
+.v167-hero-line {
+  display: block;
+}
+.v167-hero-line-2 {
+  font-size: 26px !important;
+  letter-spacing: -0.02em !important;
+  margin-top: 2px;
+}
+@media (min-width: 380px) {
+  .v167-hero { font-size: 36px !important; }
+  .v167-hero-line-2 { font-size: 28px !important; }
+}
+
+/* V.167 — Search-bar elevation. Target the v172 type input and submit
+   button. Inset shadow on the input + premium focus ring + richer
+   gradient on the submit button. */
+.v172-type-input {
+  box-shadow: inset 0 1px 3px rgba(20,32,26,0.08), inset 0 0 0 1px rgba(20,32,26,0.06) !important;
+  transition: box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms ease !important;
+}
+.v172-type-input:focus,
+.v172-type-input:focus-visible {
+  outline: none !important;
+  box-shadow: inset 0 1px 3px rgba(20,32,26,0.08),
+              0 0 0 4px rgba(42,107,34,0.14),
+              0 0 0 1.5px rgba(42,107,34,0.85) !important;
+  border-color: transparent !important;
+}
+#v172-type-submit,
+.v172-type-submit {
+  background: linear-gradient(180deg, #2a6b22 0%, #1d4a18 100%) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 6px 16px -4px rgba(42,107,34,0.42) !important;
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 180ms ease !important;
+}
+#v172-type-submit:active,
+.v172-type-submit:active {
+  transform: scale(0.94) !important;
+  box-shadow: 0 1px 0 rgba(255,255,255,0.18) inset, 0 3px 8px -2px rgba(42,107,34,0.42) !important;
+}
+
+/* V.167 — Bottom nav permanence + inactive contrast + tap spring. The
+   tab-bar was occasionally disappearing on screen transitions; force
+   position:fixed + z-index high enough to beat any rogue overlay. */
+#v183-tab-bar {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  z-index: 8000 !important;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: transform;
+}
+.v183-tab {
+  color: rgba(20, 32, 26, 0.72) !important;
+  transition: transform 150ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              color 180ms ease !important;
+}
+.v183-tab.is-active {
+  color: var(--green-deep, #143d10) !important;
+}
+.v183-tab:active {
+  transform: scale(0.95) !important;
+}
+@media (prefers-color-scheme: dark) {
+  .v183-tab { color: rgba(255,255,255,0.72) !important; }
+  .v183-tab.is-active { color: #b9e0b3 !important; }
+}
+
+/* V.167 — Skeleton shimmer DIALLED BACK from aggressive opacity swing
+   to a subtle pulse. Overrides the V.140 shimmer keyframes. */
+@keyframes v167-soft-shimmer {
+  0%, 100% { opacity: 0.92; }
+  50%      { opacity: 1; }
+}
+.v140-skel {
+  animation: v167-soft-shimmer 1.6s ease-in-out infinite !important;
+}
+
+/* V.167 — Loading screen: kill ALL non-GPU animations, add Savvey logo
+   pulse so the screen feels alive. Only opacity + transform animate. */
+@keyframes v167-logo-pulse {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50%      { transform: scale(1.04); opacity: 1; }
+}
+#screen-loading .v124-savvey-logo,
+#screen-loading .savvey-wordmark,
+#screen-loading [data-loading-pulse] {
+  animation: v167-logo-pulse 1.8s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+/* Guarantee NOTHING in the loading screen animates margin/padding/height. */
+#screen-loading,
+#screen-loading * {
+  transition-property: opacity, transform !important;
+}
+
+/* V.167 — Result-screen Amazon Associates disclaimer mount. The home-
+   screen disclaimer is hidden via the `hidden` attribute (B above);
+   the same copy is mounted at the bottom of #screen-result via the
+   v167-disclaimer-result rule. The disclaimer is inserted by the
+   inline JS hook injected after the V.163 anchor CSS. */
+.v167-disclaimer-result {
+  display: block;
+  margin: 28px 16px calc(env(safe-area-inset-bottom, 0px) + 96px);
+  padding: 6px 12px 0;
+  font: 500 11px/1.5 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  color: rgba(20, 32, 26, 0.45);
+  text-align: center;
+  letter-spacing: 0.003em;
+}
+@media (prefers-color-scheme: dark) {
+  .v167-disclaimer-result { color: rgba(255, 255, 255, 0.45); }
+}
+
 /* ─── V.163 AMAZON ANCHOR ─────────────────────────────────────────────
    Founder UX insight: Amazon is the universal mental anchor. Even when
    a specialty store wins Best Price (slot 0), the user looks for the
@@ -8215,8 +8352,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v164-MEGA-SWEEP';
-  var V126_GUARD          = 'savvey_v164_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v167-POLISH-PIPELINE';
+  var V126_GUARD          = 'savvey_v167_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8381,7 +8518,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
        door layout below is preserved in the DOM but CSS-hidden when
        <body class="v171"> is active. JS at end of file toggles the class. -->
   <div class="v171-home" role="region" aria-label="Savvey home">
-    <h1 class="v171-tagline v124-hero-tagline">Shop Smart. We Search, You Save.</h1>
+    <h1 class="v171-tagline v124-hero-tagline v167-hero"><span class="v167-hero-line v167-hero-line-1">Shop Smart.</span><span class="v167-hero-line v167-hero-line-2">We Search, You Save.</span></h1>
     <p class="v171-subtagline">Find a product at a fair price, restock quicker at home or use in store.</p>
     <div class="v171-twin-heroes">
       <button class="v171-hero v171-hero-snap v181-spring" type="button" onclick="navSnap()" aria-label="Snap a product with the camera">
@@ -8505,7 +8642,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
          Associates Operating Agreement: every page carrying an Amazon
          affiliate link must display this disclosure. Sits at the
          absolute bottom of #screen-home below the Recents row. -->
-    <p class="v140-amzn-disclaimer" id="v140-amzn-disclaimer">As an Amazon Associate, Savvey earns from qualifying purchases.</p>
+    <p class="v140-amzn-disclaimer v167-disclaimer-on-home" id="v140-amzn-disclaimer" hidden aria-hidden="true">As an Amazon Associate, Savvey earns from qualifying purchases.</p>
   </div>
   <!-- v5 REBUILD (V.40): rebuilt to match Claude Design v5 spec -->
   <!-- V.171 — markup below preserved but hidden via body.v171 selector. -->
@@ -8562,7 +8699,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v164</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v167</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -13361,7 +13498,13 @@ window.RETAILER_DISPLAY_NAMES = window.RETAILER_DISPLAY_NAMES || {
   gear4music:                'Gear4music',
   andertons:                 'Andertons Music Co.',
   pmtonline:                 'PMT Music',
-  gak:                       'GAK'
+  gak:                       'GAK',
+  // V.167 — Appliances (Currys + Argos + John Lewis already present)
+  ao:                        'AO',
+  aocom:                     'AO',
+  appliancesdirect:          'Appliances Direct',
+  appliancesdirectcouk:      'Appliances Direct',
+  marksandelectrical:        "Marks Electrical"
 };
 function _v160PrettyRetailer(raw) {
   if (!raw) return 'Retailer';
@@ -13384,6 +13527,19 @@ function renderResult(displayName, payload) {
   // focus on the verdict + retailer stack without a CTA squatting at
   // the bottom of the viewport.
   try { if (typeof window.v138DismissInstallSheet === 'function') window.v138DismissInstallSheet(); } catch (e) {}
+  // V.167 — Mount the Amazon Associates disclaimer at the BOTTOM of
+  // #screen-result (was incorrectly displayed on home). Idempotent —
+  // checks for an existing #v167-disclaimer-result element first.
+  try {
+    var _v167ResultScreen = document.getElementById('screen-result');
+    if (_v167ResultScreen && !document.getElementById('v167-disclaimer-result')) {
+      var _v167Disc = document.createElement('p');
+      _v167Disc.id = 'v167-disclaimer-result';
+      _v167Disc.className = 'v167-disclaimer-result';
+      _v167Disc.textContent = 'Savvey may earn a small commission via retailer links. It never changes the price you pay.';
+      _v167ResultScreen.appendChild(_v167Disc);
+    }
+  } catch (e) {}
   // V.152 — release the V.151 step pin so the next query's loading
   // screen can run the auto-cycler again.
   try { if (window._v151ClearStep) window._v151ClearStep(); } catch (e) {}
