@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v161-trust-diversity';
+const VERSION             = 'normalize.js v3.4.5v162-omni-category';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -247,20 +247,40 @@ function _v161IsFmcgCategory(cat) {
 }
 function _v161EnforceDiversity(links, category) {
   if (!Array.isArray(links) || links.length < 3) return links;
-  const isFmcg = _v161IsFmcgCategory(category);
-  const byBucket = { amazon: [], highstreet: [], supermarket: [], other: [] };
+  // V.162 — detect specialty category (DIY / Garden / Pets / Baby /
+  // Sports / Auto / Homeware / Toys) OR FMCG. Specialty bucket wins
+  // slot 1 when matched.
+  const catKey = (typeof _v162DetectCategoryKey === 'function') ? _v162DetectCategoryKey(category) : null;
+  const byBucket = { specialty: [], amazon: [], highstreet: [], supermarket: [], other: [] };
   for (const l of links) {
     if (!l || !l.url) continue;
     let host = '';
     try { host = new URL(l.url).hostname; } catch (e) {}
+    // V.162 — Is this host the specialty bucket for the detected category?
+    if (catKey && catKey !== 'fmcg' && typeof _v162SpecialtyBucketForHost === 'function') {
+      const specKey = _v162SpecialtyBucketForHost(host);
+      if (specKey === catKey) {
+        byBucket.specialty.push(l);
+        continue;
+      }
+    }
     const bucket = _v161BucketForHost(host);
     byBucket[bucket].push(l);
   }
   const distinctBuckets = Object.keys(byBucket).filter(k => byBucket[k].length > 0).length;
   if (distinctBuckets < 2) return links;
-  const slotOrder = isFmcg
-    ? ['supermarket', 'highstreet', 'amazon', 'other']
-    : ['amazon', 'highstreet', 'supermarket', 'other'];
+  // V.162 — three-way slot ordering:
+  //   FMCG       → supermarket-first
+  //   specialty  → specialty-first (DIY/Garden/Pets/Baby/Sports/Auto/Homeware/Toys)
+  //   no match   → amazon-first (default)
+  let slotOrder;
+  if (catKey === 'fmcg') {
+    slotOrder = ['supermarket', 'highstreet', 'amazon', 'specialty', 'other'];
+  } else if (catKey) {
+    slotOrder = ['specialty', 'amazon', 'highstreet', 'supermarket', 'other'];
+  } else {
+    slotOrder = ['amazon', 'highstreet', 'supermarket', 'specialty', 'other'];
+  }
   const picked = [];
   const seen = new Set();
   for (const bucket of slotOrder) {
@@ -273,6 +293,74 @@ function _v161EnforceDiversity(links, category) {
     picked.push(l); seen.add(l.url);
   }
   return picked;
+}
+
+
+// ═════════════════════════════════════════════════════════════════════
+// V.162 — OMNI-CATEGORY CURATION MATRIX (15 May 2026 evening)
+// ─────────────────────────────────────────────────────────────────────
+// Scales the V.161 FMCG buckets to cover the eight major UK retail
+// categories. Each category has:
+//   - pattern: regex matched against the Vision-detected category string
+//   - primary: Set of host strings whose results get priority slot 1
+// Slot order when a category matches: [specialty, amazon, highstreet,
+// supermarket, other]. The specialty bucket always wins slot 1 for
+// category-matched queries, so a power-drill scan surfaces Screwfix
+// even when Amazon undercuts on price.
+// ═════════════════════════════════════════════════════════════════════
+const V162_CATEGORY_CONFIG = {
+  diy: {
+    pattern: /\b(diy|hardware|tool|drill|hammer|saw|screw|nail|bolt|paint|sealant|silicone|adhesive|decking|fence|wrench|spanner|sander|grinder|caulk|plaster|tile|tiling|jigsaw\s*tool|workbench|workmate|toolbox)\b/i,
+    primary: new Set(['screwfix.com', 'toolstation.com', 'b-and-q.co.uk', 'diy.com', 'wickes.co.uk', 'homebase.co.uk']),
+  },
+  garden: {
+    pattern: /\b(garden|compost|plant|flower|seed|soil|fertili[sz]er|mower|lawnmower|hedge\s*trimmer|hose|patio|trellis|lawn|shed|greenhouse|topsoil|mulch|wheelbarrow|secateurs|pruner)\b/i,
+    primary: new Set(['b-and-q.co.uk', 'diy.com', 'wickes.co.uk', 'homebase.co.uk', 'dobbies.com', 'therange.co.uk']),
+  },
+  pets: {
+    pattern: /\b(pet|dog|cat|kitten|puppy|hamster|rabbit|guinea\s*pig|aquarium|fish\s*tank|leash|lead|collar|kibble|kong|chew|cattery|kennel|litter|paw|catnip|harness)\b/i,
+    primary: new Set(['petsathome.com', 'jollyes.co.uk', 'zooplus.co.uk', 'fish4dogs.com', 'pets-corner.co.uk']),
+  },
+  baby: {
+    pattern: /\b(baby|toddler|infant|newborn|nappy|nappies|diaper|pram|pushchair|cot|crib|stroller|formula|dummy|pacifier|swaddle|breast\s*pump|highchair|teether|moses\s*basket|sleepsuit|romper)\b/i,
+    primary: new Set(['jojomamanbebe.co.uk', 'mamasandpapas.com', 'mothercare.com', 'boots.com', 'kiddies-kingdom.com']),
+  },
+  sports: {
+    pattern: /\b(running|gym|fitness|workout|hiking|camp(?:ing|fire)?|tent|sleeping\s*bag|fishing|ski|skiing|snowboard|cycling|bike|cycle|trainer|trainers|treadmill|dumbbell|barbell|kettlebell|yoga\s*mat|football|cricket|rugby|tennis|golf|swim|swimming)\b/i,
+    primary: new Set(['decathlon.co.uk', 'sportsdirect.com', 'jdsports.co.uk', 'gooutdoors.co.uk', 'cotswoldoutdoor.com', 'halfords.com', 'wiggle.com']),
+  },
+  auto: {
+    pattern: /\b(car(?!\s*seat\b)|automotive|motor(?!\s*home)|tyre|tire|engine\s*oil|car\s*wax|car\s*polish|wiper|car\s*battery|alloy\s*wheel|brake|brake\s*pad|dashcam|child\s*car\s*seat)\b/i,
+    primary: new Set(['halfords.com', 'eurocarparts.com', 'eurocarparts.co.uk', 'mytyres.co.uk']),
+  },
+  homeware: {
+    pattern: /\b(cushion|lamp|mug|curtain|rug|bedding|duvet|pillow|sofa|throw|towel|sheet|vase|candle|picture\s*frame|wallpaper|tablecloth|bookend|coaster|placemat|doormat)\b/i,
+    primary: new Set(['dunelm.com', 'ikea.com', 'habitat.co.uk', 'johnlewis.com', 'therange.co.uk', 'dwell.co.uk']),
+  },
+  toys: {
+    pattern: /\b(toy|toys|lego|action\s*figure|playset|doll|board\s*game|jigsaw\s*puzzle|puzzle|ride\s*on|nerf|playmobil|hot\s*wheels|barbie|paw\s*patrol|peppa\s*pig|hatchimal)\b/i,
+    primary: new Set(['smythstoys.com', 'smyths.toys', 'theentertainer.com', 'argos.co.uk']),
+  },
+};
+function _v162DetectCategoryKey(cat) {
+  if (!cat || typeof cat !== 'string') return null;
+  if (_v161IsFmcgCategory(cat)) return 'fmcg';
+  for (const key of Object.keys(V162_CATEGORY_CONFIG)) {
+    if (V162_CATEGORY_CONFIG[key].pattern.test(cat)) return key;
+  }
+  return null;
+}
+function _v162SpecialtyBucketForHost(host) {
+  const h = _v161NormalizeHost(host);
+  if (!h) return null;
+  for (const key of Object.keys(V162_CATEGORY_CONFIG)) {
+    const set = V162_CATEGORY_CONFIG[key].primary;
+    if (set.has(h)) return key;
+    for (const p of set) {
+      if (h.endsWith('.' + p)) return key;
+    }
+  }
+  return null;
 }
 
 // V.199 — UK Authority Allow-List. Positive allow-list of known UK
@@ -319,6 +407,37 @@ const V199_UK_TRUSTED_HOSTS = new Set([
   'wilko.com',
   'wayfair.co.uk',
   'lakeland.co.uk',
+  // V.162 — DIY / Garden specialists (B&Q, Wickes, Screwfix, Toolstation
+  // already present above).
+  'dobbies.com',
+  // V.162 — Pets specialists.
+  'petsathome.com',
+  'jollyes.co.uk',
+  'zooplus.co.uk',
+  'fish4dogs.com',
+  'pets-corner.co.uk',
+  // V.162 — Baby / Toddler specialists.
+  'jojomamanbebe.co.uk',
+  'mamasandpapas.com',
+  'mothercare.com',
+  'kiddies-kingdom.com',
+  // V.162 — Sports / Outdoors specialists.
+  'decathlon.co.uk',
+  'sportsdirect.com',
+  'jdsports.co.uk',
+  'gooutdoors.co.uk',
+  'cotswoldoutdoor.com',
+  'wiggle.com',
+  // V.162 — Auto / Bikes specialists.
+  'halfords.com',
+  'eurocarparts.com',
+  'eurocarparts.co.uk',
+  'mytyres.co.uk',
+  // V.162 — Homeware specialists (dunelm + therange already present).
+  'habitat.co.uk',
+  'dwell.co.uk',
+  // V.162 — Toys specialists (smyths + argos already present).
+  'theentertainer.com',
   'johnlewisfinance.com',
   'johnlewispartnership.co.uk',
   'waitrose.com',
