@@ -5211,6 +5211,90 @@
   }
   @media (prefers-color-scheme: dark) { .v136-verdict-text { color: #FFFFFF; } }
 
+  /* V.185 — HERO ANCHOR CARD (Brand Direct + Amazon).
+     The two anchors of truth. Sits above the scrollable retailer list
+     with a distinct elevated card treatment so the user's eye lands on
+     these prices first. Integrates with V.183 edge-to-edge: card carries
+     its own 16px gutter padding, no fixed positioning that would clash
+     with .savvey-says or .bottom-nav. Compact enough to leave verdict
+     box breathing room above and retailer stack room below. */
+  .v185-hero-anchor-card {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin: 8px 0 16px;
+    padding: 14px;
+    background: #ffffff;
+    border-radius: 16px;
+    border: 1px solid rgba(20, 32, 26, 0.06);
+    box-shadow:
+      0 10px 25px -5px rgba(0, 0, 0, 0.10),
+      0 8px 10px -6px rgba(0, 0, 0, 0.10);
+  }
+  .v185-hero-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 12px 14px;
+    background: #fafbf7;
+    border-radius: 12px;
+    border: 1px solid rgba(20, 32, 26, 0.06);
+    text-decoration: none;
+    color: inherit;
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .v185-hero-row:active { transform: scale(0.97); }
+  .v185-hero-row-brand { /* Row 1: Brand Direct — green ribbon, premium feel */
+    background: linear-gradient(180deg, #f3faef 0%, #eaf5e3 100%);
+    border-color: rgba(42, 107, 34, 0.20);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.7) inset;
+  }
+  .v185-hero-row-amazon { /* Row 2: Amazon — neutral benchmark feel */
+    background: #ffffff;
+    border-color: rgba(20, 32, 26, 0.08);
+  }
+  .v185-hero-mark {
+    width: 44px; height: 44px; flex: 0 0 44px;
+    border-radius: 12px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--sav-font-stack-system, system-ui);
+    font-weight: 800; font-size: 18px;
+    color: #fff;
+  }
+  .v185-hero-row-brand  .v185-hero-mark { background: linear-gradient(180deg, #318c27 0%, #205c1b 100%); }
+  .v185-hero-row-amazon .v185-hero-mark { background: #232f3e; }
+  .v185-hero-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .v185-hero-name {
+    font-weight: 800; font-size: 15px; line-height: 1.2;
+    color: #14201a;
+    letter-spacing: -0.005em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .v185-hero-badge {
+    display: inline-block;
+    margin-top: 4px;
+    padding: 2px 8px;
+    border-radius: 9999px;
+    font-size: 10px; font-weight: 700; letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .v185-hero-badge-official  { background: rgba(42, 107, 34, 0.12); color: #2a6b22; }
+  .v185-hero-badge-benchmark { background: rgba(35, 47, 62, 0.10); color: #232f3e; }
+  .v185-hero-price {
+    font-weight: 800; font-size: 17px;
+    color: #14201a;
+    letter-spacing: -0.01em;
+    flex: 0 0 auto;
+  }
+  .v185-hero-row-brand .v185-hero-price { color: #205c1b; }
+  /* Dark mode polish */
+  @media (prefers-color-scheme: dark) {
+    .v185-hero-anchor-card { background: #1a1f1c; border-color: rgba(255,255,255,0.06); }
+    .v185-hero-row { background: #232826; border-color: rgba(255,255,255,0.05); }
+    .v185-hero-row-brand  { background: linear-gradient(180deg, #1f2e1d 0%, #1a2718 100%); border-color: rgba(95,180,85,0.25); }
+    .v185-hero-name, .v185-hero-price { color: #f4f6f4; }
+    .v185-hero-row-brand .v185-hero-price { color: #9bd089; }
+  }
+
   /* ── CTA stack (the Links) ─────────────────────────────────────────── */
   .v136-cta-stack {
     display: flex;
@@ -8658,8 +8742,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v184-KILLSWITCH-DUALANCHOR';
-  var V126_GUARD          = 'savvey_v184_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v185-HERO-UI-AND-SYNTH';
+  var V126_GUARD          = 'savvey_v185_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -9005,7 +9089,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v184</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v185</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9634,7 +9718,14 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       </p>
     </div>
 
-    <!-- Pillar 4: The Links -->
+    <!-- V.185 — Hero Anchor Card: Brand Direct (Row 1) + Amazon (Row 2).
+         Populated dynamically by renderResult from payload.brand_direct
+         and the Amazon link inside payload.links. Hidden until the first
+         payload that has either anchor. -->
+    <div class="v185-hero-anchor-card" id="v185-hero-anchors" style="display:none;"></div>
+
+    <!-- Pillar 4: The Links (remaining trusted retailers — Brand-Direct
+         and Amazon are filtered out and rendered in the hero card above) -->
     <div class="v136-cta-stack" id="v138-cta-stack">
       <a class="v136-cta v136-cta-primary" href="#" onclick="return false;">
         <span class="v136-cta-mark v136-cta-mark-amzn">a</span>
@@ -14105,6 +14196,104 @@ function renderResult(displayName, payload) {
         }
       }
     }
+
+    // --- V.185 HERO ANCHOR CARD ---------------------------------------
+    // The Brand Direct + Amazon prices are the two barometers of truth.
+    // Filter them OUT of the main retailer stack and pin them to the
+    // hero anchor card above the scrollable list. Hierarchy:
+    //   Row 1 (The Truth):     Brand Direct  (if present)
+    //   Row 2 (The Benchmark): Amazon UK     (if present; promotes to
+    //                                          Row 1 when no Brand Direct)
+    var _v185HeroEl = document.getElementById('v185-hero-anchors');
+    var _v185BrandDirect = (p && p.brand_direct) || null;
+    // Locate the Amazon link inside the links array (host-based, robust
+    // against retailer-name capitalisation).
+    var _v185AmazonLink = null;
+    for (var _v185i = 0; _v185i < links.length; _v185i++) {
+      var _v185L = links[_v185i];
+      if (!_v185L || !_v185L.url) continue;
+      try {
+        var _v185H = (new URL(_v185L.url)).hostname.toLowerCase();
+        if (/(^|\.)amazon\.(co\.uk|com)$/.test(_v185H)) {
+          _v185AmazonLink = _v185L;
+          break;
+        }
+      } catch (e) {}
+      if (/\bamazon\b/i.test(_v185L.retailer || '')) { _v185AmazonLink = _v185L; break; }
+    }
+    // Filter both anchors out of the list that will render in the stack.
+    var _v185FilteredLinks = links.filter(function (l) {
+      if (!l || !l.url) return false;
+      if (l.is_brand_direct) return false;
+      if (_v185BrandDirect && l.url === _v185BrandDirect.url) return false;
+      if (_v185AmazonLink && l.url === _v185AmazonLink.url) return false;
+      return true;
+    });
+    // Build hero card markup.
+    if (_v185HeroEl) {
+      _v185HeroEl.innerHTML = '';
+      var _v185HasAnchor = false;
+      // Helper: build a hero row.
+      function _v185BuildRow(opts) {
+        var a = document.createElement('a');
+        a.className = 'v185-hero-row ' + (opts.kind === 'brand' ? 'v185-hero-row-brand' : 'v185-hero-row-amazon');
+        a.href = opts.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+        var initial = String(opts.name || '?').charAt(0).toUpperCase();
+        var badge = opts.kind === 'brand'
+          ? '<span class="v185-hero-badge v185-hero-badge-official">Official Store</span>'
+          : '<span class="v185-hero-badge v185-hero-badge-benchmark">Amazon Benchmark</span>';
+        a.innerHTML =
+          '<span class="v185-hero-mark">' + initial + '</span>' +
+          '<span class="v185-hero-body">' +
+            '<span class="v185-hero-name">' + (opts.name || 'Retailer') + '</span>' +
+            badge +
+          '</span>' +
+          '<span class="v185-hero-price">' + opts.priceStr + '</span>';
+        return a;
+      }
+      // Row 1: Brand Direct if present, otherwise Amazon promotes.
+      if (_v185BrandDirect && _v185BrandDirect.url) {
+        _v185HeroEl.appendChild(_v185BuildRow({
+          kind:     'brand',
+          url:      _v185BrandDirect.url,
+          name:     _v185BrandDirect.retailer || 'Brand Direct',
+          priceStr: _v185BrandDirect.price_str
+                  || (_v185BrandDirect.price_gbp != null
+                      ? '£' + Number(_v185BrandDirect.price_gbp).toFixed(2) : '—'),
+        }));
+        _v185HasAnchor = true;
+        // Row 2: Amazon (if present and different URL from brand).
+        if (_v185AmazonLink && _v185AmazonLink.url !== _v185BrandDirect.url) {
+          var _v185AmzPretty = (typeof window._v160PrettyRetailer === 'function')
+            ? window._v160PrettyRetailer(_v185AmazonLink.retailer) : 'Amazon UK';
+          _v185HeroEl.appendChild(_v185BuildRow({
+            kind:     'amazon',
+            url:      _v185AmazonLink.url,
+            name:     _v185AmzPretty,
+            priceStr: _v185AmazonLink.price_str
+                    || (_v185AmazonLink.price_gbp != null
+                        ? '£' + Number(_v185AmazonLink.price_gbp).toFixed(2) : '—'),
+          }));
+        }
+      } else if (_v185AmazonLink) {
+        // Fallback safety: no Brand Direct → Amazon promotes to Row 1.
+        var _v185AmzName = (typeof window._v160PrettyRetailer === 'function')
+          ? window._v160PrettyRetailer(_v185AmazonLink.retailer) : 'Amazon UK';
+        _v185HeroEl.appendChild(_v185BuildRow({
+          kind:     'amazon',
+          url:      _v185AmazonLink.url,
+          name:     _v185AmzName,
+          priceStr: _v185AmazonLink.price_str
+                  || (_v185AmazonLink.price_gbp != null
+                      ? '£' + Number(_v185AmazonLink.price_gbp).toFixed(2) : '—'),
+        }));
+        _v185HasAnchor = true;
+      }
+      _v185HeroEl.style.display = _v185HasAnchor ? '' : 'none';
+    }
+    // Re-bind `links` to the filtered set so the main stack render below
+    // doesn't double-paint the anchors.
+    links = _v185FilteredLinks;
 
     // --- LINKS --------------------------------------------------------
     var stackEl = document.getElementById('v138-cta-stack');

@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v184-killswitch-dualanchor';
+const VERSION             = 'normalize.js v3.4.5v185-hero-ui-and-synth';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -2622,7 +2622,7 @@ Verified Amazon UK price: ${price_str}` +
 //
 // Latency budget: 4000ms with abort. Falls back to {nulls} on
 // timeout / parse error / no-key so the response shape stays stable.
-async function callHaikuMegaSynthesis({ canonical, category, market_status, amazon, retailers, alternatives, trace }) {
+async function callHaikuMegaSynthesis({ canonical, category, market_status, amazon, retailers, alternatives, brand_direct, trace }) {
   const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
   const EMPTY = { verdict_label: null, verdict_summary: null, category_eyebrow: null, tier_blurbs: null };
   if (!ANTHROPIC_KEY) return EMPTY;
@@ -2696,6 +2696,19 @@ async function callHaikuMegaSynthesis({ canonical, category, market_status, amaz
       };
     }
   }
+  // V.185 — DUAL-ANCHOR brand-direct surface for the synth prompt. When
+  // the parser captured an official-store price for the brand (aesop.com,
+  // dyson.co.uk, etc.), thread it into the input so the LLM can compute
+  // the overcharge vs Amazon / median and write the explicit verdict.
+  if (brand_direct && brand_direct.price_gbp != null) {
+    input.brand_direct = {
+      brand_slug: brand_direct.brand_slug || null,
+      retailer:   brand_direct.retailer || (brand_direct.host ? (brand_direct.host + ' (Official)') : 'Official Store'),
+      host:       brand_direct.host || null,
+      price_gbp:  Number(brand_direct.price_gbp),
+      price_str:  brand_direct.price_str || ('£' + Number(brand_direct.price_gbp).toFixed(2)),
+    };
+  }
   if (alternatives && Array.isArray(alternatives) && alternatives.length >= 2 && alternatives.length <= 4) {
     // V.139 — accept 2-4 alternatives. The frontend tier render either
     // pads with a placeholder (when 2) or truncates (when 4). Haiku only
@@ -2734,6 +2747,77 @@ Concretely this means:
 This rule overrides the V.173 "name 1-2 retailers" guidance — if the
 list of retailers you were given is empty or sparse, name fewer, not
 more. The verdict_summary may be short. It may not lie.
+
+V.185 BRAND-DIRECT BASELINE (THE OVERCHARGE / PARITY CALL-OUT) —
+applies whenever INPUT.brand_direct is present. This is the loudest
+single signal Savvey carries; it overrides retailer-comparison framing.
+
+INPUT.brand_direct = { retailer, host, price_gbp, price_str, brand_slug }
+  → this is the OFFICIAL STORE price for the brand. It is the truth
+    benchmark against which the market is judged.
+
+You MUST cite INPUT.brand_direct first in the verdict_summary when it
+is present. Two scenarios:
+
+  (A) OVERCHARGE call-out — when EITHER:
+        INPUT.amazon.price > INPUT.brand_direct.price_gbp
+      OR
+        INPUT.market_context.median_gbp > INPUT.brand_direct.price_gbp
+
+      Explicitly state the overcharge in £ and advise buying direct.
+      Compute: overcharge = max(amazon.price, median_gbp) − brand_direct.price_gbp.
+      Compute: pct = round((overcharge / brand_direct.price_gbp) * 100).
+
+      Template (adapt voice, keep numbers exact):
+        "Amazon is £<overcharge> over <brand> (Official). Buy direct at
+         <brand_direct.price_str> to save <pct>%."
+
+      Examples (Aesop Resurrection 500ml, brand_direct=£29, amazon=£32):
+        "Amazon's £3 over Aesop's own shop. Buy direct at £29 — same
+         product, official stock, save 10%."
+        "Aesop's website is £29 — Amazon's £32 listing is a £3 markup.
+         Cheaper to buy from aesop.com."
+
+  (B) PARITY confirmation — when amazon.price AND median_gbp are both
+      within ±£1 (or ±2%) of brand_direct.price_gbp.
+
+      Confidently state strict MSRP parity. The user is safe wherever
+      they shop.
+
+      Template:
+        "At <brand_direct.price_str>, every shop's matching <brand>'s
+         own price — strict MSRP parity. Buy wherever's convenient."
+
+      Examples:
+        "£29 across the board — Aesop holds strict price parity, so
+         buy wherever's easiest."
+        "Dyson's at £349 everywhere — straight MSRP, no markups to dodge."
+
+  (C) UNDERCUT case (market PRICE is BELOW brand_direct) — rare but
+      possible during retailer sales. State plainly that a retailer is
+      beating the official price.
+
+      Template:
+        "<retailer> is £<diff> under <brand>'s own price — pick it up
+         there while it lasts."
+
+VERDICT-LABEL TIE-INS:
+  - OVERCHARGE pattern → bias verdict_label to "check_elsewhere" UNLESS
+    the brand_direct itself is the cheapest entry (then "good_buy").
+  - PARITY pattern   → verdict_label "fair".
+  - UNDERCUT pattern → verdict_label "good_buy".
+
+CRITICAL NUMERIC RULES (still bound by V.179 strict data binding):
+  - Every £ figure you cite must equal INPUT.brand_direct.price_gbp,
+    INPUT.amazon.price, INPUT.market_context.{low|median|high}_gbp,
+    INPUT.retailers[*].price, OR the EXACT arithmetic difference of two
+    such numbers (the overcharge / undercut £ amount).
+  - The percentage you cite must equal round((diff / brand_direct.price_gbp) * 100).
+  - Do not invent additional retailers in this sentence — only name the
+    brand_direct retailer + Amazon + at most one retailer from
+    INPUT.retailers if directly relevant.
+  - If INPUT.brand_direct is absent, this whole V.185 block is INACTIVE.
+    Fall back to V.173 consumer-voice synthesis from amazon + retailers.
 
 V.173 CONSUMER VOICE — non-negotiable, applies to every verdict_summary
 and tier_blurb you write:
@@ -6377,6 +6461,7 @@ async function _v202InnerHandler(req, res) {
         amazon:        (mode === 'pillars') ? (sp.amazon || null) : null,
         retailers:     (mode === 'pillars') ? (sp.retailers || null) : null,
         alternatives:  (mode === 'tiers')   ? (sp.alternatives || null) : null,
+        brand_direct:  (mode === 'pillars') ? (sp.brand_direct || null) : null, // V.185
         trace:         _v160Trace,
       });
       const pillMap = {
@@ -6943,6 +7028,56 @@ async function _v202InnerHandler(req, res) {
             name:  l.retailer || l.retailer_key || 'Retailer',
             price: l.price_gbp,
           }));
+        // V.185 — Compute brand_direct inline so the synth can cite the
+        // official-store price even though _v138BuildPricingAndLinks
+        // hasn't run yet. Scan retailer_deep_links (incl. relaxed pool)
+        // for the cheapest host matching the brand slug from canonical.
+        let _v185BrandDirectForSynth = null;
+        try {
+          const _v185Slug = _v184ExtractBrandFromQuery(parsed.canonical_search_string);
+          if (_v185Slug) {
+            const _v185Pool = [];
+            if (retailer_deep_links && typeof retailer_deep_links === 'object') {
+              for (const k of Object.keys(retailer_deep_links)) {
+                if (k.indexOf('__') === 0) continue;
+                const r = retailer_deep_links[k];
+                if (r && r.url) _v185Pool.push({
+                  url: r.url, name: r.name || k,
+                  price_gbp: Number(r.price_gbp || r.price || 0),
+                  price_str: r.price_str || null,
+                });
+              }
+              if (Array.isArray(retailer_deep_links.__v168_relaxed_pool)) {
+                retailer_deep_links.__v168_relaxed_pool.forEach(function (r) {
+                  if (r && r.url) _v185Pool.push({
+                    url: r.url, name: r.name || r.host || 'Brand',
+                    price_gbp: Number(r.price_gbp),
+                    price_str: null,
+                  });
+                });
+              }
+            }
+            let _v185Best = null;
+            for (const c of _v185Pool) {
+              let _v185H = '';
+              try { _v185H = new URL(c.url).hostname; } catch (e) { continue; }
+              if (!_v184HostMatchesBrand(_v185H, _v185Slug)) continue;
+              if (!Number.isFinite(c.price_gbp) || c.price_gbp <= 0) continue;
+              if (_v185Best == null || c.price_gbp < _v185Best.price_gbp) {
+                _v185Best = Object.assign({}, c, { host: _v185H });
+              }
+            }
+            if (_v185Best) {
+              _v185BrandDirectForSynth = {
+                brand_slug: _v185Slug,
+                host:       _v185Best.host,
+                retailer:   _v185Best.name + ' (Official)',
+                price_gbp:  _v185Best.price_gbp,
+                price_str:  _v185Best.price_str || ('£' + _v185Best.price_gbp.toFixed(2)),
+              };
+            }
+          }
+        } catch (_v185BdErr) {}
         const ai = await callHaikuMegaSynthesis({
           canonical:     parsed.canonical_search_string,
           category:      parsed.category,
@@ -6957,6 +7092,7 @@ async function _v202InnerHandler(req, res) {
           },
           retailers: _v179RetailersForAI.length > 0 ? _v179RetailersForAI : null,
           alternatives: null, // Pillars mode
+          brand_direct: _v185BrandDirectForSynth, // V.185 — Dual-Anchor synth input
           trace: debugTrace,
         });
         if (ai) {
@@ -7370,6 +7506,10 @@ async function _v202InnerHandler(req, res) {
               pack_size:         m.pack_size || null,
             };
           }) : null,
+      // V.185 — DUAL-ANCHOR brand-direct passed through to the deferred
+      // synthesize.js call so the verdict text can reference the
+      // official-store price even when synth is split off.
+      brand_direct: (_v138 && _v138.brand_direct) ? _v138.brand_direct : null,
     } : undefined,
     _meta: {
       version: VERSION,
