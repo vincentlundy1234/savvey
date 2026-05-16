@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v173-relevance-gate';
+const VERSION             = 'normalize.js v3.4.5v174-platform-enforcement';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -321,7 +321,12 @@ function _v161EnforceDiversity(links, category) {
 // ═════════════════════════════════════════════════════════════════════
 const V173_MERCH_NEG_KEYWORDS = new Set([
   // Apparel / decor merchandise
-  'rug', 'doormat', 'mat', 'blanket', 'throw', 'cushion', 'pillow',
+  'rug', 'doormat', 'mat', 'blanket', 'fleece', 'fleece blanket',
+  'throw', 'throw blanket', 'cushion', 'pillow', 'duvet', 'duvet cover',
+  'bedding', 'bed sheet', 'fitted sheet', 'flat sheet', 'pillowcase',
+  'pillow case', 'towel', 'beach towel', 'bath towel', 'hand towel',
+  'merch', 'merchandise', 'apparel', 'clothing', 'hoodie', 'hooded',
+  'jumper', 'sweater', 'sweatshirt', 'tracksuit',
   'poster', 'print', 'wall art', 'canvas print', 'sticker', 'stickers',
   'decal', 'magnet', 'pin badge', 'enamel pin', 'keyring', 'keychain',
   'tshirt', 't-shirt', 'tee', 'hoodie', 'sweater', 'jumper', 'cap',
@@ -435,6 +440,74 @@ function _v173MedianFloor(links, floorPct) {
     ? top5[2]
     : (top5.length === 4 ? (top5[1] + top5[2]) / 2 : top5[Math.floor(top5.length / 2)]);
   return mid * (floorPct != null ? floorPct : 0.40);
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// V.174 — PLATFORM ENFORCEMENT + CATEGORY-AWARE PRICE FLOOR
+// ─────────────────────────────────────────────────────────────────────
+// The Tesco-fleece-blanket bug: V.173's 50% floor + universal merch
+// list weren't enough. A £27 Tesco "Hogwarts Legacy Cosy Fleece
+// Blanket" passed V.173 (50% of £45 = £22.50 floor; £27 above it).
+// V.174 ships the kill shot:
+//   1. High-value categories use 0.70 floor — £27 < (0.70 × £45) = £31.50
+//   2. Games-category platform match — title MUST carry PS5/PS4/Xbox
+//      token if the user's intent specified one
+//   3. Supermarket reality guard — Tesco/Asda/Sainsbury's get strict
+//      title verification on games (they largely stopped selling AAA)
+// ═════════════════════════════════════════════════════════════════════
+const V174_HIGH_VALUE_CATS = new Set(['games', 'pc_components', 'appliances', 'auto', 'instruments', 'beauty']);
+function _v174FloorPctForCategory(categoryKey) {
+  if (categoryKey && V174_HIGH_VALUE_CATS.has(categoryKey)) return 0.70;
+  return 0.50;
+}
+const V174_PLATFORM_TOKENS = {
+  ps5:      [/\bps\s*5\b/i, /\bplaystation\s*5\b/i, /\bps5\b/i],
+  ps4:      [/\bps\s*4\b/i, /\bplaystation\s*4\b/i, /\bps4\b/i],
+  xbox:     [/\bxbox\b/i, /\bxbox\s*one\b/i, /\bxbox\s*series\s*[xs]\b/i, /\bxsx\b/i, /\bxss\b/i],
+  switch:   [/\bnintendo\s*switch\b/i, /\bswitch\b/i],
+  nintendo: [/\bnintendo\b/i, /\bswitch\b/i, /\bwii\b/i],
+  pc:       [/\bpc\b/i, /\bsteam\b/i, /\bwindows\s*pc\b/i],
+};
+function _v174ExtractPlatformIntent(canonicalQuery) {
+  if (!canonicalQuery || typeof canonicalQuery !== 'string') return null;
+  const q = canonicalQuery.toLowerCase();
+  if (/\bps\s*5\b|\bplaystation\s*5\b/i.test(q)) return 'ps5';
+  if (/\bps\s*4\b|\bplaystation\s*4\b/i.test(q)) return 'ps4';
+  if (/\bxbox\s*series\s*[xs]\b|\bxsx\b|\bxss\b/i.test(q)) return 'xbox';
+  if (/\bxbox\s*one\b|\bxbox\b/i.test(q)) return 'xbox';
+  if (/\bnintendo\s*switch\b|\bswitch\b/i.test(q)) return 'switch';
+  if (/\bnintendo\b/i.test(q)) return 'nintendo';
+  return null;
+}
+function _v174TitlePassesPlatform(title, platformKey) {
+  if (!platformKey || !V174_PLATFORM_TOKENS[platformKey]) return true;
+  if (!title || typeof title !== 'string') return false;
+  const rxList = V174_PLATFORM_TOKENS[platformKey];
+  for (const rx of rxList) {
+    if (rx.test(title)) return true;
+  }
+  return false;
+}
+const V174_SUPERMARKET_HOSTS_FOR_GAMES_CHECK = new Set([
+  'tesco.com', 'asda.com', 'sainsburys.co.uk', 'sainsburys.com',
+  'morrisons.com', 'waitrose.com', 'iceland.co.uk',
+]);
+function _v174SupermarketGamesGuard(host, title, canonicalQuery, platformKey) {
+  if (!host) return { ok: true };
+  const h = host.replace(/^www\./i, '').toLowerCase();
+  if (!V174_SUPERMARKET_HOSTS_FOR_GAMES_CHECK.has(h)) return { ok: true };
+  if (!_v174TitlePassesPlatform(title, platformKey)) {
+    return { ok: false, reason: 'v174_supermarket_no_platform_token' };
+  }
+  const normTitle = (title || '').toLowerCase();
+  const tokens = (canonicalQuery || '').toLowerCase().split(/\s+/).filter(t => t.length >= 3 && /[a-z]/i.test(t));
+  for (const t of tokens) {
+    if (t === 'ps5' || t === 'ps4' || t === 'xbox' || t === 'switch' || t === 'nintendo') continue;
+    if (normTitle.indexOf(t) === -1) {
+      return { ok: false, reason: 'v174_supermarket_missing_token:' + t };
+    }
+  }
+  return { ok: true };
 }
 
 // ═════════════════════════════════════════════════════════════════════
@@ -3775,6 +3848,31 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             continue;
           }
         } catch (_v173MerchErr) {}
+        // V.174 — PLATFORM ENFORCEMENT (games only). Kill shot for the
+        // Tesco fleece-blanket bug. If user intent says PS5, title MUST
+        // also say PS5 (or PlayStation 5 etc.). A blanket title never
+        // carries the console.
+        try {
+          if (_v173Cat === 'games') {
+            const _v174Plat = _v174ExtractPlatformIntent(parsed && parsed.canonical_search_string);
+            if (_v174Plat && !_v174TitlePassesPlatform(item.title, _v174Plat)) {
+              if (_droppedSamples.length < 8) {
+                _droppedSamples.push('v174_no_platform:' + _v174Plat + ':' + String(item.title || '').slice(0, 30));
+              }
+              _droppedRedirector++;
+              continue;
+            }
+            // V.174 — Supermarket reality check for games.
+            const _v174SmGuard = _v174SupermarketGamesGuard(host, item.title, parsed && parsed.canonical_search_string, _v174Plat);
+            if (!_v174SmGuard.ok) {
+              if (_droppedSamples.length < 8) {
+                _droppedSamples.push(_v174SmGuard.reason + ':' + String(item.title || '').slice(0, 30));
+              }
+              _droppedRedirector++;
+              continue;
+            }
+          }
+        } catch (_v174Err) {}
         // V.201 — ONE GATE admission. Single check, single source of truth.
         const _v201Src = (typeof item.source === 'string' && item.source)
                       || (typeof item.seller_name === 'string' && item.seller_name)
@@ -5010,7 +5108,10 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
   // 60% cheaper than the median'). Applied AFTER V.159 outlier delete
   // so we don't second-guess outliers already filtered upstream.
   try {
-    const _v173Floor = _v173MedianFloor(_v159LinksFiltered, 0.40);
+    // V.174 — Category-aware floor: high-value cats get 0.70.
+    const _v174CatKey = (typeof _v162DetectCategoryKey === 'function') ? _v162DetectCategoryKey(category) : null;
+    const _v174FloorPct = (typeof _v174FloorPctForCategory === 'function') ? _v174FloorPctForCategory(_v174CatKey) : 0.50;
+    const _v173Floor = _v173MedianFloor(_v159LinksFiltered, _v174FloorPct);
     if (_v173Floor != null && Number.isFinite(_v173Floor)) {
       const _v173Before = _v159LinksFiltered.length;
       _v159LinksFiltered = _v159LinksFiltered.filter(l => {
