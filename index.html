@@ -5584,6 +5584,147 @@
   .v167-disclaimer-result { color: rgba(255, 255, 255, 0.45); }
 }
 
+/* ═══════════════════════════════════════════════════════════════════
+   V.168 HARD UI POLISH — Founder rejection of V.167 weak polish.
+   Apple-grade search bar + modern skeleton shimmer loading screen.
+   Specificity must beat V.167 — using !important on the contended
+   declarations and ordering after V.167 so the cascade wins.
+   ═══════════════════════════════════════════════════════════════════ */
+
+/* Search bar — pill, 56px tall, 1px tonal border, rich inset depth */
+.v172-type-input,
+input.v172-type-input,
+body.v172 .v172-type-input,
+body .v172-type-input {
+  height: 56px !important;
+  min-height: 56px !important;
+  border-radius: 9999px !important;
+  border: 1px solid rgba(0, 0, 0, 0.10) !important;
+  background: #ffffff !important;
+  padding: 0 60px 0 22px !important;
+  font: 600 16px/1.2 system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+  color: #14201a !important;
+  letter-spacing: -0.005em !important;
+  box-shadow: inset 0 1px 2px rgba(20, 32, 26, 0.06),
+              inset 0 0 0 0.5px rgba(20, 32, 26, 0.04),
+              0 1px 0 rgba(255, 255, 255, 0.7) !important;
+  -webkit-appearance: none !important;
+          appearance: none !important;
+  transition: box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 200ms ease !important;
+}
+.v172-type-input:focus,
+.v172-type-input:focus-visible,
+body .v172-type-input:focus {
+  outline: none !important;
+  border-color: rgba(42, 107, 34, 0.45) !important;
+  box-shadow: inset 0 1px 2px rgba(20, 32, 26, 0.06),
+              0 0 0 4px rgba(42, 107, 34, 0.20) !important;
+}
+.v172-type-input::placeholder {
+  color: rgba(20, 32, 26, 0.40) !important;
+  font-weight: 500 !important;
+}
+
+/* Submit pill — perfectly centered, rich green, satisfying tap */
+#v172-type-submit,
+.v172-type-submit,
+button.v172-type-submit {
+  position: absolute !important;
+  right: 6px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 9999px !important;
+  border: none !important;
+  background: linear-gradient(180deg, #318c27 0%, #205c1b 100%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset,
+              0 4px 12px -2px rgba(42, 107, 34, 0.45),
+              0 1px 3px rgba(0, 0, 0, 0.12) !important;
+  cursor: pointer !important;
+  -webkit-tap-highlight-color: transparent !important;
+  transition: transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 200ms ease !important;
+}
+#v172-type-submit:hover,
+.v172-type-submit:hover {
+  transform: translateY(-50%) scale(1.04) !important;
+}
+#v172-type-submit:active,
+.v172-type-submit:active {
+  transform: translateY(-50%) scale(0.92) !important;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.25) inset,
+              0 2px 6px -1px rgba(42, 107, 34, 0.50) !important;
+}
+#v172-type-submit svg,
+.v172-type-submit svg {
+  width: 20px !important;
+  height: 20px !important;
+  stroke-width: 2.6 !important;
+  color: #ffffff !important;
+}
+
+/* V.168 — Modern Skeleton Loading. Replaces the boring fade with
+   sweeping gradient shimmer across boxes that mimic the final cards. */
+.v168-skel-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 24px 16px;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+}
+.v168-skel-card {
+  background: #ffffff;
+  border-radius: 16px;
+  box-shadow: 0 4px 14px -4px rgba(20, 32, 26, 0.08), 0 1px 3px rgba(20, 32, 26, 0.04);
+  padding: 16px;
+  overflow: hidden;
+  position: relative;
+}
+.v168-skel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.v168-skel-row:last-child { margin-bottom: 0; }
+.v168-skel-box {
+  background: linear-gradient(90deg,
+              #e9ecef 0%, #f4f6f8 40%, #ffffff 50%, #f4f6f8 60%, #e9ecef 100%);
+  background-size: 200% 100%;
+  border-radius: 8px;
+  animation: v168-shimmer-sweep 1.4s ease-in-out infinite;
+  will-change: background-position;
+}
+@keyframes v168-shimmer-sweep {
+  0%   { background-position: 200% 50%; }
+  100% { background-position: -200% 50%; }
+}
+.v168-skel-thumb  { width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0; }
+.v168-skel-title  { height: 18px; width: 70%; border-radius: 6px; }
+.v168-skel-sub    { height: 12px; width: 45%; border-radius: 6px; }
+.v168-skel-price  { height: 28px; width: 90px; border-radius: 8px; }
+.v168-skel-line   { height: 14px; border-radius: 6px; flex: 1; }
+.v168-skel-line.w70 { max-width: 70%; }
+.v168-skel-line.w50 { max-width: 50%; }
+.v168-skel-line.w80 { max-width: 80%; }
+.v168-skel-pill   { height: 24px; width: 90px; border-radius: 9999px; }
+@media (prefers-color-scheme: dark) {
+  .v168-skel-card { background: #1a1f1c; box-shadow: 0 4px 14px -4px rgba(0,0,0,0.4); }
+  .v168-skel-box {
+    background: linear-gradient(90deg,
+                #232826 0%, #2c3331 40%, #353c39 50%, #2c3331 60%, #232826 100%);
+    background-size: 200% 100%;
+  }
+}
+
 /* ─── V.163 AMAZON ANCHOR ─────────────────────────────────────────────
    Founder UX insight: Amazon is the universal mental anchor. Even when
    a specialty store wins Best Price (slot 0), the user looks for the
@@ -8352,8 +8493,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v167-POLISH-PIPELINE';
-  var V126_GUARD          = 'savvey_v167_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v168-TRUE-FAILSAFE';
+  var V126_GUARD          = 'savvey_v168_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -8699,7 +8840,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v167</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v168</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9458,6 +9599,77 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 </div>
 
 <script>
+// ─────────────────────────────────────────────────────────────────────────
+// V.168 — SKELETON LOADING. Wraps window.show() so every transition
+// to 'loading' mounts a sweeping-shimmer skeleton DOM inside
+// #screen-loading. Replaces the bare logo fade with a premium
+// preview of the four-pillar shape. Teardown happens inside
+// renderResult (and renderConfirm) so the skeleton never overlaps
+// the real result paint.
+// ─────────────────────────────────────────────────────────────────────────
+(function _v168SkeletonInit() {
+  function buildSkel() {
+    var host = document.createElement('div');
+    host.id = 'v168-skel-host';
+    host.className = 'v168-skel-screen';
+    host.setAttribute('aria-hidden', 'true');
+    host.innerHTML =
+      '<div class="v168-skel-card">' +
+        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-pill"></span></div>' +
+        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w80"></span></div>' +
+        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w50"></span></div>' +
+      '</div>' +
+      '<div class="v168-skel-card">' +
+        '<div class="v168-skel-row">' +
+          '<span class="v168-skel-box v168-skel-thumb"></span>' +
+          '<span style="flex:1;display:flex;flex-direction:column;gap:8px">' +
+            '<span class="v168-skel-box v168-skel-title"></span>' +
+            '<span class="v168-skel-box v168-skel-sub"></span>' +
+          '</span>' +
+        '</div>' +
+        '<div class="v168-skel-row" style="justify-content:space-between">' +
+          '<span class="v168-skel-box v168-skel-price"></span>' +
+          '<span class="v168-skel-box v168-skel-line w50" style="max-width:80px"></span>' +
+        '</div>' +
+      '</div>' +
+      '<div class="v168-skel-card">' +
+        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w70"></span></div>' +
+        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w80"></span></div>' +
+      '</div>';
+    return host;
+  }
+  function mountSkel() {
+    try {
+      var screen = document.getElementById('screen-loading');
+      if (!screen) return;
+      if (document.getElementById('v168-skel-host')) return;
+      screen.appendChild(buildSkel());
+    } catch (e) {}
+  }
+  function unmountSkel() {
+    try {
+      var existing = document.getElementById('v168-skel-host');
+      if (existing) existing.remove();
+    } catch (e) {}
+  }
+  window._v168MountSkel   = mountSkel;
+  window._v168UnmountSkel = unmountSkel;
+  // Wrap window.show() so every entry into 'loading' mounts the
+  // skeleton, and every entry into 'result' / 'confirm' / 'home' /
+  // 'error' tears it down. Idempotent — checks for existing wrap.
+  if (typeof window.show === 'function' && !window.__v168ShowWrapped) {
+    window.__v168ShowWrapped = true;
+    var _origShow = window.show;
+    window.show = function (id, opts) {
+      try {
+        if (id === 'loading') mountSkel();
+        else unmountSkel();
+      } catch (e) {}
+      return _origShow.apply(this, arguments);
+    };
+  }
+})();
+
 // ─────────────────────────────────────────────────────────────────────────
 // V.155 — RAW ERROR DUMP. The Founder demanded the ugly truth during the
 // V.155–V.158 forensic hunt. Now V.159 gates it behind a developer flag:
@@ -13527,6 +13739,14 @@ function renderResult(displayName, payload) {
   // focus on the verdict + retailer stack without a CTA squatting at
   // the bottom of the viewport.
   try { if (typeof window.v138DismissInstallSheet === 'function') window.v138DismissInstallSheet(); } catch (e) {}
+  // V.168 — Tear down the skeleton screen as soon as the real result
+  // renders. The skeleton lives in #v168-skel-host (mounted by the
+  // V.168 init below); removing it here prevents the visible flash
+  // of skeleton-over-real-content during the render handoff.
+  try {
+    var _v168Skel = document.getElementById('v168-skel-host');
+    if (_v168Skel) _v168Skel.remove();
+  } catch (e) {}
   // V.167 — Mount the Amazon Associates disclaimer at the BOTTOM of
   // #screen-result (was incorrectly displayed on home). Idempotent —
   // checks for an existing #v167-disclaimer-result element first.

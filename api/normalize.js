@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v167-polish-pipeline';
+const VERSION             = 'normalize.js v3.4.5v168-true-failsafe';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -3276,6 +3276,13 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     const j = await r.json();
     const results = Array.isArray(j.shopping_results) ? j.shopping_results : [];
     const deepLinks = {};
+    // V.168 — RELAXED POOL. Captures candidates that passed V.161
+    // spammy-blacklist AND identity-token check BUT failed the V.199
+    // strict allow-list (untrusted_host:* rejection reason). When the
+    // strict diversity pass ends with ≤1 link, _v138BuildPricingAndLinks
+    // pulls from this pool to backfill. Sorted by price ascending so
+    // the cheapest legitimate-but-non-allowlisted retailer wins.
+    const _v168RelaxedPool = [];
     let _examined = 0;
     let _droppedNoUrl = 0;
     let _droppedNoPrice = 0;
@@ -3458,6 +3465,28 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
             _droppedSamples.push(_v201Verdict.reason);
           }
           _droppedRedirector++;
+          // V.168 — Capture into relaxed pool if the rejection was
+          // 'untrusted_host:*' (just not on the V.199 allow-list) AND
+          // the host is not on the V.161 spammy blacklist. Skips
+          // 'malformed_host', 'foreign_tld:*', 'untrusted_source:*'
+          // and 'no_host' — those are quality rejections, not just
+          // allow-list rejections.
+          try {
+            const _v168Reason = String(_v201Verdict.reason || '');
+            const _v168IsUntrusted = _v168Reason.indexOf('untrusted_host:') === 0;
+            if (_v168IsUntrusted && !_v161IsSpammyHost(host, inputType) && parsedPrice != null && url) {
+              _v168RelaxedPool.push({
+                url:       url.slice(0, 500),
+                title:     typeof item.title === 'string' ? item.title.slice(0, 200) : null,
+                price_gbp: parsedPrice,
+                host:      host,
+                name:      (host.split('.')[0].charAt(0).toUpperCase() + host.split('.')[0].slice(1)),
+                thumbnail: (typeof item.thumbnail === 'string' && /^https?:\/\//i.test(item.thumbnail))
+                           ? item.thumbnail.slice(0, 500) : null,
+                _v168_relaxed: true,
+              });
+            }
+          } catch (e) {}
           continue;
         }
       }
@@ -3926,6 +3955,24 @@ async function fetchGoogleShoppingDeepLinks(query, canonicalKey, _diagOut = null
     // Module-level kept for back-compat callers that haven't migrated yet.
     _lastGoogleShoppingDiag = _v153Diag;
     if (Object.keys(deepLinks).length === 0) return null;
+    // V.168 — Attach sorted relaxed pool BEFORE caching so the
+    // _v138BuildPricingAndLinks failsafe can consult it even on
+    // cache-hit responses. The pool sorts by price ascending so the
+    // cheapest legitimate-but-non-allowlisted retailer wins.
+    try {
+      _v168RelaxedPool.sort(function (a, b) {
+        const aP = (a && a.price_gbp != null) ? Number(a.price_gbp) : Number.POSITIVE_INFINITY;
+        const bP = (b && b.price_gbp != null) ? Number(b.price_gbp) : Number.POSITIVE_INFINITY;
+        return aP - bP;
+      });
+      // Cap the pool at 8 entries so the cached object stays small.
+      deepLinks.__v168_relaxed_pool = _v168RelaxedPool.slice(0, 8);
+      if (_v168RelaxedPool.length > 0) {
+        try { console.log('[V.168][pool] captured ' + _v168RelaxedPool.length + ' relaxed candidate(s) for "' + (query || '').slice(0, 60) + '"'); } catch (e) {}
+      }
+    } catch (_v168PoolErr) {
+      try { console.warn('[V.168][pool] attach threw:', _v168PoolErr && _v168PoolErr.message); } catch (e) {}
+    }
     kvSet(ck, deepLinks, KV_TTL_SECONDS).catch(() => {});
     return deepLinks;
   } catch (err) {
@@ -4648,11 +4695,53 @@ function _v138BuildPricingAndLinks({ verified_amazon_price, retailer_deep_links,
       try {
         const _v167Host = (_v161FinalLinks[0] && _v161FinalLinks[0].url)
           ? (new URL(_v161FinalLinks[0].url)).hostname : '(none)';
-        console.warn('[V.167][FAILSAFE] thin-stack · final_count=' + _v161FinalLinks.length +
+        console.warn('[V.167][FAILSAFE] thin-stack detected · final_count=' + _v161FinalLinks.length +
                      ' · only_host=' + _v167Host +
                      ' · category="' + (category || '').slice(0,40) + '"' +
                      ' · canonical="' + (canonical || '').slice(0,60) + '"');
       } catch (e) {}
+      // V.168 — TRUE FAILSAFE. The strict V.199 allow-list left us with
+      // ≤1 link. Pull up to 3 cheapest entries from the relaxed pool
+      // (legit retailers that failed only the allow-list check) and
+      // splice them in below the strict survivor. Maintains the
+      // 'Amazon (or specialty) at slot 0 + diverse fillers' shape
+      // while guaranteeing the user NEVER sees a 1-link stack for a
+      // real product.
+      try {
+        const _v168Pool = (retailer_deep_links && Array.isArray(retailer_deep_links.__v168_relaxed_pool))
+                          ? retailer_deep_links.__v168_relaxed_pool : [];
+        if (_v168Pool.length > 0) {
+          const _v168Seen = new Set();
+          _v161FinalLinks.forEach(function (l) { if (l && l.url) _v168Seen.add(l.url); });
+          const _v168Added = [];
+          for (let _v168i = 0; _v168i < _v168Pool.length && _v168Added.length < 3; _v168i++) {
+            const _v168Entry = _v168Pool[_v168i];
+            if (!_v168Entry || !_v168Entry.url) continue;
+            if (_v168Seen.has(_v168Entry.url)) continue;
+            // Same V.159 outlier-floor sanity check: skip if price is
+            // implausibly below the V.145 median floor (when set).
+            if (_v145Floor != null && Number(_v168Entry.price_gbp) < Number(_v145Floor)) continue;
+            _v168Added.push({
+              url:          _v168Entry.url,
+              retailer:     _v168Entry.name || _v168Entry.host || 'Retailer',
+              price_gbp:    Number(_v168Entry.price_gbp),
+              price_str:    '\u00a3' + Number(_v168Entry.price_gbp).toFixed(2),
+              delivery_note: '',
+              thumbnail:    _v168Entry.thumbnail || null,
+              is_outlier:   false,
+              is_primary:   false,
+              _v168_relaxed: true,
+            });
+            _v168Seen.add(_v168Entry.url);
+          }
+          if (_v168Added.length > 0) {
+            _v161FinalLinks = _v161FinalLinks.concat(_v168Added);
+            try { console.log('[V.168][FAILSAFE] relaxed ' + _v168Added.length + ' link(s) from pool · new_total=' + _v161FinalLinks.length + ' · hosts=' + _v168Added.map(l => { try { return new URL(l.url).hostname; } catch (e) { return '?'; } }).join(',')); } catch (e) {}
+          }
+        }
+      } catch (_v168Err) {
+        try { console.warn('[V.168][FAILSAFE] pool merge threw:', _v168Err && _v168Err.message); } catch (e) {}
+      }
     }
   } catch (_v161Err) {
     try { console.warn('[V.161] diversity pass threw — falling back to V.159 order:', _v161Err && _v161Err.message); } catch (e) {}
