@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v189-preflight-polish';
+const VERSION             = 'normalize.js v3.4.5v190-final-arbiter-and-coercion';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -3692,6 +3692,50 @@ function parseAndDefault(rawText) {
       });
     }
   }
+  // ──────────────────────────────────────────────────────────────────
+  // V.190 — SERVER-SIDE CATEGORY-TAG COERCION (Bosch Lawnmower fix).
+  // Field test: "Bosch Lawnmower" returned three Bosch Rotak alternatives
+  // labelled DISHWASHER / POWER TOOL / WET & DRY VAC — hallucinated by
+  // Haiku because the tag prompt isn't strict enough to enforce family
+  // coherence. Server-side validator: if all alternatives share the same
+  // first word (brand) AND the unique tag count is ≥ 2 (i.e. Haiku gave
+  // them inconsistent categories), strip every tag so the frontend falls
+  // back to a single shared category derived from the parent query.
+  // We cannot trust the LLM to self-regulate this visually-breaking bug.
+  // ──────────────────────────────────────────────────────────────────
+  try {
+    if (Array.isArray(alternatives_array) && alternatives_array.length >= 2
+        && Array.isArray(alternatives_meta)
+        && alternatives_meta.length === alternatives_array.length) {
+      // First-word-of-each-alt set. If they all share the same brand token,
+      // they're a single brand's product line and disjoint tags are bogus.
+      const _v190FirstWords = alternatives_array.map(s => {
+        if (!s || typeof s !== 'string') return '';
+        const w = s.trim().split(/\s+/)[0] || '';
+        return w.toLowerCase().replace(/[^a-z0-9]/g, '');
+      }).filter(Boolean);
+      const _v190SharedBrand = _v190FirstWords.length === alternatives_array.length
+                            && new Set(_v190FirstWords).size === 1;
+      if (_v190SharedBrand) {
+        // Collect non-null tags + count uniques.
+        const _v190Tags = alternatives_meta
+          .map(m => (m && typeof m.tag === 'string' && m.tag.trim()) ? m.tag.trim().toUpperCase() : null)
+          .filter(Boolean);
+        const _v190UniqueTags = new Set(_v190Tags);
+        if (_v190UniqueTags.size >= 2) {
+          try { console.log('[V.190][category_coercion] stripping disjoint tags for shared-brand alternatives: brand="' + _v190FirstWords[0] + '" tags=[' + Array.from(_v190UniqueTags).join('|') + ']'); } catch (e) {}
+          for (let _v190i = 0; _v190i < alternatives_meta.length; _v190i++) {
+            if (alternatives_meta[_v190i] && typeof alternatives_meta[_v190i] === 'object') {
+              alternatives_meta[_v190i].tag = null;
+            }
+          }
+        }
+      }
+    }
+  } catch (_v190CtErr) {
+    try { console.warn('[V.190][category_coercion] threw:', _v190CtErr && _v190CtErr.message); } catch (e) {}
+  }
+
   let category = ['tech','home','toys','diy','beauty','grocery','health','generic'].includes(parsed.category) ? parsed.category : 'generic';
   // v3.4.5q Wave F.1 — keyword-driven category override (defense-in-depth).
   // Beta finding 6 May 2026: Listerine snap returned with Currys/JL in alternatives, meaning Haiku
@@ -6109,8 +6153,12 @@ function _v138BuildResponse({
   if (outcome === 'matched' && Array.isArray(links)) {
     const _v168PricedLinks = links.filter(l => l && l.price_gbp != null && !l.is_outlier).length;
     if (_v168PricedLinks === 0) {
-      outcome = 'not_found';
-      outcome_reason = 'matched_no_links_post_filter';
+      // V.190 — was 'not_found' (which V.201 then rescued to a hollow
+      // matched_thin). Route directly to needs_specificity so the V.190
+      // final arbiter doesn't need to undo a V.201 injection. V.201 will
+      // only fire if outcome is no_match / not_found from upstream.
+      outcome = 'needs_specificity';
+      outcome_reason = 'mvs_failed_zero_links';
     } else if (_v168PricedLinks === 1) {
       // V.186 — MVS CIRCUIT BREAKER. A single-link stack is a dead
       // product per Founder mandate. Even Amazon-alone, even brand-
@@ -6181,6 +6229,46 @@ function _v138BuildResponse({
       pricing.avg_market = null;
       pricing.price_band = null;
     }
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // V.190 — MVS ABSOLUTE FINAL ARBITER.
+  //
+  // Founder mandate after V.189 field test: the V.201 premium-brand
+  // soft-match rescue was rendering hollow Amazon-search CTAs on
+  // result screens, violating the Constitution's "Zero useless screens"
+  // principle. V.186 needs to fire AFTER every other rescue path so
+  // that ANY final state with < 2 priced anchors becomes
+  // needs_specificity — regardless of what V.201 / V.150 / V.168 set.
+  //
+  // This block reads the FINAL link state after every preceding rescue
+  // pass has run. Counts links with a real price_gbp (V.201 soft-match
+  // links have price_gbp:null and don't count). If the result is < 2,
+  // we override to needs_specificity, undo V.201's hollow CTA injection
+  // so the frontend doesn't get conflicting state, and let the V.186
+  // specificity_message render the helpful ambiguity screen instead.
+  // ──────────────────────────────────────────────────────────────────
+  try {
+    if (outcome !== 'disambig' && outcome !== 'needs_specificity' && Array.isArray(links)) {
+      const _v190PricedFinal = links.filter(l => l && l.price_gbp != null && Number(l.price_gbp) > 0 && !l.is_outlier).length;
+      if (_v190PricedFinal < 2) {
+        try { console.log('[V.190][final_arbiter] override outcome="' + outcome + '" → "needs_specificity" (priced_final=' + _v190PricedFinal + ' < 2 · prev_reason=' + outcome_reason + ')'); } catch (e) {}
+        outcome = 'needs_specificity';
+        outcome_reason = 'mvs_failed_final_arbiter_' + _v190PricedFinal + '_link' + (_v190PricedFinal === 1 ? '' : 's');
+        // Purge any V.201 soft-match injections so the frontend gets a
+        // clean payload. The specificity screen needs no link cards.
+        try {
+          links.length = 0;
+          if (pricing) {
+            pricing.best_price = null;
+            pricing.avg_market = null;
+            pricing.price_band = null;
+          }
+        } catch (e) {}
+      }
+    }
+  } catch (_v190FaErr) {
+    try { console.warn('[V.190][final_arbiter] threw:', _v190FaErr && _v190FaErr.message); } catch (e) {}
   }
 
   // ──────────────────────────────────────────────────────────────────

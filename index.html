@@ -5926,6 +5926,145 @@ button.v172-type-submit {
     background-size: 200% 100%;
   }
 }
+/* V.190 — Hide the V.168 skeleton if any cached DOM still mounts it.
+   The V.168 baseline was superseded 16 May 2026 by the V.190
+   swirling-£-labels loader. Defensive zap so a stale cached payload
+   can't double-paint the rejected static blocks. */
+.v168-skel-screen, #v168-skel-host { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   V.190 — SWIRLING £ PRICE LABELS LOADER (supersedes V.168 skeleton)
+   Founder-authorised replacement on 16 May 2026 after field rejection
+   of the static-block skeleton. GPU-only animations: transform + opacity.
+   No width/height/margin transitions inside #screen-loading per V.167.
+   ═══════════════════════════════════════════════════════════════════ */
+.v190-loader-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  /* Provide ample vertical space for the ring radius. */
+  min-height: 360px;
+}
+.v190-loader-core {
+  position: relative;
+  z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 14px;
+}
+.v190-loader-disk {
+  width: 96px; height: 96px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #318c27 0%, #205c1b 100%);
+  color: #ffffff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow:
+    0 0 0 8px rgba(42, 107, 34, 0.12),
+    0 12px 28px -6px rgba(42, 107, 34, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.30) inset;
+  animation: v190-disk-pulse 1.8s ease-in-out infinite;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+.v190-loader-icon { display: block; }
+.v190-loader-caption {
+  font-family: var(--sav-font-stack-system, system-ui);
+  font-weight: 700; font-size: 15px;
+  letter-spacing: -0.005em;
+  color: #14201a;
+  text-align: center;
+}
+@keyframes v190-disk-pulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 8px rgba(42,107,34,0.12), 0 12px 28px -6px rgba(42,107,34,0.45), 0 1px 0 rgba(255,255,255,0.30) inset; }
+  50%      { transform: scale(1.06); box-shadow: 0 0 0 14px rgba(42,107,34,0.08), 0 16px 36px -6px rgba(42,107,34,0.55), 0 1px 0 rgba(255,255,255,0.30) inset; }
+}
+
+/* Orbiting pill ring. Each pill is absolute-positioned at the centre,
+   then translated outward via the keyframe. We use rotate(deg) translate(r)
+   rotate(-deg) so the pill text stays upright while the orbit sweeps. */
+.v190-loader-ring {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 0; height: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+.v190-loader-pill {
+  position: absolute;
+  top: 0; left: 0;
+  transform-origin: 0 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 6px 12px;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #14201a;
+  font-family: var(--sav-font-stack-system, system-ui);
+  font-weight: 700; font-size: 13px;
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  border: 1px solid rgba(42, 107, 34, 0.14);
+  box-shadow:
+    0 4px 12px -2px rgba(42, 107, 34, 0.18),
+    0 1px 3px rgba(0, 0, 0, 0.08);
+  animation: v190-orbit-sweep 7.5s linear infinite;
+  will-change: transform, opacity;
+}
+/* 8 staggered phases so the pills are evenly distributed around the
+   orbit at any frozen instant. Each starts at a different time offset
+   in the same 7.5s loop. */
+.v190-loader-pill-0 { animation-delay:  0.00s; }
+.v190-loader-pill-1 { animation-delay: -0.94s; }
+.v190-loader-pill-2 { animation-delay: -1.87s; }
+.v190-loader-pill-3 { animation-delay: -2.81s; }
+.v190-loader-pill-4 { animation-delay: -3.75s; }
+.v190-loader-pill-5 { animation-delay: -4.69s; }
+.v190-loader-pill-6 { animation-delay: -5.62s; }
+.v190-loader-pill-7 { animation-delay: -6.56s; }
+@keyframes v190-orbit-sweep {
+  0%   { transform: translate(-50%, -50%) rotate(0deg)   translateX(135px) rotate(0deg);    opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { transform: translate(-50%, -50%) rotate(360deg) translateX(135px) rotate(-360deg); opacity: 0; }
+}
+@media (prefers-color-scheme: dark) {
+  .v190-loader-caption { color: #f4f6f4; }
+  .v190-loader-pill {
+    background: #1a1f1c;
+    color: #f4f6f4;
+    border-color: rgba(95, 180, 85, 0.20);
+    box-shadow:
+      0 4px 12px -2px rgba(0, 0, 0, 0.5),
+      0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+}
+@media (max-width: 360px) {
+  /* Slightly tighter orbit on small phones so the pills don't clip. */
+  @keyframes v190-orbit-sweep {
+    0%   { transform: translate(-50%, -50%) rotate(0deg)   translateX(110px) rotate(0deg);    opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { transform: translate(-50%, -50%) rotate(360deg) translateX(110px) rotate(-360deg); opacity: 0; }
+  }
+}
+/* Respect prefers-reduced-motion — freeze orbit + pulse. */
+@media (prefers-reduced-motion: reduce) {
+  .v190-loader-disk { animation: none; }
+  .v190-loader-pill {
+    animation: none;
+    opacity: 1;
+    /* Lay pills out in a static ring via simple positioning fallback. */
+    transform: translate(-50%, -50%) translateX(135px);
+  }
+  .v190-loader-pill-1 { transform: translate(-50%, -50%) rotate( 45deg) translateX(135px) rotate(-45deg); }
+  .v190-loader-pill-2 { transform: translate(-50%, -50%) rotate( 90deg) translateX(135px) rotate(-90deg); }
+  .v190-loader-pill-3 { transform: translate(-50%, -50%) rotate(135deg) translateX(135px) rotate(-135deg); }
+  .v190-loader-pill-4 { transform: translate(-50%, -50%) rotate(180deg) translateX(135px) rotate(-180deg); }
+  .v190-loader-pill-5 { transform: translate(-50%, -50%) rotate(225deg) translateX(135px) rotate(-225deg); }
+  .v190-loader-pill-6 { transform: translate(-50%, -50%) rotate(270deg) translateX(135px) rotate(-270deg); }
+  .v190-loader-pill-7 { transform: translate(-50%, -50%) rotate(315deg) translateX(135px) rotate(-315deg); }
+}
 
 /* ═══════════════════════════════════════════════════════════════════
    V.172 iOS VIEWPORT + NAV LOCK + STABILISATION
@@ -8819,8 +8958,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v189-PREFLIGHT-POLISH';
-  var V126_GUARD          = 'savvey_v189_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v190-FINAL-ARBITER-COERCION-SWIRL';
+  var V126_GUARD          = 'savvey_v190_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -9166,7 +9305,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v189</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v190</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9976,63 +10115,130 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 // renderResult (and renderConfirm) so the skeleton never overlaps
 // the real result paint.
 // ─────────────────────────────────────────────────────────────────────────
-(function _v168SkeletonInit() {
-  function buildSkel() {
+// ─────────────────────────────────────────────────────────────────────────
+// V.190 — SWIRLING £ PRICE LABELS LOADING UI (supersedes V.168 skeleton).
+// Founder authorisation 16 May 2026: V.168 skeleton baseline rejected in
+// field test as "static and terrible". V.190 ships the 2026-localized
+// concept: a centralised "checking market" visual with a dynamic orbiting
+// ring of UK £ price labels visualising live market scraping.
+//
+// Architecture:
+//   #v190-loader-host (mounted into #screen-loading on show('loading'))
+//     ├── .v190-loader-core   — centred pulsing green disk + magnifier icon
+//     │     + "Checking the market…" caption beneath
+//     └── .v190-loader-ring   — absolute-positioned price-label pills
+//             orbiting the core via rotate(deg) translate(radius) rotate(-deg)
+//             keyframe. 8 pills, each with staggered animation-delay so
+//             they sweep at different positions. Each pill's text cycles
+//             through plausible UK £ values (£8.99 → £349 range)
+//             refreshed every 1.6s via a single setInterval that only
+//             ticks while the loader is mounted (cleaned up on unmount).
+//
+// Performance: pure CSS transforms + opacity only — GPU-accelerated, no
+// width/height/margin transitions (preserves the V.167 stutter-fix rule
+// for #screen-loading). Single requestAnimationFrame-friendly setInterval
+// at 1.6s — extremely lightweight.
+// ─────────────────────────────────────────────────────────────────────────
+(function _v190LoaderInit() {
+  // Plausible UK price pool — wide enough to feel like real market data.
+  var V190_PRICE_POOL = [
+    '£4.99','£8.50','£12.99','£14.95','£18.00','£22.50','£27.99',
+    '£29.00','£34.50','£39.99','£44.95','£49.99','£54.00','£59.99',
+    '£64.50','£69.99','£75.00','£79.95','£89.00','£99.99','£109.00',
+    '£119.99','£129.50','£149.00','£169.00','£189.99','£199.00',
+    '£229.00','£249.99','£279.00','£329.00','£349.99'
+  ];
+  var V190_PILL_COUNT = 8;
+  var _v190Interval = null;
+
+  function pick() { return V190_PRICE_POOL[Math.floor(Math.random() * V190_PRICE_POOL.length)]; }
+
+  function buildLoader() {
     var host = document.createElement('div');
-    host.id = 'v168-skel-host';
-    host.className = 'v168-skel-screen';
+    host.id = 'v190-loader-host';
+    host.className = 'v190-loader-screen';
     host.setAttribute('aria-hidden', 'true');
-    host.innerHTML =
-      '<div class="v168-skel-card">' +
-        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-pill"></span></div>' +
-        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w80"></span></div>' +
-        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w50"></span></div>' +
+
+    // Core: green pulsing disk + magnifier icon + caption.
+    var core = document.createElement('div');
+    core.className = 'v190-loader-core';
+    core.innerHTML =
+      '<div class="v190-loader-disk">' +
+        '<svg class="v190-loader-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+          '<circle cx="11" cy="11" r="6"></circle>' +
+          '<line x1="20" y1="20" x2="15.5" y2="15.5"></line>' +
+        '</svg>' +
       '</div>' +
-      '<div class="v168-skel-card">' +
-        '<div class="v168-skel-row">' +
-          '<span class="v168-skel-box v168-skel-thumb"></span>' +
-          '<span style="flex:1;display:flex;flex-direction:column;gap:8px">' +
-            '<span class="v168-skel-box v168-skel-title"></span>' +
-            '<span class="v168-skel-box v168-skel-sub"></span>' +
-          '</span>' +
-        '</div>' +
-        '<div class="v168-skel-row" style="justify-content:space-between">' +
-          '<span class="v168-skel-box v168-skel-price"></span>' +
-          '<span class="v168-skel-box v168-skel-line w50" style="max-width:80px"></span>' +
-        '</div>' +
-      '</div>' +
-      '<div class="v168-skel-card">' +
-        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w70"></span></div>' +
-        '<div class="v168-skel-row"><span class="v168-skel-box v168-skel-line w80"></span></div>' +
-      '</div>';
+      '<div class="v190-loader-caption">Checking the market…</div>';
+
+    // Ring of orbiting £ pills.
+    var ring = document.createElement('div');
+    ring.className = 'v190-loader-ring';
+    var pills = [];
+    for (var i = 0; i < V190_PILL_COUNT; i++) {
+      var pill = document.createElement('span');
+      pill.className = 'v190-loader-pill v190-loader-pill-' + i;
+      pill.textContent = pick();
+      ring.appendChild(pill);
+      pills.push(pill);
+    }
+
+    host.appendChild(core);
+    host.appendChild(ring);
+
+    // Refresh pill text every 1.6s so the "scraping" feels live.
+    if (_v190Interval) { try { clearInterval(_v190Interval); } catch (e) {} }
+    _v190Interval = setInterval(function () {
+      if (!document.body.contains(host)) {
+        try { clearInterval(_v190Interval); } catch (e) {}
+        _v190Interval = null;
+        return;
+      }
+      // Refresh ~3 random pills each tick — gives a live, organic feel
+      // without all 8 numbers churning in lockstep.
+      for (var j = 0; j < 3; j++) {
+        var idx = Math.floor(Math.random() * pills.length);
+        pills[idx].textContent = pick();
+      }
+    }, 1600);
+
     return host;
   }
-  function mountSkel() {
+
+  function mountLoader() {
     try {
       var screen = document.getElementById('screen-loading');
       if (!screen) return;
-      if (document.getElementById('v168-skel-host')) return;
-      screen.appendChild(buildSkel());
+      if (document.getElementById('v190-loader-host')) return;
+      screen.appendChild(buildLoader());
     } catch (e) {}
   }
-  function unmountSkel() {
+  function unmountLoader() {
     try {
-      var existing = document.getElementById('v168-skel-host');
+      var existing = document.getElementById('v190-loader-host');
       if (existing) existing.remove();
+      if (_v190Interval) { try { clearInterval(_v190Interval); } catch (e) {} _v190Interval = null; }
     } catch (e) {}
   }
-  window._v168MountSkel   = mountSkel;
-  window._v168UnmountSkel = unmountSkel;
-  // Wrap window.show() so every entry into 'loading' mounts the
-  // skeleton, and every entry into 'result' / 'confirm' / 'home' /
-  // 'error' tears it down. Idempotent — checks for existing wrap.
-  if (typeof window.show === 'function' && !window.__v168ShowWrapped) {
-    window.__v168ShowWrapped = true;
+
+  window._v190MountLoader   = mountLoader;
+  window._v190UnmountLoader = unmountLoader;
+  // Back-compat: keep V.168 mount/unmount handles wired to the new loader
+  // so any legacy call site still works without code change.
+  window._v168MountSkel     = mountLoader;
+  window._v168UnmountSkel   = unmountLoader;
+
+  // Wrap window.show() so every entry into 'loading' mounts the loader,
+  // and every entry into any other screen tears it down. Idempotent —
+  // checks the V.190 wrap flag AND the legacy V.168 flag.
+  if (typeof window.show === 'function' && !window.__v190ShowWrapped) {
+    window.__v190ShowWrapped = true;
+    window.__v168ShowWrapped = true; // mark V.168 wrap as done too
     var _origShow = window.show;
-    window.show = function (id, opts) {
+    window.show = function (id) {
       try {
-        if (id === 'loading') mountSkel();
-        else unmountSkel();
+        if (id === 'loading') mountLoader();
+        else unmountLoader();
       } catch (e) {}
       return _origShow.apply(this, arguments);
     };
