@@ -5933,10 +5933,88 @@ button.v172-type-submit {
 .v168-skel-screen, #v168-skel-host { display: none !important; }
 
 /* ═══════════════════════════════════════════════════════════════════
-   V.190 — SWIRLING £ PRICE LABELS LOADER (supersedes V.168 skeleton)
+   V.192 — CENTRED 'S' LOGO + CYCLING TRUSTED BRAND NAMES (LOCKED)
    Founder-authorised replacement on 16 May 2026 after field rejection
-   of the static-block skeleton. GPU-only animations: transform + opacity.
-   No width/height/margin transitions inside #screen-loading per V.167.
+   of the V.190 swirling £ price pills. Minimal, clean, focused.
+   GPU-only: opacity transitions on the brand span + pulse on the disk.
+   ═══════════════════════════════════════════════════════════════════ */
+.v192-loader-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 22px;
+  pointer-events: none;
+  padding: 0 24px;
+}
+.v192-loader-disk {
+  width: 96px; height: 96px;
+  border-radius: 9999px;
+  background: linear-gradient(180deg, #318c27 0%, #205c1b 100%);
+  color: #ffffff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--sav-font-stack-system, system-ui);
+  font-weight: 800; font-size: 42px;
+  letter-spacing: -0.02em;
+  box-shadow:
+    0 0 0 8px rgba(42, 107, 34, 0.10),
+    0 12px 28px -6px rgba(42, 107, 34, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.30) inset;
+  animation: v192-disk-pulse 1.8s ease-in-out infinite;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+  -webkit-transform: translateZ(0);
+}
+@keyframes v192-disk-pulse {
+  0%, 100% { transform: scale(1);    box-shadow: 0 0 0 8px  rgba(42,107,34,0.10), 0 12px 28px -6px rgba(42,107,34,0.45), 0 1px 0 rgba(255,255,255,0.30) inset; }
+  50%      { transform: scale(1.06); box-shadow: 0 0 0 14px rgba(42,107,34,0.06), 0 16px 36px -6px rgba(42,107,34,0.55), 0 1px 0 rgba(255,255,255,0.30) inset; }
+}
+.v192-loader-text {
+  font-family: var(--sav-font-stack-system, system-ui);
+  font-weight: 600; font-size: 16px;
+  letter-spacing: -0.005em;
+  color: #14201a;
+  text-align: center;
+  /* Reserve a stable height so brand-name swaps don't reflow vertically. */
+  line-height: 1.4;
+  min-height: 22px;
+  white-space: nowrap;
+}
+.v192-loader-brand {
+  display: inline-block;
+  font-weight: 800;
+  color: #2a6b22;
+  /* min-width prevents horizontal layout shift as different brand
+     names (Argos vs John Lewis vs Official Stores) come in. */
+  min-width: 110px;
+  text-align: left;
+  transition: opacity 220ms ease;
+}
+.v192-loader-brand.is-fading { opacity: 0; }
+.v192-loader-dots {
+  display: inline-block;
+  color: #14201a;
+  margin-left: 1px;
+}
+@media (prefers-color-scheme: dark) {
+  .v192-loader-text, .v192-loader-dots { color: #f4f6f4; }
+  .v192-loader-brand { color: #9bd089; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .v192-loader-disk { animation: none; }
+  .v192-loader-brand { transition: none; }
+  .v192-loader-brand.is-fading { opacity: 1; }
+}
+/* Defensive — hide V.190 swirling-pill DOM if any cached payload tries
+   to paint it. Same pattern as the V.168 skeleton hide. */
+.v190-loader-screen, #v190-loader-host { display: none !important; }
+
+/* ═══════════════════════════════════════════════════════════════════
+   V.190 — Swirling £ price labels CSS retained as DORMANT rules
+   (superseded by V.192, hidden defensively above). Kept in source
+   for one wave so any in-flight cached HTML can degrade gracefully.
    ═══════════════════════════════════════════════════════════════════ */
 .v190-loader-screen {
   position: absolute;
@@ -8958,8 +9036,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v191-BARCODE-TRANSLATION';
-  var V126_GUARD          = 'savvey_v191_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v192-LOADER-S-CYCLE';
+  var V126_GUARD          = 'savvey_v192_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -9305,7 +9383,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v191</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v192</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -10116,92 +10194,50 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
 // the real result paint.
 // ─────────────────────────────────────────────────────────────────────────
 // ─────────────────────────────────────────────────────────────────────────
-// V.190 — SWIRLING £ PRICE LABELS LOADING UI (supersedes V.168 skeleton).
-// Founder authorisation 16 May 2026: V.168 skeleton baseline rejected in
-// field test as "static and terrible". V.190 ships the 2026-localized
-// concept: a centralised "checking market" visual with a dynamic orbiting
-// ring of UK £ price labels visualising live market scraping.
-//
-// Architecture:
-//   #v190-loader-host (mounted into #screen-loading on show('loading'))
-//     ├── .v190-loader-core   — centred pulsing green disk + magnifier icon
-//     │     + "Checking the market…" caption beneath
-//     └── .v190-loader-ring   — absolute-positioned price-label pills
-//             orbiting the core via rotate(deg) translate(radius) rotate(-deg)
-//             keyframe. 8 pills, each with staggered animation-delay so
-//             they sweep at different positions. Each pill's text cycles
-//             through plausible UK £ values (£8.99 → £349 range)
-//             refreshed every 1.6s via a single setInterval that only
-//             ticks while the loader is mounted (cleaned up on unmount).
-//
-// Performance: pure CSS transforms + opacity only — GPU-accelerated, no
-// width/height/margin transitions (preserves the V.167 stutter-fix rule
-// for #screen-loading). Single requestAnimationFrame-friendly setInterval
-// at 1.6s — extremely lightweight.
+// V.192 — CENTRED 'S' LOGO + CYCLING TRUSTED BRAND NAMES (FINAL LOCK).
+// Founder field rejection 16 May 2026 of the V.190 swirling £ price pills
+// concept. Final, minimal, locked design:
+//   - Centred green 'S' Savvey logo (96px disk, soft pulse).
+//   - Single text line below: "Checking <BRAND>…"
+//   - <BRAND> token cycles through the V.169-trusted UK names every 900ms
+//     with a clean opacity fade. Pool: Amazon, Argos, Currys, John Lewis,
+//     AO, Boots, Screwfix, B&Q, Halfords, Official Stores.
+//   - GPU-only: opacity transitions on the brand span; pulse on the disk.
+//   - Honours V.167's #screen-loading transition-property rule
+//     (opacity + transform only — no width/height/margin).
+//   - prefers-reduced-motion: pulse + fade frozen; static brand reads.
+// V.168 skeleton CSS + V.190 swirling pill CSS are both kept as dormant
+// rules (display:none / no DOM mount) so any cached payload can't paint
+// the rejected designs.
 // ─────────────────────────────────────────────────────────────────────────
-(function _v190LoaderInit() {
-  // Plausible UK price pool — wide enough to feel like real market data.
-  var V190_PRICE_POOL = [
-    '£4.99','£8.50','£12.99','£14.95','£18.00','£22.50','£27.99',
-    '£29.00','£34.50','£39.99','£44.95','£49.99','£54.00','£59.99',
-    '£64.50','£69.99','£75.00','£79.95','£89.00','£99.99','£109.00',
-    '£119.99','£129.50','£149.00','£169.00','£189.99','£199.00',
-    '£229.00','£249.99','£279.00','£329.00','£349.99'
+(function _v192LoaderInit() {
+  var V192_BRANDS = [
+    'Amazon',
+    'Argos',
+    'Currys',
+    'John Lewis',
+    'AO',
+    'Boots',
+    'Screwfix',
+    'B&Q',
+    'Halfords',
+    'Official Stores'
   ];
-  var V190_PILL_COUNT = 8;
-  var _v190Interval = null;
-
-  function pick() { return V190_PRICE_POOL[Math.floor(Math.random() * V190_PRICE_POOL.length)]; }
+  var V192_CYCLE_MS = 900; // total per-brand dwell time (incl. fade)
+  var V192_FADE_MS  = 220; // opacity transition window
+  var _v192Interval = null;
+  var _v192Idx = 0;
 
   function buildLoader() {
     var host = document.createElement('div');
-    host.id = 'v190-loader-host';
-    host.className = 'v190-loader-screen';
+    host.id = 'v192-loader-host';
+    host.className = 'v192-loader-screen';
     host.setAttribute('aria-hidden', 'true');
-
-    // Core: green pulsing disk + magnifier icon + caption.
-    var core = document.createElement('div');
-    core.className = 'v190-loader-core';
-    core.innerHTML =
-      '<div class="v190-loader-disk">' +
-        '<svg class="v190-loader-icon" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
-          '<circle cx="11" cy="11" r="6"></circle>' +
-          '<line x1="20" y1="20" x2="15.5" y2="15.5"></line>' +
-        '</svg>' +
-      '</div>' +
-      '<div class="v190-loader-caption">Checking the market…</div>';
-
-    // Ring of orbiting £ pills.
-    var ring = document.createElement('div');
-    ring.className = 'v190-loader-ring';
-    var pills = [];
-    for (var i = 0; i < V190_PILL_COUNT; i++) {
-      var pill = document.createElement('span');
-      pill.className = 'v190-loader-pill v190-loader-pill-' + i;
-      pill.textContent = pick();
-      ring.appendChild(pill);
-      pills.push(pill);
-    }
-
-    host.appendChild(core);
-    host.appendChild(ring);
-
-    // Refresh pill text every 1.6s so the "scraping" feels live.
-    if (_v190Interval) { try { clearInterval(_v190Interval); } catch (e) {} }
-    _v190Interval = setInterval(function () {
-      if (!document.body.contains(host)) {
-        try { clearInterval(_v190Interval); } catch (e) {}
-        _v190Interval = null;
-        return;
-      }
-      // Refresh ~3 random pills each tick — gives a live, organic feel
-      // without all 8 numbers churning in lockstep.
-      for (var j = 0; j < 3; j++) {
-        var idx = Math.floor(Math.random() * pills.length);
-        pills[idx].textContent = pick();
-      }
-    }, 1600);
-
+    host.innerHTML =
+      '<div class="v192-loader-disk" aria-hidden="true">S</div>' +
+      '<div class="v192-loader-text">Checking <span class="v192-loader-brand" id="v192-loader-brand">' +
+        V192_BRANDS[0] +
+      '</span><span class="v192-loader-dots">…</span></div>';
     return host;
   }
 
@@ -10209,31 +10245,54 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     try {
       var screen = document.getElementById('screen-loading');
       if (!screen) return;
-      if (document.getElementById('v190-loader-host')) return;
+      if (document.getElementById('v192-loader-host')) return;
       screen.appendChild(buildLoader());
+      _v192Idx = 0;
+      if (_v192Interval) { try { clearInterval(_v192Interval); } catch (e) {} }
+      _v192Interval = setInterval(function () {
+        var span = document.getElementById('v192-loader-brand');
+        if (!span) {
+          try { clearInterval(_v192Interval); } catch (e) {}
+          _v192Interval = null;
+          return;
+        }
+        // Fade out → swap text → fade in. CSS handles the smooth opacity
+        // transition; we just toggle the class.
+        span.classList.add('is-fading');
+        setTimeout(function () {
+          // Re-resolve in case the loader was torn down mid-fade.
+          var s = document.getElementById('v192-loader-brand');
+          if (!s) return;
+          _v192Idx = (_v192Idx + 1) % V192_BRANDS.length;
+          s.textContent = V192_BRANDS[_v192Idx];
+          s.classList.remove('is-fading');
+        }, V192_FADE_MS);
+      }, V192_CYCLE_MS);
     } catch (e) {}
   }
   function unmountLoader() {
     try {
-      var existing = document.getElementById('v190-loader-host');
+      var existing = document.getElementById('v192-loader-host');
       if (existing) existing.remove();
-      if (_v190Interval) { try { clearInterval(_v190Interval); } catch (e) {} _v190Interval = null; }
+      if (_v192Interval) { try { clearInterval(_v192Interval); } catch (e) {} _v192Interval = null; }
     } catch (e) {}
   }
 
+  // Public + back-compat handles. Every prior wave's mount/unmount API
+  // points at the same V.192 loader so legacy call sites still work.
+  window._v192MountLoader   = mountLoader;
+  window._v192UnmountLoader = unmountLoader;
   window._v190MountLoader   = mountLoader;
   window._v190UnmountLoader = unmountLoader;
-  // Back-compat: keep V.168 mount/unmount handles wired to the new loader
-  // so any legacy call site still works without code change.
   window._v168MountSkel     = mountLoader;
   window._v168UnmountSkel   = unmountLoader;
 
-  // Wrap window.show() so every entry into 'loading' mounts the loader,
-  // and every entry into any other screen tears it down. Idempotent —
-  // checks the V.190 wrap flag AND the legacy V.168 flag.
-  if (typeof window.show === 'function' && !window.__v190ShowWrapped) {
+  // Wrap window.show() once. Multiple wave flags are set so prior init
+  // attempts (V.168/V.190) are short-circuited if they ever re-execute.
+  if (typeof window.show === 'function' && !window.__v192ShowWrapped) {
+    window.__v192ShowWrapped = true;
     window.__v190ShowWrapped = true;
-    window.__v168ShowWrapped = true; // mark V.168 wrap as done too
+    window.__v168ShowWrapped = true;
     var _origShow = window.show;
     window.show = function (id) {
       try {
