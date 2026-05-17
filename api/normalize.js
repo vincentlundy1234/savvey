@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v191-barcode-translation';
+const VERSION             = 'normalize.js v3.4.5v195-escape-hatches';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -6761,20 +6761,34 @@ function _v138BuildResponse({
     // fallback UI with the actual user query interpolated. Includes
     // the canonical the engine resolved AND the raw text the user
     // typed, so the UI can show the most legible label.
-    specificity_message: (outcome === 'needs_specificity') ? {
-      user_query:     (typeof rawInputText === 'string' && rawInputText.trim())
-                      ? rawInputText.trim().slice(0, 80)
-                      : ((parsed && parsed.canonical_search_string) ? parsed.canonical_search_string.slice(0, 80) : ''),
-      canonical:      (parsed && parsed.canonical_search_string) || null,
-      headline:       'Too many variations',
-      body:           "We found too many size/model variations for \"" +
-                      (((typeof rawInputText === 'string' && rawInputText.trim())
-                        ? rawInputText.trim()
-                        : ((parsed && parsed.canonical_search_string) || 'this product')).slice(0, 60)) +
-                      "\". To guarantee you get the exact lowest price, please scan the barcode or add the specific size/model.",
-      cta_primary:    { label: 'Scan barcode', action: 'open_barcode' },
-      cta_secondary:  { label: 'Refine search', action: 'focus_search' },
-    } : null,
+    specificity_message: (outcome === 'needs_specificity') ? (function () {
+      var _userQueryStr = (typeof rawInputText === 'string' && rawInputText.trim())
+        ? rawInputText.trim().slice(0, 80)
+        : ((parsed && parsed.canonical_search_string) ? parsed.canonical_search_string.slice(0, 80) : '');
+      var _canonStr = (parsed && parsed.canonical_search_string) || null;
+      // V.195 — Build the escape-hatch retailer chips on the backend so
+      // URL templates stay server-authoritative. Use the canonical query
+      // when available (more specific → better retailer-search results),
+      // fall back to the raw user query. URL-encode the search term.
+      var _v195SearchTerm = (_canonStr && _canonStr.trim()) ? _canonStr.trim() : _userQueryStr;
+      var _v195Enc = encodeURIComponent(_v195SearchTerm || '');
+      var _v195Hatches = (_v195SearchTerm && _v195SearchTerm.length > 0) ? [
+        { retailer: 'amazon', label: 'Amazon UK', url: 'https://www.amazon.co.uk/s?k=' + _v195Enc },
+        { retailer: 'bandq',  label: 'B&Q',       url: 'https://www.diy.com/search?term=' + _v195Enc },
+        { retailer: 'currys', label: 'Currys',    url: 'https://www.currys.co.uk/search?q=' + _v195Enc },
+      ] : [];
+      return {
+        user_query:     _userQueryStr,
+        canonical:      _canonStr,
+        headline:       'Too many variations',
+        body:           "We found too many size/model variations for \"" +
+                        ((_userQueryStr || _canonStr || 'this product').slice(0, 60)) +
+                        "\". To guarantee you get the exact lowest price, please scan the barcode or add the specific size/model.",
+        cta_primary:    { label: 'Scan barcode', action: 'open_barcode' },
+        cta_secondary:  { label: 'Refine search', action: 'focus_search' },
+        escape_hatches: _v195Hatches, // V.195 — named retailer-search deep links
+      };
+    })() : null,
     tiers,
     disclosure,
     schema_version: 1,

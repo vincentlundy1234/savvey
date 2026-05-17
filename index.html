@@ -5287,6 +5287,64 @@
     .v186-spec-body { color: rgba(244,246,244,0.72); }
     .v186-spec-cta-secondary { color: #f4f6f4; background: rgba(255,255,255,0.06); }
   }
+  /* V.195 — Escape-hatch retailer chips. Sits between the body copy and
+     the primary CTAs on the needs_specificity screen. Honest concierge
+     UX: we couldn't fetch live prices for this exact SKU, so here are
+     deep-search links to the obvious places to check. */
+  .v195-escape-row {
+    margin: 4px 0 18px;
+    text-align: center;
+  }
+  .v195-escape-eyebrow {
+    font-weight: 600; font-size: 12px;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: rgba(20, 32, 26, 0.55);
+    margin-bottom: 10px;
+  }
+  .v195-escape-chips {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+  .v195-escape-chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 10px 16px;
+    border-radius: 9999px;
+    background: #ffffff;
+    color: #14201a;
+    border: 1px solid rgba(20, 32, 26, 0.10);
+    font-family: var(--sav-font-stack-system, system-ui);
+    font-weight: 700; font-size: 14px;
+    letter-spacing: -0.005em;
+    text-decoration: none;
+    cursor: pointer;
+    transition: transform 150ms cubic-bezier(0.4, 0, 0.2, 1),
+                background 150ms cubic-bezier(0.4, 0, 0.2, 1),
+                border-color 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  }
+  .v195-escape-chip:hover {
+    background: #fafbf7;
+    border-color: rgba(42, 107, 34, 0.25);
+  }
+  .v195-escape-chip:active { transform: scale(0.95); }
+  .v195-escape-chip-mark {
+    width: 18px; height: 18px;
+    border-radius: 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 11px;
+    color: #ffffff;
+    flex-shrink: 0;
+  }
+  .v195-chip-amazon  .v195-escape-chip-mark { background: #232f3e; }
+  .v195-chip-bandq   .v195-escape-chip-mark { background: #ee7100; }
+  .v195-chip-currys  .v195-escape-chip-mark { background: #4c12a1; }
+  @media (prefers-color-scheme: dark) {
+    .v195-escape-eyebrow { color: rgba(244,246,244,0.55); }
+    .v195-escape-chip { background: #232826; color: #f4f6f4; border-color: rgba(255,255,255,0.08); }
+    .v195-escape-chip:hover { background: #2c3331; border-color: rgba(95,180,85,0.30); }
+  }
 
   /* V.185 — HERO ANCHOR CARD (Brand Direct + Amazon).
      The two anchors of truth. Sits above the scrollable retailer list
@@ -9036,8 +9094,8 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
   // EXPECTED is the cache key the current deploy SHOULD have written.
   // If we don't see it AND we have stale savvey-static-* caches lying
   // around, nuke EVERYTHING and force-reload once.
-  var V126_EXPECTED_CACHE = 'savvey-static-v345v192-LOADER-S-CYCLE';
-  var V126_GUARD          = 'savvey_v192_nuke_done';
+  var V126_EXPECTED_CACHE = 'savvey-static-v345v195-ESCAPE-HATCHES';
+  var V126_GUARD          = 'savvey_v195_nuke_done';
   if ('serviceWorker' in navigator && 'caches' in window) {
     try {
       caches.keys().then(function(keys){
@@ -9383,7 +9441,7 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
     <!-- Trust footer per v5 -->
     <footer class="v5-home-footer">
       <p class="trust-line"><strong>How Savvey works.</strong> We identify your product with AI, give you typical-price context, and link straight to each retailer. We don't fetch live prices — always confirm at the retailer before buying.</p>
-      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v192</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
+      <p class="trust-line trust-disclosure">Affiliate disclosure: Savvey may earn a small commission when you buy via the Amazon link. It never changes the price you pay. <span class="beta-tag" id="version-tag">Beta · v3.4.5v195</span> <a href="#" id="reset-link" style="display:none;color:var(--ink-mute);text-decoration:underline;font-size:11px;margin-left:6px;" aria-label="Force refresh and clear cache">Reset</a></p>
     </footer>
   </div>
 </div>
@@ -9950,6 +10008,16 @@ posthog.init('phc_tjmhKmsHUcPa6E5ARBKHiLLRemnmVTZuaKdaChDttXSv',{api_host:'https
       <p class="v186-spec-body" id="v186-spec-body">
         We found too many size/model variations to lock in a fair price. Scan the barcode or add the specific size/model to get the exact lowest price.
       </p>
+      <!-- V.195 — Escape-hatch retailer chips. Populated by
+           _v186RenderNeedsSpecificity from payload.specificity_message.
+           escape_hatches (or built client-side as a fallback). Each chip
+           deep-links to a UK retailer's search page for the canonical
+           query so the user gets a one-tap escape to the obvious next
+           place to check, not a dead end. -->
+      <div class="v195-escape-row" id="v195-escape-row" style="display:none;">
+        <div class="v195-escape-eyebrow">Or check it yourself:</div>
+        <div class="v195-escape-chips" id="v195-escape-chips"></div>
+      </div>
       <div class="v186-spec-ctas">
         <button class="v186-spec-cta v186-spec-cta-primary" id="v186-spec-cta-scan">
           <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right:8px;">
@@ -14417,6 +14485,54 @@ function _v186RenderNeedsSpecificity(payload, body) {
     var q = bodyEl.querySelector('.v186-spec-query');
     if (q) q.textContent = userQuery || 'this product';
   }
+  // V.195 — Render the escape-hatch retailer chips. Prefer the backend-
+  // provided escape_hatches array (URL templates stay server-authoritative);
+  // fall back to client-side construction for older cached payloads that
+  // predate V.195.
+  try {
+    var hatchRow   = document.getElementById('v195-escape-row');
+    var hatchChips = document.getElementById('v195-escape-chips');
+    if (hatchRow && hatchChips) {
+      hatchChips.innerHTML = '';
+      var hatches = (sm && Array.isArray(sm.escape_hatches) && sm.escape_hatches.length > 0)
+        ? sm.escape_hatches
+        : null;
+      if (!hatches && userQuery) {
+        // Client-side fallback for older payloads.
+        var qEnc = encodeURIComponent(userQuery);
+        hatches = [
+          { retailer: 'amazon', label: 'Amazon UK', url: 'https://www.amazon.co.uk/s?k=' + qEnc },
+          { retailer: 'bandq',  label: 'B&Q',       url: 'https://www.diy.com/search?term=' + qEnc },
+          { retailer: 'currys', label: 'Currys',    url: 'https://www.currys.co.uk/search?q=' + qEnc },
+        ];
+      }
+      if (hatches && hatches.length > 0) {
+        hatches.forEach(function (h) {
+          if (!h || !h.url || !h.label) return;
+          var a = document.createElement('a');
+          var slug = String(h.retailer || '').toLowerCase().replace(/[^a-z]/g, '');
+          a.className = 'v195-escape-chip v195-chip-' + (slug || 'rt');
+          a.href = h.url;
+          a.target = '_blank';
+          a.rel = 'noopener noreferrer';
+          var initial = String(h.label).charAt(0).toUpperCase();
+          a.innerHTML = '<span class="v195-escape-chip-mark">' + initial + '</span>' +
+                        '<span>' + h.label + '</span>';
+          a.addEventListener('click', function () {
+            try { track('mvs_escape_hatch_clicked', {
+              retailer: slug || 'unknown',
+              door: _lastDoor,
+              user_query: userQuery || ''
+            }); } catch (er) {}
+          });
+          hatchChips.appendChild(a);
+        });
+        hatchRow.style.display = '';
+      } else {
+        hatchRow.style.display = 'none';
+      }
+    }
+  } catch (e) { try { console.warn('[V.195] escape-hatch render failed', e); } catch (er) {} }
   // CTA: Scan barcode → routes into the barcode screen.
   var scanBtn = document.getElementById('v186-spec-cta-scan');
   if (scanBtn) {
