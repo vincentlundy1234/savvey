@@ -43,7 +43,7 @@ import { rejectIfRateLimited }  from './_rateLimit.js';
 import { withCircuit }          from './_circuitBreaker.js';
 import crypto                   from 'node:crypto';
 
-const VERSION             = 'normalize.js v3.4.5v190-final-arbiter-and-coercion';
+const VERSION             = 'normalize.js v3.4.5v191-barcode-translation';
 
 // V.161 LATENCY AUDIT FINDINGS (15 May 2026 evening):
 // 1. HTTP KEEP-ALIVE — Node 18+ Vercel uses undici fetch backend.
@@ -5130,6 +5130,130 @@ async function lookupOpenFoodFacts(ean) {
   }
 }
 
+// ═════════════════════════════════════════════════════════════════════
+// V.191 — UPCitemdb TRIAL TIER (general-retail GTIN lookup).
+// Founder-authorised on 16 May 2026 for the live field test. Tier 1
+// of the V.191 barcode-translation chain.
+//
+// Trial endpoint: https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}
+// No auth on the trial tier. Rate cap: 100 requests/day (returns HTTP 429).
+// Endpoint is pluggable via process.env.V191_GTIN_ENDPOINT so the Founder
+// can swap in a paid tier (with API key in the URL or via headers) later
+// without a code redeploy. Placeholder `{barcode}` in the env value is
+// interpolated; if absent the barcode is appended as query string `?upc=`.
+//
+// Failure modes (ALL silent, ALL fall through to OFF Tier 2):
+//   - Network error / timeout (2s AbortController)
+//   - HTTP 429 (rate-limit exceeded — the daily-cap signal)
+//   - HTTP 5xx
+//   - HTTP 200 with code !== "OK" or empty items[]
+//   - Parse failure
+// Logs every outcome for Vercel audit:
+//   [V.191][upcitemdb] barcode=NNN status=OK name="..." latency_ms=N
+//   [V.191][upcitemdb] barcode=NNN status=429 (rate_limit) → failover to OFF
+//   [V.191][upcitemdb] barcode=NNN status=5xx (server_error) → failover to OFF
+//   [V.191][upcitemdb] barcode=NNN status=empty → failover to OFF
+// ═════════════════════════════════════════════════════════════════════
+async function _v191LookupUpcItemDb(ean) {
+  if (!ean || typeof ean !== 'string' || !/^\d{8,14}$/.test(ean)) return null;
+  // Resolve the endpoint. Pluggable via env-var; `{barcode}` placeholder
+  // is replaced when present, else query string is appended.
+  const template = (typeof process !== 'undefined' && process.env && process.env.V191_GTIN_ENDPOINT)
+                 ? String(process.env.V191_GTIN_ENDPOINT)
+                 : 'https://api.upcitemdb.com/prod/trial/lookup?upc={barcode}';
+  const url = template.indexOf('{barcode}') !== -1
+            ? template.replace('{barcode}', encodeURIComponent(ean))
+            : (template + (template.indexOf('?') === -1 ? '?upc=' : '&upc=') + encodeURIComponent(ean));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  const t0 = Date.now();
+  try {
+    const r = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        'User-Agent': `Savvey/${VERSION}`,
+        'Accept': 'application/json',
+      },
+    });
+    clearTimeout(timeout);
+    if (r.status === 429) {
+      try { console.warn(`[V.191][upcitemdb] barcode=${ean} status=429 (rate_limit) latency_ms=${Date.now()-t0} → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    if (r.status >= 500) {
+      try { console.warn(`[V.191][upcitemdb] barcode=${ean} status=${r.status} (server_error) latency_ms=${Date.now()-t0} → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    if (!r.ok) {
+      try { console.warn(`[V.191][upcitemdb] barcode=${ean} status=${r.status} (http_error) latency_ms=${Date.now()-t0} → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    const j = await r.json();
+    // Trial response shape: { code: "OK", items: [{ title, brand, model, category, ... }] }
+    if (!j || j.code !== 'OK' || !Array.isArray(j.items) || j.items.length === 0) {
+      try { console.log(`[V.191][upcitemdb] barcode=${ean} status=empty latency_ms=${Date.now()-t0} → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    const item = j.items[0];
+    if (!item || typeof item !== 'object') {
+      try { console.log(`[V.191][upcitemdb] barcode=${ean} status=malformed_item → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    // Compose a canonical-friendly string. Prefer brand + title; fall back
+    // to title alone. Strip excess (UPCitemdb sometimes pads titles with
+    // commas + redundant attributes).
+    const brand = (typeof item.brand === 'string' && item.brand.trim()) ? item.brand.trim() : '';
+    const title = (typeof item.title === 'string' && item.title.trim()) ? item.title.trim() : '';
+    if (!title) {
+      try { console.log(`[V.191][upcitemdb] barcode=${ean} status=no_title → failover to OFF`); } catch (e) {}
+      return null;
+    }
+    // If brand already prefixes the title (common), don't double it.
+    const titleLower = title.toLowerCase();
+    const brandLower = brand.toLowerCase();
+    const composed = (brand && brandLower && titleLower.indexOf(brandLower) === -1)
+      ? (brand + ' ' + title).slice(0, 200)
+      : title.slice(0, 200);
+    try { console.log(`[V.191][upcitemdb] barcode=${ean} status=OK name="${composed.slice(0,60)}" latency_ms=${Date.now()-t0}`); } catch (e) {}
+    return composed;
+  } catch (err) {
+    clearTimeout(timeout);
+    const _isAbort = err && (err.name === 'AbortError' || /aborted|timeout/i.test(String(err.message || err)));
+    try { console.warn(`[V.191][upcitemdb] barcode=${ean} status=${_isAbort ? 'timeout' : 'network_error'} (${String(err && err.message || err).slice(0, 80)}) latency_ms=${Date.now()-t0} → failover to OFF`); } catch (e) {}
+    return null;
+  }
+}
+
+// ═════════════════════════════════════════════════════════════════════
+// V.191 — UNIFIED BARCODE-TRANSLATION CHAIN.
+// Door 3 (Scan) entry point. Tries Tier 1 (UPCitemdb), falls back to
+// Tier 2 (Open Food Facts). Returns the resolved canonical string OR
+// null. Caller (handler) treats null as "fall through to BARCODE_
+// SYSTEM_PROMPT" — the existing Haiku-from-digits behaviour.
+//
+// Order is sequential not parallel: we ALWAYS prefer Tier 1 when it
+// returns a name. Tier 2 only runs when Tier 1 returned null (any
+// failure mode). Both tiers carry their own AbortController; combined
+// worst-case latency is 2s + 2s = 4s (well inside the 60s ceiling).
+// ═════════════════════════════════════════════════════════════════════
+async function _v191BarcodeLookup(ean) {
+  if (!ean || typeof ean !== 'string') return null;
+  // Tier 1 — UPCitemdb (general retail).
+  const t1 = await _v191LookupUpcItemDb(ean);
+  if (t1) {
+    try { console.log(`[V.191][chain] barcode=${ean} resolved_by=upcitemdb name="${t1.slice(0,60)}"`); } catch (e) {}
+    return t1;
+  }
+  // Tier 2 — Open Food Facts (grocery / FMCG).
+  const t2 = await lookupOpenFoodFacts(ean);
+  if (t2) {
+    try { console.log(`[V.191][chain] barcode=${ean} resolved_by=open_food_facts name="${t2.slice(0,60)}"`); } catch (e) {}
+    return t2;
+  }
+  try { console.log(`[V.191][chain] barcode=${ean} resolved_by=null (both tiers failed) — caller falls through to BARCODE_SYSTEM_PROMPT`); } catch (e) {}
+  return null;
+}
+
 
 // V.73 — Mobile-CLIP V2: when frontend sends category_hint from on-device
 // classifier, inject as soft constraint at the END of the Vision tail prompt.
@@ -6835,12 +6959,15 @@ async function _v202InnerHandler(req, res) {
       const ean = String(body.ean || '').trim().replace(/\D/g, '');
       if (!ean) return res.status(400).json({ error: 'ean required' });
       if (ean.length < 8 || ean.length > 14) return res.status(400).json({ error: 'invalid ean length' });
-      // v3.4.5n — Open Food Facts pre-resolution. UK/EU groceries + toiletries
-      // are reliably mapped from EAN -> product name BEFORE Haiku sees them.
-      // On hit: feed the resolved string through TEXT_SYSTEM_PROMPT so Door 3
-      // inherits the higher-accuracy Type-door pipeline. On miss: fall through
-      // to the existing barcode-via-Haiku behaviour.
-      const resolvedName = await lookupOpenFoodFacts(ean);
+      // V.191 — TWO-TIER BARCODE TRANSLATION CHAIN (Founder-authorised
+      // 16 May 2026). Tier 1: UPCitemdb trial (general retail). Tier 2:
+      // Open Food Facts (grocery/FMCG). Each carries a 2s timeout; 429 /
+      // 5xx on Tier 1 cleanly fails over to Tier 2; both nulls fall
+      // through to BARCODE_SYSTEM_PROMPT (the legacy Haiku-from-digits
+      // path, preserved for resilience). When either tier returns a name,
+      // we feed it through TEXT_SYSTEM_PROMPT so Door 3 inherits the
+      // higher-accuracy Type-door pipeline + V.190 four-pillar render.
+      const resolvedName = await _v191BarcodeLookup(ean);
       if (resolvedName) {
         rawText = await withCircuit('anthropic',
           () => callHaikuText(TEXT_SYSTEM_PROMPT, `Query: "${resolvedName}"`),
